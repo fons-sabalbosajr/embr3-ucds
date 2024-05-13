@@ -1,0 +1,15 @@
+import React from 'react';
+import { FireFilled } from '@ant-design/icons';
+
+const Logo = ({ theme }) => {
+  return (
+    <div className={`logo ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
+      <div className='logo-icon'>
+        <img src='../../src/assets/emblogomenu.png' alt='logo' className='logo-icon' />
+        <div className='logo-icon-text'>EMBR3 UCDS</div>
+      </div>
+    </div>
+  );
+};
+
+export default Logo;
