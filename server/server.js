@@ -9,15 +9,12 @@ const { MongoClient, ServerApiVersion } = require("mongodb");
 const dotenv = require("dotenv").config();
 
 app.use(express.json());
-app.use(
-  cors({
-    origin: ["https://6641bcd95206567d577047b4--vermillion-smakager-627368.netlify.app"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
-
+app.use(cors({
+  origin: "https://6641bcd95206567d577047b4--vermillion-smakager-627368.netlify.app",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+}));
 app.use(cookieParser());
 
 // JWT Secret
@@ -41,19 +38,16 @@ const client = new MongoClient(mongoUri, {
 
 let userCollection;
 
-// Connect to MongoDB once when the server starts
-client
-  .connect()
-  .then(() => {
+async function connectToMongoDB() {
+  try {
+    await client.connect();
     console.log("Successfully connected to MongoDB!");
-
-    // Access the specific collection and set it globally
     const db = client.db("universe-db"); // Change to your database name
     userCollection = db.collection("users");
-  })
-  .catch((err) => {
+  } catch (err) {
     console.error("Error connecting to MongoDB Server:", err);
-  });
+  }
+}
 
 app.get("/cors", (req, res) => {
   res.send("CORS is working!");
@@ -208,6 +202,8 @@ app.get("/logout", async (req, res) => {
     return res.status(500).json({ error: "An error occurred during logout." });
   }
 });
+
+connectToMongoDB();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
