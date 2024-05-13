@@ -11,7 +11,7 @@ const dotenv = require("dotenv").config();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["https://6641bcd95206567d577047b4--vermillion-smakager-627368.netlify.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -209,6 +209,7 @@ app.get("/logout", async (req, res) => {
   }
 });
 
-app.listen(8081, () => {
-  console.log("Server running on port 8081");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
