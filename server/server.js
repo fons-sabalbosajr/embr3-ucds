@@ -38,16 +38,19 @@ const client = new MongoClient(mongoUri, {
 
 let userCollection;
 
-async function connectToMongoDB() {
-  try {
-    await client.connect();
+// Connect to MongoDB once when the server starts
+client
+  .connect()
+  .then(() => {
     console.log("Successfully connected to MongoDB!");
+
+    // Access the specific collection and set it globally
     const db = client.db("universe-db"); // Change to your database name
     userCollection = db.collection("users");
-  } catch (err) {
+  })
+  .catch((err) => {
     console.error("Error connecting to MongoDB Server:", err);
-  }
-}
+  });
 
 app.get("/cors", (req, res) => {
   res.send("CORS is working!");
@@ -98,7 +101,7 @@ app.post("/login", async (req, res) => {
     // Return a success response with the JWT token
     return res.status(200).json({ status: "success", token });
   } catch (error) {
-    console.error("Error during login:", error.message); // Detailed error logging
+    console.error("Error during login:", error); // Detailed error logging
     return res.status(500).json({
       error:
         "An unexpected error occurred during login. Please try again later.",
@@ -203,9 +206,6 @@ app.get("/logout", async (req, res) => {
   }
 });
 
-connectToMongoDB();
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(8081, () => {
+  console.log("Server running on port 8081");
 });
