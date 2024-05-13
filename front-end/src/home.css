@@ -10,26 +10,92 @@
   font-family: "Poppins", sans-serif;
 }
 
-.background {
+.background{
   display: flex;
   justify-content: center;
   align-items: center;
-  background: rgb(213, 230, 255);
-  background: linear-gradient(
-    90deg,
-    rgba(213, 230, 255, 1) 0%,
-    rgba(255, 255, 255, 1) 100%
-  );
+  background: rgb(213,230,255);
+  background: linear-gradient(90deg, rgba(213,230,255,1) 0%, rgba(255,255,255,1) 100%);
+  //background-image: url('../src/assets/bglogin.JPG'); /* Adjust the path based on your project structure */
   height: 100vh;
   background-size: cover;
 }
 
 .container {
-  width: 100%;
+  width: 100vw;
   min-height: 100vh;
   background-size: cover;
   background-position: center;
   padding: 10px 8%;
+}
+
+nav {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.logo {
+  width: 180px;
+  cursor: pointer;
+}
+
+nav ul {
+  list-style: none;
+  width: 100%;
+  text-align: right;
+}
+
+nav ul li {
+  display: inline-block;
+  margin: 10px 20px;
+}
+
+nav ul li a {
+  text-decoration: none;
+  color: #102f59;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+}
+
+nav li a:hover {
+  color: #0058aa !important;
+  transition: 0.3s;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  padding: 12px 21px;
+  border: 0;
+  outline: 0;
+  border-radius: 6px;
+  background: F0ECE5;
+  color: #ffffff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn_sec {
+  display: flex;
+  align-items: center;
+  padding: 23px 40px;
+  border: 0;
+  outline: 0;
+  border-radius: 0px 6px 6px 0px;
+  background: #000000;
+  color: #ffffff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn img {
+  width: 20px;
+  margin-right: 10px;
 }
 
 .content {
@@ -39,22 +105,65 @@
   align-items: center;
   justify-content: center;
   color: #000000;
+  /* max-width: 620px; */
 }
 
 .hero-text {
   text-align: center;
-  width: 100%;
+  position: absolute;
+  top: 40%; /* Adjust this value to move the text higher */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
 }
 
-.content_heading {
+.content_span {
   color: #0058aa;
+  line-height: 10px;
   font-weight: 500;
+  
 }
 
-.content_paragraph {
-  color: #31304d;
-  font-weight: 400;
+.content_para {
+  color: #31304D;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: bold;
+  line-height: 20px;
 }
+
+.content_alice {
+  color: #31304D;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+  padding-top: 20px;
+}
+
+.content h2 {
+  color: #000000;
+  font-size: 50px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 50px;
+}
+
+.content form {
+  display: flex;
+  align-items: center;
+  /* background: #ffffff; */
+  border-radius: 5px;
+  padding: 10px;
+  margin-top: 30px;
+}
+
+.content form .btn .btn-primary {
+  font-size: 15px;
+  padding: 10px 30px;
+  align-content: center;
+}
+
 
 .btn-get-started {
   border-radius: 25px;
