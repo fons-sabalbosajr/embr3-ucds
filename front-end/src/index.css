@@ -179,7 +179,7 @@
 }
 
 .light-theme-icon .anticon svg {
-  color: black; /* Change the icon color for light theme */
+  color: rgb(34, 34, 34); /* Change the icon color for light theme */
 }
 
 .dark-theme-icon img {

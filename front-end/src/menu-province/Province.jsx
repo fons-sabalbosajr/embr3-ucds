@@ -44,6 +44,7 @@ import SectionInChargeAutoComplete from "../components/SectionInCharge";
 import R3MapAutoComplete from "../components/R3Map";
 import moment from "moment";
 import styled from "styled-components";
+import InspectorTCCompliance from "../components/InspectorTCCompliance";
 
 // Utility function to capitalize the first letter of a string
 const capitalizeFirstLetter = (str) => {
@@ -695,16 +696,12 @@ const Province = ({ theme }) => {
                                 }}
                               >
                                 <SectionInChargeAutoComplete
-                                  value={row.sectionIncharge}
+                                  style={isEditing ? {} : { color: "#aaa" }}
+                                  value={selectedRecord?.section_incharge || ""}
                                   disabled={!isEditing}
                                   onChange={(value) =>
-                                    handleChange(
-                                      index,
-                                      "sectionIncharge",
-                                      value
-                                    )
-                                  }
-                                  style={{ flex: 1 }} // Allow the input to take up available space
+                                    handleChange("section_incharge", value)
+                                  } // Allow the input to take up available space
                                 />
                               </div>
                             </Paragraph>
@@ -714,11 +711,12 @@ const Province = ({ theme }) => {
                             <Paragraph>
                               <strong>Inspector/Handler</strong> <br />
                               <InspectorsAutoComplete
-                                value={row.handler}
+                                style={isEditing ? {} : { color: "#aaa" }}
+                                value={selectedRecord?.handler || ""}
                                 disabled={!isEditing}
                                 onChange={(value) =>
-                                  handleChange(index, "handler", value)
-                                }
+                                  handleChange("handler", value)
+                                } // Allow 
                               />
                             </Paragraph>
                           </Col>
@@ -1573,7 +1571,7 @@ const Province = ({ theme }) => {
                       <Card
                         style={{
                           width: 600,
-                          marginTop: 5,
+                          //marginTop: 5,
                           marginBottom: 5,
                           padding: 5,
                         }}
@@ -2351,7 +2349,7 @@ const Province = ({ theme }) => {
                       <Card
                         style={{
                           width: 600,
-                          marginTop: 5,
+                          //marginTop: 5,
                           marginBottom: 5,
                           padding: 5,
                         }}
@@ -2453,6 +2451,7 @@ const Province = ({ theme }) => {
                             </Paragraph>
                           </Col>
                         </Row>
+
                         <Row gutter={[16, 16]}>
                           <Col
                             xs={24} // Full width on extra-small screens
@@ -2502,15 +2501,37 @@ const Province = ({ theme }) => {
                               Compliance with TC Commitment/Order
                               </strong>
                               &nbsp; <i>(Paste Link Here)</i>
-                              <Input
+                              <InspectorTCCompliance
+                                value={selectedRecord?.tc_order_compliance || ""}
+                                disabled={!isEditing}
+                                onChange={(e) =>
+                                  handleChange("tc_order_compliance", e.target.value)
+                                }
+                              />
+                            </Paragraph>
+                          </Col>
+                        </Row>
+
+                        <Row gutter={[16, 16]}>
+                          <Col
+                            xs={24} // Full width on extra-small screens
+                            sm={24} // Full width on small screens
+                            md={24} // Half width on medium screens
+                            lg={24}
+                          >
+                            <Paragraph>
+                              <strong>Remarks:</strong>
+                              <br />{" "}
+                              <TextArea
                                 className="poppins-textarea"
-                                value={selectedRecord?.tc_commitment || ""}
+                                value={selectedRecord?.remarks || ""}
                                 style={isEditing ? {} : { color: "#aaa" }}
                                 disabled={!isEditing}
                                 onChange={(e) =>
-                                  handleChange("tc_commitment", e.target.value)
+                                  handleChange("remarks", e.target.value)
                                 }
                                 placeholder="no data"
+                                rows={3}
                               />
                             </Paragraph>
                           </Col>
@@ -2536,9 +2557,10 @@ const Province = ({ theme }) => {
                           >
                             <Paragraph>
                               <strong className="label_title">
-                                Position Paper
+                                Issued Position Paper
                               </strong>
-                              <Input
+                              &nbsp; <i>(Paste Link Here)</i>
+                              <TextArea
                                 className="poppins-textarea"
                                 value={selectedRecord?.pos_paper || ""}
                                 style={isEditing ? {} : { color: "#aaa" }}
@@ -2547,6 +2569,61 @@ const Province = ({ theme }) => {
                                   handleChange("pos_paper", e.target.value)
                                 }
                                 placeholder="no data"
+                                rows={2}
+                              />
+                            </Paragraph>
+                          </Col>
+                        </Row>
+
+                        <Row gutter={[16, 16]}>
+                          <Col
+                            xs={24} // Full width on extra-small screens
+                            sm={24} // Full width on small screens
+                            md={24} // Half width on medium screens
+                            lg={24}
+                          >
+                            <Paragraph>
+                              <strong className="label_title">
+                                Issued Resolution
+                              </strong>
+                              &nbsp; <i>(Paste Link Here)</i>
+                              <TextArea
+                                className="poppins-textarea"
+                                value={selectedRecord?.resolution || ""}
+                                style={isEditing ? {} : { color: "#aaa" }}
+                                disabled={!isEditing}
+                                onChange={(e) =>
+                                  handleChange("pos_paper", e.target.value)
+                                }
+                                placeholder="no data"
+                                rows={2}
+                              />
+                            </Paragraph>
+                          </Col>
+                        </Row>
+
+                        <Row gutter={[16, 16]}>
+                          <Col
+                            xs={24} // Full width on extra-small screens
+                            sm={24} // Full width on small screens
+                            md={24} // Half width on medium screens
+                            lg={24}
+                          >
+                            <Paragraph>
+                              <strong className="label_title">
+                                Issued Order
+                              </strong>
+                              &nbsp; <i>(Paste Link Here)</i>
+                              <TextArea
+                                className="poppins-textarea"
+                                value={selectedRecord?.order || ""}
+                                style={isEditing ? {} : { color: "#aaa" }}
+                                disabled={!isEditing}
+                                onChange={(e) =>
+                                  handleChange("pos_paper", e.target.value)
+                                }
+                                placeholder="no data"
+                                rows={2}
                               />
                             </Paragraph>
                           </Col>
@@ -2576,6 +2653,7 @@ const Province = ({ theme }) => {
                             </Paragraph>
                           </Col>
                         </Row>
+
                         <Row gutter={[16, 16]}>
                           <Col
                             xs={24} // Full width on extra-small screens
@@ -2620,114 +2698,7 @@ const Province = ({ theme }) => {
                             </Paragraph>
                           </Col>
                         </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <Checkbox
-                                checked={
-                                  selectedRecord?.tc_order_compliance === "✔"
-                                } // Check if '✓'
-                                disabled={!isEditing} // Only editable in edit mode
-                                onChange={(e) =>
-                                  handleChange(
-                                    "tc_order_compliance",
-                                    e.target.checked ? "✔" : ""
-                                  )
-                                }
-                                style={{ fontSize: "15px" }}
-                              >
-                                {selectedRecord?.tc_order_compliance === "✔"
-                                  ? ""
-                                  : ""}
-                              </Checkbox>
-                              <strong>
-                                Compliance with TC Commitment/Order{" "}
-                              </strong>
-                            </Paragraph>
-                          </Col>
-                        </Row>
 
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <strong>Remarks:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.remarks || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("remarks", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <Checkbox
-                                checked={selectedRecord?.resolution === "✔"} // Check if '✓'
-                                disabled={!isEditing} // Only editable in edit mode
-                                onChange={(e) =>
-                                  handleChange(
-                                    "resolution",
-                                    e.target.checked ? "✔" : ""
-                                  )
-                                }
-                                style={{ fontSize: "15px" }}
-                              >
-                                {selectedRecord?.resolution === "✔" ? "" : ""}
-                              </Checkbox>
-                              <strong>Issued Resolution </strong>
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <Checkbox
-                                checked={selectedRecord?.order === "✔"} // Check if '✓'
-                                disabled={!isEditing} // Only editable in edit mode
-                                onChange={(e) =>
-                                  handleChange(
-                                    "order",
-                                    e.target.checked ? "✔" : ""
-                                  )
-                                }
-                                style={{ fontSize: "15px" }}
-                              >
-                                {selectedRecord?.order === "✔" ? "" : ""}
-                              </Checkbox>
-                              <strong>Issued Order </strong>
-                            </Paragraph>
-                          </Col>
-                        </Row>
 
                         <Row gutter={[16, 16]}>
                           <Col
