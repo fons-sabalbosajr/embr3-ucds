@@ -53,26 +53,27 @@ const Universe = () => {
   };
 
   axios.defaults.withCredentials = true;
-
-  // Check authentication status on component mount
   useEffect(() => {
-    axios
-      .get("https://embr3-ucds.onrender.com/check-auth", { withCredentials: true })
-      .then((res) => {
-        if (res.data.status === "Success") {
+    const checkAuthentication = async () => {
+      try {
+        const response = await axios.get("https://embr3-ucds.onrender.com/check-auth", { withCredentials: true });
+        if (response.data.status === "Success") {
           setAuth(true);
-          setName(res.data.name);
-          setNotifications(res.data.notifications || []); // Set notifications if available
+          setName(response.data.name);
+          setNotifications(response.data.notifications || []);
         } else {
           setAuth(false);
           navigate("/login", { replace: true });
         }
-      })
-      .catch((err) => {
+      } catch (error) {
+        console.error("Error checking authentication:", error);
         setAuth(false);
         navigate("/login", { replace: true });
-      });
-  }, [navigate]);
+      }
+    };
+  
+    checkAuthentication();
+  }, [navigate]);  
 
   // Handle user logout
   const handleLogout = () => {

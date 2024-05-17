@@ -164,9 +164,7 @@ app.get("/check-auth", (req, res) => {
     const token = req.cookies.token; // Get the JWT from cookies
 
     if (!token) {
-      return res
-        .status(401)
-        .json({ status: "Failure", error: "No token provided" });
+      return res.status(401).json({ status: "Failure", error: "No token provided" });
     }
 
     // Verify the JWT
@@ -175,9 +173,10 @@ app.get("/check-auth", (req, res) => {
     return res.json({ status: "Success", name: decoded.name }); // If successful
   } catch (error) {
     console.error("Error in check-auth:", error.message);
-    return res.status(401).json({ status: "Failure", error: error.message });
+    return res.status(401).json({ status: "Failure", error: "Invalid or expired token" });
   }
 });
+
 
 // Logout endpoint
 app.get("/logout", async (req, res) => {
