@@ -53,27 +53,33 @@ const Universe = () => {
   };
 
   axios.defaults.withCredentials = true;
+
   useEffect(() => {
-    const checkAuthentication = async () => {
-      try {
-        const response = await axios.get("https://embr3-ucds.onrender.com/check-auth", { withCredentials: true });
-        if (response.data.status === "Success") {
+    axios
+      .get("https://embr3-ucds.onrender.com/check-auth", {
+        withCredentials: true, // Include credentials (cookies) with the request
+      })
+      .then((res) => {
+        if (res.data.status === "Success") {
           setAuth(true);
-          setName(response.data.name);
-          setNotifications(response.data.notifications || []);
+          setName(res.data.name);
+          setNotifications(res.data.notifications || []); // Set notifications if available
         } else {
           setAuth(false);
           navigate("/login", { replace: true });
         }
-      } catch (error) {
-        console.error("Error checking authentication:", error);
+      })
+      .catch((err) => {
         setAuth(false);
         navigate("/login", { replace: true });
-      }
-    };
+      });
+  }, [navigate]);
+
+  if (auth === null) {
+    // Show a loading spinner while checking authentication
+    return <Spin size="large" />;
+  }
   
-    checkAuthentication();
-  }, [navigate]);  
 
   // Handle user logout
   const handleLogout = () => {
