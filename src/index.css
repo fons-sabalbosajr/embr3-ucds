@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700;800&family=Roboto&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    list-style: none;
+    box-sizing: border-box;
+    font-family: "Poppins", sans-serif;
+}
+
+.sidebar {
+    color: #ffffff;
+}
+
+.header-container{
+    padding: 0;
+    background-color: #31304D;
+    height: 85px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    //justify-content: center;
+    color: #0066ff;
+    padding: 10px;
+    margin-top: 10px;
+    margin-left: 20px;
+}
+
+.logo-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    margin-left: 30px;
+    color: #ffffff;
+}
+
+.logo-icon-text {
+    width: 150px;
+    font-size: 1rem;
+    margin-left: 5px;
+    padding-left: 15px;
+    line-height: 15px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.ant-menu-item-dark > a {
+    color: #B6BBC4;
+}
+
+.menu-bar {
+    position: fixed;
+    height: 88vh;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    font-size: 1rem;
+    position: relative;
+    overflow-y: auto;
+}
+
+.toggle {
+    position: fixed;
+    bottom: 25px;
+    left: 20px;
+    z-index: 1;
+}
+
+.btn-logout {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    margin-bottom: 16px;
+    z-index: 1;
+}
+
+.user-name {
+    font-size: 15px;
+    font-weight: 400;
+    color: #ffffff;
+    margin-right: 20px; /* Add space to the right */
+    display: flex; /* Ensure flex behavior */
+    align-items: center; /* Vertically center the text */
+}
+
+.profile_container {
+    display: flex;
+    justify-content: flex-start; /* Align elements to the right */
+    align-items: center; /* Vertically center elements */
+}
+
+.notification-icon {
+    margin-right: 20px; /* Consistent spacing */
+    font-size: 20px;
+    color: white;
+}
+
+.theme-button{
+  font-size: 20px;
+}
+
+.link-menu {
+    text-decoration: none;
+}
+
+.link-menu:hover, .selected {
+    color: #1890ff;
+}
+
+.link-menu-hover:hover {
+    color: #9cc6ed !important;
+    text-decoration: none !important;
+}
+
+
+.collapsed-logo-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 85px; /* Adjust the height as needed */
+  background-color: #001529; /* Background color for the container */
+  //border-bottom: 1px solid #e8e8e8; /* Border for separation */
+}
+
+.collapsed-logo {
+  width: 32px; /* Adjust the width of the logo image */
+  height: auto; /* Maintain aspect ratio */
+  text-align: left;
+}
+
+.theme-switch{
+  margin-right: 10px;
+}
+
+.dark-theme {
+  background-color: rgb(09, 21, 41); /* Change the background color for dark theme */
+  color: rgb(225, 225, 225); /* Change the text color for dark theme */
+}
+
+.light-theme {
+  background-color: white; /* Change the background color for light theme */
+  color: rgb(34, 34, 34); /* Change the text color for light theme */
+}
+
+
+.dark-theme .logo-icon-text {
+  color: rgb(225, 225, 225); /* Change the text color for dark theme */
+}
+
+.light-theme .logo-icon-text {
+  color: rgb(34, 34, 34); /* Change the text color for light theme */
+}
+
+.dark-theme-text {
+  color: rgb(225, 225, 225); /* Change the text color for dark theme */
+}
+
+.light-theme-text {
+  color: rgb(34, 34, 34); /* Change the text color for light theme */
+}
+
+.dark-theme-icon {
+  color: rgb(225, 225, 225); /* Change the icon color for dark theme */
+}
+
+.light-theme-icon {
+  color: rgb(34, 34, 34); /* Change the icon color for light theme */
+}
+
+.dark-theme-icon .anticon svg {
+  color: white; /* Change the icon color for dark theme */
+}
+
+.light-theme-icon .anticon svg {
+  color: black; /* Change the icon color for light theme */
+}
+
+.dark-theme-icon img {
+  filter: invert(100%);
+}
+
+.light-theme-icon img {
+  filter: invert(0%);
+}

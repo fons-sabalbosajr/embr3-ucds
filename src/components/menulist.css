@@ -1,0 +1,18 @@
+.menu-bar-container {
+    transition: transform 0.3s ease; /* Smooth transition */
+  }
+  
+  .menu-bar-container.open {
+    transform: translateX(0);
+  }
+  
+  .menu-bar-container.closed {
+    transform: translateX(-100%); /* Move the sidebar off-screen */
+  }
+  
+  @media (min-width: 768px) {
+    .menu-bar-container.closed {
+      transform: translateX(0); /* Keep the sidebar open on larger screens */
+    }
+  }
+  

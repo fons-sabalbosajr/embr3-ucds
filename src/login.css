@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+* {
+    padding: 0px;
+    margin: 0px;
+    box-sizing: border-box;
+}
+
+
+:root {
+    --linear-grad: linear-gradient(to right, #141E30, #243B55);
+    --grad-clr1: #141E30;
+    --grad-clr2: #243B55;
+}
+
+body {
+    height: 100vh;
+    background: #f6f5f7;
+    display: grid;
+    font-family: 'Poppins', sans-serif;
+}
+
+.login-label{
+    margin-bottom: 5px;
+}
+
+.form{
+    background-color: rgb(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 10px;
+    top: 40%;
+    left: 50%;
+}
+
+.background-form{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.background-login{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: url('../src/assets/bglogin.JPG'); /* Adjust the path based on your project structure */
+    height: 100vh;
+    background-size: cover;
+}
+
+.input-txt{
+    display: flex;
+    position: absolute;
+    width: auto;
+    
+}
+
+.centered{
+    text-align: center;
+}
