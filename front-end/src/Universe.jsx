@@ -56,9 +56,7 @@ const Universe = () => {
 
   useEffect(() => {
     axios
-      .get("https://embr3-ucds.onrender.com/check-auth", {
-        withCredentials: true, // Include credentials (cookies) with the request
-      })
+      .get("http://localhost:8081/check-auth", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);
@@ -74,17 +72,12 @@ const Universe = () => {
         navigate("/login", { replace: true });
       });
   }, [navigate]);
-
-  if (auth === null) {
-    // Show a loading spinner while checking authentication
-    return <Spin size="large" />;
-  }
   
 
   // Handle user logout
   const handleLogout = () => {
     axios
-      .get("https://embr3-ucds.onrender.com/logout", { withCredentials: true })
+      .get("http://localhost:8081/logout", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Logout Success") {
           localStorage.removeItem("authToken"); // Clear token from local storage
@@ -97,6 +90,7 @@ const Universe = () => {
         console.error("Error during logout:", err.message);
       });
   };
+
 
   // User menu for profile and logout options
   const userMenu = (

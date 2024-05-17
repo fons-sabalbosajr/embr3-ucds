@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const app = express();
@@ -11,14 +10,14 @@ const dotenv = require("dotenv").config();
 app.use(express.json());
 app.use(
   cors({
-    origin: "https://embr3-ucds.netlify.app/", // Specify your frontend URL
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true, // Allow credentials (cookies) to be included in requests
+    origin: ["http://localhost:5173", "https://embr3-ucds.netlify.app"], // Add allowed origins here
+    methods: ["GET", "POST", "PUT", "DELETE"], // Specify allowed HTTP methods
+    allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
+    credentials: true,
   })
 );
-
 app.use(cookieParser());
+
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -35,7 +34,7 @@ if (!mongoUri) {
 const client = new MongoClient(mongoUri, {
   serverApi: ServerApiVersion.v1,
   tls: true,
-  tlsAllowInvalidCertificates: false, // Set to true if you want to allow invalid certificates
+  tlsAllowInvalidCertificates: false,
 });
 
 let userCollection;
@@ -57,25 +56,6 @@ client
 app.get("/cors", (req, res) => {
   res.send("CORS is working!");
 });
-
-// Middleware to verify JWT token
-const verifyToken = (req, res, next) => {
-  const token = req.cookies.token;
-
-  if (!token) {
-    return res.status(401).json({ status: "Failure", error: "No token provided" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // Attach decoded token to request
-    next();
-  } catch (error) {
-    console.error("Error in token verification:", error.message);
-    return res.status(401).json({ status: "Failure", error: "Invalid or expired token" });
-  }
-};
-
 
 // Login Route
 app.post("/login", async (req, res) => {
@@ -130,8 +110,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-
-
 // Registration endpoint
 app.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
@@ -185,7 +163,9 @@ app.get("/check-auth", (req, res) => {
     const token = req.cookies.token; // Get the JWT from cookies
 
     if (!token) {
-      return res.status(401).json({ status: "Failure", error: "No token provided" });
+      return res
+        .status(401)
+        .json({ status: "Failure", error: "No token provided" });
     }
 
     // Verify the JWT
@@ -194,21 +174,39 @@ app.get("/check-auth", (req, res) => {
     return res.json({ status: "Success", name: decoded.name }); // If successful
   } catch (error) {
     console.error("Error in check-auth:", error.message);
-    return res.status(401).json({ status: "Failure", error: "Invalid or expired token" });
+    return res.status(401).json({ status: "Failure", error: error.message });
   }
 });
 
-// Protected Route Example
-app.get("/protected-route", verifyToken, (req, res) => {
-  // Your protected route logic here
-  res.json({ status: "Success", name: req.user.name });
+// LOGOUT endpoint
+app.get("/logout", async (req, res) => {
+  try {
+    // Clear the JWT token cookie
+    res.clearCookie("token", {
+      httpOnly: true, // Ensures the cookie is only accessible by the server
+      secure: process.env.NODE_ENV === "production", // Use secure flag in production
+      sameSite: "Strict", // Mitigates CSRF attacks
+    });
+
+    // Optional: If you have user sessions in MongoDB, clear them
+    const userEmail = req.user?.email; // Assuming JWT middleware sets req.user
+    if (userEmail) {
+      // If you manage sessions, delete them for the current user
+      await sessionCollection.deleteMany({ email: userEmail }); // Clear user sessions in the database
+    }
+
+    // Indicate successful logout and provide redirect information
+    return res.json({
+      status: "Logout Success",
+      message: "You have been logged out.",
+      redirect: "/login",
+    });
+  } catch (error) {
+    console.error("Error during logout:", error.message);
+    return res.status(500).json({ error: "An error occurred during logout." });
+  }
 });
 
-// Logout Route
-app.get("/logout", (req, res) => {
-  res.clearCookie("token");
-  res.json({ status: "Logout Success" });
-});
 
 // Define a route to fetch data from "ucds-data"
 app.get("/api/getdata", async (req, res) => {
