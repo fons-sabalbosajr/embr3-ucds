@@ -30,6 +30,7 @@ import Province from "./menu-province/Province";
 import Survey from "./menu-component/Survey";
 import MBU from "./menu-component/MBU";
 import ExportData from "./menu-component/ExportData";
+import Admin from "./menu-component/Admin";
 import "./index.css";
 import { DataProvider } from "./menu-province/DataContext";
 import embLogo from "./assets/emblogomenu.png";
@@ -43,7 +44,7 @@ const Universe = () => {
   const [notifications, setNotifications] = useState([]); // For notification badge
   const navigate = useNavigate();
 
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState("dark");
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -157,7 +158,7 @@ const Universe = () => {
         {auth && (
           <Header
             className={`header-container ${
-              theme === "dark" ? "dark-theme" : "light-theme"
+              theme ===  "dark" ? "dark-theme" : "light-theme"
             }`}
             theme={theme}
             toggleTheme={toggleTheme}
@@ -174,7 +175,7 @@ const Universe = () => {
               {!collapsed}
               <span
                 className={`user-name ${
-                  theme === "dark" ? "dark-theme-text" : "light-theme-text"
+                  theme ===  "dark" ? "dark-theme" : "light-theme"
                 }`}
               >
                 Hi, {name}
@@ -191,7 +192,7 @@ const Universe = () => {
                 <Badge count={notifications.length} offset={[10, 0]}>
                   <BellOutlined
                     className={`notification-icon ${
-                      theme === "dark" ? "dark-theme-icon" : "light-theme-icon"
+                      theme === "light" ? "light-theme-icon" : "dark-theme-icon"
                     }`}
                   />
                 </Badge>
@@ -209,7 +210,7 @@ const Universe = () => {
 
               <div
                 className={`theme-switch ${
-                  theme === "dark" ? "dark-theme-icon" : "light-theme-icon"
+                  theme === "light" ? "light-theme-icon" : "dark-theme-icon"
                 }`}
               >
                 <Button
@@ -239,6 +240,7 @@ const Universe = () => {
                   <Route path="survey" element={<Survey />} />
                   <Route path="mbu" element={<MBU />} />
                   <Route path="exportdata" element={<ExportData />} />
+                  <Route path="admin" element={<Admin />} />
                 </Routes>
               </Spin>
             </Content>

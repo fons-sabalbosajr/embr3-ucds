@@ -5,7 +5,7 @@ import {
   CheckCircleFilled,
   PushpinFilled,
   DownCircleFilled,
-  GlobalOutlined,
+  SettingFilled,
 } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -20,8 +20,8 @@ const MenuList = ({ refreshDashboard, theme, toggleTheme }) => {
     navigate("/universe/exportdata"); // navigate to Export Data
   };
 
-  const handleRegionDataClick = () => {
-    navigate("/universe/region"); // navigate to Regional Data
+  const handleAdminDataClick = () => {
+    navigate("/universe/admin"); // navigate to Admin
   };
 
   const isMenuSelected = (path) => {
@@ -107,6 +107,16 @@ const MenuList = ({ refreshDashboard, theme, toggleTheme }) => {
               onClick={handleExportDataClick}
             >
               Export Data
+            </Link>
+          </Menu.Item>
+
+          <Menu.Item key="admin" icon={<SettingFilled />}>
+            <Link
+              to="/universe/admin"
+              className="link-menu"
+              onClick={handleAdminDataClick}
+            >
+              ADMIN
             </Link>
           </Menu.Item>
         </Menu>

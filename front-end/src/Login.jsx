@@ -25,7 +25,7 @@ const Login = () => {
 
     try {
       const response = await axios.post(
-        "http://localhost:8081/login" || "https://server-embr3.vercel.app",
+        "http://localhost:8081/login",
         {
           email: values.email,
           password: values.password,

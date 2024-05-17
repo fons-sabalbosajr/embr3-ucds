@@ -11,7 +11,7 @@ const dotenv = require("dotenv").config();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173" || "https://embr3-ucds.netlify.app/"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -206,6 +206,276 @@ app.get("/logout", async (req, res) => {
   } catch (error) {
     console.error("Error during logout:", error.message);
     return res.status(500).json({ error: "An error occurred during logout." });
+  }
+});
+
+// Define a route to fetch data from "ucds-data"
+app.get("/api/getdata", async (req, res) => {
+  try {
+    // Ensure the MongoDB client is connected
+    if (!client.topology.isConnected()) {
+      await client.connect(); // Connect if not already connected
+    }
+
+    // Access the specific database and collection
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data");
+
+    // Fetch all documents from the collection
+    const data = await collection.find({}).toArray();
+
+    // Transform the data to the desired format
+    const formattedData = data.map((doc) => ({
+      id_no: doc.id_no || "",
+      title: doc.title || "",
+      name: doc.name || "",
+      address: doc.address || "",
+      ecc_cnc: doc.ecc_cnc || "",
+      date_approved: doc.date_approved || "",
+      industry_class: doc.industry_class || "",
+      remarks_recommendations: doc.remarks_recommendations || "",
+      industry_type: doc.industry_type || "",
+      industry_subtype: doc.industry_subtype || "",
+      psic_code: doc.psic_code || "",
+      proj_type: doc.proj_type || "",
+      mbu_area: doc.mbu_area || "",
+      waterbody: doc.waterbody || "",
+      long: doc.long || "",
+      lat: doc.lat || "",
+      cong_district: doc.cong_district || "",
+      street: doc.street || "",
+      brgy: doc.brgy || "",
+      city: doc.city || "",
+      province: doc.province || "",
+      emp_no_total: doc.emp_no_total || "",
+      bod: doc.bod || "",
+      fmr_section_incharged: doc.fmr_section_incharged || "",
+      section_incharge: doc.section_incharge || "",
+      handler: doc.handler || "",
+      monitoring_sched: doc.monitoring_sched || "",
+      iis_no: doc.iis_no || "",
+      insp_type: doc.insp_type || "",
+      report_type: doc.report_type || "",
+      date_monitored: doc.date_monitored || "",
+      date_routed: doc.date_routed || "",
+      date_signed: doc.date_signed || "",
+      days_dmds: doc.days_dmds || "",
+      days_dsdrs: doc.days_dsdrs || "",
+      pismu_tracking: doc.pismu_tracking || "",
+      pd1586: doc.pd1586 || "",
+      permit_process: doc.permit_process || "",
+      date_amend: doc.date_amend || "",
+      date_approved: doc.date_approved || "",
+      ra8749: doc.ra8749 || "",
+      pto_code: doc.pto_code || "",
+      pto_issued: doc.pto_issued || "",
+      pto_expiration: doc.pto_expiration || "",
+      ra9275: doc.ra9275 || "",
+      wwdp_code: doc.wwdp_code || "",
+      wwdp_issued: doc.wwdp_issued || "",
+      wwdp_expiration: doc.wwdp_expiration || "",
+      ra6969: doc.ra6969 || "",
+      haz_id: doc.haz_id || "",
+      haz_issued: doc.haz_issued || "",
+      tsd: doc.tsd || "",
+      tsd_expiration: doc.tsd_expiration || "",
+      tp_trc: doc.tp_trc || "",
+      tp_trc_expiration: doc.tp_trc_expiration || "",
+      chemical_permit: doc.chemical_permit || "",
+      chem_permit_issued: doc.chem_permit_issued || "",
+      chem_permit_exp: doc.chem_permit_exp || "",
+      pco_no: doc.pco_no || "",
+      pco_name: doc.pco_name || "",
+      pco_tel_no: doc.pco_tel_no || "",
+      pco_validity: doc.pco_validity || "",
+      docket_no: doc.docket_no || "",
+      denr_pab_case_no: doc.denr_pab_case_no || "",
+      date_forwarded: doc.date_forwarded || "",
+      date_approved: doc.date_approved || "",
+      days_dfda: doc.days_dfda || "",
+      service_mode: doc.service_mode || "",
+      nov_released: doc.nov_released || "",
+      v_pd1586: doc.v_pd1586 || "",
+      v_ra9275: doc.v_ra9275 || "",
+      v_ra8749: doc.v_ra8749 || "",
+      v_haz: doc.v_haz || "",
+      v_tchem: doc.v_tchem || "",
+      tc_date_sched: doc.tc_date_sched || "",
+      tc_date_actual: doc.tc_date_actual || "",
+      legal_officer: doc.legal_officer || "",
+      tc_commitment: doc.tc_commitment || "",
+      pos_paper: doc.pos_paper || "",
+      penalty: doc.penalty || "",
+      amount: doc.amount || "",
+      or_number: doc.or_number || "",
+      tc_order_compliance: doc.tc_order_compliance || "",
+      remarks: doc.remarks || "",
+      resolution: doc.resolution || "",
+      order: doc.order || "",
+      order_status: doc.order_status || "",
+      mbu_priority: doc.mbu_priority || "",
+      mbu_survey: doc.mbu_survey || "",
+      mbu_survey_request: doc.mbu_survey_request || "",
+      dp_universe: doc.dp_universe || "",
+    }));
+
+    // Send the formatted data as a JSON response with proper status code
+    res.status(200).json(formattedData);
+  } catch (error) {
+    console.error("Error retrieving data from 'ucds-data':", error.message);
+
+    // Provide a meaningful error message to the client
+    res
+      .status(500)
+      .json({ error: "Failed to retrieve data. Please try again later." });
+  }
+});
+
+// Function to capitalize the first letter of each word
+function capitalizeFirstLetter(input) {
+  return input
+    .toLowerCase() // Convert the entire string to lowercase
+    .split("_") // Split by underscore to handle multi-word names
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize the first letter of each word
+    .join("_"); // Rejoin with underscores
+}
+
+// Define endpoint with security improvements
+app.get("/api/get-province-data", async (req, res) => {
+  try {
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data");
+
+    // Validate the input and ensure province parameter is provided
+    const provinceQuery = req.query.province;
+    if (!provinceQuery) {
+      return res.status(400).json({ error: "Province parameter is required." });
+    }
+
+    // Capitalize the first letter of each word in the province name
+    const province = capitalizeFirstLetter(provinceQuery);
+
+    // Debug log to trace the province value
+    console.log(`Querying data for province: ${province}`);
+
+    // Create a case-insensitive regex query for the specified province
+    const query = { province: new RegExp(`^${province}$`, 'i') };
+
+    // Fetch data for the specified province
+    const provinceData = await collection.find(query).toArray();
+
+    if (provinceData.length === 0) {
+      return res.status(404).json({ message: `No data found for ${province}.` });
+    }
+
+   // Sort the data by Serial_No
+    provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
+
+    // Format the fetched data for the response
+    const formattedData = provinceData.map((doc) => ({
+      id_no: doc.id_no,
+      title: doc.title,
+      name: doc.name,
+      address: doc.address,
+      ecc_cnc: doc.ecc_cnc,
+      industry_class: doc.industry_class,
+      remarks_recommendations: doc.remarks_recommendations,
+      industry_class: doc.industry_class || "",
+      remarks_recommendations: doc.remarks_recommendations || "",
+      industry_type: doc.industry_type || "",
+      industry_subtype: doc.industry_subtype || "",
+      psic_code: doc.psic_code || "",
+      proj_type: doc.proj_type || "",
+      mbu_area: doc.mbu_area || "",
+      waterbody: doc.waterbody || "",
+      long: doc.long || "",
+      lat: doc.lat || "",
+      cong_district: doc.cong_district || "",
+      street: doc.street || "",
+      brgy: doc.brgy || "",
+      city: doc.city || "",
+      province: doc.province || "",
+      emp_no_total: doc.emp_no_total || "",
+      bod: doc.bod || "",
+      fmr_section_incharged: doc.fmr_section_incharged || "",
+      section_incharge: doc.section_incharge || "",
+      handler: doc.handler || "",
+      monitoring_sched: doc.monitoring_sched || "",
+      iis_no: doc.iis_no || "",
+      insp_type: doc.insp_type || "",
+      report_type: doc.report_type || "",
+      date_monitored: doc.date_monitored || "",
+      date_routed: doc.date_routed || "",
+      date_signed: doc.date_signed || "",
+      days_dmds: doc.days_dmds || "",
+      days_dsdrs: doc.days_dsdrs || "",
+      pismu_tracking: doc.pismu_tracking || "",
+      pd1586: doc.pd1586 || "",
+      permit_process: doc.permit_process || "",
+      date_amend: doc.date_amend || "",
+      date_approved: doc.date_approved || "",
+      ra8749: doc.ra8749 || "",
+      pto_code: doc.pto_code || "",
+      pto_issued: doc.pto_issued || "",
+      pto_expiration: doc.pto_expiration || "",
+      ra9275: doc.ra9275 || "",
+      wwdp_code: doc.wwdp_code || "",
+      wwdp_issued: doc.wwdp_issued || "",
+      wwdp_expiration: doc.wwdp_expiration || "",
+      ra6969: doc.ra6969 || "",
+      haz_id: doc.haz_id || "",
+      haz_issued: doc.haz_issued || "",
+      tsd: doc.tsd || "",
+      tsd_expiration: doc.tsd_expiration || "",
+      tp_trc: doc.tp_trc || "",
+      tp_trc_expiration: doc.tp_trc_expiration || "",
+      chemical_permit: doc.chemical_permit || "",
+      chem_permit_issued: doc.chem_permit_issued || "",
+      chem_permit_exp: doc.chem_permit_exp || "",
+      pco_no: doc.pco_no || "",
+      pco_name: doc.pco_name || "",
+      pco_tel_no: doc.pco_tel_no || "",
+      pco_validity: doc.pco_validity || "",
+      docket_no: doc.docket_no || "",
+      denr_pab_case_no: doc.denr_pab_case_no || "",
+      date_forwarded: doc.date_forwarded || "",
+      date_approved: doc.date_approved || "",
+      days_dfda: doc.days_dfda || "",
+      service_mode: doc.service_mode || "",
+      nov_released: doc.nov_released || "",
+      v_pd1586: doc.v_pd1586 || "",
+      v_ra9275: doc.v_ra9275 || "",
+      v_ra8749: doc.v_ra8749 || "",
+      v_haz: doc.v_haz || "",
+      v_tchem: doc.v_tchem || "",
+      tc_date_sched: doc.tc_date_sched || "",
+      tc_date_actual: doc.tc_date_actual || "",
+      legal_officer: doc.legal_officer || "",
+      tc_commitment: doc.tc_commitment || "",
+      pos_paper: doc.pos_paper || "",
+      penalty: doc.penalty || "",
+      amount: doc.amount || "",
+      or_number: doc.or_number || "",
+      tc_order_compliance: doc.tc_order_compliance || "",
+      remarks: doc.remarks || "",
+      resolution: doc.resolution || "",
+      order: doc.order || "",
+      order_status: doc.order_status || "",
+      mbu_priority: doc.mbu_priority || "",
+      mbu_survey: doc.mbu_survey || "",
+      mbu_survey_request: doc.mbu_survey_request || "",
+      dp_universe: doc.dp_universe || "",
+    }));
+
+    return res.status(200).json(formattedData);
+  } catch (error) {
+    console.error("Error retrieving data:", error);
+    return res.status(500).json({ error: "Failed to retrieve data. Please try again later." });
   }
 });
 
