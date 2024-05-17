@@ -11,7 +11,7 @@ const dotenv = require("dotenv").config();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173" || "https://embr3-ucds.netlify.app/"],
+    origin: ["http://localhost:5173", "https://embr3-ucds.netlify.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
