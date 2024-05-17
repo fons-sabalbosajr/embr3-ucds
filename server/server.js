@@ -37,6 +37,8 @@ const client = new MongoClient(mongoUri, {
     strict: true,
     deprecationErrors: true,
   },
+  tls: true,
+  tlsAllowInvalidCertificates: false,
 });
 
 let userCollection;
