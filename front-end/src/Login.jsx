@@ -25,7 +25,7 @@ const Login = () => {
 
     try {
       const response = await axios.post(
-        "/login",
+        "https://embr3-ucds.onrender.com/login",
         {
           email: values.email,
           password: values.password,
