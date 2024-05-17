@@ -31,14 +31,11 @@ const mongoUri = process.env.MONGO_URI;
 if (!mongoUri) {
   throw new Error("MONGO_URI is not set. Check your environment variables.");
 }
+
 const client = new MongoClient(mongoUri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
+  serverApi: ServerApiVersion.v1,
   tls: true,
-  tlsAllowInvalidCertificates: false,
+  tlsAllowInvalidCertificates: false, // Set to true if you want to allow invalid certificates
 });
 
 let userCollection;
