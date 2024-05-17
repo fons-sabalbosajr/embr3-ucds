@@ -12,7 +12,7 @@ const Register = () => {
   const onFinish = async (values) => {
     setIsLoading(true); // Start loading animation
     try {
-      const response = await axios.post('http://localhost:8081/register', {
+      const response = await axios.post('/register', {
         name: values.name,
         email: values.email,
         password: values.password,

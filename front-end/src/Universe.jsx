@@ -57,7 +57,7 @@ const Universe = () => {
   // Check authentication status on component mount
   useEffect(() => {
     axios
-      .get("http://localhost:8081/check-auth", { withCredentials: true })
+      .get("/check-auth", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);
@@ -77,7 +77,7 @@ const Universe = () => {
   // Handle user logout
   const handleLogout = () => {
     axios
-      .get("http://localhost:8081/logout", { withCredentials: true })
+      .get("/logout", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Logout Success") {
           localStorage.removeItem("authToken"); // Clear token from local storage

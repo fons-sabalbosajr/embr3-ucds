@@ -26,7 +26,7 @@ export const DataProvider = ({ children }) => {
       setLoading(true);
 
       // Ensure correct endpoint and parameters
-      const response = await axios.get("http://localhost:8081/api/get-province-data", {
+      const response = await axios.get("/api/get-province-data", {
         params: { province },
       });
 
