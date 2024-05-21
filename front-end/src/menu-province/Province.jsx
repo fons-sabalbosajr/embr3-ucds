@@ -1,5 +1,6 @@
 import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import axios from "axios";
 import {
   Table,
   Input,
@@ -19,6 +20,7 @@ import {
   Space,
   Spin,
   TimePicker,
+  notification,
 } from "antd";
 import {
   SearchOutlined,
@@ -27,6 +29,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
   MinusOutlined,
+  ReloadOutlined, // Add the reload icon
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import "./province.css";
@@ -61,16 +64,23 @@ const BoldTab = styled.span`
 `;
 
 const Province = ({ theme }) => {
-  const { provinceName } = useParams(); // Get province name from the route
-  const { data, loading, error, setCurrentProvince } = useContext(DataContext);
+  const { provinceName } = useParams();
+  const { data, loading, error, currentProvince, setCurrentProvince } =
+    useContext(DataContext);
+  const { fetchData } = useContext(DataContext);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const capitalizedProvinceName = capitalizeFirstLetter(provinceName);
-  const [modalVisible, setModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [originalRecord, setOriginalRecord] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [shouldRefreshTable, setShouldRefreshTable] = useState(false);
+  const [filteredData, setFilteredData] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
+  const { confirm } = Modal;
+
   const [rows, setRows] = useState([
     {
       sectionIncharge: "",
@@ -95,80 +105,13 @@ const Province = ({ theme }) => {
   const maxRowsHAZ = 5;
   const maxRowsCHEM = 100;
   const maxRowsPCO = 5;
-
-  const { confirm } = Modal;
-
-  useEffect(() => {
-    if (provinceName) {
-      setCurrentProvince(provinceName); // Update the province in the context
-    }
-  }, [provinceName]); // Re-run when `provinceName` changes
-
-  // Filter data based on search term
-  const filteredData = data.filter((item) => {
-    return Object.values(item).some(
-      (value) =>
-        typeof value === "string" &&
-        value.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
-
-  const showModal = (record) => {
-    setSelectedRecord(record);
-    setOriginalRecord(record); // Store the original data when the modal is opened
-    setIsEditing(false);
-    setModalVisible(true);
-  };
-
-  const handleCloseModal = () => {
-    // Close the modal completely
-    setModalVisible(false);
-    setSelectedRecord(null);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setSelectedRecord(originalRecord); // Reset to the original data
-    setIsEditing(false); // Exit edit mode
-  };
-
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
-
-  const handleSave = () => {
-    console.log("Save", selectedRecord); // Handle save logic here
-    setIsEditing(false);
-    setOriginalRecord(selectedRecord);
-  };
-
-  const handleChange = (field, value) => {
-    setSelectedRecord((prevRecord) => ({
-      ...prevRecord,
-      [field]: value,
-    }));
-  };
-
-  const showCancelPrompt = () => {
-    confirm({
-      title: "Are you sure you want to cancel editing?",
-      icon: <ExclamationCircleOutlined />,
-      content: "Any unsaved changes will be lost.",
-      okText: "Yes, Cancel",
-      okType: "primary",
-      cancelText: "No, Keep Editing",
-      //transitionName: 'zoom',
-      onOk() {
-        handleCancel(); // If the user confirms, call handleCancelEdit
-      },
-      onCancel() {
-        console.log("Keep editing");
-      },
-    });
-  };
-
   const dateFormat = "MM/DD/YYYY";
   const timeFormat = "h:mm A";
+
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat('en-US').format(number);
+  };
+
   const initialDateMonitored = selectedRecord?.date_monitored
     ? moment(selectedRecord.date_monitored, dateFormat)
     : null;
@@ -228,7 +171,7 @@ const Province = ({ theme }) => {
     ? moment(selectedRecord.date_forwarded, dateFormat)
     : null;
 
-    const DateValPCO = selectedRecord?.pco_validity
+  const DateValPCO = selectedRecord?.pco_validity
     ? moment(selectedRecord.pco_validity, dateFormat)
     : null;
 
@@ -338,6 +281,157 @@ const Province = ({ theme }) => {
     }
   };
 
+  useEffect(() => {
+    if (provinceName) {
+      setCurrentProvince(provinceName);
+    }
+  }, [provinceName]);
+
+  useEffect(() => {
+    if (shouldRefreshTable) {
+      fetchData(provinceName);
+      setShouldRefreshTable(false); // Reset shouldRefreshTable after refresh
+    }
+  }, [shouldRefreshTable, fetchData, provinceName]);
+
+  const filterData = (data, searchTerm) => {
+    return data.filter((item) =>
+      Object.values(item).some(
+        (value) =>
+          typeof value === "string" &&
+          value.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
+  };
+
+  useEffect(() => {
+    // Filter the data whenever data or searchTerm changes
+    const filtered = filterData(data, searchTerm);
+    setFilteredData(filtered);
+  }, [data, searchTerm]);
+
+  useEffect(() => {
+    // Set the table loading state based on the overall loading state
+    setTableLoading(loading);
+  }, [loading]);
+
+  const showModal = (record) => {
+    setSelectedRecord(record);
+    setOriginalRecord(record);
+    setIsEditing(false);
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    // Close the modal completely
+    setModalVisible(false);
+    setSelectedRecord(null);
+    setIsEditing(false);
+    setShouldRefreshTable(true); // Trigger table refresh
+  };
+
+  const handleCancel = () => {
+    setSelectedRecord(originalRecord);
+    setIsEditing(false); // Exit edit mode
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      // Send PUT request to update data
+      const response = await axios.put(
+        `http://localhost:8081/api/update-data/${selectedRecord.id_no}`,
+        selectedRecord
+      );
+
+      if (response.status === 200) {
+        console.log("Data updated successfully:", response.data);
+        setIsEditing(false);
+        setOriginalRecord(selectedRecord);
+        setShouldRefreshTable(true);
+        await fetchData(provinceName);
+
+        notification.success({
+          message: "Success",
+          description: "Data updated successfully.",
+          duration: 3,
+        });
+
+        setTimeout(() => {
+          setCurrentProvince(currentProvince);
+          //handleCloseModal();
+        }, 1000);
+      } else {
+        console.error(
+          "Failed to update data. Unexpected response status:",
+          response.status
+        );
+        notification.warning({
+          message: "Warning",
+          description: "Failed to update data. Please reload the browser.",
+          duration: 3,
+        });
+      }
+    } catch (error) {
+      // Handle request errors
+      console.error("Error updating data:", error);
+      // Show error message
+      notification.error({
+        message: "Error",
+        description: "Failed to update data. Please try again.",
+        duration: 3, // Duration in seconds
+      });
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setSelectedRecord((prevRecord) => ({
+      ...prevRecord,
+      [field]: value,
+    }));
+  };
+
+  const handleReload = async () => {
+    try {
+      // Set table loading to true
+      setTableLoading(true);
+
+      // Fetch data again
+      await fetchData(provinceName);
+
+      // Filter the data
+      const filtered = filterData(data, searchTerm);
+      setFilteredData(filtered);
+    } catch (error) {
+      // Handle errors
+      console.error("Error reloading data:", error);
+    } finally {
+      // Reset table loading state
+      setTableLoading(false);
+    }
+  };
+
+  const showCancelPrompt = () => {
+    confirm({
+      title: "Are you sure you want to cancel editing?",
+      icon: <ExclamationCircleOutlined />,
+      content: "Any unsaved changes will be lost.",
+      okText: "Yes, Cancel",
+      okType: "primary",
+      cancelText: "No, Keep Editing",
+      //transitionName: 'zoom',
+      onOk() {
+        handleCancel();
+      },
+      onCancel() {
+        //console.log("Keep editing");
+      },
+    });
+  };
+
   const columns = [
     {
       title: "ID No.",
@@ -402,15 +496,9 @@ const Province = ({ theme }) => {
       {error ? (
         <Card className="error-card">
           {" "}
-          {/* Card for error handling */}
           <strong>Oops... Something went wrong!</strong>
-          <p>Try to reload the data again.</p> {/* Error message */}
-          <Button
-            type="primary"
-            onClick={() => {
-              fetchData(provinceName); // Retry fetching data
-            }}
-          >
+          <p>Try to reload the data again.</p>
+          <Button type="primary" onClick={handleReload} loading={loading}>
             Reload
           </Button>
         </Card>
@@ -421,15 +509,12 @@ const Province = ({ theme }) => {
             title={
               <div className="modal-title-container">
                 {" "}
-                {/* Flex container for the title */}
                 <span className="title-left">
                   Record ID: {selectedRecord?.id_no || "Unknown"}
                 </span>
-                <span>
-                  {selectedRecord?.title || ""} {/* Left-aligned part */}
-                </span>
+                <span>{selectedRecord?.title || ""}</span>
                 <span className="title-right">
-                  {selectedRecord?.ecc_cnc || ""} {/* Right-aligned part */}
+                  {selectedRecord?.ecc_cnc || ""}
                 </span>
               </div>
             }
@@ -465,13 +550,7 @@ const Province = ({ theme }) => {
                 {/* GENERAL INFORMATION */}
                 <TabPane tab={<BoldTab>General Information</BoldTab>} key="1">
                   <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                      className="modalcol"
-                    >
+                    <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
                       <Paragraph>
                         {" "}
                         <strong>Project Title:</strong>
@@ -538,7 +617,6 @@ const Province = ({ theme }) => {
                           </Paragraph>
                         </Col>
                       </Row>
-
                       <Paragraph>
                         <strong>Industry Type:</strong> <br />
                         <IndustryTypeAutoComplete
@@ -560,7 +638,6 @@ const Province = ({ theme }) => {
                           }
                         />
                       </Paragraph>
-
                       <Paragraph>
                         <strong>Specific Project Type:</strong>
                         <Input
@@ -671,6 +748,7 @@ const Province = ({ theme }) => {
                           placeholder="no data"
                         />
                       </Paragraph>
+
                       <Paragraph>
                         <strong>Bio-Oxygen Demand (kg/day)</strong>
                         <Input
@@ -716,7 +794,7 @@ const Province = ({ theme }) => {
                                 disabled={!isEditing}
                                 onChange={(value) =>
                                   handleChange("handler", value)
-                                } // Allow 
+                                } // Allow
                               />
                             </Paragraph>
                           </Col>
@@ -1582,7 +1660,7 @@ const Province = ({ theme }) => {
                           disabled={!isEditing} // Only editable in edit mode
                           onChange={(e) =>
                             handleChange(
-                              "tsd	",
+                              "tsd",
                               e.target.checked ? "REQUIRED" : ""
                             )
                           }
@@ -1592,15 +1670,39 @@ const Province = ({ theme }) => {
                           <strong>TSD Permit</strong>
                         </Checkbox>
                         <Row gutter={[16, 16]}>
+                        <Col
+                            xs={24} // Full width on extra-small screens
+                            sm={24} // Full width on small screens
+                            md={12} // Half width on medium screens
+                            lg={12}
+                          >
+                            
+                            <Paragraph>
+                              <strong className="label_title">
+                                TSD Reference Code
+                              </strong>
+                              <Input
+                                    className="poppins-textarea"
+                                    value={selectedRecord?.tsd_ref_no}
+                                    style={isEditing ? {} : { color: "#aaa" }}
+                                    disabled={!isEditing}
+                                    onChange={(e) =>
+                                      handleChange("tsd_ref_no", e.target.value)
+                                    }
+                                    placeholder="TSD Ref No."
+                                  />
+                            </Paragraph>
+                          </Col>
                           <Col
                             xs={24} // Full width on extra-small screens
                             sm={24} // Full width on small screens
                             md={12} // Half width on medium screens
                             lg={12}
                           >
+                            
                             <Paragraph>
                               <strong className="label_title">
-                                TSD Date of Expiration:
+                                TSD Date of Expiration
                               </strong>
 
                               <DatePicker
@@ -1632,7 +1734,7 @@ const Province = ({ theme }) => {
                           disabled={!isEditing} // Only editable in edit mode
                           onChange={(e) =>
                             handleChange(
-                              "tsd_trc	",
+                              "tp_trc",
                               e.target.checked ? "REQUIRED" : ""
                             )
                           }
@@ -1642,6 +1744,30 @@ const Province = ({ theme }) => {
                           <strong>TP/TRC Permit</strong>
                         </Checkbox>
                         <Row gutter={[16, 16]}>
+
+                        <Col
+                            xs={24} // Full width on extra-small screens
+                            sm={24} // Full width on small screens
+                            md={12} // Half width on medium screens
+                            lg={12}
+                          >
+                            
+                            <Paragraph>
+                              <strong className="label_title">
+                                TP/TRC Reference Code
+                              </strong>
+                              <Input
+                                    className="poppins-textarea"
+                                    value={selectedRecord?.tp_trc_ref_no}
+                                    style={isEditing ? {} : { color: "#aaa" }}
+                                    disabled={!isEditing}
+                                    onChange={(e) =>
+                                      handleChange("tp_trc_ref_no", e.target.value)
+                                    }
+                                    placeholder="TP/TRC Ref No."
+                                  />
+                            </Paragraph>
+                          </Col>
                           <Col
                             xs={24} // Full width on extra-small screens
                             sm={24} // Full width on small screens
@@ -1720,20 +1846,21 @@ const Province = ({ theme }) => {
                         }
                       >
                         <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">
-                              Chemical Type
-                            </strong>
+                          <Col xs={24} sm={24} md={3} lg={3}>
+                            <strong className="label_title">Type</strong>
+                          </Col>
+                          <Col xs={24} sm={24} md={3} lg={3}>
+                            <strong className="label_title">Element</strong>
                           </Col>
                           <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">Permit Type</strong>
+                            <strong className="label_title">Ref. Code</strong>
                           </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
+                          <Col xs={24} sm={24} md={5} lg={5}>
                             <strong className="label_title">Date Issued</strong>
                           </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
+                          <Col xs={24} sm={24} md={5} lg={5}>
                             <strong className="label_title">
-                              Date of Expiration
+                              Valid until
                             </strong>
                           </Col>
                         </Row>
@@ -1748,7 +1875,7 @@ const Province = ({ theme }) => {
                             }}
                           >
                             <Row gutter={[16, 16]}>
-                              <Col xs={24} sm={24} md={6} lg={6}>
+                              <Col xs={24} sm={24} md={3} lg={3}>
                                 <Paragraph>
                                   <div
                                     key={key}
@@ -1756,12 +1883,12 @@ const Province = ({ theme }) => {
                                   >
                                     <Input
                                       className="poppins-textarea"
-                                      value={selectedRecord?.chem_permit_type}
+                                      value={selectedRecord?.chemical_permit_type}
                                       style={isEditing ? {} : { color: "#aaa" }}
                                       disabled={!isEditing}
                                       onChange={(e) =>
                                         handleChange(
-                                          "chem_permit_type",
+                                          "chemical_permit_type",
                                           e.target.value
                                         )
                                       }
@@ -1770,20 +1897,37 @@ const Province = ({ theme }) => {
                                   </div>
                                 </Paragraph>
                               </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
+                              <Col xs={24} sm={24} md={3} lg={3}>
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={selectedRecord?.chem_permit_subtype}
+                                    value={selectedRecord?.chemical_permit_subtype}
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
                                       handleChange(
-                                        "chem_permit_subtype",
+                                        "chemical_permit_subtype",
                                         e.target.value
                                       )
                                     }
-                                    placeholder="Permit SubType"
+                                    placeholder="..."
+                                  />
+                                </div>
+                              </Col>
+                              <Col xs={24} sm={24} md={6} lg={6}>
+                                <div key={key} style={{ marginBottom: "10px" }}>
+                                  <Input
+                                    className="poppins-textarea"
+                                    value={selectedRecord?.chemical_permit_subtype}
+                                    style={isEditing ? {} : { color: "#aaa" }}
+                                    disabled={!isEditing}
+                                    onChange={(e) =>
+                                      handleChange(
+                                        "chemical_permit_subtype",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="ref code"
                                   />
                                 </div>
                               </Col>
@@ -1883,7 +2027,7 @@ const Province = ({ theme }) => {
                                   style={{ marginRight: 8 }}
                                 />
                               </Tooltip>
-                              <Tooltip title="Remove"> 
+                              <Tooltip title="Remove">
                                 <Button
                                   type="primary"
                                   danger
@@ -1906,9 +2050,7 @@ const Province = ({ theme }) => {
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={selectedRecord?.pco_no
-
-                                    }
+                                    value={selectedRecord?.pco_no}
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
@@ -1945,16 +2087,12 @@ const Province = ({ theme }) => {
                         <Row gutter={[16, 16]}>
                           <Col xs={24} sm={24} md={12} lg={12}>
                             <Paragraph>
-                              <strong className="label_title">
-                                PCO Name
-                              </strong>
+                              <strong className="label_title">PCO Name</strong>
                               {rowsPCO.map((key, index) => (
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={selectedRecord?.pco_name
-
-                                    }
+                                    value={selectedRecord?.pco_name}
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
@@ -1975,9 +2113,7 @@ const Province = ({ theme }) => {
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={selectedRecord?.pco_tel_no
-
-                                    }
+                                    value={selectedRecord?.pco_tel_no}
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
@@ -2498,14 +2634,19 @@ const Province = ({ theme }) => {
                           >
                             <Paragraph>
                               <strong className="label_title">
-                              Compliance with TC Commitment/Order
+                                Compliance with TC Commitment/Order
                               </strong>
                               &nbsp; <i>(Paste Link Here)</i>
                               <InspectorTCCompliance
-                                value={selectedRecord?.tc_order_compliance || ""}
+                                value={
+                                  selectedRecord?.tc_order_compliance || ""
+                                }
                                 disabled={!isEditing}
                                 onChange={(e) =>
-                                  handleChange("tc_order_compliance", e.target.value)
+                                  handleChange(
+                                    "tc_order_compliance",
+                                    e.target.value
+                                  )
                                 }
                               />
                             </Paragraph>
@@ -2698,7 +2839,6 @@ const Province = ({ theme }) => {
                             </Paragraph>
                           </Col>
                         </Row>
-
 
                         <Row gutter={[16, 16]}>
                           <Col
@@ -3104,14 +3244,22 @@ const Province = ({ theme }) => {
               <div>No Record Selected</div>
             )}
           </Modal>
-
           <div className={`header-panel ${theme}`}>
             <div className="header-content">
               <h2>{`${capitalizedProvinceName} Universe of Firms and Industries`}</h2>
+              <Button
+                className="refresh-button"
+                icon={<ReloadOutlined />}
+                onClick={handleReload}
+                loading={loading}
+              ></Button>
               <Button className="add-industry-button">Add Industry</Button>
             </div>
 
             <div className="search-pagination-container">
+              <div className="total-rows">
+                <strong>Industry Count: {formatNumber(filteredData.length)}</strong>
+              </div>
               <div className="search-input">
                 <Input
                   placeholder="Search..."
@@ -3160,17 +3308,19 @@ const Province = ({ theme }) => {
                   {<strong className="loading_title">...</strong>}
                 </Spin>
               ) : (
-                <Table
-                  columns={columns}
-                  dataSource={filteredData}
-                  rowKey={(record) => record.id_no} // Unique row key
-                  pagination={{
-                    current: currentPage,
-                    total: filteredData.length,
-                    pageSize: itemsPerPage,
-                    onChange: (page) => setCurrentPage(page),
-                  }}
-                />
+                <Spin spinning={tableLoading}>
+                  <Table
+                    columns={columns}
+                    dataSource={filteredData}
+                    rowKey={(record) => record.id_no}
+                    pagination={{
+                      current: currentPage,
+                      total: filteredData.length,
+                      pageSize: itemsPerPage,
+                      onChange: (page) => setCurrentPage(page),
+                    }}
+                  />
+                </Spin>
               )}
             </div>
           </div>

@@ -20,4 +20,4 @@ const InspectorTCCompliance = ({ value, disabled, onChange }) => {
   )
 }
 
-export default InspectorTCCompliance
+export default InspectorTCCompliance;

@@ -46,7 +46,6 @@
 
 .header-content {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   margin-top: 0.25rem;
@@ -67,6 +66,7 @@
   transition: background-color 0.3s ease;
   width: 200px;
   height: 50px;
+  margin-left: auto;
 }
 
 .add-industry-button:hover {
@@ -91,9 +91,14 @@
 
 .search-pagination-container {
   display: flex;
-  justify-content: right; /* Separates search and pagination controls */
+  justify-content: right;
   align-items: center;
-  margin: 10px 0; /* Adds top and bottom margins */
+  margin: 10px 0;
+}
+
+.total-rows {
+  margin-right: 20px;
+  margin-right: auto;
 }
 
 .pagination-controls {
@@ -171,6 +176,7 @@
   width: 130px;
   height: 5px;
   align-items: flex-start;
+  font-weight: 400;
 }
 
 .label {
@@ -236,6 +242,17 @@
   right: 0;
   height: 200px;
 }
+
+
+.refresh-button {
+  margin-left: 10px; 
+  align-items: flex-start;
+}
+
+.refresh-button:hover {
+  background-color: #40a9ff; /* Darker background color on hover */
+}
+
 
 /* Media Queries for Responsiveness */
 @media (max-width: 768px) {
