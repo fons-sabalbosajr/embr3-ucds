@@ -19,13 +19,16 @@ const Login = () => {
     setValues((prevValues) => ({ ...prevValues, [name]: value }));
   };
 
+   // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
+   const backendUrl = process.env.REACT_APP_BACKEND_URL;
+
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
 
     try {
       const response = await axios.post(
-        "http://localhost:8081/login" || "https://embr3-ucds.onrender.com/login" ,
+        `${backendUrl}/login`, // Use the environment variable here
         {
           email: values.email,
           password: values.password,
