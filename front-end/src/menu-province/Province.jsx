@@ -327,7 +327,7 @@ const Province = ({ theme }) => {
     setModalVisible(false);
     setSelectedRecord(null);
     setIsEditing(false);
-    setShouldRefreshTable(true); // Trigger table refresh
+    //setShouldRefreshTable(true); // Trigger table refresh
   };
 
   const handleCancel = () => {
@@ -1855,7 +1855,7 @@ const Province = ({ theme }) => {
                           <Col xs={24} sm={24} md={6} lg={6}>
                             <strong className="label_title">Ref. Code</strong>
                           </Col>
-                          <Col xs={24} sm={24} md={5} lg={5}>
+                          <Col xs={24} sm={24} md={6} lg={6}>
                             <strong className="label_title">Date Issued</strong>
                           </Col>
                           <Col xs={24} sm={24} md={5} lg={5}>

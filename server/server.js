@@ -22,7 +22,11 @@ app.use(cookieParser());
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
-const client = new MongoClient(mongoUri);
+const client = new MongoClient(mongoUri, {
+  //useNewUrlParser: true,
+  //useUnifiedTopology: true,
+  ssl: true,
+});
 
 let db;
 let userCollection;
@@ -38,6 +42,7 @@ async function connectToMongo() {
     console.error("Error connecting to MongoDB:", error);
   }
 }
+
 connectToMongo();
 
 // JWT Secret
