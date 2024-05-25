@@ -20,7 +20,7 @@ const Login = () => {
   };
 
    // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
-   const backendUrl = process.env.REACT_APP_BACKEND_URL;
+   const backendUrl = 'https://embr3-ucds.onrender.com';
 
   const handleSubmit = async (values) => {
     setIsLoading(true);
