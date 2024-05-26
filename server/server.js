@@ -20,11 +20,18 @@ app.use(cors({
 }));
 app.use(cookieParser());
 
+// Preflight request handling
+app.options("*", cors({
+  origin: ["http://localhost:5173", "https://6651729de551d90008488c23--embr3-ucds.netlify.app", "https://66517a5c3ba4860008041006--embr3-ucds.netlify.app"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+}));
+
+
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
 const client = new MongoClient(mongoUri, {
-  //useNewUrlParser: true,
-  //useUnifiedTopology: true,
   ssl: true,
 });
 
