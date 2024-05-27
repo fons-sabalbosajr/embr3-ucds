@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 8081;
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: 'https://6653e32f7d713902bf49f924--lovely-moonbeam-8b6721.netlify.app',
+  origin: 'https://66541db29c181f411b8e1811--embr3-ucds.netlify.app/',
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
