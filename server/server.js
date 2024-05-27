@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 8081;
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ["http://localhost:5173", "https://6651729de551d90008488c23--embr3-ucds.netlify.app"],
+  origin: ["http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
@@ -22,7 +22,7 @@ app.use(cookieParser());
 
 // Preflight request handling
 app.options("*", cors({
-  origin: ["http://localhost:5173", "https://6651729de551d90008488c23--embr3-ucds.netlify.app", "https://66517a5c3ba4860008041006--embr3-ucds.netlify.app"],
+  origin: ["http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,

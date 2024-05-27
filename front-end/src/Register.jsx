@@ -12,7 +12,7 @@ const Register = () => {
   const onFinish = async (values) => {
     setIsLoading(true); // Start loading animation
     try {
-      const response = await axios.post('http://localhost:8081/register' || 'https://embr3-ucds.onrender.com/register',  {
+      const response = await axios.post('http://localhost:8081/register',  {
         name: values.name,
         email: values.email,
         password: values.password,
