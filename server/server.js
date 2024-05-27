@@ -13,21 +13,13 @@ const PORT = process.env.PORT || 8081;
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ["http://localhost:5173"],
+  origin: 'https://6653e32f7d713902bf49f924--lovely-moonbeam-8b6721.netlify.app',
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
+  optionsSuccessStatus: 200 // For legacy browser support
 }));
 app.use(cookieParser());
-
-// Preflight request handling
-app.options("*", cors({
-  origin: ["http://localhost:5173"],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-}));
-
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;

@@ -343,7 +343,7 @@ const Province = ({ theme }) => {
     try {
       // Send PUT request to update data
       const response = await axios.put(
-        `http://localhost:8081/api/update-data/${selectedRecord.id_no}`,
+        `https://embr3-ucds.onrender.com/api/update-data/${selectedRecord.id_no}`,
         selectedRecord
       );
 
