@@ -1,3 +1,4 @@
+//#region "imports"
 import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
@@ -55,6 +56,22 @@ const capitalizeFirstLetter = (str) => {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
 
+const normalizeAndSplit = (str) => {
+  return str
+    .replace(/_/g, ' ') // Replace underscores with spaces
+    .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
+    .split(/(?<!,\s)[\n,]/) // Split by new lines and commas
+    .map((s, i, arr) => {
+      if (i < arr.length - 1 && arr[i + 1] && arr[i + 1].trim().startsWith(',')) {
+        return s.trim() + ', ';
+      }
+      return s.trim();
+    }) // Trim each string and add ", " if the next element starts with a comma
+    .filter(s => s); // Remove empty strings
+};
+
+//#endregion
+
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { Paragraph } = Typography;
@@ -81,14 +98,7 @@ const Province = ({ theme }) => {
   const [tableLoading, setTableLoading] = useState(false);
   const { confirm } = Modal;
 
-  const [rows, setRows] = useState([
-    {
-      sectionIncharge: "",
-      handler: "",
-      key: Date.now(),
-    },
-  ]);
-  const [rowsECC, setRowsECC] = useState([Date.now()]);
+ 
   const [rowsPTO, setRowsPTO] = useState([Date.now()]);
   const [rowsDP, setRowsDP] = useState([Date.now()]);
   const [rowsHAZ, setRowsHAZ] = useState([Date.now()]);
@@ -108,10 +118,58 @@ const Province = ({ theme }) => {
   const dateFormat = "MM/DD/YYYY";
   const timeFormat = "h:mm A";
 
-  const formatNumber = (number) => {
-    return new Intl.NumberFormat('en-US').format(number);
+  const [rows, setRows] = useState([]);
+  const [sectionInCharge, setSectionInCharge] = useState([]);
+  const [handler, setHandler] = useState([]);
+  const [rowsECC, setRowsECC] = useState([Date.now()]);
+
+  useEffect(() => {
+    if (selectedRecord && isEditing) {
+      const sectionInChargeData = normalizeAndSplit(selectedRecord.section_incharge);
+      const handlerData = normalizeAndSplit(selectedRecord.handler);
+      
+
+      setRows(sectionInChargeData.map((_, index) => ({ key: index })));
+      setSectionInCharge(sectionInChargeData);
+      //setRowsECC(selectedRecord.ecc_cnc.map((_, index) => ({ key: index })));
+      setHandler(handlerData);
+    }
+  }, [selectedRecord, isEditing]);
+
+  const handleSectionInChargeChange = (index, value) => {
+    const newSectionInCharge = [...sectionInCharge];
+    newSectionInCharge[index] = value;
+    setSectionInCharge(newSectionInCharge);
   };
 
+  const handleHandlerChange = (index, value) => {
+    const newHandler = [...handler];
+    newHandler[index] = value;
+    setHandler(newHandler);
+  };
+
+  const handleAddRowsec = () => {
+    setRows([...rows, { key: rows.length }]);
+    setSectionInCharge([...sectionInCharge, ""]);
+    setHandler([...handler, ""]);
+  };
+
+  const handleRemoveRowsec = (index) => {
+    const newRows = rows.filter((_, i) => i !== index);
+    const newSectionInCharge = sectionInCharge.filter((_, i) => i !== index);
+    const newHandler = handler.filter((_, i) => i !== index);
+
+    setRows(newRows);
+    setSectionInCharge(newSectionInCharge);
+    setHandler(newHandler);
+  };
+  
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-US").format(number);
+  };
+
+ 
+//#region initialDate================================================================
   const initialDateMonitored = selectedRecord?.date_monitored
     ? moment(selectedRecord.date_monitored, dateFormat)
     : null;
@@ -175,8 +233,8 @@ const Province = ({ theme }) => {
     ? moment(selectedRecord.pco_validity, dateFormat)
     : null;
 
-  const DateApprovedChiefLegal = selectedRecord?.date_approved
-    ? moment(selectedRecord.date_approved, dateFormat)
+  const DateApprovedChiefLegal = selectedRecord?.date_approved_clegal
+    ? moment(selectedRecord.date_approved_clegal, dateFormat)
     : null;
 
   const DateNOVRelease = selectedRecord?.nov_released
@@ -198,16 +256,8 @@ const Province = ({ theme }) => {
   const DatePenalty = selectedRecord?.penalty
     ? moment(selectedRecord.penalty, dateFormat)
     : null;
+//#endregion
 
-  const handleAddRow = () => {
-    if (rows.length < maxRows) {
-      setRows([...rows, { sectionIncharge: "", handler: "", key: Date.now() }]);
-    }
-  };
-
-  const handleRemoveRow = (index) => {
-    setRows(rows.filter((_, i) => i !== index));
-  };
 
   const handleAddRowECC = () => {
     if (rowsECC.length < maxRowsECC) {
@@ -290,7 +340,7 @@ const Province = ({ theme }) => {
   useEffect(() => {
     if (shouldRefreshTable) {
       fetchData(provinceName);
-      setShouldRefreshTable(false); // Reset shouldRefreshTable after refresh
+      setShouldRefreshTable(false);
     }
   }, [shouldRefreshTable, fetchData, provinceName]);
 
@@ -305,13 +355,11 @@ const Province = ({ theme }) => {
   };
 
   useEffect(() => {
-    // Filter the data whenever data or searchTerm changes
     const filtered = filterData(data, searchTerm);
     setFilteredData(filtered);
   }, [data, searchTerm]);
 
   useEffect(() => {
-    // Set the table loading state based on the overall loading state
     setTableLoading(loading);
   }, [loading]);
 
@@ -323,7 +371,6 @@ const Province = ({ theme }) => {
   };
 
   const handleCloseModal = () => {
-    // Close the modal completely
     setModalVisible(false);
     setSelectedRecord(null);
     setIsEditing(false);
@@ -341,8 +388,8 @@ const Province = ({ theme }) => {
 
   const handleSave = async () => {
     try {
-      // Send PUT request to update data
       const response = await axios.put(
+        `http://localhost:8081/api/update-data/${selectedRecord.id_no}` ||
         `https://embr3-ucds.onrender.com/api/update-data/${selectedRecord.id_no}`,
         selectedRecord
       );
@@ -362,7 +409,6 @@ const Province = ({ theme }) => {
 
         setTimeout(() => {
           setCurrentProvince(currentProvince);
-          //handleCloseModal();
         }, 1000);
       } else {
         console.error(
@@ -376,13 +422,11 @@ const Province = ({ theme }) => {
         });
       }
     } catch (error) {
-      // Handle request errors
       console.error("Error updating data:", error);
-      // Show error message
       notification.error({
         message: "Error",
         description: "Failed to update data. Please try again.",
-        duration: 3, // Duration in seconds
+        duration: 3,
       });
     }
   };
@@ -775,32 +819,30 @@ const Province = ({ theme }) => {
                               >
                                 <SectionInChargeAutoComplete
                                   style={isEditing ? {} : { color: "#aaa" }}
-                                  value={selectedRecord?.section_incharge || ""}
+                                  value={sectionInCharge[index] || ""}
                                   disabled={!isEditing}
                                   onChange={(value) =>
-                                    handleChange("section_incharge", value)
-                                  } // Allow the input to take up available space
+                                    handleSectionInChargeChange(index, value)
+                                  }
                                 />
                               </div>
                             </Paragraph>
                           </Col>
-
                           <Col xs={24} sm={24} md={9} lg={9}>
                             <Paragraph>
                               <strong>Inspector/Handler</strong> <br />
                               <InspectorsAutoComplete
                                 style={isEditing ? {} : { color: "#aaa" }}
-                                value={selectedRecord?.handler || ""}
+                                value={handler[index] || ""}
                                 disabled={!isEditing}
                                 onChange={(value) =>
-                                  handleChange("handler", value)
-                                } // Allow
+                                  handleHandlerChange(index, value)
+                                }
                               />
                             </Paragraph>
                           </Col>
                         </Row>
                       ))}
-
                       <Row gutter={[16, 16]}>
                         <Col
                           xs={24}
@@ -818,7 +860,7 @@ const Province = ({ theme }) => {
                             <Button
                               type="primary"
                               icon={<PlusOutlined />}
-                              onClick={handleAddRow}
+                              onClick={handleAddRowsec}
                               className="btn-add"
                               disabled={rows.length >= maxRows}
                             />
@@ -829,7 +871,7 @@ const Province = ({ theme }) => {
                                 type="primary"
                                 danger
                                 icon={<MinusOutlined />}
-                                onClick={() => handleRemoveRow(rows.length - 1)}
+                                onClick={() => handleRemoveRowsec(rows.length - 1)}
                                 className="btn-remove"
                                 style={{ marginLeft: "8px" }}
                               />
@@ -1114,9 +1156,9 @@ const Province = ({ theme }) => {
                 >
                   <Row gutter={[16, 16]}>
                     <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
+                      xs={24}
+                      sm={24}
+                      md={12}
                       lg={12}
                     >
                       <Card
@@ -1670,27 +1712,26 @@ const Province = ({ theme }) => {
                           <strong>TSD Permit</strong>
                         </Checkbox>
                         <Row gutter={[16, 16]}>
-                        <Col
+                          <Col
                             xs={24} // Full width on extra-small screens
                             sm={24} // Full width on small screens
                             md={12} // Half width on medium screens
                             lg={12}
                           >
-                            
                             <Paragraph>
                               <strong className="label_title">
                                 TSD Reference Code
                               </strong>
                               <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.tsd_ref_no}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("tsd_ref_no", e.target.value)
-                                    }
-                                    placeholder="TSD Ref No."
-                                  />
+                                className="poppins-textarea"
+                                value={selectedRecord?.tsd_ref_no}
+                                style={isEditing ? {} : { color: "#aaa" }}
+                                disabled={!isEditing}
+                                onChange={(e) =>
+                                  handleChange("tsd_ref_no", e.target.value)
+                                }
+                                placeholder="TSD Ref No."
+                              />
                             </Paragraph>
                           </Col>
                           <Col
@@ -1699,7 +1740,6 @@ const Province = ({ theme }) => {
                             md={12} // Half width on medium screens
                             lg={12}
                           >
-                            
                             <Paragraph>
                               <strong className="label_title">
                                 TSD Date of Expiration
@@ -1744,28 +1784,26 @@ const Province = ({ theme }) => {
                           <strong>TP/TRC Permit</strong>
                         </Checkbox>
                         <Row gutter={[16, 16]}>
-
-                        <Col
+                          <Col
                             xs={24} // Full width on extra-small screens
                             sm={24} // Full width on small screens
                             md={12} // Half width on medium screens
                             lg={12}
                           >
-                            
                             <Paragraph>
                               <strong className="label_title">
                                 TP/TRC Reference Code
                               </strong>
                               <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.tp_trc_ref_no}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("tp_trc_ref_no", e.target.value)
-                                    }
-                                    placeholder="TP/TRC Ref No."
-                                  />
+                                className="poppins-textarea"
+                                value={selectedRecord?.tp_trc_ref_no}
+                                style={isEditing ? {} : { color: "#aaa" }}
+                                disabled={!isEditing}
+                                onChange={(e) =>
+                                  handleChange("tp_trc_ref_no", e.target.value)
+                                }
+                                placeholder="TP/TRC Ref No."
+                              />
                             </Paragraph>
                           </Col>
                           <Col
@@ -1859,9 +1897,7 @@ const Province = ({ theme }) => {
                             <strong className="label_title">Date Issued</strong>
                           </Col>
                           <Col xs={24} sm={24} md={5} lg={5}>
-                            <strong className="label_title">
-                              Valid until
-                            </strong>
+                            <strong className="label_title">Valid until</strong>
                           </Col>
                         </Row>
 
@@ -1883,7 +1919,9 @@ const Province = ({ theme }) => {
                                   >
                                     <Input
                                       className="poppins-textarea"
-                                      value={selectedRecord?.chemical_permit_type}
+                                      value={
+                                        selectedRecord?.chemical_permit_type
+                                      }
                                       style={isEditing ? {} : { color: "#aaa" }}
                                       disabled={!isEditing}
                                       onChange={(e) =>
@@ -1901,7 +1939,9 @@ const Province = ({ theme }) => {
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={selectedRecord?.chemical_permit_subtype}
+                                    value={
+                                      selectedRecord?.chemical_permit_subtype
+                                    }
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
@@ -1918,7 +1958,9 @@ const Province = ({ theme }) => {
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={selectedRecord?.chemical_permit_subtype}
+                                    value={
+                                      selectedRecord?.chemical_permit_subtype
+                                    }
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
@@ -2280,7 +2322,7 @@ const Province = ({ theme }) => {
                                 format={dateFormat} // Define the desired date format
                                 disabled={!isEditing} // Disable if not in editing mode
                                 onChange={(date, dateString) => {
-                                  handleChange("date_approved", dateString);
+                                  handleChange("date_approved_clegal", dateString);
                                 }}
                                 placeholder="Select date" // Placeholder for the date picker
                                 style={{ width: "100%" }}
@@ -3258,7 +3300,9 @@ const Province = ({ theme }) => {
 
             <div className="search-pagination-container">
               <div className="total-rows">
-                <strong>Industry Count: {formatNumber(filteredData.length)}</strong>
+                <strong>
+                  Industry Count: {formatNumber(filteredData.length)}
+                </strong>
               </div>
               <div className="search-input">
                 <Input

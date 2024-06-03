@@ -13,11 +13,11 @@ const PORT = process.env.PORT || 8081;
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: 'https://66541ef030bad92ab9e61793--lucent-scone-fc55bd.netlify.app',
+  origin: 'http://localhost:5173' || 'https://66541ef030bad92ab9e61793--lucent-scone-fc55bd.netlify.app',
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
-  optionsSuccessStatus: 200 // For legacy browser support
+  optionsSuccessStatus: 200
 }));
 app.use(cookieParser());
 
