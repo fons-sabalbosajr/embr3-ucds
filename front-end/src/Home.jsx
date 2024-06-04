@@ -43,7 +43,7 @@ const Home = () => {
             </p>
             <h2>
               <span className="content_span">
-                EMB R3 Universe Central Database System
+                Universe Centralized Database System
               </span>
             </h2>
             <p className="content_alice">

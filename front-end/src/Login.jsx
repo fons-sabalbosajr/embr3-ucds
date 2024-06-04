@@ -9,14 +9,14 @@ import homelogo from "./assets/emblogomenu.png";
 const antIcon = <LoadingOutlined style={{ fontSize: 24 }} spin />;
 
 const Login = () => {
-  const [values, setValues] = useState({ email: "", password: "" });
+  const [values, setValues] = useState({ username: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setValues((prevValues) => ({ ...prevValues, [name]: value }));
+    const { username, value } = e.target;
+    setValues((prevValues) => ({ ...prevValues, [username]: value }));
   };
 
    // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
@@ -30,7 +30,7 @@ const Login = () => {
       const response = await axios.post(
         `${backendUrl}/login`, // Use the environment variable here
         {
-          email: values.email,
+          username: values.username,
           password: values.password,
         },
         {
@@ -76,22 +76,22 @@ const Login = () => {
             <br />
             ENVIRONMENTAL MANAGEMENT BUREAU REGION III
             <br />
-            Universe Central Database System
+            Universe Centralized Database System
           </p>
           {error && <p style={{ color: "red" }}>{error}</p>}{" "}
           {/* Display error message */}
           <Form onFinish={handleSubmit} layout="vertical">
             <Form.Item
-              name="email"
-              label="Email"
+              name="username"
+              label="Username"
               rules={[
-                { type: "email", message: "Invalid email format" },
-                { required: true, message: "Email is required" },
+                { type: "username", message: "Username is required" },
+                { required: true, message: "Username is required" },
               ]}
             >
               <Input
-                placeholder="Enter Email"
-                value={values.email}
+                placeholder="Enter Username"
+                value={values.username}
                 onChange={handleChange}
               />
             </Form.Item>

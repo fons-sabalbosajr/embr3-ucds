@@ -52,19 +52,19 @@ if (!JWT_SECRET) {
 
 // Login Route
 app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
+  const { username, password } = req.body;
+  if (!username || !password) {
     return res.status(400).json({ error: "Email and password are required." });
   }
 
   try {
-    const user = await userCollection.findOne({ email });
+    const user = await userCollection.findOne({ username});
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
     const token = jwt.sign(
-      { email: user.email, name: user.name, userId: user._id },
+      { username: user.username, name: user.name, userId: user._id },
       JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -84,9 +84,9 @@ app.post("/login", async (req, res) => {
 
 // Registration Route
 app.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: "Name, email, and password are required" });
+  const { name, username, email, password } = req.body;
+  if (!name || !username || !email || !password) {
+    return res.status(400).json({ error: "Name, username, email, and password are required" });
   }
   try {
     const existingUser = await userCollection.findOne({ email });
@@ -94,7 +94,7 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Email already exists" });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await userCollection.insertOne({ name, email, password: hashedPassword });
+    const result = await userCollection.insertOne({ name, username, email, password: hashedPassword });
     return res.status(201).json({
       status: "User registered successfully",
       userId: result.insertedId,

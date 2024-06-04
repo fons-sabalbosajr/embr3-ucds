@@ -26,10 +26,12 @@ body {
 
 .form{
     background-color: rgb(255, 255, 255, 0.95);
+    max-width: 600px;
     padding: 15px;
     border-radius: 10px;
     top: 40%;
     left: 50%;
+    margin: 0 auto;
 }
 
 .background-form{

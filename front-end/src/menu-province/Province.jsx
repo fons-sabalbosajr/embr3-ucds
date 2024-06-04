@@ -2,6 +2,7 @@
 import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import _ from "lodash";
 import {
   Table,
   Input,
@@ -22,6 +23,7 @@ import {
   Spin,
   TimePicker,
   notification,
+  Tag,
 } from "antd";
 import {
   SearchOutlined,
@@ -58,16 +60,20 @@ const capitalizeFirstLetter = (str) => {
 
 const normalizeAndSplit = (str) => {
   return str
-    .replace(/_/g, ' ') // Replace underscores with spaces
-    .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
+    .replace(/_/g, " ") // Replace underscores with spaces
+    .replace(/\s+/g, " ") // Replace multiple spaces with a single space
     .split(/(?<!,\s)[\n,]/) // Split by new lines and commas
     .map((s, i, arr) => {
-      if (i < arr.length - 1 && arr[i + 1] && arr[i + 1].trim().startsWith(',')) {
-        return s.trim() + ', ';
+      if (
+        i < arr.length - 1 &&
+        arr[i + 1] &&
+        arr[i + 1].trim().startsWith(",")
+      ) {
+        return s.trim() + ", ";
       }
       return s.trim();
     }) // Trim each string and add ", " if the next element starts with a comma
-    .filter(s => s); // Remove empty strings
+    .filter((s) => s); // Remove empty strings
 };
 
 //#endregion
@@ -96,9 +102,9 @@ const Province = ({ theme }) => {
   const [shouldRefreshTable, setShouldRefreshTable] = useState(false);
   const [filteredData, setFilteredData] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { confirm } = Modal;
 
- 
   const [rowsPTO, setRowsPTO] = useState([Date.now()]);
   const [rowsDP, setRowsDP] = useState([Date.now()]);
   const [rowsHAZ, setRowsHAZ] = useState([Date.now()]);
@@ -108,7 +114,7 @@ const Province = ({ theme }) => {
   const [showAllRowsCHEM, setShowAllRowsCHEM] = useState(false);
   const [rowsPCO, setRowsPCO] = useState([Date.now()]);
 
-  const maxRows = 3;
+  const maxRows = 2;
   const maxRowsECC = 3;
   const maxRowsPTO = 5;
   const maxRowsDP = 5;
@@ -120,14 +126,17 @@ const Province = ({ theme }) => {
 
   const [rows, setRows] = useState([]);
   const [sectionInCharge, setSectionInCharge] = useState([]);
+  const [chemicalPermits, setchemicalPermits] = useState([]);
   const [handler, setHandler] = useState([]);
   const [rowsECC, setRowsECC] = useState([Date.now()]);
 
   useEffect(() => {
     if (selectedRecord && isEditing) {
-      const sectionInChargeData = normalizeAndSplit(selectedRecord.section_incharge);
+      const sectionInChargeData = normalizeAndSplit(
+        selectedRecord.section_incharge
+      );
       const handlerData = normalizeAndSplit(selectedRecord.handler);
-      
+      //const chemicalPermitsData = normalizeAndSplit(selectedRecord.chemical_code);
 
       setRows(sectionInChargeData.map((_, index) => ({ key: index })));
       setSectionInCharge(sectionInChargeData);
@@ -163,13 +172,12 @@ const Province = ({ theme }) => {
     setSectionInCharge(newSectionInCharge);
     setHandler(newHandler);
   };
-  
+
   const formatNumber = (number) => {
     return new Intl.NumberFormat("en-US").format(number);
   };
 
- 
-//#region initialDate================================================================
+  //#region initialDate================================================================
   const initialDateMonitored = selectedRecord?.date_monitored
     ? moment(selectedRecord.date_monitored, dateFormat)
     : null;
@@ -256,9 +264,9 @@ const Province = ({ theme }) => {
   const DatePenalty = selectedRecord?.penalty
     ? moment(selectedRecord.penalty, dateFormat)
     : null;
-//#endregion
+  //#endregion
 
-
+  //#region addrows
   const handleAddRowECC = () => {
     if (rowsECC.length < maxRowsECC) {
       setRowsECC([...rowsECC, Date.now()]);
@@ -330,6 +338,7 @@ const Province = ({ theme }) => {
       setRowsPCO(rowsPCO.slice(0, -1));
     }
   };
+  //#endregion
 
   useEffect(() => {
     if (provinceName) {
@@ -363,6 +372,8 @@ const Province = ({ theme }) => {
     setTableLoading(loading);
   }, [loading]);
 
+
+  //#region  MODAL FUNCTIONS
   const showModal = (record) => {
     setSelectedRecord(record);
     setOriginalRecord(record);
@@ -387,12 +398,25 @@ const Province = ({ theme }) => {
   };
 
   const handleSave = async () => {
+    setIsLoading(true);
     try {
-      const response = await axios.put(
+      const hasChanges = !_.isEqual(selectedRecord, originalRecord); // Using lodash for deep comparison
+
+      if (!hasChanges) {
+        notification.info({
+          message: "Information",
+          description: "No changes detected. Data remains the same.",
+          duration: 3,
+        });
+        setIsLoading(false); // Stop loading state if no changes
+        return; // Exit the function if there are no changes
+      }
+
+      const updateUrl =
         `http://localhost:8081/api/update-data/${selectedRecord.id_no}` ||
-        `https://embr3-ucds.onrender.com/api/update-data/${selectedRecord.id_no}`,
-        selectedRecord
-      );
+        `https://embr3-ucds.onrender.com/api/update-data/${selectedRecord.id_no}`;
+
+      const response = await axios.put(updateUrl, selectedRecord);
 
       if (response.status === 200) {
         console.log("Data updated successfully:", response.data);
@@ -406,10 +430,6 @@ const Province = ({ theme }) => {
           description: "Data updated successfully.",
           duration: 3,
         });
-
-        setTimeout(() => {
-          setCurrentProvince(currentProvince);
-        }, 1000);
       } else {
         console.error(
           "Failed to update data. Unexpected response status:",
@@ -428,6 +448,8 @@ const Province = ({ theme }) => {
         description: "Failed to update data. Please try again.",
         duration: 3,
       });
+    } finally {
+      setIsLoading(false); // Set loading state to false after the operation finishes
     }
   };
 
@@ -475,6 +497,7 @@ const Province = ({ theme }) => {
       },
     });
   };
+  //#endregion
 
   const columns = [
     {
@@ -514,12 +537,239 @@ const Province = ({ theme }) => {
       render: (text, record) => <>{record.industry_class}</>,
       align: "left",
     },
+
+    {
+      title: "Permits/Clearances",
+      key: "permits_clearances",
+      render: (text, record) => (
+        <div className="permits-clearances-container">
+          {
+            record.ecc_cnc &&
+              ((record.permit_process === "ECC Online" ||
+                record.permit_process === "ECC Manual") &&
+              (record.ecc_cnc.includes("ECC-OL") ||
+                record.ecc_cnc.includes("R3") ||
+                record.ecc_cnc.includes("03") ||
+                record.ecc_cnc.includes("III") ||
+                record.ecc_cnc.includes("RO3") ||
+                record.ecc_cnc.includes("ECC")) ? (
+                <Tooltip
+                  title={
+                    <div className="tooltip-content">
+                      <div>ECC Information</div>
+                      <div>Reference No.: {record.ecc_cnc}</div>
+                      <div>Date Approved: {record.date_approved}</div>
+                      <div>Date Amended: {record.date_amend}</div>
+                    </div>
+                  }
+                  color="#0b5f74"
+                >
+                  <Button
+                    type="text"
+                    className="custom-button-green"
+                    size="small"
+                  >
+                    ECC
+                  </Button>
+                </Tooltip>
+              ) : record.ecc_cnc.includes("CNC") ||
+                record.ecc_cnc.includes("R03") ? (
+                <Tooltip
+                  title={
+                    <div className="tooltip-content">
+                      <div>CNC Information</div>
+                      <div>Code: {record.ecc_cnc}</div>
+                      <div>Date Issued: {record.date_approved}</div>
+                    </div>
+                  }
+                  color="#bc6e00"
+                >
+                  <Button
+                    type="text"
+                    className="custom-button-yellow"
+                    size="small"
+                  >
+                    CNC
+                  </Button>
+                </Tooltip>
+              ) : null) // Return null for invalid or empty ecc_cnc
+          }
+          {record.pto_code && (
+            <Tooltip
+              title={
+                <div>
+                  <div>PTO Information</div>
+                  <div>Code: {record.pto_code}</div>
+                  <div>Date Issued: {record.pto_issued}</div>
+                  <div>Date of Expiration: {record.pto_expiration}</div>
+                </div>
+              }
+              color="#643c6a"
+            >
+              <Button type="text" className="custom-button-blue" size="small">
+                {record.pto_code.includes("POA") ||
+                record.pto_code.includes("PTO") ||
+                record.pto_code.includes("FLA")
+                  ? "PTO"
+                  : record.pto_code}
+              </Button>
+            </Tooltip>
+          )}
+          {record.wwdp_code && (
+            <Tooltip
+              title={
+                <div>
+                  <div>WWDP Information</div>
+                  <div>Code: {record.wwdp_code}</div>
+                  <div>Date Issued: {record.wwdp_issued}</div>
+                  <div>Date of Expiration: {record.wwdp_expiration}</div>
+                </div>
+              }
+              color="#b45248"
+            >
+              <Button type="text" className="custom-button-orange" size="small">
+                {record.wwdp_code.includes("DP") ? "WWDP" : record.wwdp_code}
+              </Button>
+            </Tooltip>
+          )}
+          {record.haz_id && (
+            <Tooltip
+              title={
+                <div>
+                  <div>HWG ID Information</div>
+                  <div>Code: {record.haz_id}</div>
+                  <div>Date Issued: {record.haz_issued}</div>
+                </div>
+              }
+              color="#415e20"
+            >
+              <Button
+                type="text"
+                className="custom-button-skyblue"
+                size="small"
+              >
+                {record.haz_id.includes("GR") ||
+                record.haz_id.includes("M-GR") ||
+                record.pto_code.includes("OL-GR") ||
+                record.pto_code.includes("HW")
+                  ? "HWG ID"
+                  : record.haz_id}
+              </Button>
+            </Tooltip>
+          )}
+          {record.tsd_ref_no && (
+            <Tooltip
+              title={
+                <div>
+                  <div>TSD Information</div>
+                  <div>Code: {record.tsd_ref_no}</div>
+                  <div>Date of Expiration: {record.tsd_expiration}</div>
+                </div>
+              }
+              color="#542c14"
+            >
+              <Button type="text" className="custom-button-brown" size="small">
+                {record.tsd_ref_no.includes("TR") ||
+                record.tsd_ref_no.includes("OL-TR")
+                  ? "TSD ID"
+                  : record.tsd_ref_no}
+              </Button>
+            </Tooltip>
+          )}
+          {record.tp_trc_ref_no && (
+            <Tooltip
+              title={
+                <div>
+                  <div>TP/TRC Information</div>
+                  <div>Code: {record.tp_trc_ref_no}</div>
+                  <div>Date of Expiration: {record.tp_trc_expiration}</div>
+                </div>
+              }
+              color="#242726"
+            >
+              <Button type="text" className="custom-button-stone" size="small">
+                {record.tp_trc_ref_no.includes("TR") ||
+                record.tp_trc_ref_no.includes("OL-TP") ||
+                record.tp_trc_ref_no.includes("OL-PTT")
+                  ? "TP/TRC ID"
+                  : record.tp_trc_ref_no}
+              </Button>
+            </Tooltip>
+          )}
+          {record.chemical_code && (
+            <Tooltip
+              title={
+                <div>
+                  <div>Chemical Permit/s Information</div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Element</th>
+                        <th>Code</th>
+                        <th>Permit Issued</th>
+                        <th>Permit Expiration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>{record.chemical_code.split("-")[0]}</td>
+                        <td>{record.chemical_code.split("-")[2]}</td>
+                        <td>{record.chemical_code}</td>
+                        <td>{record.chem_permit_issued}</td>
+                        <td>{record.chem_permit_exp}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              }
+              color="#5e5d3e"
+            >
+              <Button type="text" className="custom-button-ash" size="small">
+                {record.chemical_code.includes("CCOr") ||
+                record.chemical_code.includes("CCOi") ||
+                record.chemical_code.includes("OL") ||
+                record.chemical_code.includes("PCL") ||
+                record.chemical_code.includes("SQI")
+                  ? "Chemical Permits"
+                  : record.chemical_code}
+              </Button>
+            </Tooltip>
+          )}
+          {record.pco_no && (
+            <Tooltip
+              title={
+                <div>
+                  <div>PCO Information</div>
+                  <div>Code: {record.pco_no}</div>
+                  <div>Name: {record.pco_name}</div>
+                  <div>Tel. No: {record.pco_tel_no}</div>
+                  <div>PCO Validity: {record.pco_validity}</div>
+                </div>
+              }
+              color="#263238"
+            >
+              <Button type="text" className="custom-button-slate" size="small">
+                {record.pco_no.includes("L") ||
+                record.pco_no.includes("PCO") ||
+                record.pco_no.includes("R") ||
+                record.pco_no.includes("COA")
+                  ? "PCO"
+                  : record.pco_no}
+              </Button>
+            </Tooltip>
+          )}
+        </div>
+      ),
+      align: "left",
+    },
     {
       title: "Remarks/Recommendations",
       key: "remarks_recommendations",
       render: (text, record) => <>{record.remarks_recommendations}</>,
       align: "left",
     },
+
     {
       title: "Actions",
       key: "actions",
@@ -552,7 +802,6 @@ const Province = ({ theme }) => {
             visible={modalVisible}
             title={
               <div className="modal-title-container">
-                {" "}
                 <span className="title-left">
                   Record ID: {selectedRecord?.id_no || "Unknown"}
                 </span>
@@ -582,13 +831,36 @@ const Province = ({ theme }) => {
                 </Button>
               ) : null,
               isEditing ? (
-                <Button key="save" type="primary" onClick={handleSave}>
+                <Button
+                  key="save"
+                  type="primary"
+                  loading={isLoading}
+                  onClick={handleSave}
+                >
                   Save
                 </Button>
               ) : null,
             ]}
             width={1300}
           >
+            {isLoading && ( // Conditionally render the loading indicator
+              <Spin
+                tip="Processing Data..." // Set the text here
+                size="large"
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: "rgba(0, 0, 0, 0.3)",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  zIndex: 999,
+                }}
+              />
+            )}
             {selectedRecord ? (
               <Tabs defaultActiveKey="1" className="tab-font">
                 {/* GENERAL INFORMATION */}
@@ -774,9 +1046,9 @@ const Province = ({ theme }) => {
                 >
                   <Row gutter={[16, 16]}>
                     <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
+                      xs={24}
+                      sm={24}
+                      md={12}
                       lg={12}
                     >
                       <Paragraph>
@@ -805,8 +1077,7 @@ const Province = ({ theme }) => {
                         />
                       </Paragraph>
 
-                      {rows.map((row, index) => (
-                        <Row gutter={[16, 16]} key={row.key}>
+                      <Row gutter={[16, 16]}>
                           <Col xs={24} sm={24} md={9} lg={9}>
                             <Paragraph>
                               <strong>Section/Unit In-Charged</strong>
@@ -819,10 +1090,13 @@ const Province = ({ theme }) => {
                               >
                                 <SectionInChargeAutoComplete
                                   style={isEditing ? {} : { color: "#aaa" }}
-                                  value={sectionInCharge[index] || ""}
+                                  value={selectedRecord.section_incharge}
                                   disabled={!isEditing}
                                   onChange={(value) =>
-                                    handleSectionInChargeChange(index, value)
+                                    handleChange(
+                                      `section_incharge_${index}`,
+                                      value
+                                    )
                                   }
                                 />
                               </div>
@@ -833,16 +1107,15 @@ const Province = ({ theme }) => {
                               <strong>Inspector/Handler</strong> <br />
                               <InspectorsAutoComplete
                                 style={isEditing ? {} : { color: "#aaa" }}
-                                value={handler[index] || ""}
+                                value={selectedRecord.handler}
                                 disabled={!isEditing}
                                 onChange={(value) =>
-                                  handleHandlerChange(index, value)
+                                  handleChange(`handler_${index}`, value)
                                 }
                               />
                             </Paragraph>
                           </Col>
                         </Row>
-                      ))}
                       <Row gutter={[16, 16]}>
                         <Col
                           xs={24}
@@ -871,7 +1144,9 @@ const Province = ({ theme }) => {
                                 type="primary"
                                 danger
                                 icon={<MinusOutlined />}
-                                onClick={() => handleRemoveRowsec(rows.length - 1)}
+                                onClick={() =>
+                                  handleRemoveRowsec(rows.length - 1)
+                                }
                                 className="btn-remove"
                                 style={{ marginLeft: "8px" }}
                               />
@@ -1155,12 +1430,7 @@ const Province = ({ theme }) => {
                   key="3"
                 >
                   <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24}
-                      sm={24}
-                      md={12}
-                      lg={12}
-                    >
+                    <Col xs={24} sm={24} md={12} lg={12}>
                       <Card
                         style={{
                           width: 600,
@@ -1240,13 +1510,10 @@ const Province = ({ theme }) => {
                               {rowsECC.map((key, index) => (
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <PermitSourceAutoComplete
-                                    value={selectedRecord?.permit_process}
+                                    value={selectedRecord?.permit_process || ""}
                                     disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange(
-                                        "permit_process",
-                                        e.target.value
-                                      )
+                                    onChange={(value) =>
+                                      handleChange("permit_process", value)
                                     }
                                   />
                                 </div>
@@ -1887,7 +2154,7 @@ const Province = ({ theme }) => {
                           <Col xs={24} sm={24} md={3} lg={3}>
                             <strong className="label_title">Type</strong>
                           </Col>
-                          <Col xs={24} sm={24} md={3} lg={3}>
+                          <Col xs={24} sm={24} md={4} lg={4}>
                             <strong className="label_title">Element</strong>
                           </Col>
                           <Col xs={24} sm={24} md={6} lg={6}>
@@ -1958,14 +2225,12 @@ const Province = ({ theme }) => {
                                 <div key={key} style={{ marginBottom: "10px" }}>
                                   <Input
                                     className="poppins-textarea"
-                                    value={
-                                      selectedRecord?.chemical_permit_subtype
-                                    }
+                                    value={selectedRecord?.chemical_code}
                                     style={isEditing ? {} : { color: "#aaa" }}
                                     disabled={!isEditing}
                                     onChange={(e) =>
                                       handleChange(
-                                        "chemical_permit_subtype",
+                                        "chemical_code",
                                         e.target.value
                                       )
                                     }
@@ -2322,7 +2587,10 @@ const Province = ({ theme }) => {
                                 format={dateFormat} // Define the desired date format
                                 disabled={!isEditing} // Disable if not in editing mode
                                 onChange={(date, dateString) => {
-                                  handleChange("date_approved_clegal", dateString);
+                                  handleChange(
+                                    "date_approved_clegal",
+                                    dateString
+                                  );
                                 }}
                                 placeholder="Select date" // Placeholder for the date picker
                                 style={{ width: "100%" }}
@@ -3286,6 +3554,7 @@ const Province = ({ theme }) => {
               <div>No Record Selected</div>
             )}
           </Modal>
+
           <div className={`header-panel ${theme}`}>
             <div className="header-content">
               <h2>{`${capitalizedProvinceName} Universe of Firms and Industries`}</h2>
@@ -3295,7 +3564,9 @@ const Province = ({ theme }) => {
                 onClick={handleReload}
                 loading={loading}
               ></Button>
-              <Button className="add-industry-button">Add Industry</Button>
+              <Button type="primary" className="add-industry-button">
+                Add Industry
+              </Button>
             </div>
 
             <div className="search-pagination-container">
