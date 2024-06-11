@@ -10,7 +10,8 @@ import {
   Spin,
   Popover,
   List,
-  Switch,
+  Space,
+  Typography,
 } from "antd";
 import {
   LogoutOutlined,
@@ -20,8 +21,11 @@ import {
   UserOutlined,
   SunOutlined,
   MoonOutlined,
+  SettingOutlined,
+  QuestionCircleOutlined,
+  BulbOutlined,
 } from "@ant-design/icons";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import Logo from "./components/Logo";
 import MenuList from "./components/MenuList";
@@ -31,11 +35,15 @@ import Survey from "./menu-component/Survey";
 import MBU from "./menu-component/MBU";
 import ExportData from "./menu-component/ExportData";
 import Admin from "./menu-component/Admin";
+import Accounts from "./menu-component/UserAccounts";
+import Extract from "./menu-component/ExtractData"
+import Report from  "./menu-component/AdminReport"
 import "./index.css";
 import { DataProvider } from "./menu-province/DataContext";
 import embLogo from "./assets/emblogomenu.png";
 
 const { Header, Sider, Content } = Layout;
+const { Text } = Typography;
 
 const Universe = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -43,25 +51,41 @@ const Universe = () => {
   const [name, setName] = useState("");
   const [notifications, setNotifications] = useState([]); // For notification badge
   const navigate = useNavigate();
-
+  const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("dark");
-
+  const [userHandle, setUserHandle] = useState("");
+  const [selection, setSelection] = useState("");
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
     // You can also apply theme changes to your application here
   };
 
+  const handleVisibleChange = (visible) => {
+    if (!visible) {
+      setSelection("");
+    }
+  };
+
+  const handleMenuItemClick = (key) => {
+    setSelection(key);
+  };
+
   axios.defaults.withCredentials = true;
 
   useEffect(() => {
     axios
-      .get("http://localhost:8081/check-auth" || "https://embr3-ucds.onrender.com/check-auth", { withCredentials: true })
+      .get(
+        "http://localhost:8081/check-auth" ||
+          "https://embr3-ucds.onrender.com/check-auth",
+        { withCredentials: true }
+      )
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);
           setName(res.data.name);
-          setNotifications(res.data.notifications || []); // Set notifications if available
+          setUserHandle(res.data.username);
+          setNotifications(res.data.notifications || []);
         } else {
           setAuth(false);
           navigate("/login", { replace: true });
@@ -70,17 +94,22 @@ const Universe = () => {
       .catch((err) => {
         setAuth(false);
         navigate("/login", { replace: true });
-      });
+      })
+      .finally(() => setLoading(false)); // Stop loading after request completes
   }, [navigate]);
-  
 
   // Handle user logout
   const handleLogout = () => {
     axios
-      .get("http://localhost:8081/logout" || "https://embr3-ucds.onrender.com/logout", { withCredentials: true })
+      .get(
+        "http://localhost:8081/logout" ||
+          "https://embr3-ucds.onrender.com/logout",
+        { withCredentials: true }
+      )
       .then((res) => {
         if (res.data.status === "Logout Success") {
           localStorage.removeItem("authToken"); // Clear token from local storage
+          setAuth(false);
           navigate("/login", { replace: true });
         } else {
           console.error("Unexpected response during logout:", res.data);
@@ -91,25 +120,24 @@ const Universe = () => {
       });
   };
 
-
-  // User menu for profile and logout options
-  const userMenu = (
-    <Menu>
-      <Menu.Item key="profile" onClick={() => navigate("/profile")}>
-        View Profile
-      </Menu.Item>
-      <Menu.Item key="logout" onClick={handleLogout}>
-        <LogoutOutlined /> Logout
-      </Menu.Item>
-    </Menu>
-  );
-
   const popoverContent = (
     <List
       dataSource={notifications}
       renderItem={(item) => <List.Item>{item.message}</List.Item>}
     />
   );
+
+  if (loading) {
+    return <Spin spinning />;
+  }
+
+  const getInitials = (name) => {
+    const splitName = name.split(" ");
+    return splitName
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+  };
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -159,7 +187,7 @@ const Universe = () => {
         {auth && (
           <Header
             className={`header-container ${
-              theme ===  "dark" ? "dark-theme" : "light-theme"
+              theme === "dark" ? "dark-theme" : "light-theme"
             }`}
             theme={theme}
             toggleTheme={toggleTheme}
@@ -176,7 +204,7 @@ const Universe = () => {
               {!collapsed}
               <span
                 className={`user-name ${
-                  theme ===  "dark" ? "dark-theme" : "light-theme"
+                  theme === "dark" ? "dark-theme" : "light-theme"
                 }`}
               >
                 Hi, {name}
@@ -200,14 +228,65 @@ const Universe = () => {
               </Popover>
 
               {/* User profile and logout options */}
-              <Dropdown overlay={userMenu} placement="bottomRight">
-                <Avatar
-                  icon={<UserOutlined />}
-                  style={{ marginRight: "20px", fontSize: "24px" }}
-                  theme={theme}
-                  toggleTheme={toggleTheme}
-                />
-              </Dropdown>
+              <Popover
+                content={
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Avatar
+                      src={getInitials(name)} 
+                      icon={<UserOutlined />} 
+                      style={{ marginBottom: "10px" }} 
+                    >{name}</Avatar>
+                    <div style={{ textAlign: "center" }}>
+                      <Text strong>{name}</Text>
+                    </div>
+                    <Text type="secondary">@{userHandle}</Text>
+                    <Menu selectedKeys={[selection]} onClick={({ key }) => handleMenuItemClick(key)}>
+                      <Menu.Item
+                        key="profile"
+                        icon={<UserOutlined />}
+                        onClick={() => navigate("/profile")}
+                      >
+                        Profile Setting
+                      </Menu.Item>
+                      <Menu.Item key="settings" icon={<SettingOutlined />}>
+                        Settings
+                      </Menu.Item>
+                      <Menu.Item key="help" icon={<QuestionCircleOutlined />}>
+                        Help
+                      </Menu.Item>
+                      <Menu.Item key="feature" icon={<BulbOutlined />}>
+                        Suggest a feature{" "}
+                        <span style={{ color: "red", marginLeft: "5px" }}>
+                          Beta
+                        </span>
+                      </Menu.Item>
+                      <Menu.Item key="logout" onClick={handleLogout}>
+                        <LogoutOutlined /> Log Out
+                      </Menu.Item>
+                    </Menu>
+                  </div>
+                }
+                trigger="click"
+                placement="bottomRight"
+                onVisibleChange={handleVisibleChange}
+                theme={theme === "light" ? "light" : "dark"}
+              >
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <Avatar
+                    src={getInitials(name)} // Use profile picture if available, otherwise display initials
+                    icon={<UserOutlined />} // Show user icon if no profile picture
+                    style={{ fontSize: "24px" }}
+                    theme={theme}
+                    toggleTheme={toggleTheme}
+                  />
+                </div>
+              </Popover>
 
               <div
                 className={`theme-switch ${
@@ -233,6 +312,10 @@ const Universe = () => {
               {/* Spin during authentication */}
               <Spin spinning={!auth}>
                 <Routes>
+                  <Route
+                    path="/"
+                    element={<Navigate to="dashboard" replace />}
+                  />
                   <Route path="dashboard" element={<Dashboard />} />
                   <Route
                     path="/province/:provinceName"
@@ -242,6 +325,11 @@ const Universe = () => {
                   <Route path="mbu" element={<MBU />} />
                   <Route path="exportdata" element={<ExportData />} />
                   <Route path="admin" element={<Admin />} />
+                  <Route path="accounts" element={<Accounts />} />
+                  <Route path="extract" element={<Extract />} />
+                  <Route path="report" element={<Report />} />
+                  <Route path="*" element={<Navigate to="dashboard" />} />{" "}
+                  {/* Catch-all route */}
                 </Routes>
               </Spin>
             </Content>

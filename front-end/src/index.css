@@ -92,12 +92,13 @@
 
 .profile_container {
     display: flex;
-    justify-content: flex-start; /* Align elements to the right */
-    align-items: center; /* Vertically center elements */
+    justify-content: flex-start;
+    align-items: center;
+    height: 85px;
 }
 
 .notification-icon {
-    margin-right: 20px; /* Consistent spacing */
+    margin-right: 10px; /* Consistent spacing */
     font-size: 20px;
     color: white;
 }

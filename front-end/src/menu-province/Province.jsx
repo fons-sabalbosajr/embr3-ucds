@@ -372,6 +372,39 @@ const Province = ({ theme }) => {
     setTableLoading(loading);
   }, [loading]);
 
+  const [chemicalCodes, setChemicalCodes] = useState([]);
+  const [chemicalType, setChemicalType] = useState('');
+  const [chemicalSubtype, setChemicalSubtype] = useState('');
+  const [permitIssued, setPermitIssued] = useState('');
+  const [permitExp, setPermitExp] = useState('');
+  const [showAllPermitsModal, setShowAllPermitsModal] = useState(false);
+
+  useEffect(() => {
+    if (selectedRecord) {
+      const { chemical_code, chemical_permit_type, chemical_permit_subtype, chem_permit_issued, chem_permit_exp } = selectedRecord;
+      setChemicalCodes(chemical_code ? chemical_code.split(/[\n,]+/) : []);
+     
+    }
+  }, [selectedRecord]);
+
+  const handleCodeChange = (index, value) => {
+    const updatedCodes = [...chemicalCodes];
+    updatedCodes[index] = value;
+    setChemicalCodes(updatedCodes);
+    
+  };
+
+  const handleAddPermit = () => {
+    const updatedCodes = [...chemicalCodes, ''];
+    setChemicalCodes(updatedCodes);
+  };
+
+  const handleRemovePermit = (index) => {
+    const updatedCodes = [...chemicalCodes];
+    updatedCodes.splice(index, 1);
+    setChemicalCodes(updatedCodes);
+  };
+
 
   //#region  MODAL FUNCTIONS
   const showModal = (record) => {
@@ -785,6 +818,111 @@ const Province = ({ theme }) => {
     },
   ];
 
+  const chemical_permit_columns =[
+    {
+      title: 'Ref Code',
+      dataIndex: 'refCode',
+      key: 'refCode',
+      width: 300,
+      render: (text, record) => (
+        <Input
+          value={text}
+          onChange={(e) => handleCodeChange(record.key, e.target.value)}
+        />
+      ),
+    },
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      key: 'type',
+      render: (text, record) => (
+        <Input
+          value={text}
+          onChange={(e) => handleCodeChange(record.key, e.target.value)}
+        />
+      ),
+    },
+    {
+      title: 'Element',
+      dataIndex: 'element',
+      key: 'element',
+      with: 100,
+      render: (text, record) => (
+        <Input
+          value={text}
+          onChange={(e) => handleCodeChange(record.key, e.target.value)}
+        />
+      ),
+    },
+    {
+      title: 'Date Issued',
+      dataIndex: 'dateIssued',
+      key: 'dateIssued',
+      render: (text, record) => (
+        <DatePicker
+          value={text}
+          onChange={(date, dateString) => handleCodeChange(record.key, 'dateIssued', dateString)}
+          placeholder="Select date"
+        />
+      ),
+    },
+    {
+      title: 'Date Expiration',
+      dataIndex: 'dateExpiration',
+      key: 'dateExpiration',
+      render: (text, record) => (
+        <DatePicker
+          value={text}
+          onChange={(date, dateString) => handleCodeChange(record.key, 'dateExpiration', dateString)}
+          placeholder="Select date"
+        />
+      ),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      with: 150,
+      render: (_, record, index) => (
+        <Space size="middle">
+          {isEditing ? (
+            <Button type="primary" onClick={() => handleTableChange(index)}>
+              Save
+            </Button>
+          ) : (
+            <Button type="primary" onClick={() => handleEdit(index)}>
+              Edit
+            </Button>
+          )}
+          <Button danger onClick={() => handleRemovePermit(index)}>
+            Remove
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  const dataSource = chemicalCodes.map((code, index) => ({
+    key: index,
+    refCode: code,
+    type: '', 
+    element: '', 
+    dateIssued: null,
+    dateExpiration: null, // Add additional columns if needed
+  }));
+
+  const handleShowAllPermits = () => {
+    setShowAllPermitsModal(true);
+  };
+
+  const handleModalCancel = () => {
+    setShowAllPermitsModal(false);
+  };
+
+  const handleTableChange = (key, field, value) => {
+    const updatedRecord = { ...selectedRecord, [field]: value };
+    handleChange(key, updatedRecord);
+  };
+
   return (
     <div>
       {error ? (
@@ -1045,12 +1183,7 @@ const Province = ({ theme }) => {
                   key="2"
                 >
                   <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24}
-                      sm={24}
-                      md={12}
-                      lg={12}
-                    >
+                    <Col xs={24} sm={24} md={12} lg={12}>
                       <Paragraph>
                         <strong>Number of Employees:</strong>
                         <Input
@@ -1078,44 +1211,44 @@ const Province = ({ theme }) => {
                       </Paragraph>
 
                       <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={9} lg={9}>
-                            <Paragraph>
-                              <strong>Section/Unit In-Charged</strong>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                <SectionInChargeAutoComplete
-                                  style={isEditing ? {} : { color: "#aaa" }}
-                                  value={selectedRecord.section_incharge}
-                                  disabled={!isEditing}
-                                  onChange={(value) =>
-                                    handleChange(
-                                      `section_incharge_${index}`,
-                                      value
-                                    )
-                                  }
-                                />
-                              </div>
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={9} lg={9}>
-                            <Paragraph>
-                              <strong>Inspector/Handler</strong> <br />
-                              <InspectorsAutoComplete
+                        <Col xs={24} sm={24} md={9} lg={9}>
+                          <Paragraph>
+                            <strong>Section/Unit In-Charged</strong>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              <SectionInChargeAutoComplete
                                 style={isEditing ? {} : { color: "#aaa" }}
-                                value={selectedRecord.handler}
+                                value={selectedRecord.section_incharge}
                                 disabled={!isEditing}
                                 onChange={(value) =>
-                                  handleChange(`handler_${index}`, value)
+                                  handleChange(
+                                    `section_incharge_${index}`,
+                                    value
+                                  )
                                 }
                               />
-                            </Paragraph>
-                          </Col>
-                        </Row>
+                            </div>
+                          </Paragraph>
+                        </Col>
+                        <Col xs={24} sm={24} md={9} lg={9}>
+                          <Paragraph>
+                            <strong>Inspector/Handler</strong> <br />
+                            <InspectorsAutoComplete
+                              style={isEditing ? {} : { color: "#aaa" }}
+                              value={selectedRecord.handler}
+                              disabled={!isEditing}
+                              onChange={(value) =>
+                                handleChange(`handler_${index}`, value)
+                              }
+                            />
+                          </Paragraph>
+                        </Col>
+                      </Row>
                       <Row gutter={[16, 16]}>
                         <Col
                           xs={24}
@@ -2113,205 +2246,6 @@ const Province = ({ theme }) => {
                             }}
                           >
                             <Checkbox
-                              checked={
-                                selectedRecord?.chemical_permit === "REQUIRED"
-                              } // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "chemical_permit",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>Chemical Permits</strong>
-                            </Checkbox>
-                            <div className="add-remove-container-chem">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowCHEM}
-                                  disabled={rowsCHEM.length >= maxRowsCHEM}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove">
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowCHEM}
-                                  disabled={rowsCHEM.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={3} lg={3}>
-                            <strong className="label_title">Type</strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={4} lg={4}>
-                            <strong className="label_title">Element</strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">Ref. Code</strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">Date Issued</strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={5} lg={5}>
-                            <strong className="label_title">Valid until</strong>
-                          </Col>
-                        </Row>
-
-                        {/* Render first five rows and additional rows conditionally */}
-                        {rowsCHEM.map((key, index) => (
-                          <div
-                            key={key}
-                            style={{
-                              display:
-                                showAllRowsCHEM || index < 5 ? "block" : "none",
-                            }}
-                          >
-                            <Row gutter={[16, 16]}>
-                              <Col xs={24} sm={24} md={3} lg={3}>
-                                <Paragraph>
-                                  <div
-                                    key={key}
-                                    style={{ marginBottom: "5px" }}
-                                  >
-                                    <Input
-                                      className="poppins-textarea"
-                                      value={
-                                        selectedRecord?.chemical_permit_type
-                                      }
-                                      style={isEditing ? {} : { color: "#aaa" }}
-                                      disabled={!isEditing}
-                                      onChange={(e) =>
-                                        handleChange(
-                                          "chemical_permit_type",
-                                          e.target.value
-                                        )
-                                      }
-                                      placeholder="Permit SubType"
-                                    />
-                                  </div>
-                                </Paragraph>
-                              </Col>
-                              <Col xs={24} sm={24} md={3} lg={3}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={
-                                      selectedRecord?.chemical_permit_subtype
-                                    }
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange(
-                                        "chemical_permit_subtype",
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder="..."
-                                  />
-                                </div>
-                              </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.chemical_code}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange(
-                                        "chemical_code",
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder="ref code"
-                                  />
-                                </div>
-                              </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateIssuedChem} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange(
-                                        "chem_permit_issued",
-                                        dateString
-                                      );
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateExpChem} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange(
-                                        "chem_permit_exp",
-                                        dateString
-                                      );
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              </Col>
-                            </Row>
-                            {index === 4 && !showAllRowsCHEM && (
-                              <div className="gradient-more"></div>
-                            )}
-                          </div>
-                        ))}
-
-                        {/* Show All / Hide Additional Rows Button */}
-                        {rowsCHEM.length > 4 && (
-                          <div
-                            style={{ textAlign: "center", marginTop: "10px" }}
-                          >
-                            <Button
-                              type="primary"
-                              onClick={() =>
-                                setShowAllRowsCHEM(!showAllRowsCHEM)
-                              }
-                            >
-                              {showAllRowsCHEM
-                                ? "Hide Other Permits"
-                                : "Show All Chemical Permits"}
-                            </Button>
-                          </div>
-                        )}
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
                               checked={selectedRecord?.pco === "REQUIRED"} // Check if '✓'
                               disabled={!isEditing} // Only editable in edit mode
                               onChange={(e) =>
@@ -2445,6 +2379,121 @@ const Province = ({ theme }) => {
                             permits only. You cannot add more sets.
                           </div>
                         )}
+                      </Card>
+
+                      <Card
+                        style={{
+                          width: 600,
+                          marginBottom: 20,
+                          padding: 5,
+                        }}
+                        size="small"
+                        title={
+                          <div
+                            style={{
+                              display: "flex",
+                            }}
+                          >
+                            <Checkbox
+                              checked={
+                                selectedRecord?.chemical_permit === "REQUIRED"
+                              }
+                              disabled={!isEditing}
+                              onChange={(e) =>
+                                handleChange(
+                                  "chemical_permit",
+                                  e.target.checked ? "REQUIRED" : ""
+                                )
+                              }
+                              style={{ fontSize: "15px" }}
+                            >
+                              <strong>Chemical Permits</strong>
+                            </Checkbox>
+                          </div>
+                        }
+                      >
+                       {chemicalCodes.slice(0, 3).map((code, index) => (
+                        <Row key={index} gutter={[16, 16]}>
+                          <Col xs={24} sm={24} md={5} lg={5}>
+                            <strong>Ref Code {index + 1}:</strong>
+                            <Input
+                              value={code}
+                              disabled={!isEditing}
+                              onChange={(e) => handleCodeChange(index, e.target.value)}
+                              placeholder={`Ref Code ${index + 1}`}
+                            />
+                          </Col>
+                          <Col xs={24} sm={24} md={4} lg={4}>
+                            <strong>Type:</strong>
+                            <Input
+                              value={chemicalType}
+                              disabled={!isEditing}
+                              onChange={(e) => setChemicalType(e.target.value)}
+                              placeholder="Type"
+                            />
+                          </Col>
+                          <Col xs={24} sm={24} md={4} lg={4}>
+                            <strong>Element:</strong>
+                            <Input
+                              value={chemicalSubtype}
+                              disabled={!isEditing}
+                              onChange={(e) => setChemicalSubtype(e.target.value)}
+                              placeholder="Element"
+                            />
+                          </Col>
+                          <Col xs={24} sm={24} md={6} lg={6}>
+                            <strong>Permit Issued:</strong>
+                            <DatePicker
+                              value={permitIssued ? moment(permitIssued, 'MM/DD/YYYY') : null}
+                              format="MM/DD/YYYY"
+                              disabled={!isEditing}
+                              onChange={(date, dateString) => setPermitIssued(dateString)}
+                              placeholder="Permit Issued"
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col xs={24} sm={24} md={5} lg={5}>
+                            <strong>Permit Exp.:</strong>
+                            <DatePicker
+                              value={permitExp ? moment(permitExp, 'MM/DD/YYYY') : null}
+                              format="MM/DD/YYYY"
+                              disabled={!isEditing}
+                              onChange={(date, dateString) => setPermitExp(dateString)}
+                              placeholder="Permit Exp"
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                        </Row>
+                        
+                      ))}
+                        {chemicalCodes.length > 3 && (
+                        <div
+                          style={{ textAlign: "center", marginTop: "10px" }}
+                          >
+                         <Button type="primary"  onClick={handleShowAllPermits}>
+                            Show All Chemical Permits
+                          </Button>
+                        </div>
+                        )}
+                       <Modal
+                          title="All Chemical Permits"
+                          visible={showAllPermitsModal}
+                          onCancel={handleModalCancel}
+                          footer={[
+                            <Button key="cancel" onClick={() => setShowAllPermitsModal(false)}>
+                              Cancel
+                            </Button>,
+                            <Button key="update" type="primary" onClick={handleSave}>
+                              Update All Changes
+                            </Button>,
+                            <Button key="close" onClick={() => setShowAllPermitsModal(false)}>
+                              Close
+                            </Button>,
+                          ]}
+                          width={1100}
+                        >
+                          <Table columns={chemical_permit_columns} dataSource={dataSource} pagination={false} />
+                        </Modal>
                       </Card>
                     </Col>
                   </Row>

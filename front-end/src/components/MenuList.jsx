@@ -7,9 +7,10 @@ import {
   DownCircleFilled,
   SettingFilled,
 } from "@ant-design/icons";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const MenuList = ({ refreshDashboard, theme, toggleTheme }) => {
+  const location = useLocation();
   const navigate = useNavigate(); // Initialize the navigate function from `react-router-dom`
 
   const handleDashboardClick = () => {
@@ -35,6 +36,7 @@ const MenuList = ({ refreshDashboard, theme, toggleTheme }) => {
           mode="inline"
           className="menu-bar"
           theme={theme}
+          //selectedKeys={location.pathname === "/universe/dashboard" ? ["dashboard"] : []}
           defaultOpenKeys={["reports"]}
         >
           <Menu.Item
@@ -110,15 +112,38 @@ const MenuList = ({ refreshDashboard, theme, toggleTheme }) => {
             </Link>
           </Menu.Item>
 
-          <Menu.Item key="admin" icon={<SettingFilled />}>
-            <Link
-              to="/universe/admin"
-              className="link-menu"
-              onClick={handleAdminDataClick}
-            >
-              ADMIN
-            </Link>
-          </Menu.Item>
+          <Menu.SubMenu key="admin" icon={<SettingFilled />} title="Admin">
+            <Menu.Item key="admin-1">
+              <Link
+                to="/universe/accounts"
+                className={`link-menu-hover ${
+                  isMenuSelected("accounts") ? "selected" : ""
+                }`}
+              >
+                User Accounts
+              </Link>
+            </Menu.Item>
+            <Menu.Item key="admin-2">
+              <Link
+                to="/universe/extract"
+                className={`link-menu-hover ${
+                  isMenuSelected("extract") ? "selected" : ""
+                }`}
+              >
+                Extract Data
+              </Link>
+            </Menu.Item>
+            <Menu.Item key="admin-3">
+              <Link
+                to="/universe/report"
+                className={`link-menu-hover ${
+                  isMenuSelected("report") ? "selected" : ""
+                }`}
+              >
+                Generate Report
+              </Link>
+            </Menu.Item>
+          </Menu.SubMenu>
         </Menu>
         {/* <div className="theme-switch">
         <Switch

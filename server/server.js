@@ -6,19 +6,22 @@ const bcrypt = require("bcrypt");
 const { MongoClient } = require("mongodb");
 const dotenv = require("dotenv").config();
 
-
 const app = express();
 const PORT = process.env.PORT || 8081;
 
 // Middleware
 app.use(express.json());
-app.use(cors({
-  origin: 'http://localhost:5173' || 'https://66541ef030bad92ab9e61793--lucent-scone-fc55bd.netlify.app',
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
+app.use(
+  cors({
+    origin:
+      "http://localhost:5173" ||
+      "https://66541ef030bad92ab9e61793--lucent-scone-fc55bd.netlify.app",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+    optionsSuccessStatus: 200,
+  })
+);
 app.use(cookieParser());
 
 // MongoDB connection setup
@@ -29,6 +32,7 @@ const client = new MongoClient(mongoUri, {
 
 let db;
 let userCollection;
+let loginStatusCollection;
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -37,6 +41,7 @@ async function connectToMongo() {
     console.log("Successfully connected to MongoDB!");
     db = client.db("universe-db");
     userCollection = db.collection("users");
+    loginStatusCollection = db.collection("login-status");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
@@ -58,7 +63,7 @@ app.post("/login", async (req, res) => {
   }
 
   try {
-    const user = await userCollection.findOne({ username});
+    const user = await userCollection.findOne({ username });
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
@@ -69,10 +74,20 @@ app.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
+    // Save login status to the login-status collection
+    const loginStatus = {
+      userId: user._id,
+      name: user.name,
+      userName: user.username,
+      isLoggedIn: true,
+      loginTime: new Date(),
+    };
+    await loginStatusCollection.insertOne(loginStatus);
+
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'None',
+      sameSite: "None",
     });
 
     return res.status(200).json({ status: "success", token });
@@ -86,7 +101,9 @@ app.post("/login", async (req, res) => {
 app.post("/register", async (req, res) => {
   const { name, username, email, password } = req.body;
   if (!name || !username || !email || !password) {
-    return res.status(400).json({ error: "Name, username, email, and password are required" });
+    return res
+      .status(400)
+      .json({ error: "Name, username, email, and password are required" });
   }
   try {
     const existingUser = await userCollection.findOne({ email });
@@ -94,25 +111,50 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Email already exists" });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await userCollection.insertOne({ name, username, email, password: hashedPassword });
+    const result = await userCollection.insertOne({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+    });
     return res.status(201).json({
       status: "User registered successfully",
       userId: result.insertedId,
     });
   } catch (error) {
     console.error("Error during registration:", error.message);
-    return res.status(500).json({ error: "An error occurred during registration" });
+    return res
+      .status(500)
+      .json({ error: "An error occurred during registration" });
   }
 });
 
 // Logout Route
 app.get("/logout", async (req, res) => {
   try {
+    // Extract token from request headers or cookies
+    const token = req.cookies.token;
+
+    // Decode token to get user information
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decodedToken.username;
+
+      // Find and update the most recent document for the user
+      await loginStatusCollection.findOneAndUpdate(
+        { userName: username, isLoggedIn: true },
+        { $set: { isLoggedIn: false, logoutTime: new Date() } },
+        { sort: { loginTime: -1 } } // Sort by loginTime in descending order
+      );
+
+
+    // Clear authentication token from cookies
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
     });
+
+    // Send logout success response
     return res.json({
       status: "Logout Success",
       message: "You have been logged out.",
@@ -120,6 +162,8 @@ app.get("/logout", async (req, res) => {
     });
   } catch (error) {
     console.error("Error during logout:", error.message);
+
+    // Send detailed error response
     return res.status(500).json({ error: "An error occurred during logout." });
   }
 });
@@ -129,16 +173,40 @@ app.get("/check-auth", async (req, res) => {
   try {
     const token = req.cookies.token;
     if (!token) {
-      return res.status(401).json({ status: "Failure", error: "No token provided" });
+      return res
+        .status(401)
+        .json({ status: "Failure", error: "No token provided" });
     }
     const decoded = jwt.verify(token, JWT_SECRET);
-    return res.json({ status: "Success", name: decoded.name });
+    return res.json({ status: "Success", name: decoded.name, username: decoded.username });
   } catch (error) {
     console.error("Error in check-auth:", error.message);
     return res.status(401).json({ status: "Failure", error: error.message });
   }
 });
 
+app.get("/api/online_users", async (req, res) => {
+  try {
+    // Query the login-status collection to find users who are currently logged in
+    const onlineUsers = await loginStatusCollection.find().toArray();
+    
+    // Extract relevant user information
+    const formattedOnlineUsers = onlineUsers.map(user => ({
+      userId: user.userId,
+      userName: user.userName,
+      name: user.name,
+      isLoggedIn: user.isLoggedIn,
+      loginTime: user.loginTime,
+      logoutTime: user.logoutTime
+    }));
+
+    // Send the list of online users as the response
+    res.status(200).json({ onlineUsers: formattedOnlineUsers });
+  } catch (error) {
+    console.error("Error fetching online users:", error);
+    res.status(500).json({ error: "An error occurred while fetching online users." });
+  }
+});
 
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
@@ -172,16 +240,18 @@ app.get("/api/get-province-data", async (req, res) => {
     //console.log(`Querying data for province: ${province}`);
 
     // Create a case-insensitive regex query for the specified province
-    const query = { province: new RegExp(`^${province}$`, 'i') };
+    const query = { province: new RegExp(`^${province}$`, "i") };
 
     // Fetch data for the specified province
     const provinceData = await collection.find(query).toArray();
 
     if (provinceData.length === 0) {
-      return res.status(404).json({ message: `No data found for ${province}.` });
+      return res
+        .status(404)
+        .json({ message: `No data found for ${province}.` });
     }
 
-   // Sort the data by Serial_No
+    // Sort the data by Serial_No
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
 
     // Format the fetched data for the response
@@ -246,7 +316,8 @@ app.get("/api/get-province-data", async (req, res) => {
       tp_trc_expiration: doc.tp_trc_expiration || "",
       chemical_permit: doc.chemical_permit || "",
       chemical_permit_type: doc.chemical_permit_type || "",
-      chemical_permit_subtype: doc.chemical_permit_subtype || "",
+      chemical_permit_sub_type: doc.chemical_permit_sub_type || "",
+      chemical_code: doc.chemical_code || "",
       chem_permit_issued: doc.chem_permit_issued || "",
       chem_permit_exp: doc.chem_permit_exp || "",
       pco: doc.pco || "",
@@ -288,7 +359,9 @@ app.get("/api/get-province-data", async (req, res) => {
     return res.status(200).json(formattedData);
   } catch (error) {
     console.error("Error retrieving data:", error);
-    return res.status(500).json({ error: "Failed to retrieve data. Please try again later." });
+    return res
+      .status(500)
+      .json({ error: "Failed to retrieve data. Please try again later." });
   }
 });
 
@@ -318,7 +391,20 @@ app.put("/api/update-data/:id", async (req, res) => {
     }
   } catch (error) {
     console.error("Error updating data:", error);
-    res.status(500).json({ error: "Failed to update data. Please try again later." });
+    res
+      .status(500)
+      .json({ error: "Failed to update data. Please try again later." });
+  }
+});
+
+// Define route to fetch user data
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await userCollection.find().toArray(); // Fetch all users from the "user" collection
+    res.json(users); // Return the users as JSON
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
   }
 });
 

@@ -316,6 +316,13 @@
 }
 
 
+.custom-table-row{
+  height: 30px; /* Adjust the height as needed */
+  line-height: 30px; /* Ensure text is vertically centered */
+  padding-top: 5px; /* Adjust the top padding as needed */
+  padding-bottom: 5px; /* Adjust the bottom padding as needed */
+}
+
 /* Media Queries for Responsiveness */
 @media (max-width: 768px) {
   .header-content {

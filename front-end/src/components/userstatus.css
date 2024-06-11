@@ -1,0 +1,86 @@
+.user-status-container {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: #f9f9f9;
+    width: 350px;
+  }
+
+
+  .user-status-container h2 {
+    font-size: 18px;
+    color: #5a5a5a;
+  }
+
+  .user-status-item {
+    display: flex;
+    align-items: center;
+    justify-items: center;
+  }
+  
+  .user-status-item-avatar {
+    margin-right: 5px;
+  }
+
+  .user-status-item-title {
+    margin-top: 5px;
+    margin-left: 10px;
+  }
+
+  .user-status-item-time {
+    margin-left: auto;
+    font-size: 12px;
+    color: #9d9d9d;
+  }
+
+  .user-status-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  
+  @media screen and (max-width: 768px) {
+    .user-status-container {
+      width: 300px;
+    }
+  }
+  
+  @media screen and (max-width: 576px) {
+    .user-status-container {
+      width: 250px;
+    }
+  }
+  
+  @media screen and (max-width: 480px) {
+    .user-status-container {
+      width: 150px;
+      top: 100px;
+      right: 20px;
+    }
+    .user-status-container h2 {
+        font-size: 15px;
+        color: #5a5a5a;
+      }
+      .user-status-item-title {
+        margin-top: 5px;
+        font-size: 12px;
+      }
+      .user-status-item-avatar {
+        margin-right: 5px;
+        font-size: 12px;
+      }
+
+      .user-status-item-time {
+        margin-left: auto;
+        font-size: 9px;
+        color: #9d9d9d;
+        margin-top: -10px;
+      }
+  }
+  

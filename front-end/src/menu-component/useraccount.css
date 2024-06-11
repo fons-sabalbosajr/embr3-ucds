@@ -1,0 +1,84 @@
+.user-accounts-container {
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: rgb(255, 255, 255);
+}
+
+.filter-options {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-right: 20px;
+}
+
+.filter-options .filter-input {
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+}
+
+.filter-options .ant-input {
+  margin-right: 16px;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+ 
+}
+
+.search-filter{
+    margin-right: 20px;
+    width: 400px;
+}
+
+.export{
+    color: #686868;
+    border-color: #4057d6;
+    //background-color: #4057d6;
+}
+
+.add-user{
+    color: white;
+    background-color: #4057d6;
+}
+
+.filter-options .ant-select {
+    margin-right: 16px;
+  }
+
+.action-buttons .ant-btn:not(:last-child) {
+    margin-right: 16px; /* Add spacing between buttons */
+  
+
+/* Media queries for tablet */
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+  .user-accounts-container {
+    padding: 15px;
+  }
+
+  .filter-options .ant-input {
+    height: 38px;
+    font-size: 15px;
+  }
+
+  .filter-options .ant-select {
+    height: 38px;
+    font-size: 15px;
+  }
+
+  .filter-options .ant-picker {
+    height: 38px;
+  }
+
+  .filter-options .ant-btn {
+    height: 38px;
+    font-size: 15px;
+  }
+
+  .filter-options .ant-space-item:not(:last-child) {
+    margin-right: 12px;
+  }
+}
