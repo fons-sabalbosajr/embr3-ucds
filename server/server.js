@@ -187,7 +187,6 @@ app.get("/check-auth", async (req, res) => {
 
 app.get("/api/online_users", async (req, res) => {
   try {
-    // Query the login-status collection to find users who are currently logged in
     const onlineUsers = await loginStatusCollection.find().toArray();
     
     // Extract relevant user information

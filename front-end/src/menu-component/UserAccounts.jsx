@@ -1,87 +1,199 @@
 import { useState, useEffect } from "react";
-import { Table, Input, Button, Select } from "antd";
+import { Avatar, Table, Input, Button, Select, Popover, List } from "antd";
 import {
   SearchOutlined,
   DownloadOutlined,
   PlusOutlined,
+  EllipsisOutlined,
+  UserOutlined
 } from "@ant-design/icons";
 import axios from "axios";
 import "./useraccount.css";
+import UserProfileModal from "./UserAccountModal";
 
 const { Option } = Select;
 
 const UserAccounts = () => {
   const [userData, setUserData] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [popoverVisible, setPopoverVisible] = useState(false);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
   });
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await axios.get("http://localhost:8081/api/users", {
-          params: {
-            page: pagination.current,
-            pageSize: pagination.pageSize,
-          },
-        });
-        setUserData(response.data);
-        setPagination({
-          ...pagination,
-          total: response.headers["x-total-count"],
-        });
-      } catch (error) {
-        console.error("Error fetching user data:", error);
+
+  const fetchUserData = async () => {
+    try {
+      const response = await axios.get("http://localhost:8081/api/users", {
+        params: {
+          page: pagination.current,
+          pageSize: pagination.pageSize,
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      return [];
+    }
+  };
+
+  const fetchLoginStatus = async () => {
+    try {
+      const response = await axios.get("http://localhost:8081/api/online_users");
+      const allStatuses = response.data.onlineUsers;
+
+      // Extract the latest status for each user based on the name
+      const latestStatuses = allStatuses.reduce((acc, status) => {
+        if (!acc[status.name] || new Date(status.loginTime) > new Date(acc[status.name].loginTime)) {
+          acc[status.name] = status;
+        }
+        return acc;
+      }, {});
+
+      return latestStatuses;
+    } catch (error) {
+      console.error("Error fetching login status:", error);
+      return {};
+    }
+  };
+
+  const getOfflineStatus = (logoutTime) => {
+    const logoutDate = new Date(logoutTime);
+    const currentDate = new Date();
+    const diffMs = currentDate - logoutDate;
+    const diffHrs = diffMs / (1000 * 60 * 60);
+
+    if (diffHrs < 12) {
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffHrs);
+      if (diffMins < 60) {
+        return `active ${diffMins} min ago`;
+      } else {
+        return `active ${diffHours} hr ago`;
       }
+    } else {
+      return 'offline';
+    }
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [users, loginStatuses] = await Promise.all([fetchUserData(), fetchLoginStatus()]);
+
+        const combinedData = users.map(user => {
+          const status = loginStatuses[user.name];
+          if (status && status.isLoggedIn) {
+            return { ...user, status: 'online' };
+          } else if (status) {
+            return { ...user, status: getOfflineStatus(status.logoutTime) };
+          } else {
+            return { ...user, status: 'offline' }; // Default to 'offline' if no status found
+          }
+        });
+
+        const sortedData = combinedData.sort((a, b) => {
+          if (a.status === 'online' && b.status !== 'online') {
+            return -1;
+          }
+          if (a.status !== 'online' && b.status === 'online') {
+            return 1;
+          }
+          return 0;
+        });
+
+        setUserData(sortedData);
+        setPagination(prev => ({
+          ...prev,
+          total: sortedData.length,
+        }));
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+      setLoading(false);
     };
 
-    fetchUserData();
-  }, []);
+    fetchData();
+  }, [pagination.current, pagination.pageSize]);
 
-  // Define columns for the table
+
   const columns = [
     {
       title: "Name",
       dataIndex: "name",
       key: "name",
+      ellipsis: true,
+      render: (name, record) => (
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {record.avatar ? (
+            <Avatar src={record.avatar} />
+          ) : (
+            <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }}>{name.charAt(0)}</Avatar>
+          )}
+          <span style={{ marginLeft: "8px" }}>{name}</span>
+        </div>
+      ),
     },
     {
       title: "Email Address",
       dataIndex: "email",
       key: "email",
+      ellipsis: true,
     },
     {
-      title: "Designation",
+      title: "Designation/Position",
       dataIndex: "designation",
       key: "designation",
-    },
-    {
-      title: "Position",
-      dataIndex: "position",
-      key: "position",
+      ellipsis: true,
     },
     {
       title: "Permission",
       dataIndex: "permission",
       key: "permission",
-    },
-    {
-      title: "Action",
-      dataIndex: "action",
-      key: "action",
+      ellipsis: true,
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
+      render: status => (
+        <span style={{ color: status === 'online' ? 'green' : status.includes('active') ? 'orange' : 'red' }}>
+        {status}
+      </span>
+      ),
+    },
+    {
+      title: "Action",
+      dataIndex: "action",
+      key: "action",
+      render: (_, record) => (
+        <Popover
+          content={
+            <List>
+              <List.Item>
+                <Button type="text" size="small" onClick={() => handleEdit(record)}>Edit Profile</Button>
+              </List.Item>
+              <List.Item>
+                <Button type="text" size="small">Evaluate</Button>
+              </List.Item>
+            </List>
+          }
+          trigger="click"
+          //visible={popoverVisible}
+          //onVisibleChange={setPopoverVisible}
+        >
+          <Button icon={<EllipsisOutlined />} />
+        </Popover>
+      ),
     },
   ];
 
-  const handlePaginationChange = (newPagination) => {
-    setPagination(newPagination);
+  const handlePaginationChange = (pagination) => {
+    setPagination(pagination);
   };
 
   const handleSearch = (value) => {
@@ -100,12 +212,16 @@ const UserAccounts = () => {
     console.log("Adding new user...");
   };
 
-  const handlePageSizeChange = (value) => {
-    setPagination({
-      ...pagination,
-      pageSize: value,
-    });
-  }
+  const handleEdit = (record) => {
+    setSelectedUser(record);
+    setIsModalVisible(true);
+    setPopoverVisible(false);
+  };
+
+  const handleModalCancel = () => {
+    setSelectedUser(null);
+    setIsModalVisible(false); // Hide the modal
+  };
 
   return (
     <div className="user-accounts-container">
@@ -115,8 +231,8 @@ const UserAccounts = () => {
           <Input
             placeholder="Search Users"
             allowClear
-            prefix={<SearchOutlined />} // Replace enter button with search icon
-            size="medium" // Set the size to large
+            prefix={<SearchOutlined />}
+            size="medium"
             onSearch={handleSearch}
             className="search-filter"
           />
@@ -153,16 +269,17 @@ const UserAccounts = () => {
         dataSource={userData}
         pagination={{
           ...pagination,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
-        }}
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "50", "100"]
+         }}
         loading={loading}
         onChange={handlePaginationChange}
       />
-      <Select defaultValue={pagination.pageSize} onChange={handlePageSizeChange}>
-          {[10, 20, 50, 100].map((pageSize) => (
-            <Option key={pageSize} value={pageSize}>{pageSize}</Option>
-          ))}
-        </Select>
+      <UserProfileModal
+        user={selectedUser}
+        visible={isModalVisible}
+        onCancel={handleModalCancel}
+      />
     </div>
   );
 };
