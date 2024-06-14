@@ -1,13 +1,17 @@
 import React, { useState } from "react";
-import { Form, Input, Button, message } from "antd";
+import { Form, Input, Button } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 import homelogo from "./assets/emblogomenu.png";
 import { LoadingOutlined } from "@ant-design/icons";
+import './register.css';
 
 const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const MySwal = withReactContent(Swal);
 
   const onFinish = async (values) => {
     setIsLoading(true); // Start loading animation
@@ -17,33 +21,38 @@ const Register = () => {
           "https://embr3-ucds.onrender.com/register",
         {
           name: values.name,
-          username: values.username,
+          division: values.division,
+          position: values.position,
           email: values.email,
-          password: values.password,
         }
       );
 
       if (response.status === 201) {
-        // Status code for successful creation
-        message.success("Registration successful!");
-        navigate("/login"); // Navigate to login page after successful registration
+        // Show confirmation message with SweetAlert2
+        MySwal.fire({
+          icon: "info",
+          title: "Registration submitted for approval",
+          text: "Your account registration has been submitted for admin approval. You will receive further instructions via email once approved.",
+        }).then(() => {
+          navigate("/login"); // Navigate to login page after registration submission
+        });
       } else {
-        message.error("Registration failed. Please try again."); // Catch-all for unexpected status
+        // Show error message with SweetAlert2
+        MySwal.fire({
+          icon: "error",
+          title: "Registration failed",
+          text: "Please try again later.",
+        });
       }
     } catch (error) {
-      if (error.response) {
-        message.error(
-          `Registration failed: ${error.response.data.error || "Unknown error"}`
-        );
-      } else if (error.request) {
-        // No response from server
-        message.error(
-          "No response from server. Please check your network connection."
-        );
-      } else {
-        // Other unexpected errors
-        message.error(`Error during registration: ${error.message}`);
-      }
+      // Show error message with SweetAlert2
+      MySwal.fire({
+        icon: "error",
+        title: "Registration failed",
+        text:
+          error.response?.data.error ||
+          "An unexpected error occurred. Please try again later.",
+      });
     } finally {
       setIsLoading(false); // Stop loading animation
     }
@@ -64,7 +73,7 @@ const Register = () => {
           </div>
           <p className="centered">
             ENVIRONMENTAL MANAGEMENT BUREAU REGION III <br />
-            Universe Central Database System
+            Universe Centralized Database System
           </p>
           <h3 className="centered">SIGN-UP</h3>
 
@@ -74,17 +83,33 @@ const Register = () => {
               label="Name"
               rules={[{ required: true, message: "Please enter your name" }]}
             >
-              <Input placeholder="Enter Name" />
+              <Input placeholder="Enter Name" size="large" />{" "}
+              {/* Adjust size here */}
             </Form.Item>
 
             <Form.Item
-              name="username"
-              label="Username"
+              name="division"
+              label="Division/Section"
               rules={[
-                { required: true, message: "Please enter your username" },
+                {
+                  required: true,
+                  message: "Please enter your division/section",
+                },
               ]}
             >
-              <Input placeholder="Enter Username" />
+              <Input placeholder="Enter Division/Section" size="large" />{" "}
+              {/* Adjust size here */}
+            </Form.Item>
+
+            <Form.Item
+              name="position"
+              label="Position"
+              rules={[
+                { required: true, message: "Please enter your position" },
+              ]}
+            >
+              <Input placeholder="Enter Position" size="large" />{" "}
+              {/* Adjust size here */}
             </Form.Item>
 
             <Form.Item
@@ -95,53 +120,25 @@ const Register = () => {
                 { type: "email", message: "Invalid email format" },
               ]}
             >
-              <Input placeholder="Enter Email" />
+              <Input placeholder="Enter Email" size="large" />{" "}
+              {/* Adjust size here */}
             </Form.Item>
 
-            <Form.Item
-              name="password"
-              label="Password"
-              rules={[{ required: true, message: "Password is required" }]}
-            >
-              <Input.Password placeholder="Enter Password" />
-            </Form.Item>
-
-            <Form.Item
-              name="confirmPassword"
-              label="Confirm Password"
-              rules={[
-                { required: true, message: "Please confirm your password" },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue("password") === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(
-                      new Error("The two passwords do not match")
-                    );
-                  },
-                }),
-              ]}
-            >
-              <Input.Password placeholder="Confirm Password" />
-            </Form.Item>
-
-            <Form.Item>
+             <Form.Item>
+            <p>By signing up, you agree to our Terms and Conditions.</p>
               <Button
                 type="primary"
                 htmlType="submit"
-                block
+                block size="large"
                 disabled={isLoading} // Disable button while loading
-                icon={isLoading ? <LoadingOutlined spin /> : null} // Loading icon
+                icon={isLoading ? <LoadingOutlined spin /> : null}
+                className="btn-sign-up"
               >
                 {isLoading ? "Signing Up..." : "Sign Up"}
               </Button>
             </Form.Item>
-
-            <p>By signing up, you agree to our Terms and Conditions.</p>
-
             <Link to="/login">
-              <Button block>Back to Log In</Button>
+            <Button block size="large">Back to Log In</Button>
             </Link>
           </Form>
         </div>

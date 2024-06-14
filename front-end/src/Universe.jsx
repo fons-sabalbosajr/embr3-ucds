@@ -36,11 +36,13 @@ import MBU from "./menu-component/MBU";
 import ExportData from "./menu-component/ExportData";
 import Admin from "./menu-component/Admin";
 import Accounts from "./menu-component/UserAccounts";
-import Extract from "./menu-component/ExtractData"
-import Report from  "./menu-component/AdminReport"
+import Extract from "./menu-component/ExtractData";
+import Report from "./menu-component/AdminReport";
 import "./index.css";
 import { DataProvider } from "./menu-province/DataContext";
 import embLogo from "./assets/emblogomenu.png";
+import UserPopover from "./components/PopOverUser";
+import NotificationsPopover from "./components/PopOverNotification";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -83,20 +85,24 @@ const Universe = () => {
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);
-          setName(res.data.name);
+          // Assuming res.data.division is something like "ORD-PISMU/Programmer II"
+          const divisionParts = res.data.division.split("/");
+          const formattedName = `${divisionParts[0]} | ${res.data.name}`;
+          setName(formattedName);
           setUserHandle(res.data.username);
           setNotifications(res.data.notifications || []);
         } else {
           setAuth(false);
-          navigate("/login", { replace: true });
+          // Redirect to login page or handle unauthorized access
         }
       })
       .catch((err) => {
+        console.error("Error fetching auth status:", err);
         setAuth(false);
-        navigate("/login", { replace: true });
+        // Redirect to login page or handle unauthorized access
       })
-      .finally(() => setLoading(false)); // Stop loading after request completes
-  }, [navigate]);
+      .finally(() => setLoading(false));
+  }, []);
 
   // Handle user logout
   const handleLogout = () => {
@@ -207,70 +213,31 @@ const Universe = () => {
                   theme === "dark" ? "dark-theme" : "light-theme"
                 }`}
               >
-                Hi, {name}
+                {name}
               </span>
 
               {/* Notification badge with tooltip */}
-              <Popover
-                content={popoverContent}
-                title="Notifications"
-                trigger="click"
-                placement="bottomRight" // Ensures it opens to the bottom-right
-                overlayStyle={{ width: "600px", maxWidth: "800px" }} // Custom width for larger popover
-              >
-                <Badge count={notifications.length} offset={[10, 0]}>
-                  <BellOutlined
-                    className={`notification-icon ${
-                      theme === "light" ? "light-theme-icon" : "dark-theme-icon"
-                    }`}
-                  />
-                </Badge>
-              </Popover>
+              <NotificationsPopover
+                popoverContent={popoverContent}
+                theme={theme}
+                notifications={notifications}
+              />
 
               {/* User profile and logout options */}
               <Popover
                 content={
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Avatar
-                      src={getInitials(name)} 
-                      icon={<UserOutlined />} 
-                      style={{ marginBottom: "10px" }} 
-                    >{name}</Avatar>
-                    <div style={{ textAlign: "center" }}>
-                      <Text strong>{name}</Text>
-                    </div>
-                    <Text type="secondary">@{userHandle}</Text>
-                    <Menu selectedKeys={[selection]} onClick={({ key }) => handleMenuItemClick(key)}>
-                      <Menu.Item
-                        key="profile"
-                        icon={<UserOutlined />}
-                        onClick={() => navigate("/profile")}
-                      >
-                        Profile Setting
-                      </Menu.Item>
-                      <Menu.Item key="settings" icon={<SettingOutlined />}>
-                        Settings
-                      </Menu.Item>
-                      <Menu.Item key="help" icon={<QuestionCircleOutlined />}>
-                        Help
-                      </Menu.Item>
-                      <Menu.Item key="feature" icon={<BulbOutlined />}>
-                        Suggest a feature{" "}
-                        <span style={{ color: "red", marginLeft: "5px" }}>
-                          Beta
-                        </span>
-                      </Menu.Item>
-                      <Menu.Item key="logout" onClick={handleLogout}>
-                        <LogoutOutlined /> Log Out
-                      </Menu.Item>
-                    </Menu>
-                  </div>
+                  <UserPopover
+                    name={name}
+                    userHandle={userHandle}
+                    theme={theme}
+                    handleMenuItemClick={handleMenuItemClick}
+                    navigate={navigate}
+                    handleLogout={handleLogout}
+                    getInitials={getInitials}
+                    toggleTheme={toggleTheme}
+                    selection={selection}
+                    handleVisibleChange={handleVisibleChange}
+                  />
                 }
                 trigger="click"
                 placement="bottomRight"
@@ -279,8 +246,8 @@ const Universe = () => {
               >
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <Avatar
-                    src={getInitials(name)} // Use profile picture if available, otherwise display initials
-                    icon={<UserOutlined />} // Show user icon if no profile picture
+                    src={getInitials(name)}
+                    icon={<UserOutlined />}
                     style={{ fontSize: "24px" }}
                     theme={theme}
                     toggleTheme={toggleTheme}

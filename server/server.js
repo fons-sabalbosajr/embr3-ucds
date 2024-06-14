@@ -3,7 +3,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 const dotenv = require("dotenv").config();
 
 const app = express();
@@ -41,6 +41,7 @@ async function connectToMongo() {
     console.log("Successfully connected to MongoDB!");
     db = client.db("universe-db");
     userCollection = db.collection("users");
+    signUpCollection = db.collection("sign-up");
     loginStatusCollection = db.collection("login-status");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
@@ -49,10 +50,31 @@ async function connectToMongo() {
 
 connectToMongo();
 
+
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not set. Check your environment variables.");
+}
+
+// Function to capitalize the first letter of each word
+function capitalizeFirstLetter(input) {
+  return input
+    .toLowerCase() // Convert the entire string to lowercase
+    .split("_") // Split by underscore to handle multi-word names
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize the first letter of each word
+    .join("_"); // Rejoin with underscores
+}
+
+// Function to generate a random password of specified length
+function generateRandomPassword(length) {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * charset.length);
+    password += charset[randomIndex];
+  }
+  return password;
 }
 
 // Login Route
@@ -69,7 +91,11 @@ app.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign(
-      { username: user.username, name: user.name, userId: user._id },
+      { username: user.username, 
+        name: user.name, 
+        userId: user._id,
+        division: user.division
+       },
       JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -99,26 +125,30 @@ app.post("/login", async (req, res) => {
 
 // Registration Route
 app.post("/register", async (req, res) => {
-  const { name, username, email, password } = req.body;
-  if (!name || !username || !email || !password) {
+  const { name, division, position, email } = req.body; // Updated to match frontend form fields
+
+  if (!name || !division || !position || !email) {
     return res
       .status(400)
-      .json({ error: "Name, username, email, and password are required" });
+      .json({ error: "Name, division/section, position, and email are required" });
   }
+
   try {
-    const existingUser = await userCollection.findOne({ email });
+    const existingUser = await signUpCollection.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: "Email already exists" });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await userCollection.insertOne({
+
+    const result = await signUpCollection.insertOne({
       name,
-      username,
+      division,
+      position,
       email,
-      password: hashedPassword,
+      status: "pending", // Assuming status is set to pending for admin approval
     });
+
     return res.status(201).json({
-      status: "User registered successfully",
+      status: "User registration submitted for approval",
       userId: result.insertedId,
     });
   } catch (error) {
@@ -128,6 +158,77 @@ app.post("/register", async (req, res) => {
       .json({ error: "An error occurred during registration" });
   }
 });
+
+// POST /api/newusers - Create a new user with password encryption
+app.post('/api/newusers', async (req, res) => {
+  console.log('Received request:', req.body);
+
+  const { name, email, division, status, password, username } = req.body;
+
+  // Input validation
+  if (!name || !email || !division || !status || !password || !username) {
+    console.log('Validation error: Missing required fields');
+    return res.status(400).json({ error: 'Required fields: name, email, division, status, password, username' });
+  }
+
+  try {
+    // Check for existing email
+    const existingUser = await userCollection.findOne({ email });
+    if (existingUser) {
+      console.log('Validation error: Email already exists');
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    // Check for existing username
+    const existingUsername = await userCollection.findOne({ username });
+    if (existingUsername) {
+      console.log('Validation error: Username already exists');
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    // Hash password securely
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user object with hashed password and provided username
+    const newUser = {
+      name,
+      username,
+      email,
+      password: hashedPassword,
+      division,
+      permission: 'viewer', // Default permission
+      status,
+    };
+
+    // Insert the new user document into MongoDB
+    const insertResult = await userCollection.insertOne(newUser);
+
+    if (insertResult.insertedCount === 1) {
+      console.log('User created successfully:', insertResult.ops[0]);
+
+      return res.status(201).json({
+        message: 'User created and status updated successfully',
+        user: insertResult.ops[0],
+      });
+    } else {
+      console.error('Error inserting user:', insertResult);
+      return res.status(500).json({ error: 'Failed to create user', user: newUser });
+    }
+  } catch (error) {
+    console.error('Error creating user:', error);
+
+    // Provide more informative error message based on the error type
+    let errorMessage = 'Failed to create user';
+    if (error.name === 'MongoError') {
+      errorMessage = 'Database error occurred';
+    } else if (error.name === 'BcryptError') {
+      errorMessage = 'Error during password hashing';
+    }
+
+    return res.status(500).json({ error: errorMessage, user: req.body }); // Include the user data in the error response
+  }
+});
+
 
 // Logout Route
 app.get("/logout", async (req, res) => {
@@ -178,13 +279,14 @@ app.get("/check-auth", async (req, res) => {
         .json({ status: "Failure", error: "No token provided" });
     }
     const decoded = jwt.verify(token, JWT_SECRET);
-    return res.json({ status: "Success", name: decoded.name, username: decoded.username });
+    return res.json({ status: "Success", name: decoded.name, username: decoded.username, division: decoded.division  });
   } catch (error) {
     console.error("Error in check-auth:", error.message);
     return res.status(401).json({ status: "Failure", error: error.message });
   }
 });
 
+// Check the online users and load
 app.get("/api/online_users", async (req, res) => {
   try {
     const onlineUsers = await loginStatusCollection.find().toArray();
@@ -207,15 +309,7 @@ app.get("/api/online_users", async (req, res) => {
   }
 });
 
-// Function to capitalize the first letter of each word
-function capitalizeFirstLetter(input) {
-  return input
-    .toLowerCase() // Convert the entire string to lowercase
-    .split("_") // Split by underscore to handle multi-word names
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize the first letter of each word
-    .join("_"); // Rejoin with underscores
-}
-
+//get the data per provinces from the server
 app.get("/api/get-province-data", async (req, res) => {
   try {
     // Ensure connection to the database
@@ -364,6 +458,38 @@ app.get("/api/get-province-data", async (req, res) => {
   }
 });
 
+// Define route to fetch user data
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await userCollection.find().toArray(); // Fetch all users from the "user" collection
+    res.json(users); // Return the users as JSON
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+  }
+});
+
+//generate a random password
+app.get('/api/generate-password', (req, res) => {
+  const password = generateRandomPassword(8);
+  res.json({ password });
+});
+
+// Define route to fetch signup data
+app.get('/api/sign-up', async (req, res) => {
+  try {
+    const users = await signUpCollection.find().toArray(); // Fetch all users from the "user" collection
+    res.json(users); // Return the users as JSON
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+  }
+});
+
+
+
+
+//Update the data per provinces
 app.put("/api/update-data/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -396,14 +522,69 @@ app.put("/api/update-data/:id", async (req, res) => {
   }
 });
 
-// Define route to fetch user data
-app.get('/api/users', async (req, res) => {
+//update users data from admin panel
+app.put('/api/users/:id', async (req, res) => {
   try {
-    const users = await userCollection.find().toArray(); // Fetch all users from the "user" collection
-    res.json(users); // Return the users as JSON
+    const { id } = req.params;
+    const updatedUser = req.body;
+
+    // Ensure the provided ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    // Ensure connection to the database
+    if (!client.isConnected) {
+      await client.connect();
+      db = client.db("universe-db");
+      userCollection = db.collection("users");
+    }
+
+    // Exclude the _id field from the update operation
+    delete updatedUser._id;
+
+    // Perform the update operation
+    const result = await userCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updatedUser }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'User updated successfully' });
   } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+    console.error("Error updating user:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.put('/api/status/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Ensure the provided ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    // Update status in 'sign-up' collection to the new status sent from the frontend
+    const { status } = req.body;
+
+    const updateResult = await signUpCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status } }
+    );
+
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ error: 'User not found in sign-up collection' });
+    }
+
+    res.json({ message: 'Status updated successfully in sign-up collection' });
+  } catch (error) {
+    console.error('Error updating status:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

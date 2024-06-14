@@ -2,10 +2,12 @@ import { Modal, Avatar, Input, Select, Button, Tabs, Table } from "antd";
 import "./useraccountmodal.css";
 import { UserOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
+import Swal from "sweetalert2";
+import axios from "axios";
 
 const { TabPane } = Tabs;
 
-const UserProfileModal = ({ user, visible, onCancel }) => {
+const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editableUser, setEditableUser] = useState({ ...user });
   const [originalUser, setOriginalUser] = useState({ ...user });
@@ -19,23 +21,77 @@ const UserProfileModal = ({ user, visible, onCancel }) => {
     setIsEditing(!isEditing);
   };
 
-  const handleSave = () => {
-    setIsEditing(false);
-    setOriginalUser({ ...editableUser });
+  const handleSave = async () => {
+    try {
+      const response = await axios.put(
+        `http://localhost:8081/api/users/${editableUser._id}`,
+        editableUser,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Check if the update was successful by examining the response
+      if (response.status === 200 && response.data) {
+        // Update the original user state with the latest changes
+        setOriginalUser({ ...editableUser });
+
+        // Turn off editing mode
+        setIsEditing(false);
+
+        // Display success message using SweetAlert2
+        Swal.fire({
+          title: "Success!",
+          text: "User information updated successfully!",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+      } else {
+        // If the update was not successful, display an error message
+        Swal.fire({
+          title: "Error!",
+          text: "Failed to update user information. Please try again.",
+          icon: "error",
+          confirmButtonText: "OK",
+        });
+
+        await fetchUserData();
+      }
+    } catch (error) {
+      // Log the error details
+      console.error(
+        "Error updating user:",
+        error.response ? error.response.data : error
+      );
+
+      // Handle error and display message using SweetAlert2
+      Swal.fire({
+        title: "Error!",
+        text: error.response
+          ? error.response.data.error
+          : "Failed to update user information. Please try again.",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+    }
   };
 
   const handleCancel = () => {
     if (isEditing) {
-      Modal.confirm({
+      Swal.fire({
         title: "Cancel Editing",
-        content:
-          "Are you sure you want to cancel editing? Your changes will be discarded.",
-        okText: "Yes",
-        cancelText: "No",
-        onOk: () => {
+        text: "Are you sure you want to cancel editing? Your changes will be discarded.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes",
+        cancelButtonText: "No",
+      }).then((result) => {
+        if (result.isConfirmed) {
           setIsEditing(false);
           setEditableUser({ ...originalUser });
-        },
+        }
       });
     } else {
       onCancel();
@@ -123,12 +179,12 @@ const UserProfileModal = ({ user, visible, onCancel }) => {
               disabled={!isEditing}
               onChange={(e) => handleChange("name", e.target.value)}
             />
-            <p>Designation:</p>
+            <p>Division/Section:</p>
             <Input
               placeholder="Enter Designation"
               value={editableUser ? editableUser.designation : ""}
               disabled={!isEditing}
-              onChange={(e) => handleChange("designation", e.target.value)}
+              onChange={(e) => handleChange("division", e.target.value)}
             />
           </div>
 
@@ -147,12 +203,13 @@ const UserProfileModal = ({ user, visible, onCancel }) => {
               disabled={!isEditing}
               onChange={(value) => handleChange("permission", value)}
             >
-              <Select.Option value="user">User</Select.Option>
+              <Select.Option value="viewer">Viewer</Select.Option>
+              <Select.Option value="contributor">Contributor</Select.Option>
               <Select.Option value="admin">Admin</Select.Option>
+              <Select.Option value="developer">Developer</Select.Option>
             </Select>
           </div>
         </div>
-
       </div>
 
       <div className="tab-container">
@@ -172,7 +229,10 @@ const UserProfileModal = ({ user, visible, onCancel }) => {
         </Tabs>
 
         <div className="modal-footer-container">
-          <Button type={isEditing ? "primary" : "default"} onClick={handleEdit}>
+          <Button
+            type={isEditing ? "primary" : "default"}
+            onClick={isEditing ? handleSave : handleEdit}
+          >
             {isEditing ? "Save" : "Edit"}
           </Button>
           <Button onClick={handleCancel}>

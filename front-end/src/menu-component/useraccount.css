@@ -1,8 +1,12 @@
-.user-accounts-container {
+.signed-up-container,.user-accounts-container {
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(150, 150, 150, 0.1);
   background-color: rgb(255, 255, 255);
+}
+
+.signed-up-container{
+  margin-top: 30px;
 }
 
 .filter-options {
@@ -34,10 +38,17 @@
   width: 300px;
 }
 
+.account-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+
 .export {
-  color: #686868;
+  color: #ffffff;
   border-color: #4057d6;
-  //background-color: #4057d6;
+  background-color: #4057d6;
 }
 
 .add-user {
@@ -51,6 +62,10 @@
 
 .action-buttons .ant-btn:not(:last-child) {
   margin-right: 16px;
+}
+
+.disabled-row {
+  opacity: 0.5; /* Reduced opacity for disabled rows */
 }
 
 @media screen and (max-width: 768px) {
@@ -80,7 +95,7 @@
 
   .action-buttons {
     flex-direction: column;
-    gap: 10px; 
+    gap: 10px;
     align-items: stretch;
   }
 
@@ -121,7 +136,7 @@
 
   .action-buttons {
     flex-direction: column;
-    gap: 10px; 
+    gap: 10px;
     align-items: stretch;
   }
 
@@ -134,4 +149,6 @@
     width: 200px;
   }
 }
+
+
 
