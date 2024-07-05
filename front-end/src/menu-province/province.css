@@ -159,10 +159,14 @@
   align-items: center;
 }
 
+.modal-title{
+  font-size: medium;
+  margin-right: 30px;
+}
+
+
 .title-right {
   text-align: right;
-
-  margin-right: 30px;
 }
 
 .label_container {
@@ -247,6 +251,9 @@
 .refresh-button {
   margin-left: 10px; 
   align-items: flex-start;
+  margin-top: -20px;
+  height: 30px;
+  width: 30px;
 }
 
 .refresh-button:hover {

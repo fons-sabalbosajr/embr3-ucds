@@ -41,9 +41,9 @@ const Login = () => {
       );
   
       if (response.data?.status === "success") {
-        const { token, permissions } = response.data;
+        const { token, permission } = response.data;
         localStorage.setItem("authToken", token);
-        localStorage.setItem("permissions", JSON.stringify(permissions)); // Store permissions in localStorage
+        localStorage.setItem("permission", JSON.stringify(permission)); // Store permissions in localStorage
   
         message.success("Login successful!");
         navigate("/universe"); // Navigate to a protected route

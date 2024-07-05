@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Avatar, Input, Button, Divider, Tooltip } from "antd";
-import AvatarSelectionModal from "../components/AvatarSelectionModal";
+import AvatarSelectionModal from "../components/AvatarSelectionModalProfile";
 import { UserOutlined, UploadOutlined } from "@ant-design/icons";
 import "./signaccountmodal.css";
 import axios from "axios";

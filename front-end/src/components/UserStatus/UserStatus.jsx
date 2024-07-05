@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { List, Avatar } from "antd";
+import { List, Avatar, Spin } from "antd";
+import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
-import './userstatus.css'
+import "./userstatus.css";
 
-const UserStatus = () => {
+const UserStatus = ({ avatar, name }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchOnlineUsers = async () => {
@@ -12,30 +14,30 @@ const UserStatus = () => {
         const response = await axios.get("http://localhost:8081/api/online_users");
         const allUsers = response.data.onlineUsers;
 
-        // Ensure we get the latest status for each user
         const latestOnlineUsers = allUsers.reduce((acc, user) => {
           const existingUser = acc.find((u) => u.userName === user.userName);
           if (!existingUser) {
             acc.push(user);
-          } else if (user.isLoggedIn || new Date(user.logoutTime) > new Date(existingUser.logoutTime)) {
-            // Replace user with the latest status (logged in or latest logout time)
+          } else if (
+            user.isLoggedIn ||
+            new Date(user.logoutTime) > new Date(existingUser.logoutTime)
+          ) {
             acc[acc.indexOf(existingUser)] = user;
           }
           return acc;
         }, []);
 
-        // Sort users by status (online first) and then by logout time (offline users)
         const sortedUsers = latestOnlineUsers.sort((a, b) => {
-          if (a.isLoggedIn && !b.isLoggedIn) return -1; // a is online, b is offline
-          if (!a.isLoggedIn && b.isLoggedIn) return 1; // a is offline, b is online
-          // Both users are online or both are offline, sort by logout time
+          if (a.isLoggedIn && !b.isLoggedIn) return -1;
+          if (!a.isLoggedIn && b.isLoggedIn) return 1;
           return new Date(b.logoutTime) - new Date(a.logoutTime);
         });
 
-        // Update the onlineUsers state with the sorted users
         setOnlineUsers(sortedUsers);
       } catch (error) {
         console.error("Error fetching online users:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -53,43 +55,51 @@ const UserStatus = () => {
     if (diffMinutes > 2160) {
       return ""; // Remove calculation for long offline duration
     } else if (diffMinutes < 60) {
-      return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
-    } else if (diffMinutes < 1440) { // Less than 1 day
+      return `${diffMinutes} min${diffMinutes !== 1 ? "" : ""} ago`;
+    } else if (diffMinutes < 1440) {
+      // Less than 1 day
       const diffHours = Math.floor(diffMinutes / 60);
-      return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-    } else { // Less than 1.5 days
+      return `${diffHours} hr${diffHours !== 1 ? "s" : ""} ago`;
+    } else {
+      // Less than 1.5 days
       const diffDays = Math.floor(diffMinutes / 1440);
       const remainingMinutes = diffMinutes % 1440;
       const diffHours = Math.floor(remainingMinutes / 60);
-      return `${diffDays} day${diffDays !== 1 ? "s" : ""} and ${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+      return `${diffDays} day${
+        diffDays !== 1 ? "s" : ""
+      } and ${diffHours} hr${diffHours !== 1 ? "s" : ""} ago`;
     }
   };
-  
+
 
   return (
-    <div className="user-status-container">
-    <h2 className="user-status-title">Online Users</h2>
-    {onlineUsers.length > 0 ? (
-      <List
-        itemLayout="horizontal"
-        dataSource={onlineUsers}
-        renderItem={(user) => {
-          //console.log(user);
-          return (
-            <List.Item className="user-status-item">
-              <div style={{ position: 'relative' }}>
-                <Avatar className="user-status-item-avatar">{user.name ? user.name[0] : ""}</Avatar>
+    <div>
+      <h2 className="user-status-title">Online Users</h2>
+      {onlineUsers.length > 0 ? (
+        <List
+          itemLayout="horizontal"
+          dataSource={onlineUsers}
+          renderItem={(user) => (
+            <List.Item className="user-status-item" style={{ opacity: user.isLoggedIn ? 1 : 0.75 }}>
+              <div style={{ position: "relative" }}>
+                {user.avatar ? (
+                  <NiceAvatar style={{ width: '40px', height: '40px' }} {...user.avatar} />
+                ) : (
+                  <NiceAvatar style={{ width: '40px', height: '40px' }} />
+                )}
                 <div
                   className="user-status-dot"
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     bottom: 0,
                     right: 0,
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: user.isLoggedIn ? '#52c41a' : '#d9d9d9',
-                    border: '2px solid white'
+                    width: "12px",
+                    height: "12px",
+                    borderRadius: "50%",
+                    backgroundColor: user.isLoggedIn
+                      ? "#52c41a"
+                      : "#d9d9d9",
+                    border: "2px solid white",
                   }}
                 />
               </div>
@@ -100,13 +110,12 @@ const UserStatus = () => {
                 {!user.isLoggedIn ? calculateOfflineTime(user.logoutTime) : ""}
               </span>
             </List.Item>
-          );
-        }}
-      />
-    ) : (
-      <p>No users available</p>
-    )}
-  </div>
+          )}
+        />
+      ) : (
+        <p>No online users</p>
+      )}
+    </div>
   );
 };
 

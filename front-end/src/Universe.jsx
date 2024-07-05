@@ -1,34 +1,8 @@
 import React, { useState, useEffect } from "react";
-import {
-  Layout,
-  Button,
-  Tooltip,
-  Dropdown,
-  Menu,
-  Avatar,
-  Badge,
-  Spin,
-  Popover,
-  List,
-  Space,
-  Typography,
-} from "antd";
-import {
-  LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  BellOutlined,
-  UserOutlined,
-  SunOutlined,
-  MoonOutlined,
-  SettingOutlined,
-  QuestionCircleOutlined,
-  BulbOutlined,
-} from "@ant-design/icons";
+import { Layout, Button, Avatar, Spin, Popover, List } from "antd";
+import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
-import Logo from "./components/Logo";
-import MenuList from "./components/MenuList";
 import Dashboard from "./menu-component/Dashboard";
 import Province from "./menu-province/Province";
 import Survey from "./menu-component/Survey";
@@ -38,29 +12,34 @@ import Admin from "./menu-component/Admin";
 import Accounts from "./menu-component/UserAccounts";
 import Extract from "./menu-component/ExtractData";
 import Report from "./menu-component/AdminReport";
+import Posting from "./menu-component/Posting";
 import "./index.css";
 import { DataProvider } from "./menu-province/DataContext";
-import embLogo from "./assets/emblogomenu.png";
 import UserPopover from "./components/PopOverUser";
 import NotificationsPopover from "./components/PopOverNotification";
+import SideMenu from "./components/SideMenu";
+import AvatarWithName from "./components/AvatarwithName";
 
-const { Header, Sider, Content } = Layout;
-const { Text } = Typography;
+const { Header, Content } = Layout;
 
 const Universe = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [auth, setAuth] = useState(false);
   const [name, setName] = useState("");
-  const [notifications, setNotifications] = useState([]); // For notification badge
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("dark");
   const [userHandle, setUserHandle] = useState("");
   const [selection, setSelection] = useState("");
+  const [permissions, setPermissions] = useState([]);
+  const [avatar, setAvatar] = useState(null);
+
+  axios.defaults.withCredentials = true;
+
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
-    // You can also apply theme changes to your application here
   };
 
   const handleVisibleChange = (visible) => {
@@ -73,48 +52,15 @@ const Universe = () => {
     setSelection(key);
   };
 
-  axios.defaults.withCredentials = true;
-
-  useEffect(() => {
-    axios
-      .get(
-        "http://localhost:8081/check-auth" ||
-          "https://embr3-ucds.onrender.com/check-auth",
-        { withCredentials: true }
-      )
-      .then((res) => {
-        if (res.data.status === "Success") {
-          setAuth(true);
-          // Assuming res.data.division is something like "ORD-PISMU/Programmer II"
-          const divisionParts = res.data.division.split("/");
-          const formattedName = `${divisionParts[0]} | ${res.data.name}`;
-          setName(formattedName);
-          setUserHandle(res.data.username);
-          setNotifications(res.data.notifications || []);
-        } else {
-          setAuth(false);
-          // Redirect to login page or handle unauthorized access
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching auth status:", err);
-        setAuth(false);
-        // Redirect to login page or handle unauthorized access
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Handle user logout
   const handleLogout = () => {
     axios
-      .get(
-        "http://localhost:8081/logout" ||
-          "https://embr3-ucds.onrender.com/logout",
-        { withCredentials: true }
-      )
+      .get("http://localhost:8081/logout", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Logout Success") {
-          localStorage.removeItem("authToken"); // Clear token from local storage
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("permissions");
+          localStorage.removeItem("permission");
+
           setAuth(false);
           navigate("/login", { replace: true });
         } else {
@@ -125,6 +71,75 @@ const Universe = () => {
         console.error("Error during logout:", err.message);
       });
   };
+
+  const getInitials = (name) => {
+    const splitName = name.split(" ");
+    const initials = splitName.map((part) => part[0].toUpperCase());
+    return initials.join("");
+  };
+
+  useEffect(() => {
+    axios
+      .get("http://localhost:8081/check-auth", { withCredentials: true })
+      .then((res) => {
+        if (res.data.status === "Success") {
+          setAuth(true);
+          const divisionParts = res.data.division.split("/");
+          const formattedName = `${divisionParts[0]} | ${res.data.name}`;
+          setName(formattedName);
+          setUserHandle(res.data.username);
+          setNotifications(res.data.notifications || []);
+          setPermissions(res.data.permissions || []);
+          localStorage.setItem(
+            "permissions",
+            JSON.stringify(res.data.permissions || [])
+          );
+
+          // Fetch user avatar
+          axios.get('http://localhost:8081/api/user/avatar', {
+            params: { name: res.data.name }
+          })
+          .then(response => {
+            setAvatar(response.data.avatar);
+          })
+          .catch(error => {
+            console.error('Error fetching user avatar:', error);
+          });
+        } else {
+          setAuth(false);
+          navigate("/login", { replace: true });
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching auth status:", err.message);
+        setAuth(false);
+        navigate("/login", { replace: true });
+      })
+      .finally(() => setLoading(false));
+  }, [navigate]);
+
+  useEffect(() => {
+    // Fetch and set permissions from localStorage or API response
+    const storedPermissions = JSON.parse(localStorage.getItem("permissions"));
+    if (storedPermissions) {
+      setPermissions(storedPermissions);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      // Optional: Save necessary state or show a confirmation dialog here
+      // event.preventDefault();
+      // event.returnValue = '';
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+
 
   const popoverContent = (
     <List
@@ -137,57 +152,14 @@ const Universe = () => {
     return <Spin spinning />;
   }
 
-  const getInitials = (name) => {
-    const splitName = name.split(" ");
-    return splitName
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase();
-  };
-
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      {auth && (
-        <Sider
-          width={250}
-          collapsible
-          trigger={null}
-          collapsed={collapsed}
-          className="sidebar"
-          theme={theme}
-        >
-          {!collapsed && <Logo theme={theme} />}{" "}
-          {/* Render the Logo component only when the menu is expanded */}
-          {collapsed && (
-            <div
-              className={`logo ${
-                theme === "dark" ? "dark-theme" : "light-theme"
-              }`}
-            >
-              <img
-                src={embLogo}
-                alt="Sample Logo"
-                className="collapsed-logo"
-                title="EMBR3 UCDS"
-              />
-            </div>
-          )}
-          <MenuList
-            navigate={navigate}
-            theme={theme}
-            toggleTheme={toggleTheme}
-          />
-          <Tooltip title="Toggle Menu" placement="left">
-            <Button
-              type="text"
-              className="toggle"
-              onClick={() => setCollapsed(!collapsed)}
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              style={{ backgroundColor: "#B6BBC4" }}
-            />
-          </Tooltip>
-        </Sider>
-      )}
+      <SideMenu
+        theme={theme}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        permissions={permissions} // Pass permissions to SideMenu
+      />
 
       <Layout>
         {auth && (
@@ -195,95 +167,73 @@ const Universe = () => {
             className={`header-container ${
               theme === "dark" ? "dark-theme" : "light-theme"
             }`}
-            theme={theme}
-            toggleTheme={toggleTheme}
           >
-            <div
-              className="profile_container"
-              style={{
-                display: "flex",
-                justifyContent: "flex-end", // Aligns elements to the right
-                alignItems: "center", // Vertically center elements
-                padding: "10px 20px", // Add padding to the container
-              }}
-            >
-              {!collapsed}
-              <span
-                className={`user-name ${
-                  theme === "dark" ? "dark-theme" : "light-theme"
-                }`}
-              >
-                {name}
-              </span>
+            <div className="header-content">
+              <div className="profile_container">
+                <span
+                  className={`user-name ${
+                    theme === "dark" ? "dark-theme" : "light-theme"
+                  }`}
+                >
+                  {name}
+                </span>
+                <NotificationsPopover
+                  popoverContent={popoverContent}
+                  theme={theme}
+                  notifications={notifications}
+                />
+                <Popover
+                  content={
+                    <UserPopover
+                      name={name}
+                      userHandle={userHandle}
+                      theme={theme}
+                      handleMenuItemClick={handleMenuItemClick}
+                      navigate={navigate}
+                      handleLogout={handleLogout}
+                      getInitials={getInitials}
+                      toggleTheme={toggleTheme}
+                      selection={selection}
+                      handleVisibleChange={handleVisibleChange}
+                    />
+                  }
+                  trigger="click"
+                  placement="bottomRight"
+                  theme={theme === "light" ? "light" : "dark"}
+                  onVisibleChange={handleVisibleChange}
+                >
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                  <AvatarWithName avatar={avatar}/>
+                  </div>
+                </Popover>
 
-              {/* Notification badge with tooltip */}
-              <NotificationsPopover
-                popoverContent={popoverContent}
-                theme={theme}
-                notifications={notifications}
-              />
-
-              {/* User profile and logout options */}
-              <Popover
-                content={
-                  <UserPopover
-                    name={name}
-                    userHandle={userHandle}
-                    theme={theme}
-                    handleMenuItemClick={handleMenuItemClick}
-                    navigate={navigate}
-                    handleLogout={handleLogout}
-                    getInitials={getInitials}
-                    toggleTheme={toggleTheme}
-                    selection={selection}
-                    handleVisibleChange={handleVisibleChange}
-                  />
-                }
-                trigger="click"
-                placement="bottomRight"
-                onVisibleChange={handleVisibleChange}
-                theme={theme === "light" ? "light" : "dark"}
-              >
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <Avatar
-                    src={getInitials(name)}
-                    icon={<UserOutlined />}
-                    style={{ fontSize: "24px" }}
-                    theme={theme}
-                    toggleTheme={toggleTheme}
+                <div
+                  className={`theme-switch ${
+                    theme === "light" ? "light-theme-icon" : "dark-theme-icon"
+                  }`}
+                >
+                  <Button
+                    className="theme-button"
+                    type="text"
+                    onClick={toggleTheme}
+                    icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
                   />
                 </div>
-              </Popover>
-
-              <div
-                className={`theme-switch ${
-                  theme === "light" ? "light-theme-icon" : "dark-theme-icon"
-                }`}
-              >
-                <Button
-                  className="theme-button"
-                  type="text"
-                  onClick={toggleTheme}
-                  icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
-                />
               </div>
             </div>
           </Header>
         )}
 
         <DataProvider>
-          {" "}
-          {/* Wrapping all content within DataProvider */}
           {auth && (
             <Content style={{ padding: "24px", backgroundColor: "#F0F2F5" }}>
-              {/* Spin during authentication */}
               <Spin spinning={!auth}>
                 <Routes>
                   <Route
                     path="/"
                     element={<Navigate to="dashboard" replace />}
                   />
-                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="dashboard" element={<Dashboard avatar={avatar} name={name} />} />
                   <Route
                     path="/province/:provinceName"
                     element={<Province />}
@@ -291,12 +241,14 @@ const Universe = () => {
                   <Route path="survey" element={<Survey />} />
                   <Route path="mbu" element={<MBU />} />
                   <Route path="exportdata" element={<ExportData />} />
-                  <Route path="admin" element={<Admin />} />
+                  {permissions.includes("admin") && (
+                    <Route path="admin" element={<Admin />} />
+                  )}
                   <Route path="accounts" element={<Accounts />} />
                   <Route path="extract" element={<Extract />} />
                   <Route path="report" element={<Report />} />
-                  <Route path="*" element={<Navigate to="dashboard" />} />{" "}
-                  {/* Catch-all route */}
+                  <Route path="posting" element={<Posting />} />
+                  <Route path="*" element={<Navigate to="dashboard" />} />
                 </Routes>
               </Spin>
             </Content>

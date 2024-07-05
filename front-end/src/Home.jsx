@@ -24,13 +24,13 @@ const Home = () => {
         </div>
         <ul className={`menu_container ${menuOpen ? "open" : ""}`}>
           <li>
-            <a href="#" className="menu_item">About EMB-UCDS</a>
+            <a href="https://embr3-ucds.netlify.app" className="menu_item">About EMB-UCDS</a>
           </li>
           <li>
-            <a href="#" className="menu_item">Programs</a>
+            <a href="https://embr3-ucds.netlify.app" className="menu_item">Programs</a>
           </li>
           <li>
-            <a href="#" className="menu_item">Contacts</a>
+            <a href="https://embr3-ucds.netlify.app" className="menu_item">Contacts</a>
           </li>
           <li>
             <a href="/login" className="menu_item signup">Log in</a>

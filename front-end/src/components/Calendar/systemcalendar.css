@@ -1,0 +1,42 @@
+.calendar-container {
+  width: 100%; /* Adjust the width as needed */
+  margin: 0 auto;
+}
+
+.custom-calendar .ant-picker-calendar {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.calendar-title{
+  font-size: 24px;
+  color: #5a5a5a;
+  margin-bottom: 10px; 
+  font-weight: 500;
+}
+
+.clickable-date {
+  cursor: pointer;
+}
+
+.ant-picker-calendar-header .ant-picker-calendar-year-select,
+.ant-picker-calendar-header .ant-picker-calendar-month-select {
+  font-size: 9px; /* Adjust the font size as needed */
+}
+
+.ant-picker-calendar-header .ant-picker-calendar-mode-switch {
+  font-size: 9px; /* Adjust the font size as needed */
+}
+
+.events {
+  font-size: 9px; /* Adjust the font size as needed */
+}
+
+.badge-item .ant-badge-status-text {
+  font-size: 9px; /* Adjust the font size as needed */
+}
+
+.see-more{
+  color: rgb(0, 102, 255);
+  font-size: 10px;
+}

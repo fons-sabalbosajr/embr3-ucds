@@ -33,6 +33,9 @@ const client = new MongoClient(mongoUri, {
 let db;
 let userCollection;
 let loginStatusCollection;
+let ucdsCollection;
+let dailyNoticesCollection;
+let postingCollection;
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -43,6 +46,9 @@ async function connectToMongo() {
     userCollection = db.collection("users");
     signUpCollection = db.collection("sign-up");
     loginStatusCollection = db.collection("login-status");
+    ucdsCollection = db.collection("ucds-data");
+    dailyNoticesCollection = db.collection("ucds-data");
+    postingCollection = db.collection("postings")
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
@@ -77,25 +83,30 @@ function generateRandomPassword(length) {
   return password;
 }
 
+
 // Login Route
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
+    return res.status(400).json({ error: "Username and password are required." });
   }
 
   try {
+    // Fetch user from database
     const user = await userCollection.findOne({ username });
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: "Invalid email or password." });
+      return res.status(401).json({ error: "Invalid username or password." });
     }
 
+    // Generate JWT token
     const token = jwt.sign(
-      { username: user.username, 
-        name: user.name, 
+      { 
+        username: user.username,
+        name: user.name,
         userId: user._id,
-        division: user.division
-       },
+        division: user.division,
+        permission: user.permission
+      },
       JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -110,13 +121,15 @@ app.post("/login", async (req, res) => {
     };
     await loginStatusCollection.insertOne(loginStatus);
 
+    // Set HTTP-only cookie with token
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
       sameSite: "None",
     });
 
-    return res.status(200).json({ status: "success", token });
+    // Return success response with token and permissions
+    return res.status(200).json({ status: "success", token, permission: user.permission });
   } catch (error) {
     console.error("Error during login:", error.message);
     return res.status(500).json({ error: "An unexpected error occurred." });
@@ -229,6 +242,27 @@ app.post('/api/newusers', async (req, res) => {
   }
 });
 
+app.post('/api/posting', async (req, res) => {
+  try {
+    const { title, message, date, acknowledgement, iconType, createdDate } = req.body;
+
+    // Create a new document in the "posting" collection
+    const postingCollection = db.collection("postings");
+    const posting = await postingCollection.insertOne({
+      title,
+      message,
+      date,
+      acknowledgement,
+      iconType,
+      createdDate: new Date(),
+    });
+
+    res.status(201).send({ message: 'Announcement saved successfully!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: 'Error saving announcement' });
+  }
+});
 
 // Logout Route
 app.get("/logout", async (req, res) => {
@@ -290,18 +324,23 @@ app.get("/check-auth", async (req, res) => {
 app.get("/api/online_users", async (req, res) => {
   try {
     const onlineUsers = await loginStatusCollection.find().toArray();
-    
-    // Extract relevant user information
-    const formattedOnlineUsers = onlineUsers.map(user => ({
-      userId: user.userId,
-      userName: user.userName,
-      name: user.name,
-      isLoggedIn: user.isLoggedIn,
-      loginTime: user.loginTime,
-      logoutTime: user.logoutTime
-    }));
 
-    // Send the list of online users as the response
+    const formattedOnlineUsers = await Promise.all(
+      onlineUsers.map(async (user) => {
+        const userDoc = await userCollection.findOne({ name: user.name });
+        const avatar = userDoc ? userDoc.avatar : null;
+        return {
+          userId: user.userId,
+          userName: user.userName,
+          name: user.name,
+          isLoggedIn: user.isLoggedIn,
+          loginTime: user.loginTime,
+          logoutTime: user.logoutTime,
+          avatar: avatar,
+        };
+      })
+    );
+
     res.status(200).json({ onlineUsers: formattedOnlineUsers });
   } catch (error) {
     console.error("Error fetching online users:", error);
@@ -486,14 +525,80 @@ app.get('/api/sign-up', async (req, res) => {
   }
 });
 
+app.get('/api/user/avatar', async (req, res) => {
+  try {
+    const name = req.query.name;
+    const user = await userCollection.findOne({ name }); // Find the user by name
+    if (!user) {
+      res.status(404).json({ error: 'User not found' }); // Return 404 status code if user not found
+    } else {
+      const avatar = user.avatar; // Assuming the avatar is stored in the "avatar" field
+      res.json({ avatar }); // Return the avatar as a JSON object
+    }
+  } catch (error) {
+    console.error('Error fetching user avatar:', error);
+    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+  }
+});
 
+// Example API endpoint to fetch monitored dates
+app.get("/api/monitored_dates", async (req, res) => {
+  try {
+    const monitoredDates = await ucdsCollection.find({
+      title: { $exists: true, $ne: "" },
+      date_monitored: { $exists: true, $ne: "" }
+    }).project({ title: 1, date_monitored: 1 }).toArray();
+    
+    res.status(200).json({ monitoredDates });
+  } catch (error) {
+    console.error("Error fetching monitored dates:", error);
+    res.status(500).json({ error: "An error occurred while fetching monitored dates." });
+  }
+});
 
+app.get("/api/daily_notices", async (req, res) => {
+  try {
+    const notices = await dailyNoticesCollection.find(
+      { date_monitored: { $exists: true, $ne: "" } }, // Filter to ensure date_monitored exists and is not empty
+      { projection: { 
+        date_monitored: 1, 
+        title: 1, 
+        address: 1, 
+        industry_class: 1, 
+        date_monitored: 1,
+        date_routed: 1, 
+        date_signed: 1, 
+        iis_no: 1, 
+        section_incharge: 1, 
+        remarks_recommendation: 1,
+        _id: 0 
+      } } // Include only these fields
+    ).toArray();
+
+    res.json({ notices });
+  } catch (error) {
+    console.error("Error fetching daily notices:", error);
+    res.status(500).json({ error: "An error occurred while fetching daily notices." });
+  }
+});
+
+app.get('/api/postings', async (req, res) => {
+  try {
+    const postings = await postingCollection.find().toArray(); // Fetch all postings from the "postings" collection
+    res.json(postings); // Return the postings as JSON
+  } catch (error) {
+    console.error('Error fetching postings data:', error);
+    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+  }
+});
 
 //Update the data per provinces
 app.put("/api/update-data/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const newData = req.body; // Assuming the updated data is sent in the request body
+    const newData = req.body;
+
+    console.log(`Received update request for id ${id} with data:`, newData);
 
     // Ensure connection to the database
     if (!client.topology.isConnected()) {
@@ -503,11 +608,15 @@ app.put("/api/update-data/:id", async (req, res) => {
     const database = client.db("universe-db");
     const collection = database.collection("ucds-data");
 
+    console.log("Connected to MongoDB database");
+
     // Perform the update operation
     const result = await collection.updateOne(
-      { id_no: parseInt(id) }, // Assuming id_no is the unique identifier
+      { id_no: parseInt(id) },
       { $set: newData }
     );
+
+    console.log("Update result:", result);
 
     if (result.modifiedCount === 1) {
       res.status(200).json({ message: "Data updated successfully" });
@@ -517,12 +626,12 @@ app.put("/api/update-data/:id", async (req, res) => {
   } catch (error) {
     console.error("Error updating data:", error);
     res
-      .status(500)
-      .json({ error: "Failed to update data. Please try again later." });
+     .status(500)
+     .json({ error: "Failed to update data. Please try again later." });
   }
 });
 
-//update users data from admin panel
+// Update users data from admin panel
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -533,20 +642,26 @@ app.put('/api/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Ensure connection to the database
-    if (!client.isConnected) {
-      await client.connect();
-      db = client.db("universe-db");
-      userCollection = db.collection("users");
+    // Extract avatar from the request body
+    const { avatar } = updatedUser;
+
+    // Exclude the _id and avatar fields from the general user update
+    delete updatedUser._id;
+    delete updatedUser.avatar; // Exclude avatar from general user update
+
+    // Prepare the update operation for user data
+    const updateOperation = { $set: updatedUser };
+
+    // If there is an avatar URL in the request body, update it separately
+    if (avatar) {
+      // Update avatar URL for the user
+      updateOperation.$set.avatar = avatar;
     }
 
-    // Exclude the _id field from the update operation
-    delete updatedUser._id;
-
-    // Perform the update operation
+    // Perform the general user update including the avatar, if provided
     const result = await userCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: updatedUser }
+      updateOperation
     );
 
     if (result.matchedCount === 0) {
@@ -555,10 +670,11 @@ app.put('/api/users/:id', async (req, res) => {
 
     res.json({ message: 'User updated successfully' });
   } catch (error) {
-    console.error("Error updating user:", error);
+    console.error('Error updating user:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 app.put('/api/status/:id', async (req, res) => {
   try {

@@ -1,19 +1,37 @@
-import { Modal, Avatar, Input, Select, Button, Tabs, Table } from "antd";
+import {
+  Modal,
+  Avatar,
+  Input,
+  Select,
+  Button,
+  Tabs,
+  Table,
+  Progress,
+} from "antd";
 import "./useraccountmodal.css";
-import { UserOutlined } from "@ant-design/icons";
+import { UserOutlined, CameraOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import axios from "axios";
+import AvatarSelectionModal from "../components/AvatarSelectionModalProfile";
+import NiceAvatar from "react-nice-avatar"; // Assuming NiceAvatar is correctly imported
 
 const { TabPane } = Tabs;
 
 const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editableUser, setEditableUser] = useState({ ...user });
+  const [editableUser, setEditableUser] = useState(
+    user ? { ...user, avatar: user.avatar || null } : null
+  );
   const [originalUser, setOriginalUser] = useState({ ...user });
+  const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
-    setEditableUser({ ...user });
+    if (user) {
+      setEditableUser({ ...user, avatar: user.avatar || null });
+    }
     setOriginalUser({ ...user });
   }, [user]);
 
@@ -23,9 +41,23 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
 
   const handleSave = async () => {
     try {
+      let updatedUserData = { ...editableUser };
+
+      // Check if there's a new avatar selected
+      if (editableUser.avatar && typeof editableUser.avatar === "object") {
+        // If avatar is an object (indicating it's from AvatarSelectionModal), extract its configuration
+        updatedUserData.avatar = { ...editableUser.avatar };
+      } else if (
+        editableUser.avatar &&
+        typeof editableUser.avatar === "string"
+      ) {
+        // If avatar is a string (already saved URL), keep it as it is
+        updatedUserData.avatar = editableUser.avatar;
+      }
+
       const response = await axios.put(
         `http://localhost:8081/api/users/${editableUser._id}`,
-        editableUser,
+        updatedUserData,
         {
           headers: {
             "Content-Type": "application/json",
@@ -36,7 +68,7 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
       // Check if the update was successful by examining the response
       if (response.status === 200 && response.data) {
         // Update the original user state with the latest changes
-        setOriginalUser({ ...editableUser });
+        setOriginalUser({ ...updatedUserData });
 
         // Turn off editing mode
         setIsEditing(false);
@@ -105,6 +137,37 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
     });
   };
 
+  const handleAvatarSelect = (config) => {
+    setEditableUser({
+      ...editableUser,
+      avatar: config,
+    });
+    setIsAvatarModalVisible(false);
+  };
+
+  const handleUploadAvatar = async (avatarUrl) => {
+    try {
+      setUploading(true);
+      // Simulate upload progress
+      for (let i = 0; i <= 100; i += 20) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setUploadProgress(i);
+      }
+      setUploadProgress(100); // Ensure progress reaches 100%
+      setUploading(false);
+
+      // Update the avatar URL in the editableUser state
+      setEditableUser({
+        ...editableUser,
+        avatar: avatarUrl,
+      });
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
   const recentChangesColumns = [
     {
       title: "Date",
@@ -142,33 +205,42 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
       }
       visible={visible}
       onCancel={handleCancel}
-      footer={null} // No footer buttons by default
-      width={1000} // Set the width of the modal
+      footer={null}
+      width={1000}
       className="user-profile-modal"
       zIndex={1001}
       closable={false}
     >
       <div className="user-details-container">
-        {editableUser && (
-          <div className="avatar-container">
-            {editableUser.avatar ? (
-              <Avatar size={150} src={user.avatar} icon={<UserOutlined />} />
-            ) : (
-              <Avatar
-                size={150}
-                className="user-status-item-avatar"
-                style={{
-                  fontSize: "50px",
-                  backgroundColor: "#f56a00",
-                  verticalAlign: "middle",
-                }}
-              >
-                {editableUser.name ? editableUser.name[0] : ""}
-              </Avatar>
-            )}
-            <div className={`user-status-dot ${editableUser.status}`} />
-          </div>
-        )}
+        <div className="avatar-container">
+          {editableUser && editableUser.avatar ? (
+            <NiceAvatar
+              style={{ width: 150, height: 150 }}
+              {...editableUser.avatar}
+            />
+          ) : (
+            <Avatar
+              size={150}
+              className="user-status-item-avatar"
+              style={{
+                fontSize: "50px",
+                backgroundColor: "#f56a00",
+                verticalAlign: "middle",
+              }}
+            >
+              {editableUser && editableUser.name ? editableUser.name[0] : ""}
+            </Avatar>
+          )}
+          <div className="user-status-dot" />
+          {isEditing && (
+            <div
+              className="avatar-edit-button"
+              onClick={() => setIsAvatarModalVisible(true)}
+            >
+              <CameraOutlined className="edit-avatar-icon" />
+            </div>
+          )}
+        </div>
 
         <div className="user-info">
           <div className="user-info-column">
@@ -182,7 +254,7 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
             <p>Division/Section:</p>
             <Input
               placeholder="Enter Designation"
-              value={editableUser ? editableUser.designation : ""}
+              value={editableUser ? editableUser.division : ""}
               disabled={!isEditing}
               onChange={(e) => handleChange("division", e.target.value)}
             />
@@ -229,17 +301,28 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
         </Tabs>
 
         <div className="modal-footer-container">
-          <Button
-            type={isEditing ? "primary" : "default"}
-            onClick={isEditing ? handleSave : handleEdit}
-          >
-            {isEditing ? "Save" : "Edit"}
-          </Button>
-          <Button onClick={handleCancel}>
-            {isEditing ? "Cancel" : "Close"}
-          </Button>
+          {uploading && <Progress percent={uploadProgress} status="active" />}
+          <div className="button-group">
+            <Button
+              type={isEditing ? "primary" : "default"}
+              onClick={isEditing ? handleSave : handleEdit}
+              className="button-save"
+            >
+              {isEditing ? "Save" : "Edit"}
+            </Button>
+            <Button onClick={handleCancel} type="primary">
+              {isEditing ? "Cancel" : "Close"}
+            </Button>
+          </div>
         </div>
       </div>
+
+      <AvatarSelectionModal
+        visible={isAvatarModalVisible}
+        onSelect={handleAvatarSelect}
+        onCancel={() => setIsAvatarModalVisible(false)}
+        onUpload={handleUploadAvatar} // Pass handleUploadAvatar function to receive uploaded avatar URL
+      />
     </Modal>
   );
 };

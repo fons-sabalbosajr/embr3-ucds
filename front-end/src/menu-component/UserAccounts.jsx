@@ -7,12 +7,15 @@ import {
   EllipsisOutlined,
   UserOutlined,
   CloseCircleOutlined,
+  CameraOutlined
 } from "@ant-design/icons";
 import axios from "axios";
 import "./useraccount.css";
 import UserProfileModal from "./UserAccountModal";
 import SignAccountModal from "./SignAccountModal";
 import Swal from "sweetalert2";
+import NiceAvatar from "react-nice-avatar";
+import AvatarWithName from "../components/AvatarwithName";
 
 const { Option } = Select;
 
@@ -33,6 +36,42 @@ const UserAccounts = () => {
     current: 1,
     pageSize: 10,
   });
+
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get("http://localhost:8081/api/users", {
+        params: {
+          page: pagination.current,
+          pageSize: pagination.pageSize,
+        },
+      });
+      setUserData(response.data);
+      setPagination((prev) => ({
+        ...prev,
+        total: response.data.length,
+      }));
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [pagination.current, pagination.pageSize]);
+
+  useEffect(() => {
+    const uniquePermissions = new Set();
+    userData.forEach((user) => {
+      if (user.permission) {
+        uniquePermissions.add(user.permission);
+      }
+    });
+    setPermissions(Array.from(uniquePermissions));
+  }, [userData]);
 
   const fetchUserData = async () => {
     try {
@@ -169,23 +208,10 @@ const UserAccounts = () => {
   const columns = [
     {
       title: "Name",
-      dataIndex: "name",
-      key: "name",
-      ellipsis: true,
+      dataIndex: "name", // Assuming `name` is a field in your data
+      key: "avatarName",
       render: (name, record) => (
-        <div style={{ display: "flex", alignItems: "center" }}>
-          {record.avatar ? (
-            <Avatar src={record.avatar} />
-          ) : (
-            <Avatar
-              icon={<UserOutlined />}
-              style={{ backgroundColor: "#87d068" }}
-            >
-              {name.charAt(0)}
-            </Avatar>
-          )}
-          <span style={{ marginLeft: "8px" }}>{name}</span>
-        </div>
+        <AvatarWithName avatar={record.avatar} name={name} />
       ),
     },
     {
