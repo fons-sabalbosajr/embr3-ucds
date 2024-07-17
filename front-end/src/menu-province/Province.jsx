@@ -46,6 +46,7 @@ const Province = ({ theme }) => {
   const [tableLoading, setTableLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     if (provinceName) {
@@ -108,6 +109,7 @@ const Province = ({ theme }) => {
         if (result.isConfirmed) {
           setModalVisible(false);
           setIsEditing(false);
+          setEditMode(false);
         }
       });
     } else {
@@ -493,6 +495,7 @@ const Province = ({ theme }) => {
         onCancel={handleCloseModal}
         width={1300}
         footer={null}
+        onClose={handleCloseModal}
       >
         {selectedRecord && (
           <ProvinceModal

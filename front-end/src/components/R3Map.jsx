@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { GoogleMap, LoadScript, StreetViewPanorama } from '@react-google-maps/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { Card, Row, Col, Button, Alert, Spin } from 'antd';
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyBQSWuvJx6N7wQ2adHqBEdNyurA3G9-ogc";
+const GOOGLE_MAPS_API_KEY = "AIzaSyBQSWuvJx6N7wQ2adHqBEdNyurA3G9-ogc"; // Replace with your actual API key
 
 const mapContainerStyle = {
   width: '100%',
@@ -14,6 +14,9 @@ const R3Map = ({ latitude, longitude }) => {
   const [center, setCenter] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showInfoWindow, setShowInfoWindow] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const mapRef = useRef(null);
 
   const handleRefresh = () => {
     setError(null);
@@ -32,6 +35,20 @@ const R3Map = ({ latitude, longitude }) => {
   useEffect(() => {
     handleRefresh();
   }, [latitude, longitude]);
+
+  const onLoad = map => {
+    mapRef.current = map;
+    console.log('Map loaded:', map);
+  };
+
+  const handleMarkerClick = place => {
+    setSelectedPlace(place);
+    setShowInfoWindow(true);
+  };
+
+  const handleInfoWindowClose = () => {
+    setShowInfoWindow(false);
+  };
 
   return (
     <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
@@ -52,39 +69,50 @@ const R3Map = ({ latitude, longitude }) => {
             type="error"
             message="No/Invalid Coordinates encoded"
             description={error}
-            // action={
-            //   <Button size="small" type="primary" onClick={handleRefresh}>
-            //     Refresh
-            //   </Button>
-            // }
           />
         ) : (
           <Row gutter={[16, 16]}>
-            {center && (
-              <Col span={24}>
-                {isStreetView ? (
-                  <StreetViewPanorama
+            <Col span={24}>
+              <GoogleMap
+                mapTypeId={'satellite'} 
+                mapContainerStyle={mapContainerStyle}
+                center={center}
+                zoom={25} // Adjust zoom level as needed
+                onLoad={onLoad}
+                options={{
+                  disableDefaultUI: true,
+                  streetViewControl: true,
+                  mapTypeControl: true,
+                  fullscreenControl: true,
+                  scaleControl: true,
+                  zoomControl: true,
+                  rotateControl: true
+                }}
+              >
+                {center && (
+                  <Marker
                     position={center}
-                    pov={{ heading: 0, pitch: 0 }}
-                    visible
-                    mapContainerStyle={mapContainerStyle}
-                  />
-                ) : (
-                  <GoogleMap
-                    mapContainerStyle={mapContainerStyle}
-                    center={center}
-                    zoom={25}
-                    mapTypeId={'satellite'} // Set map to satellite mode
+                    onClick={() => handleMarkerClick({ name: 'Marker Name', details: 'Marker Details' })}
                   />
                 )}
-              </Col>
-            )}
+                {showInfoWindow && selectedPlace && (
+                  <InfoWindow
+                    position={center}
+                    onCloseClick={handleInfoWindowClose}
+                  >
+                    <div>
+                      <h3>{selectedPlace.name}</h3>
+                      <p>{selectedPlace.details}</p>
+                    </div>
+                  </InfoWindow>
+                )}
+              </GoogleMap>
+            </Col>
           </Row>
         )}
       </Card>
     </LoadScript>
   );
 };
-
 
 export default R3Map;

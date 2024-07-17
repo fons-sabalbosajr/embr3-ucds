@@ -71,11 +71,11 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 1200px;
+  max-width: 800px;
 }
 
 .text-content {
-  max-width: 50%;
+  max-width: 100%;
 }
 
 h1 {
@@ -111,11 +111,16 @@ h1 {
 }
 
 .image-content {
-  max-width: 45%;
+  max-width: 25%;
+  width: 500px; /* Adjust the width to your preference */
+  height: auto; /* Maintain the aspect ratio */
+  object-fit: contain; 
 }
 
 .illustration {
-  width: 100%;
+  width: 500px; /* Adjust the width to your preference */
+  height: auto; /* Maintain the aspect ratio */
+  object-fit: contain; 
   border-radius: 10px;
 }
 

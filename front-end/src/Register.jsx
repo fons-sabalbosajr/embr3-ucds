@@ -14,7 +14,7 @@ const Register = () => {
   const MySwal = withReactContent(Swal);
 
   const onFinish = async (values) => {
-    setIsLoading(true); // Start loading animation
+    setIsLoading(true);
     try {
       const response = await axios.post(
         "http://localhost:8081/register" ||
@@ -28,7 +28,6 @@ const Register = () => {
       );
 
       if (response.status === 201) {
-        // Show confirmation message with SweetAlert2
         MySwal.fire({
           icon: "info",
           title: "Registration submitted for approval",
@@ -37,7 +36,6 @@ const Register = () => {
           navigate("/login"); // Navigate to login page after registration submission
         });
       } else {
-        // Show error message with SweetAlert2
         MySwal.fire({
           icon: "error",
           title: "Registration failed",
@@ -45,7 +43,7 @@ const Register = () => {
         });
       }
     } catch (error) {
-      // Show error message with SweetAlert2
+      console.error('Error response:', error.response);
       MySwal.fire({
         icon: "error",
         title: "Registration failed",
@@ -54,7 +52,7 @@ const Register = () => {
           "An unexpected error occurred. Please try again later.",
       });
     } finally {
-      setIsLoading(false); // Stop loading animation
+      setIsLoading(false);
     }
   };
 
@@ -83,8 +81,7 @@ const Register = () => {
               label="Name"
               rules={[{ required: true, message: "Please enter your name" }]}
             >
-              <Input placeholder="Enter Name" size="large" />{" "}
-              {/* Adjust size here */}
+              <Input placeholder="Enter Name" size="large" />
             </Form.Item>
 
             <Form.Item
@@ -97,8 +94,7 @@ const Register = () => {
                 },
               ]}
             >
-              <Input placeholder="Enter Division/Section" size="large" />{" "}
-              {/* Adjust size here */}
+              <Input placeholder="Enter Division/Section" size="large" />
             </Form.Item>
 
             <Form.Item
@@ -108,8 +104,7 @@ const Register = () => {
                 { required: true, message: "Please enter your position" },
               ]}
             >
-              <Input placeholder="Enter Position" size="large" />{" "}
-              {/* Adjust size here */}
+              <Input placeholder="Enter Position" size="large" />
             </Form.Item>
 
             <Form.Item
@@ -120,17 +115,17 @@ const Register = () => {
                 { type: "email", message: "Invalid email format" },
               ]}
             >
-              <Input placeholder="Enter Email" size="large" />{" "}
-              {/* Adjust size here */}
+              <Input placeholder="Enter Email" size="large" />
             </Form.Item>
 
-             <Form.Item>
-            <p>By signing up, you agree to our Terms and Conditions.</p>
+            <Form.Item>
+              <p>By signing up, you agree to our Terms and Conditions.</p>
               <Button
                 type="primary"
                 htmlType="submit"
-                block size="large"
-                disabled={isLoading} // Disable button while loading
+                block
+                size="large"
+                disabled={isLoading}
                 icon={isLoading ? <LoadingOutlined spin /> : null}
                 className="btn-sign-up"
               >
@@ -138,7 +133,7 @@ const Register = () => {
               </Button>
             </Form.Item>
             <Link to="/login">
-            <Button block size="large">Back to Log In</Button>
+              <Button block size="large">Back to Log In</Button>
             </Link>
           </Form>
         </div>

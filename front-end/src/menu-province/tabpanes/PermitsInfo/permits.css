@@ -1,0 +1,10 @@
+.permit-label{
+    margin-top: 3px;
+    display: flex;
+}
+
+.btn-chemical-viewmore{
+    width: 100%;
+    background-color: rgb(236, 236, 236);
+    font-size: 12px;
+}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Table,
   Input,
@@ -21,7 +21,6 @@ import {
   notification,
   Tag,
 } from "antd";
-import { PlusCircleFilled } from "@ant-design/icons";
 import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
 import moment from "moment";
@@ -31,6 +30,7 @@ import Inspector from "../../../components/Inspectors";
 import Month from "../../../components/Month";
 import ReportType from "../../../components/ReportType";
 import InspectionType from "../../../components/InspectionType";
+import Inspectors from "../../../components/Inspectors";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -64,8 +64,6 @@ const normalizeAndSplit = (str) => {
 };
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
-  const dateFormat = "MM/DD/YYYY";
-  const timeFormat = "h:mm A";
 
   return (
     <Row gutter={[16, 16]}>
@@ -88,10 +86,11 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             placeholder="No data"
           />
         </Paragraph>
+
         <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={10} lg={10} className="modal-col">
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
-              <strong>Section In Charged</strong>
+              <strong>Current Section In Charge</strong>
               <SectionInCharged
                 value={editedRecord ? editedRecord.section_incharge : ""}
                 onChange={(value) => handleChange("section_incharge", value)}
@@ -100,21 +99,31 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               />
             </Paragraph>
           </Col>
-          <Col xs={24} sm={24} md={10} lg={10} className="modal-col">
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
-              <strong>Inspector/Handler</strong>
-              <Inspector
-                value={editedRecord ? editedRecord.handler : ""}
-                onChange={(value) => handleChange("handler", value)}
+              <strong>Other Section/Unit-In-Charged</strong>
+              <SectionInCharged
+                value={editedRecord ? editedRecord.fmr_section_incharged : ""}
+                onChange={(value) =>
+                  handleChange("fmr_section_incharged", value)
+                }
                 disabled={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
           </Col>
-          <Col xs={24} sm={24} md={2} lg={2} className="modal-col">
-            <PlusCircleFilled className="plus-button" />
-          </Col>
         </Row>
+
+        <Paragraph>
+          <strong>Inspector/Handler</strong>
+          <Inspector
+            value={editedRecord ? editedRecord.handler : ""}
+            onChange={(value) => handleChange("handler", value)}
+            disabled={!isEditing}
+            placeholder="No data"
+          />
+        </Paragraph>
+
         <Paragraph>
           <strong>Schedule of Monitoring</strong>
           <Month
@@ -220,8 +229,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           <Row gutter={[16, 16]} className="row-auto">
             <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
               <Paragraph>
-                <strong className="label_container">Total No. of Days</strong>
-                <p className="label">(Date Monitored VS Date Submitted)</p>
+                <span className="label_container">
+                  <strong className="label_title">Total No. of Days:</strong>
+                  <p className="label">(Date Monitored VS Date Submitted)</p>
+                </span>
                 <InspectionType
                   value={editedRecord ? editedRecord.days_dmds : ""}
                   onChange={(value) => handleChange("days_dmds", value)}
@@ -232,8 +243,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             </Col>
             <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
               <Paragraph>
-              <strong className="label_container">Total No. of Days</strong>
-              <p className="label">(Date Monitored VS Date Submitted)</p>
+                <span className="label_container">
+                  <strong className="label_title">Total No. of Days:</strong>
+                  <p className="label">(Date Submitted VS Date Signed)</p>
+                </span>
                 <ReportType
                   value={editedRecord ? editedRecord.days_dsdrs : ""}
                   onChange={(value) => handleChange("days_dsdrs", value)}
@@ -243,6 +256,29 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               </Paragraph>
             </Col>
           </Row>
+          <Paragraph>
+            <strong>Remarks/Recommendations:</strong> <br />
+            <TextArea
+              value={editedRecord ? editedRecord.remarks_recommendations : ""}
+              onChange={(e) => handleChange("street", e.target.value)}
+              disabled={!isEditing}
+              placeholder="No data"
+            />
+          </Paragraph>
+          <Paragraph>
+            <strong>Tracking of Reports (Received by Planning Unit): </strong>{" "}
+            <br />
+            <Checkbox
+              checked={editedRecord?.pismu_tracking === "✔"}
+              disabled={!isEditing}
+              onChange={(e) =>
+                handleChange("pismu_tracking", e.target.checked ? "✔" : "")
+              }
+              style={{ fontSize: "15px" }}
+            >
+              {editedRecord?.pismu_tracking === "✔" ? "Yes" : "No"}
+            </Checkbox>
+          </Paragraph>
         </Card>
       </Col>
     </Row>

@@ -4,6 +4,10 @@ const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const { MongoClient, ObjectId } = require("mongodb");
+const fs = require("fs");
+const path = require("path");
+const { PDFDocument, rgb } = require("pdf-lib");
+const zlib = require("zlib");
 const dotenv = require("dotenv").config();
 
 const app = express();
@@ -48,14 +52,13 @@ async function connectToMongo() {
     loginStatusCollection = db.collection("login-status");
     ucdsCollection = db.collection("ucds-data");
     dailyNoticesCollection = db.collection("ucds-data");
-    postingCollection = db.collection("postings")
+    postingCollection = db.collection("postings");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
 }
 
 connectToMongo();
-
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -74,8 +77,9 @@ function capitalizeFirstLetter(input) {
 
 // Function to generate a random password of specified length
 function generateRandomPassword(length) {
-  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let password = '';
+  const charset =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let password = "";
   for (let i = 0; i < length; i++) {
     const randomIndex = Math.floor(Math.random() * charset.length);
     password += charset[randomIndex];
@@ -83,12 +87,13 @@ function generateRandomPassword(length) {
   return password;
 }
 
-
 // Login Route
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
-    return res.status(400).json({ error: "Username and password are required." });
+    return res
+      .status(400)
+      .json({ error: "Username and password are required." });
   }
 
   try {
@@ -100,12 +105,12 @@ app.post("/login", async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { 
+      {
         username: user.username,
         name: user.name,
         userId: user._id,
         division: user.division,
-        permission: user.permission
+        permission: user.permission,
       },
       JWT_SECRET,
       { expiresIn: "1d" }
@@ -129,7 +134,9 @@ app.post("/login", async (req, res) => {
     });
 
     // Return success response with token and permissions
-    return res.status(200).json({ status: "success", token, permission: user.permission });
+    return res
+      .status(200)
+      .json({ status: "success", token, permission: user.permission });
   } catch (error) {
     console.error("Error during login:", error.message);
     return res.status(500).json({ error: "An unexpected error occurred." });
@@ -141,9 +148,9 @@ app.post("/register", async (req, res) => {
   const { name, division, position, email } = req.body; // Updated to match frontend form fields
 
   if (!name || !division || !position || !email) {
-    return res
-      .status(400)
-      .json({ error: "Name, division/section, position, and email are required" });
+    return res.status(400).json({
+      error: "Name, division/section, position, and email are required",
+    });
   }
 
   try {
@@ -173,30 +180,33 @@ app.post("/register", async (req, res) => {
 });
 
 // POST /api/newusers - Create a new user with password encryption
-app.post('/api/newusers', async (req, res) => {
-  console.log('Received request:', req.body);
+app.post("/api/newusers", async (req, res) => {
+  console.log("Received request:", req.body);
 
   const { name, email, division, status, password, username } = req.body;
 
   // Input validation
   if (!name || !email || !division || !status || !password || !username) {
-    console.log('Validation error: Missing required fields');
-    return res.status(400).json({ error: 'Required fields: name, email, division, status, password, username' });
+    console.log("Validation error: Missing required fields");
+    return res.status(400).json({
+      error:
+        "Required fields: name, email, division, status, password, username",
+    });
   }
 
   try {
     // Check for existing email
     const existingUser = await userCollection.findOne({ email });
     if (existingUser) {
-      console.log('Validation error: Email already exists');
-      return res.status(400).json({ error: 'Email already exists' });
+      console.log("Validation error: Email already exists");
+      return res.status(400).json({ error: "Email already exists" });
     }
 
     // Check for existing username
     const existingUsername = await userCollection.findOne({ username });
     if (existingUsername) {
-      console.log('Validation error: Username already exists');
-      return res.status(400).json({ error: 'Username already exists' });
+      console.log("Validation error: Username already exists");
+      return res.status(400).json({ error: "Username already exists" });
     }
 
     // Hash password securely
@@ -209,7 +219,7 @@ app.post('/api/newusers', async (req, res) => {
       email,
       password: hashedPassword,
       division,
-      permission: 'viewer', // Default permission
+      permission: "viewer", // Default permission
       status,
     };
 
@@ -217,34 +227,37 @@ app.post('/api/newusers', async (req, res) => {
     const insertResult = await userCollection.insertOne(newUser);
 
     if (insertResult.insertedCount === 1) {
-      console.log('User created successfully:', insertResult.ops[0]);
+      console.log("User created successfully:", insertResult.ops[0]);
 
       return res.status(201).json({
-        message: 'User created and status updated successfully',
+        message: "User created and status updated successfully",
         user: insertResult.ops[0],
       });
     } else {
-      console.error('Error inserting user:', insertResult);
-      return res.status(500).json({ error: 'Failed to create user', user: newUser });
+      console.error("Error inserting user:", insertResult);
+      return res
+        .status(500)
+        .json({ error: "Failed to create user", user: newUser });
     }
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error("Error creating user:", error);
 
     // Provide more informative error message based on the error type
-    let errorMessage = 'Failed to create user';
-    if (error.name === 'MongoError') {
-      errorMessage = 'Database error occurred';
-    } else if (error.name === 'BcryptError') {
-      errorMessage = 'Error during password hashing';
+    let errorMessage = "Failed to create user";
+    if (error.name === "MongoError") {
+      errorMessage = "Database error occurred";
+    } else if (error.name === "BcryptError") {
+      errorMessage = "Error during password hashing";
     }
 
     return res.status(500).json({ error: errorMessage, user: req.body }); // Include the user data in the error response
   }
 });
 
-app.post('/api/posting', async (req, res) => {
+app.post("/api/posting", async (req, res) => {
   try {
-    const { title, message, date, acknowledgement, iconType, createdDate } = req.body;
+    const { title, message, date, acknowledgement, iconType, createdDate } =
+      req.body;
 
     // Create a new document in the "posting" collection
     const postingCollection = db.collection("postings");
@@ -257,10 +270,107 @@ app.post('/api/posting', async (req, res) => {
       createdDate: new Date(),
     });
 
-    res.status(201).send({ message: 'Announcement saved successfully!' });
+    res.status(201).send({ message: "Announcement saved successfully!" });
   } catch (error) {
     console.error(error);
-    res.status(500).send({ message: 'Error saving announcement' });
+    res.status(500).send({ message: "Error saving announcement" });
+  }
+});
+
+// GENERATION OF ICIR FORM PDF AS PRIMARY INFORMATION
+app.get("/generate-icir/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Validate id_no format
+    if (!parseInt(id)) {
+      return res.status(400).send("Invalid id_no format");
+    }
+
+    // Find record by id_no from ucds-data collection
+    const record = await ucdsCollection.findOne({ id_no: parseInt(id) });
+
+    // Handle if record not found
+    if (!record) {
+      return res.status(404).send("Record not found");
+    }
+
+    // Load existing PDF template
+    const pdfPath = path.join(__dirname, "tmp", "icir-form.pdf");
+    const pdfBuffer = await fs.promises.readFile(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+
+    const form = pdfDoc.getForm();
+    const formFields = form.getFields();
+
+    // Update PDF fields with record data
+    formFields.forEach((field) => {
+      switch (field.getName()) {
+        case "establishment_name":
+          field.setText(record.title || "");
+          break;
+        case "establishment_address":
+          field.setText(record.address || "");
+          break;
+        case "establishment_industry_class":
+          field.setText(record.industry_class || "");
+          break;
+        case "establishment_psic_code":
+          field.setText(record.psic_code || "");
+          break;
+
+        case "establishment_ecc_cnc1":
+          field.setText(record.ecc_cnc || "");
+          break;
+
+        case "ecc_issued1":
+          field.setText(record.date_approved || "");
+          break;
+
+        case "establishment_pto_code":
+          field.setText(record.pto_code || "");
+          break;
+
+        case "pto_issued":
+          field.setText(record.pto_issued || "");
+          break;
+
+        case "pto_exp":
+          field.setText(record.pto_expiration || "");
+          break;
+
+        case "establishment_wwdp_code":
+          field.setText(record.wwdp_code || "");
+          break;
+
+        case "wwdp_issued":
+          field.setText(record.wwdp_issued || "");
+          break;
+
+        case "wwdp_expiration":
+          field.setText(record.wwdp_expiration || "");
+          break;
+
+        default:
+          console.log(`Unknown field: ${field.getName()}`);
+      }
+    });
+
+    // Send the modified PDF file to the client
+    const pdfBytes = await pdfDoc.save();
+    const compressedPdfBytes = zlib.gzipSync(pdfBytes);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="ICIR-${record.title}.pdf"`
+    );
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Content-Length", compressedPdfBytes.length);
+    res.send(compressedPdfBytes);
+  } catch (error) {
+    console.error("Error generating ICIR:", error);
+    res.status(500).send("Failed to generate ICIR");
   }
 });
 
@@ -274,13 +384,12 @@ app.get("/logout", async (req, res) => {
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const username = decodedToken.username;
 
-      // Find and update the most recent document for the user
-      await loginStatusCollection.findOneAndUpdate(
-        { userName: username, isLoggedIn: true },
-        { $set: { isLoggedIn: false, logoutTime: new Date() } },
-        { sort: { loginTime: -1 } } // Sort by loginTime in descending order
-      );
-
+    // Find and update the most recent document for the user
+    await loginStatusCollection.findOneAndUpdate(
+      { userName: username, isLoggedIn: true },
+      { $set: { isLoggedIn: false, logoutTime: new Date() } },
+      { sort: { loginTime: -1 } } // Sort by loginTime in descending order
+    );
 
     // Clear authentication token from cookies
     res.clearCookie("token", {
@@ -313,7 +422,12 @@ app.get("/check-auth", async (req, res) => {
         .json({ status: "Failure", error: "No token provided" });
     }
     const decoded = jwt.verify(token, JWT_SECRET);
-    return res.json({ status: "Success", name: decoded.name, username: decoded.username, division: decoded.division  });
+    return res.json({
+      status: "Success",
+      name: decoded.name,
+      username: decoded.username,
+      division: decoded.division,
+    });
   } catch (error) {
     console.error("Error in check-auth:", error.message);
     return res.status(401).json({ status: "Failure", error: error.message });
@@ -344,7 +458,9 @@ app.get("/api/online_users", async (req, res) => {
     res.status(200).json({ onlineUsers: formattedOnlineUsers });
   } catch (error) {
     console.error("Error fetching online users:", error);
-    res.status(500).json({ error: "An error occurred while fetching online users." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching online users." });
   }
 });
 
@@ -471,6 +587,7 @@ app.get("/api/get-province-data", async (req, res) => {
       v_tchem: doc.v_tchem || "",
       tc_date_sched: doc.tc_date_sched || "",
       tc_date_actual: doc.tc_date_actual || "",
+      time: doc.time || "",
       legal_officer: doc.legal_officer || "",
       tc_commitment: doc.tc_commitment || "",
       pos_paper: doc.pos_paper || "",
@@ -498,97 +615,108 @@ app.get("/api/get-province-data", async (req, res) => {
 });
 
 // Define route to fetch user data
-app.get('/api/users', async (req, res) => {
+app.get("/api/users", async (req, res) => {
   try {
     const users = await userCollection.find().toArray(); // Fetch all users from the "user" collection
     res.json(users); // Return the users as JSON
   } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+    console.error("Error fetching user data:", error);
+    res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
   }
 });
 
 //generate a random password
-app.get('/api/generate-password', (req, res) => {
+app.get("/api/generate-password", (req, res) => {
   const password = generateRandomPassword(8);
   res.json({ password });
 });
 
 // Define route to fetch signup data
-app.get('/api/sign-up', async (req, res) => {
+app.get("/api/sign-up", async (req, res) => {
   try {
     const users = await signUpCollection.find().toArray(); // Fetch all users from the "user" collection
     res.json(users); // Return the users as JSON
   } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+    console.error("Error fetching user data:", error);
+    res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
   }
 });
 
-app.get('/api/user/avatar', async (req, res) => {
+app.get("/api/user/avatar", async (req, res) => {
   try {
     const name = req.query.name;
     const user = await userCollection.findOne({ name }); // Find the user by name
     if (!user) {
-      res.status(404).json({ error: 'User not found' }); // Return 404 status code if user not found
+      res.status(404).json({ error: "User not found" }); // Return 404 status code if user not found
     } else {
       const avatar = user.avatar; // Assuming the avatar is stored in the "avatar" field
       res.json({ avatar }); // Return the avatar as a JSON object
     }
   } catch (error) {
-    console.error('Error fetching user avatar:', error);
-    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+    console.error("Error fetching user avatar:", error);
+    res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
   }
 });
 
 // Example API endpoint to fetch monitored dates
 app.get("/api/monitored_dates", async (req, res) => {
   try {
-    const monitoredDates = await ucdsCollection.find({
-      title: { $exists: true, $ne: "" },
-      date_monitored: { $exists: true, $ne: "" }
-    }).project({ title: 1, date_monitored: 1 }).toArray();
-    
+    const monitoredDates = await ucdsCollection
+      .find({
+        title: { $exists: true, $ne: "" },
+        date_monitored: { $exists: true, $ne: "" },
+      })
+      .project({ title: 1, date_monitored: 1 })
+      .toArray();
+
     res.status(200).json({ monitoredDates });
   } catch (error) {
     console.error("Error fetching monitored dates:", error);
-    res.status(500).json({ error: "An error occurred while fetching monitored dates." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching monitored dates." });
   }
 });
 
 app.get("/api/daily_notices", async (req, res) => {
   try {
-    const notices = await dailyNoticesCollection.find(
-      { date_monitored: { $exists: true, $ne: "" } }, // Filter to ensure date_monitored exists and is not empty
-      { projection: { 
-        date_monitored: 1, 
-        title: 1, 
-        address: 1, 
-        industry_class: 1, 
-        date_monitored: 1,
-        date_routed: 1, 
-        date_signed: 1, 
-        iis_no: 1, 
-        section_incharge: 1, 
-        remarks_recommendation: 1,
-        _id: 0 
-      } } // Include only these fields
-    ).toArray();
+    const notices = await dailyNoticesCollection
+      .find(
+        { date_monitored: { $exists: true, $ne: "" } }, // Filter to ensure date_monitored exists and is not empty
+        {
+          projection: {
+            date_monitored: 1,
+            title: 1,
+            address: 1,
+            industry_class: 1,
+            date_monitored: 1,
+            date_routed: 1,
+            date_signed: 1,
+            iis_no: 1,
+            section_incharge: 1,
+            remarks_recommendation: 1,
+            _id: 0,
+          },
+        } // Include only these fields
+      )
+      .toArray();
 
     res.json({ notices });
   } catch (error) {
     console.error("Error fetching daily notices:", error);
-    res.status(500).json({ error: "An error occurred while fetching daily notices." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching daily notices." });
   }
 });
 
-app.get('/api/postings', async (req, res) => {
+app.get("/api/postings", async (req, res) => {
   try {
     const postings = await postingCollection.find().toArray(); // Fetch all postings from the "postings" collection
     res.json(postings); // Return the postings as JSON
   } catch (error) {
-    console.error('Error fetching postings data:', error);
-    res.status(500).json({ error: 'Internal Server Error' }); // Return 500 status code for internal server error
+    console.error("Error fetching postings data:", error);
+    res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
   }
 });
 
@@ -626,20 +754,20 @@ app.put("/api/update-data/:id", async (req, res) => {
   } catch (error) {
     console.error("Error updating data:", error);
     res
-     .status(500)
-     .json({ error: "Failed to update data. Please try again later." });
+      .status(500)
+      .json({ error: "Failed to update data. Please try again later." });
   }
 });
 
 // Update users data from admin panel
-app.put('/api/users/:id', async (req, res) => {
+app.put("/api/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const updatedUser = req.body;
 
     // Ensure the provided ID is a valid MongoDB ObjectId
     if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
+      return res.status(400).json({ error: "Invalid user ID" });
     }
 
     // Extract avatar from the request body
@@ -665,24 +793,23 @@ app.put('/api/users/:id', async (req, res) => {
     );
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
-    res.json({ message: 'User updated successfully' });
+    res.json({ message: "User updated successfully" });
   } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error updating user:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-
-app.put('/api/status/:id', async (req, res) => {
+app.put("/api/status/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
     // Ensure the provided ID is a valid MongoDB ObjectId
     if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
+      return res.status(400).json({ error: "Invalid user ID" });
     }
 
     // Update status in 'sign-up' collection to the new status sent from the frontend
@@ -694,16 +821,17 @@ app.put('/api/status/:id', async (req, res) => {
     );
 
     if (updateResult.matchedCount === 0) {
-      return res.status(404).json({ error: 'User not found in sign-up collection' });
+      return res
+        .status(404)
+        .json({ error: "User not found in sign-up collection" });
     }
 
-    res.json({ message: 'Status updated successfully in sign-up collection' });
+    res.json({ message: "Status updated successfully in sign-up collection" });
   } catch (error) {
-    console.error('Error updating status:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error updating status:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 
 // Start server
 app.listen(8081, () => {
