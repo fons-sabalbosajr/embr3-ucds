@@ -17,7 +17,8 @@ const PORT = process.env.PORT || 8081;
 const allowedOrigins = [
   "http://localhost:5173",
   "https://669a0df25c71edf9ca6eeadd--lucent-scone-fc55bd.netlify.app",
-  "https://embr3-ucds.onrender.com"
+  "https://embr3-ucds.onrender.com",
+  "https://embr3-ucds.render.com"
 ];
 
 // Middleware
@@ -31,9 +32,10 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
+    allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
     credentials: true,
+    maxAge: 3600, // Add maxAge to specify the duration of the CORS configuration
     optionsSuccessStatus: 200,
   })
 );
