@@ -19,7 +19,7 @@ app.use(
   cors({
     origin:
       "http://localhost:5173" ||
-      "https://66541ef030bad92ab9e61793--lucent-scone-fc55bd.netlify.app",
+      "https://669a0df25c71edf9ca6eeadd--lucent-scone-fc55bd.netlify.app",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
