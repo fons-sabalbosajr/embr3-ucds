@@ -13,13 +13,23 @@ const dotenv = require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 8081;
 
+// Allowed origins
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://669a0df25c71edf9ca6eeadd--lucent-scone-fc55bd.netlify.app"
+];
+
 // Middleware
 app.use(express.json());
 app.use(
   cors({
-    origin:
-      "http://localhost:5173" ||
-      "https://669a0df25c71edf9ca6eeadd--lucent-scone-fc55bd.netlify.app",
+    origin: function (origin, callback) {
+      if (allowedOrigins.includes(origin) || !origin) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
