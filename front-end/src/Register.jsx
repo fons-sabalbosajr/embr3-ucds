@@ -17,7 +17,7 @@ const Register = () => {
     setIsLoading(true);
     try {
       const response = await axios.post(
-        "http://localhost:8081/register" ||
+        "https://embr3-ucds.onrender.com/register" ||
           "https://embr3-ucds.onrender.com/register",
         {
           name: values.name,

@@ -278,6 +278,7 @@ app.post("/api/posting", async (req, res) => {
 });
 
 // GENERATION OF ICIR FORM PDF AS PRIMARY INFORMATION
+
 app.get("/generate-icir/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -364,6 +365,106 @@ app.get("/generate-icir/:id", async (req, res) => {
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="ICIR-${record.title}.pdf"`
+    );
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Content-Length", compressedPdfBytes.length);
+    res.send(compressedPdfBytes);
+  } catch (error) {
+    console.error("Error generating ICIR:", error);
+    res.status(500).send("Failed to generate ICIR");
+  }
+});
+
+
+
+
+app.get("/generate-custom-icir/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const selectedData = req.query.fields.reduce((acc, field) => {
+    acc[field] = req.query[field];
+    return acc;
+  }, {});
+
+  const {
+    establishmentName,
+    establishmentAddress,
+    establishmentIndustryClass,
+    establishmentPsicCode,
+    establishmentEccCnc1,
+    eccIssued1,
+    establishmentPtoCode,
+    ptoIssued,
+    ptoExp,
+    establishmentWwdpCode,
+    wwdpIssued,
+    wwdpExpiration,
+  } = selectedData;
+
+  try {
+    // Validate id_no format
+    if (!parseInt(id)) {
+      return res.status(400).send("Invalid id_no format");
+    }
+
+    // Load existing PDF template
+    const pdfPath = path.join(__dirname, "tmp", "icir-form.pdf");
+    const pdfBuffer = await fs.promises.readFile(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+
+    const form = pdfDoc.getForm();
+    const formFields = form.getFields();
+
+    // Update PDF fields with provided values
+    formFields.forEach((field) => {
+      switch (field.getName()) {
+        case "establishment_name":
+          field.setText(establishmentName || "");
+          break;
+        case "establishment_address":
+          field.setText(establishmentAddress || "");
+          break;
+        case "establishment_industry_class":
+          field.setText(establishmentIndustryClass || "");
+          break;
+        case "establishment_psic_code":
+          field.setText(establishmentPsicCode || "");
+          break;
+        case "establishment_ecc_cnc1":
+          field.setText(establishmentEccCnc1 || "");
+          break;
+        case "ecc_issued1":
+          field.setText(eccIssued1 || "");
+          break;
+        case "establishment_pto_code":
+          field.setText(establishmentPtoCode || "");
+          break;
+        case "pto_issued":
+          field.setText(ptoIssued || "");
+          break;
+        case "pto_exp":
+          field.setText(ptoExp || "");
+          break;
+        case "establishment_wwdp_code":
+          field.setText(establishmentWwdpCode || "");
+          break;
+        case "wwdp_issued":
+          field.setText(wwdpIssued || "");
+          break;
+        case "wwdp_expiration":
+          field.setText(wwdpExpiration || "");
+          break;
+      }
+    });
+
+    // Send the modified PDF file to the client
+    const pdfBytes = await pdfDoc.save();
+    const compressedPdfBytes = zlib.gzipSync(pdfBytes);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="ICIR-${establishmentName}.pdf"`
     );
     res.setHeader("Content-Encoding", "gzip");
     res.setHeader("Content-Length", compressedPdfBytes.length);
@@ -565,7 +666,6 @@ app.get("/api/get-province-data", async (req, res) => {
       chemical_permit: doc.chemical_permit || "",
       chemical_permit_type: doc.chemical_permit_type || "",
       chemical_permit_sub_type: doc.chemical_permit_sub_type || "",
-      chemical_code: doc.chemical_code || "",
       chem_permit_issued: doc.chem_permit_issued || "",
       chem_permit_exp: doc.chem_permit_exp || "",
       pco: doc.pco || "",
@@ -720,13 +820,31 @@ app.get("/api/postings", async (req, res) => {
   }
 });
 
+app.get("/api/ucds-data/:id", async (req, res) => {
+  const { id } = req.params;
+  console.log(`Received request for id: ${id}`);
+
+  try {
+    const data = await ucdsCollection.findOne({ id_no: id });
+    console.log(`Data found: ${data}`);
+    if (!data) {
+      res.status(404).json({ error: "Data not found" });
+    } else {
+      res.json(data);
+    }
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+})
+
 //Update the data per provinces
 app.put("/api/update-data/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const newData = req.body;
 
-    console.log(`Received update request for id ${id} with data:`, newData);
+    //console.log(`Received update request for id ${id} with data:`, newData);
 
     // Ensure connection to the database
     if (!client.topology.isConnected()) {
@@ -736,7 +854,7 @@ app.put("/api/update-data/:id", async (req, res) => {
     const database = client.db("universe-db");
     const collection = database.collection("ucds-data");
 
-    console.log("Connected to MongoDB database");
+   // console.log("Connected to MongoDB database");
 
     // Perform the update operation
     const result = await collection.updateOne(
@@ -744,7 +862,7 @@ app.put("/api/update-data/:id", async (req, res) => {
       { $set: newData }
     );
 
-    console.log("Update result:", result);
+   //console.log("Update result:", result);
 
     if (result.modifiedCount === 1) {
       res.status(200).json({ message: "Data updated successfully" });

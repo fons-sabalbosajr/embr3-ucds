@@ -25,6 +25,12 @@ import Permit from "./tabpanes/PermitsInfo/Permits";
 import Legal from "./tabpanes/LegalInfo/LegalUnit";
 import MBU from "./tabpanes/MBUInfo/MBUnit";
 
+import ICIR from "./reports/icir/ICIR";
+import IC from "./reports/ic/formIC";
+import CIC from "./reports/cic/formCIC";
+import Drafts from "./reports/drafts/ReportDrafts";
+import ReportLog from "./reports/reportlog/ReportLog";
+
 const { TabPane } = Tabs;
 const { Paragraph } = Typography;
 const BoldTab = styled.span`
@@ -41,7 +47,9 @@ const ProvinceModal = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
-  const [loadingPDF, setLoadingPDF] = useState(false); // State to track PDF generation loading state
+  const [loadingPDF, setLoadingPDF] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false); // State for modal visibility
+  const [loadingICIR, setLoadingICIR] = useState(false);
 
   useEffect(() => {
     setEditedRecord(record);
@@ -57,7 +65,7 @@ const ProvinceModal = ({
   const handleSaveChanges = async () => {
     try {
       const response = await axios.put(
-        `http://localhost:8081/api/update-data/${record.id_no}`,
+        `https://embr3-ucds.onrender.com/api/update-data/${record.id_no}`,
         editedRecord
       );
 
@@ -94,6 +102,19 @@ const ProvinceModal = ({
     });
   };
 
+  const handleopenModal = () => {
+    setIsModalVisible(true);
+    setLoadingICIR(true);
+  };
+
+  const handleModalOk = () => {
+    setIsModalVisible(false); // Close modal
+  };
+
+  const handleModalCancel = () => {
+    setIsModalVisible(false); // Close modal
+  };
+
   const handleMenuClick = async (e) => {
     try {
       setLoadingPDF(true);
@@ -112,7 +133,7 @@ const ProvinceModal = ({
       });
 
       const response = await axios.get(
-        `http://localhost:8081/generate-icir/${record.id_no}`,
+        `https://embr3-ucds.onrender.com/generate-icir/${record.id_no}`,
         {
           responseType: "blob",
         }
@@ -216,15 +237,60 @@ const ProvinceModal = ({
         </TabPane>
       </Tabs>
 
+      <Modal
+        title="Custom Generated Report (DEV)"
+        visible={isModalVisible}
+        onOk={handleModalOk}
+        onCancel={handleModalCancel}
+        width={1200}
+        footer={null}
+      >
+        <div className="report-modal-container">
+          <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={20}>
+            <TabPane tab={<span>Generate ICIR</span>} key="1">
+              <ICIR
+                editedRecord={editedRecord}
+                onIncludeChange={(record, isChecked) => (record, isChecked)}
+                onSaveChanges={handleSaveChanges}
+              />
+            </TabPane>
+            <TabPane tab={<span>Generate CIC</span>} key="2">
+              <IC />
+            </TabPane>
+            <TabPane tab={<span>Generate IC</span>} key="3">
+              <CIC />
+            </TabPane>
+            <TabPane tab={<span>Draft Reports</span>} key="4">
+              <Drafts />
+            </TabPane>
+            <TabPane tab={<span>Report Logs</span>} key="5">
+              <ReportLog />
+            </TabPane>
+          </Tabs>
+        </div>
+      </Modal>
+
       <Dropdown overlay={menu} placement="topLeft">
         <Button
-          className="button-generate"
+          className="button-generate-alpha"
           type="primary"
           disabled={loadingPDF}
         >
           {loadingPDF ? "Generating PDF..." : "Generate"}
         </Button>
       </Dropdown>
+
+      <Button
+        className="button-generate"
+        type="primary"
+        onClick={handleopenModal}
+        disabled={loadingPDF}
+      >
+        {loadingPDF ? "Generating PDF..." : "Custom Generate (DEV)"}
+      </Button>
+
+
+     
 
       <div className="action-buttons-container">
         <Space>

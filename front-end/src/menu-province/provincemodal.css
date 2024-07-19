@@ -6,7 +6,7 @@
 
 .action-buttons-container {
   position: absolute;
-  right: 20px;
+  right: 40px;
   bottom: 20px;
   display: flex;
   align-items: center;
@@ -15,6 +15,12 @@
 
 .button-generate {
   background-color: forestgreen;
+}
+
+.button-generate-alpha {
+  //background-color: rgb(60, 133, 60);
+  bottom: -20px;
+  margin-right: 5px;
 }
 
 .ant-input:focus {
@@ -29,4 +35,40 @@
 
 .modal-col {
   margin-bottom: 10px;
+}
+
+
+.modal-container {
+  padding: 20px;
+}
+
+.button-generate {
+  margin-top: 0px;
+  bottom: -20px;
+}
+
+
+.sider-menu {
+  height: 100%;
+  border-color: #ffffff;
+}
+
+.nested-modal-layout {
+  min-height: 200px;
+}
+
+.nested-modal-sider {
+  background: #ffffff;
+}
+
+.nested-modal-content-layout {
+  padding: 5px;
+  background: #f9f9f9;
+}
+
+.nested-modal-content {
+  background: #ffffff;
+  padding: 24px;
+  margin: 0;
+  min-height: 500px;
 }

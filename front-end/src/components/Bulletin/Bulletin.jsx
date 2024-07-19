@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Input, Typography, Space } from 'antd';
+import { Table, Button, Input, Typography, Space, Modal } from 'antd';
 import {
   PlusCircleFilled,
   ExclamationCircleOutlined,
@@ -15,11 +15,13 @@ const { Search } = Input;
 
 const Bulletin = () => {
   const [bulletins, setBulletins] = useState([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [selectedBulletin, setSelectedBulletin] = useState({});
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/api/postings");
+        const response = await axios.get("https://embr3-ucds.onrender.com/api/postings");
         const data = response.data;
         setBulletins(data);
       } catch (error) {
@@ -30,15 +32,12 @@ const Bulletin = () => {
     fetchData();
   }, []);
 
-
-
   const iconMap = {
     alerts: <ExclamationCircleOutlined style={{ color: "rgb(236, 71, 71)" }} />,
     information: <InfoCircleFilled style={{ color: "rgb(54, 138, 223)" }} />,
     warning: <WarningFilled style={{ color: "orange" }} />,
     announcement: <BellFilled style={{ color: "green" }} />,
   };
-
 
   const columns = [
     {
@@ -54,7 +53,7 @@ const Bulletin = () => {
       align: "left",
       render: (_, record) => (
         <div>
-          <Typography.Text strong>{record.title}</Typography.Text>
+          <Typography.Text strong={record.isRead ? false : true}>{record.title}</Typography.Text>
           <br />
           <Typography.Text>{record.message}</Typography.Text>
         </div>
@@ -66,11 +65,26 @@ const Bulletin = () => {
       align: "left",
       render: (_, record) => (
         <Space size="middle">
-          <Button type="primary" size="small" className="bulletin-button">View</Button>
+          <Button type="primary" size="small" className="bulletin-button" onClick={() => handleView(record)}>View</Button>
         </Space>
       ),
     },
   ];
+
+  const handleView = async (record) => {
+    setSelectedBulletin(record);
+    setIsModalVisible(true);
+    try {
+      await axios.patch(`https://embr3-ucds.onrender.com/api/postings/${record.id}`, { isRead: true });
+      setBulletins(bulletins.map((bulletin) => bulletin.id === record.id ? { ...bulletin, isRead: true } : bulletin));
+    } catch (error) {
+      console.error("Error marking bulletin as read:", error);
+    }
+  };
+
+  const handleModalCancel = () => {
+    setIsModalVisible(false);
+  };
 
   return (
     <div className="bulletin-content">
@@ -79,6 +93,11 @@ const Bulletin = () => {
         <Search placeholder="Search..." style={{ width: 200, marginBottom: 20 }} />
       </div> */}
       <Table columns={columns} dataSource={bulletins} pagination={{ pageSize: 5 }} />
+      <Modal title="Bulletin Details" visible={isModalVisible} onCancel={handleModalCancel} footer={null}>
+        <Typography.Text strong>{selectedBulletin.title}</Typography.Text>
+        <br />
+        <Typography.Text>{selectedBulletin.message}</Typography.Text>
+      </Modal>
     </div>
   );
 };

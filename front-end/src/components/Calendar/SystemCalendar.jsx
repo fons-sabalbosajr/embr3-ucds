@@ -30,7 +30,7 @@ const SystemCalendar = () => {
     const fetchMonitoredDates = async () => {
       try {
         const response = await axios.get(
-          "http://localhost:8081/api/monitored_dates"
+          "https://embr3-ucds.onrender.com/api/monitored_dates"
         );
         setMonitoredDates(response.data.monitoredDates || []);
       } catch (error) {
@@ -41,7 +41,7 @@ const SystemCalendar = () => {
     const fetchDailyNotices = async () => {
       try {
         const response = await axios.get(
-          "http://localhost:8081/api/daily_notices"
+          "https://embr3-ucds.onrender.com/api/daily_notices"
         );
         setNotices(response.data.notices || []);
       } catch (error) {
