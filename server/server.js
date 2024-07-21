@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 8081;
 // Allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://5132ccc0-446b-48c7-8489-8c5eb246d77bsuper-khapse-e8a332.netlify.app/",
+  "https://super-khapse-e8a332.netlify.app/",
   "https://embr3-ucds.onrender.com",
   "https://embr3-ucds.render.com"
 ];
@@ -26,6 +26,7 @@ app.use(express.json());
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log("Origin: ", origin);  // Log the origin for debugging
       if (allowedOrigins.includes(origin) || !origin) {
         return callback(null, true);
       } else {
@@ -68,6 +69,7 @@ async function connectToMongo() {
     postingCollection = db.collection("postings");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
+    process.exit(1);
   }
 }
 
