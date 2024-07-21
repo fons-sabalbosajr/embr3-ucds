@@ -16,31 +16,34 @@ const PORT = process.env.PORT || 8081;
 // Allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://super-khapse-e8a332.netlify.app/",
+  "https://super-khapse-e8a332.netlify.app",
   "https://embr3-ucds.onrender.com",
   "https://embr3-ucds.render.com"
 ];
 
 // Middleware
 app.use(express.json());
+app.use(cookieParser());
 app.use(
   cors({
     origin: function (origin, callback) {
       console.log("Origin: ", origin);  // Log the origin for debugging
       if (allowedOrigins.includes(origin) || !origin) {
-        return callback(null, true);
+        callback(null, true);
       } else {
-        return callback(new Error("Not allowed by CORS"));
+        callback(new Error("Not allowed by CORS"));
       }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
     credentials: true,
-    maxAge: 3600,
-    optionsSuccessStatus: 200,
+    preflightContinue: false,  // Ensure preflight requests are handled automatically
+    optionsSuccessStatus: 204, // Response status code for successful OPTIONS requests
   })
 );
-app.use(cookieParser());
+
+// Middleware to handle OPTIONS requests
+app.options('*', cors());
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -73,7 +76,7 @@ async function connectToMongo() {
   }
 }
 
-connectToMongo();
+connectToMongo().catch(console.error);
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET;
