@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 8081;
 // Allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://669a0df25c71edf9ca6eeadd--lucent-scone-fc55bd.netlify.app",
+  "https://super-khapse-e8a332.netlify.app/",
   "https://embr3-ucds.onrender.com",
   "https://embr3-ucds.render.com"
 ];
