@@ -296,7 +296,6 @@ app.post("/api/posting", async (req, res) => {
 });
 
 // GENERATION OF ICIR FORM PDF AS PRIMARY INFORMATION
-
 app.get("/generate-icir/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -319,6 +318,11 @@ app.get("/generate-icir/:id", async (req, res) => {
     const pdfBuffer = await fs.promises.readFile(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBuffer);
 
+    // Load custom font
+    const fontPath = path.join(__dirname, 'fonts', 'arial.ttf');
+    const fontBytes = await fs.promises.readFile(fontPath);
+    const customFont = await pdfDoc.embedFont(fontBytes);
+
     const form = pdfDoc.getForm();
     const formFields = form.getFields();
 
@@ -327,49 +331,52 @@ app.get("/generate-icir/:id", async (req, res) => {
       switch (field.getName()) {
         case "establishment_name":
           field.setText(record.title || "");
+          field.updateAppearances(customFont);
           break;
         case "establishment_address":
           field.setText(record.address || "");
+          field.updateAppearances(customFont);
           break;
         case "establishment_industry_class":
           field.setText(record.industry_class || "");
+          field.updateAppearances(customFont);
           break;
         case "establishment_psic_code":
           field.setText(record.psic_code || "");
+          field.updateAppearances(customFont);
           break;
-
         case "establishment_ecc_cnc1":
           field.setText(record.ecc_cnc || "");
+          field.updateAppearances(customFont);
           break;
-
         case "ecc_issued1":
           field.setText(record.date_approved || "");
+          field.updateAppearances(customFont);
           break;
-
         case "establishment_pto_code":
           field.setText(record.pto_code || "");
+          field.updateAppearances(customFont);
           break;
-
         case "pto_issued":
           field.setText(record.pto_issued || "");
+          field.updateAppearances(customFont);
           break;
-
         case "pto_exp":
           field.setText(record.pto_expiration || "");
+          field.updateAppearances(customFont);
           break;
-
         case "establishment_wwdp_code":
           field.setText(record.wwdp_code || "");
+          field.updateAppearances(customFont);
           break;
-
         case "wwdp_issued":
           field.setText(record.wwdp_issued || "");
+          field.updateAppearances(customFont);
           break;
-
         case "wwdp_expiration":
           field.setText(record.wwdp_expiration || "");
+          field.updateAppearances(customFont);
           break;
-
         default:
           console.log(`Unknown field: ${field.getName()}`);
       }
@@ -392,6 +399,7 @@ app.get("/generate-icir/:id", async (req, res) => {
     res.status(500).send("Failed to generate ICIR");
   }
 });
+
 
 
 
