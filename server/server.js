@@ -7,8 +7,12 @@ const { MongoClient, ObjectId } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, rgb } = require("pdf-lib");
+const fontkit = require("@pdf-lib/fontkit");
 const zlib = require("zlib");
 const dotenv = require("dotenv").config();
+
+// Register fontkit instance
+PDFDocument.registerFontkit(fontkit);
 
 const app = express();
 const PORT = process.env.PORT || 8081;
