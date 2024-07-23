@@ -11,9 +11,6 @@ const fontkit = require("@pdf-lib/fontkit");
 const zlib = require("zlib");
 const dotenv = require("dotenv").config();
 
-// Register fontkit instance
-PDFDocument.registerFontkit(fontkit);
-
 const app = express();
 const PORT = process.env.PORT || 8081;
 
@@ -22,7 +19,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "https://super-khapse-e8a332.netlify.app",
   "https://embr3-ucds.onrender.com",
-  "https://embr3-ucds.render.com"
+  "https://embr3-ucds.render.com",
 ];
 
 // Middleware
@@ -31,7 +28,7 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: function (origin, callback) {
-      console.log("Origin: ", origin);  // Log the origin for debugging
+      console.log("Origin: ", origin); // Log the origin for debugging
       if (allowedOrigins.includes(origin) || !origin) {
         callback(null, true);
       } else {
@@ -41,13 +38,13 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
     credentials: true,
-    preflightContinue: false,  // Ensure preflight requests are handled automatically
+    preflightContinue: false, // Ensure preflight requests are handled automatically
     optionsSuccessStatus: 204, // Response status code for successful OPTIONS requests
   })
 );
 
 // Middleware to handle OPTIONS requests
-app.options('*', cors());
+app.options("*", cors());
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -323,9 +320,9 @@ app.get("/generate-icir/:id", async (req, res) => {
     const pdfDoc = await PDFDocument.load(pdfBuffer);
 
     // Load custom font
-    const fontPath = path.join(__dirname, 'fonts', 'arial.ttf');
+    const fontPath = path.join(__dirname, "fonts", "arial.ttf");
     const fontBytes = await fs.promises.readFile(fontPath);
-    const customFont = await pdfDoc.embedFont(fontBytes);
+    const customFont = await pdfDoc.embedFont(fontkit.createFont(fontBytes));
 
     const form = pdfDoc.getForm();
     const formFields = form.getFields();
@@ -403,10 +400,6 @@ app.get("/generate-icir/:id", async (req, res) => {
     res.status(500).send("Failed to generate ICIR");
   }
 });
-
-
-
-
 
 app.get("/generate-custom-icir/:id", async (req, res) => {
   const { id } = req.params;
@@ -866,7 +859,7 @@ app.get("/api/ucds-data/:id", async (req, res) => {
     console.error("Error fetching data:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
-})
+});
 
 //Update the data per provinces
 app.put("/api/update-data/:id", async (req, res) => {
@@ -884,7 +877,7 @@ app.put("/api/update-data/:id", async (req, res) => {
     const database = client.db("universe-db");
     const collection = database.collection("ucds-data");
 
-   // console.log("Connected to MongoDB database");
+    // console.log("Connected to MongoDB database");
 
     // Perform the update operation
     const result = await collection.updateOne(
@@ -892,7 +885,7 @@ app.put("/api/update-data/:id", async (req, res) => {
       { $set: newData }
     );
 
-   //console.log("Update result:", result);
+    //console.log("Update result:", result);
 
     if (result.modifiedCount === 1) {
       res.status(200).json({ message: "Data updated successfully" });
