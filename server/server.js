@@ -381,11 +381,15 @@ app.get("/generate-icir/:id", async (req, res) => {
         default:
           console.log(`Unknown field: ${field.getName()}`);
       }
+      field.defaultUpdateAppearances(customFont);
     });
 
     // Send the modified PDF file to the client
     const pdfBytes = await pdfDoc.save();
     const compressedPdfBytes = zlib.gzipSync(pdfBytes);
+
+
+
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
