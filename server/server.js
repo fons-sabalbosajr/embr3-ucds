@@ -322,7 +322,7 @@ app.get("/generate-icir/:id", async (req, res) => {
     // Load custom font
     const fontPath = path.join(__dirname, "fonts", "arial.ttf");
     const fontBytes = await fs.promises.readFile(fontPath);
-    const customFont = await pdfDoc.embedFont(fontkit.createFont(fontBytes));
+    const customFont = await pdfDoc.embedFont(fontBytes);
 
     const form = pdfDoc.getForm();
     const formFields = form.getFields();
