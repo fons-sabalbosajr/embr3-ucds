@@ -16,10 +16,7 @@ const PORT = process.env.PORT || 8081;
 
 // Allowed origins
 const allowedOrigins = [
-  "http://localhost:5173",
-  "https://super-khapse-e8a332.netlify.app",
-  "https://embr3-ucds.onrender.com",
-  "https://embr3-ucds.render.com",
+  "http://localhost:5173"
 ];
 
 // Middleware
@@ -28,7 +25,7 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: function (origin, callback) {
-      console.log("Origin: ", origin); // Log the origin for debugging
+      //console.log("Origin: ", origin); // Log the origin for debugging
       if (allowedOrigins.includes(origin) || !origin) {
         callback(null, true);
       } else {
@@ -319,6 +316,9 @@ app.get("/generate-icir/:id", async (req, res) => {
     const pdfBuffer = await fs.promises.readFile(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBuffer);
 
+    // Register fontkit
+    pdfDoc.registerFontkit(fontkit);
+
     // Load custom font
     const fontPath = path.join(__dirname, "fonts", "arial.ttf");
     const fontBytes = await fs.promises.readFile(fontPath);
@@ -375,21 +375,17 @@ app.get("/generate-icir/:id", async (req, res) => {
           field.updateAppearances(customFont);
           break;
         case "wwdp_expiration":
-          field.setText(record.wwdp_expiration || "");
+          field.setText(record.wwdp_expiration || "");``
           field.updateAppearances(customFont);
           break;
         default:
           console.log(`Unknown field: ${field.getName()}`);
       }
-      field.defaultUpdateAppearances(customFont);
     });
 
     // Send the modified PDF file to the client
     const pdfBytes = await pdfDoc.save();
     const compressedPdfBytes = zlib.gzipSync(pdfBytes);
-
-
-
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -407,27 +403,9 @@ app.get("/generate-icir/:id", async (req, res) => {
 
 app.get("/generate-custom-icir/:id", async (req, res) => {
   const { id } = req.params;
+  const selectedData = req.query;
 
-  const selectedData = req.query.fields.reduce((acc, field) => {
-    acc[field] = req.query[field];
-    return acc;
-  }, {});
-
-  const {
-    establishmentName,
-    establishmentAddress,
-    establishmentIndustryClass,
-    establishmentPsicCode,
-    establishmentEccCnc1,
-    eccIssued1,
-    establishmentPtoCode,
-    ptoIssued,
-    ptoExp,
-    establishmentWwdpCode,
-    wwdpIssued,
-    wwdpExpiration,
-  } = selectedData;
-
+  console.log("Received Query Parameters:", selectedData);
   try {
     // Validate id_no format
     if (!parseInt(id)) {
@@ -444,43 +422,9 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
 
     // Update PDF fields with provided values
     formFields.forEach((field) => {
-      switch (field.getName()) {
-        case "establishment_name":
-          field.setText(establishmentName || "");
-          break;
-        case "establishment_address":
-          field.setText(establishmentAddress || "");
-          break;
-        case "establishment_industry_class":
-          field.setText(establishmentIndustryClass || "");
-          break;
-        case "establishment_psic_code":
-          field.setText(establishmentPsicCode || "");
-          break;
-        case "establishment_ecc_cnc1":
-          field.setText(establishmentEccCnc1 || "");
-          break;
-        case "ecc_issued1":
-          field.setText(eccIssued1 || "");
-          break;
-        case "establishment_pto_code":
-          field.setText(establishmentPtoCode || "");
-          break;
-        case "pto_issued":
-          field.setText(ptoIssued || "");
-          break;
-        case "pto_exp":
-          field.setText(ptoExp || "");
-          break;
-        case "establishment_wwdp_code":
-          field.setText(establishmentWwdpCode || "");
-          break;
-        case "wwdp_issued":
-          field.setText(wwdpIssued || "");
-          break;
-        case "wwdp_expiration":
-          field.setText(wwdpExpiration || "");
-          break;
+      const fieldName = field.getName();
+      if (selectedData[fieldName]) {
+        field.setText(selectedData[fieldName] || "");
       }
     });
 
@@ -491,7 +435,7 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="ICIR-${establishmentName}.pdf"`
+      `attachment; filename="ICIR-${selectedData.establishment_name || 'Unknown'}.pdf"`
     );
     res.setHeader("Content-Encoding", "gzip");
     res.setHeader("Content-Length", compressedPdfBytes.length);

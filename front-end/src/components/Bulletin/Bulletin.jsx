@@ -21,7 +21,7 @@ const Bulletin = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("https://embr3-ucds.onrender.com/api/postings");
+        const response = await axios.get(" http://localhost:8081/api/postings");
         const data = response.data;
         setBulletins(data);
       } catch (error) {
@@ -75,7 +75,7 @@ const Bulletin = () => {
     setSelectedBulletin(record);
     setIsModalVisible(true);
     try {
-      await axios.patch(`https://embr3-ucds.onrender.com/api/postings/${record.id}`, { isRead: true });
+      await axios.patch(` http://localhost:8081/api/postings/${record.id}`, { isRead: true });
       setBulletins(bulletins.map((bulletin) => bulletin.id === record.id ? { ...bulletin, isRead: true } : bulletin));
     } catch (error) {
       console.error("Error marking bulletin as read:", error);

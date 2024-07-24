@@ -46,14 +46,14 @@ const Posting = () => {
     // Fetch senders from user collection API
     // Replace with your actual API call
     const fetchSenders = async () => {
-      const response = await axios.get("https://embr3-ucds.onrender.com/api/users"); // Replace with your API endpoint
+      const response = await axios.get(" http://localhost:8081/api/users"); // Replace with your API endpoint
       const sendersData = response.data;
       setSenders(sendersData);
     };
     fetchSenders();
 
     const fetchAnnouncements = async () => {
-      const response = await axios.get("https://embr3-ucds.onrender.com/api/postings");
+      const response = await axios.get(" http://localhost:8081/api/postings");
       const announcementsData = response.data;
       setAnnouncements(announcementsData);
     };
@@ -79,7 +79,7 @@ const Posting = () => {
 
   const handleFormSubmit = async (values) => {
     try {
-      const response = await fetch("https://embr3-ucds.onrender.com/api/posting", {
+      const response = await fetch(" http://localhost:8081/api/posting", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

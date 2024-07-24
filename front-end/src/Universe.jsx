@@ -54,7 +54,7 @@ const Universe = () => {
 
   const handleLogout = () => {
     axios
-      .get("https://embr3-ucds.onrender.com/logout", { withCredentials: true })
+      .get(" http://localhost:8081/logout", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Logout Success") {
           localStorage.removeItem("authToken");
@@ -80,7 +80,7 @@ const Universe = () => {
 
   useEffect(() => {
     axios
-      .get("https://embr3-ucds.onrender.com/check-auth", { withCredentials: true })
+      .get("http://localhost:8081/check-auth", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);
@@ -96,7 +96,7 @@ const Universe = () => {
           );
 
           // Fetch user avatar
-          axios.get('https://embr3-ucds.onrender.com/api/user/avatar', {
+          axios.get('http://localhost:8081/api/user/avatar', {
             params: { name: res.data.name }
           })
           .then(response => {

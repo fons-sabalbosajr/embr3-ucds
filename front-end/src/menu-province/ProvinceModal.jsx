@@ -65,7 +65,7 @@ const ProvinceModal = ({
   const handleSaveChanges = async () => {
     try {
       const response = await axios.put(
-        `https://embr3-ucds.onrender.com/api/update-data/${record.id_no}`,
+        `http://localhost:8081/api/update-data/${record.id_no}`,
         editedRecord
       );
 
@@ -118,26 +118,33 @@ const ProvinceModal = ({
   const handleMenuClick = async (e) => {
     try {
       setLoadingPDF(true);
-
-      // Show loading cursor
       document.body.style.cursor = "wait";
-
-      // Show processing alert
-      Swal.fire({
+      Modal.info({
         title: "Generating PDF...",
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
+        content: (
+          <Spin spinning={true} size="large">
+            <p>Please wait...</p>
+          </Spin>
+        ),
+        maskClosable: false,
+        okButtonProps: { disabled: true },
+        zIndex: 10000,
       });
 
-      const response = await axios.get(
-        `https://embr3-ucds.onrender.com/generate-icir/${record.id_no}`,
-        {
-          responseType: "blob",
-        }
-      );
+      const params = new URLSearchParams();
+      Object.keys(selectedData).forEach((key) => {
+        params.append(key, selectedData[key]);
+      });
+
+      const url = `http://localhost:8081/generate-custom-icir/${
+        editedRecord.id_no
+      }?${params.toString()}`;
+      console.log(`Request URL: ${url}`);
+      console.log(`Request Params: ${params.toString()}`);
+
+      const response = await axios.get(url, {
+        responseType: "blob",
+      });
 
       setLoadingPDF(false);
 
@@ -288,9 +295,6 @@ const ProvinceModal = ({
       >
         {loadingPDF ? "Generating PDF..." : "Custom Generate (DEV)"}
       </Button>
-
-
-     
 
       <div className="action-buttons-container">
         <Space>

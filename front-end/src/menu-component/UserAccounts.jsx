@@ -41,7 +41,7 @@ const UserAccounts = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get("https://embr3-ucds.onrender.com/api/users", {
+      const response = await axios.get(" http://localhost:8081/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -75,7 +75,7 @@ const UserAccounts = () => {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get("https://embr3-ucds.onrender.com/api/users", {
+      const response = await axios.get(" http://localhost:8081/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -90,7 +90,7 @@ const UserAccounts = () => {
 
   const fetchSignUpUsers = async () => {
     try {
-      const response = await axios.get("https://embr3-ucds.onrender.com/api/sign-up", {
+      const response = await axios.get(" http://localhost:8081/api/sign-up", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -106,7 +106,7 @@ const UserAccounts = () => {
   const fetchLoginStatus = async () => {
     try {
       const response = await axios.get(
-        "https://embr3-ucds.onrender.com/api/online_users"
+        " http://localhost:8081/api/online_users"
       );
       const allStatuses = response.data.onlineUsers;
 
@@ -391,7 +391,7 @@ const UserAccounts = () => {
             // Call backend API to update status
             try {
               const response = await axios.put(
-                `https://embr3-ucds.onrender.com/api/status/${record._id}`,
+                ` http://localhost:8081/api/status/${record._id}`,
                 { status: value }
               );
               if (

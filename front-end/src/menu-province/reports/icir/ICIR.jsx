@@ -7,6 +7,10 @@ import Swal from "sweetalert2";
 const fieldTitles = {
   id_no: "Firm ID",
   title: "Project Title",
+  name: "Name",
+  address: "Address",
+  industry_class: "Industry Class",
+  psic_code: "PSIC Code",
   // Add more field titles as needed
 };
 
@@ -18,7 +22,7 @@ const ICIR = ({ editedRecord }) => {
 
   useEffect(() => {
     axios
-      .get(`https://embr3-ucds.onrender.com/api/ucds-data/${editedRecord.id_no}`)
+      .get(`http://localhost:8081/api/ucds-data/${editedRecord.id_no}`)
       .then((response) => {
         setUcdsData(response.data);
       })
@@ -28,22 +32,31 @@ const ICIR = ({ editedRecord }) => {
   }, [editedRecord]);
 
   const handleCheckboxChange = (field, checked) => {
-    setIncludedFields({ ...includedFields, [field]: checked });
+    setIncludedFields((prevIncludedFields) => ({
+      ...prevIncludedFields,
+      [field]: checked,
+    }));
     if (checked) {
-      setSelectedData({ ...selectedData, [field]: ucdsData[field] });
+      setSelectedData((prevSelectedData) => ({
+        ...prevSelectedData,
+        [field]: ucdsData[field],
+      }));
     } else {
-      delete selectedData[field];
-      setSelectedData({ ...selectedData });
+      setSelectedData((prevSelectedData) => {
+        const newSelectedData = { ...prevSelectedData };
+        delete newSelectedData[field];
+        return newSelectedData;
+      });
     }
   };
 
   const handleGeneratePDF = async () => {
     try {
       setLoadingPDF(true);
-
+  
       // Show loading cursor
       document.body.style.cursor = "wait";
-
+  
       // Show processing modal
       Modal.info({
         title: "Generating PDF...",
@@ -56,39 +69,46 @@ const ICIR = ({ editedRecord }) => {
         okButtonProps: { disabled: true },
         zIndex: 10000, // Make sure the modal is on top
       });
-
-      const response = await axios.get(
-        `https://embr3-ucds.onrender.com/generate-custom-icir/${editedRecord.id_no}`,
-        {
-          params: { fields: Object.keys(selectedData) },
-          responseType: "blob",
+  
+      const params = new URLSearchParams();
+      Object.keys(selectedData).forEach((key) => {
+        if (selectedData[key] !== undefined && selectedData[key] !== "") {
+          params.append(key, selectedData[key]);
         }
-      );
-
+      });
+  
+      const url = `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}?${params.toString()}`;
+      console.log(`Request URL: ${url}`);
+      console.log(`Request Params: ${params.toString()}`);
+  
+      const response = await axios.get(url, {
+        responseType: "blob",
+      });
+  
       setLoadingPDF(false);
-
+  
       // Reset cursor
       document.body.style.cursor = "default";
-
+  
       // Close modal after PDF generation
       Modal.destroyAll();
-
+  
       if (response.status === 200) {
         const blob = new Blob([response.data], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
-
+  
         // Create a temporary anchor element
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank"; // Open in new tab
         a.download = `ICIR-${editedRecord.title}.pdf`; // Set the file name for download
         a.click();
-
+  
         window.open(url, "_blank");
-
+  
         // Clean up
         URL.revokeObjectURL(url);
-
+  
         // Optional: Inform user if needed
         Modal.success({
           title: "PDF Generated!",
@@ -171,8 +191,8 @@ const ICIR = ({ editedRecord }) => {
   return (
     <div className="icir-container">
       <div className="icir-header">
-        <div class="icir-header-left">
-          <h3>Please choose data to be include in the report.</h3>
+        <div className="icir-header-left">
+          <h3>Please choose data to be included in the report.</h3>
           <p>
             If the data is not updated, please update the data first before
             generating.
@@ -184,12 +204,14 @@ const ICIR = ({ editedRecord }) => {
             onChange={(e) => {
               const fieldsToInclude = [
                 "title",
+                "name",
                 "address",
                 "industry_class",
                 "psic_code",
               ];
+              const isChecked = e.target.checked;
               fieldsToInclude.forEach((field) => {
-                handleCheckboxChange(field, e.target.checked);
+                handleCheckboxChange(field, isChecked);
               });
             }}
           >
@@ -197,7 +219,7 @@ const ICIR = ({ editedRecord }) => {
           </Checkbox>
         </div>
 
-        <div class="icir-header-right">
+        <div className="icir-header-right">
           <Button
             type="primary"
             onClick={handleGeneratePDF}
