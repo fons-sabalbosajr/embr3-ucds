@@ -26,3 +26,40 @@
   text-align: right;
   max-width: max-content;
 }
+
+.skyblue-row {
+  background-color: #add1f9 !important;
+}
+
+.orange-row {
+  background-color: #ffd0a1 !important;
+}
+
+.yellow-row{
+  background-color: #F3F0CA !important;
+}
+
+.green-row{
+  background-color: #d4ed9e !important;
+}
+
+.blue-row {
+  background-color: #adc0f9 !important;
+}
+
+.gray-row{
+  background-color: #e4e4e4 !important;
+}
+
+.dropdown-container {
+  display: flex;
+  justify-content: flex-start; /* Aligns items to the start of the container */
+  margin-bottom: 20px; /* Optional: adjust the margin as needed */
+  margin-left: 680px;
+}
+
+.drop-down-select {
+  width: 300px; /* Optional: adjust width as needed */
+  text-align: left; /* Ensures the content inside is aligned to the left */
+}
+

@@ -327,55 +327,54 @@ app.get("/generate-icir/:id", async (req, res) => {
     const form = pdfDoc.getForm();
     const formFields = form.getFields();
 
-    // Update PDF fields with record data
     formFields.forEach((field) => {
       switch (field.getName()) {
         case "establishment_name":
-          field.setText(record.title || "");
+          field.setText(`${record.title || ""}`);
           field.updateAppearances(customFont);
           break;
         case "establishment_address":
-          field.setText(record.address || "");
+          field.setText(`${record.address || ""}`);
           field.updateAppearances(customFont);
           break;
         case "establishment_industry_class":
-          field.setText(record.industry_class || "");
+          field.setText(`${record.industry_class || ""}`);
           field.updateAppearances(customFont);
           break;
         case "establishment_psic_code":
-          field.setText(record.psic_code || "");
+          field.setText(`${record.psic_code || ""}`);
           field.updateAppearances(customFont);
           break;
         case "establishment_ecc_cnc1":
-          field.setText(record.ecc_cnc || "");
+          field.setText(`${record.ecc_cnc || ""}`);
           field.updateAppearances(customFont);
           break;
         case "ecc_issued1":
-          field.setText(record.date_approved || "");
+          field.setText(`${record.date_approved || ""}`);
           field.updateAppearances(customFont);
           break;
         case "establishment_pto_code":
-          field.setText(record.pto_code || "");
+          field.setText(`${record.pto_code || ""}`);
           field.updateAppearances(customFont);
           break;
         case "pto_issued":
-          field.setText(record.pto_issued || "");
+          field.setText(`${record.pto_issued || ""}`);
           field.updateAppearances(customFont);
           break;
         case "pto_exp":
-          field.setText(record.pto_expiration || "");
+          field.setText(`${record.pto_expiration || ""}`);
           field.updateAppearances(customFont);
           break;
         case "establishment_wwdp_code":
-          field.setText(record.wwdp_code || "");
+          field.setText(`${record.wwdp_code || ""}`);
           field.updateAppearances(customFont);
           break;
         case "wwdp_issued":
-          field.setText(record.wwdp_issued || "");
+          field.setText(`${record.wwdp_issued || ""}`);
           field.updateAppearances(customFont);
           break;
         case "wwdp_expiration":
-          field.setText(record.wwdp_expiration || "");``
+          field.setText(`${record.wwdp_expiration || ""}`);
           field.updateAppearances(customFont);
           break;
         default:
@@ -401,11 +400,23 @@ app.get("/generate-icir/:id", async (req, res) => {
   }
 });
 
+
+// GENERATION OF CUSTOM ICIR FORM PDF AS PRIMARY INFORMATION
 app.get("/generate-custom-icir/:id", async (req, res) => {
   const { id } = req.params;
   const selectedData = req.query;
 
-  console.log("Received Query Parameters:", selectedData);
+  //console.log("Received Query Parameters:", selectedData);
+
+  // Define field mappings based on field names from the PDF
+  const fieldMapping = {
+    title: "establishment_name",
+    name: "contact_person", // Adjust field name as needed
+    address: "establishment_address",
+    industry_class: "establishment_industry_class",
+    psic_code: "establishment_psic_code"
+  };
+
   try {
     // Validate id_no format
     if (!parseInt(id)) {
@@ -417,14 +428,28 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     const pdfBuffer = await fs.promises.readFile(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBuffer);
 
+    // Register fontkit
+    pdfDoc.registerFontkit(fontkit);
+
+    // Load custom font
+    const fontPath = path.join(__dirname, "fonts", "arial.ttf");
+    const fontBytes = await fs.promises.readFile(fontPath);
+    const customFont = await pdfDoc.embedFont(fontBytes);
+
     const form = pdfDoc.getForm();
     const formFields = form.getFields();
 
-    // Update PDF fields with provided values
+    // Map provided values to PDF fields
     formFields.forEach((field) => {
       const fieldName = field.getName();
-      if (selectedData[fieldName]) {
-        field.setText(selectedData[fieldName] || "");
+      const pdfFieldName = Object.keys(fieldMapping).find(
+        key => fieldMapping[key] === fieldName
+      );
+      if (pdfFieldName) {
+        const value = selectedData[pdfFieldName] || "";
+        console.log(`Setting field ${fieldName} to ${value}`); // Log field names and values
+        field.setText(value);
+        field.updateAppearances(customFont);
       }
     });
 
@@ -435,7 +460,7 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="ICIR-${selectedData.establishment_name || 'Unknown'}.pdf"`
+      `attachment; filename="ICIR-${selectedData.title || 'Unknown'}.pdf"`
     );
     res.setHeader("Content-Encoding", "gzip");
     res.setHeader("Content-Length", compressedPdfBytes.length);
@@ -445,6 +470,7 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     res.status(500).send("Failed to generate ICIR");
   }
 });
+
 
 // Logout Route
 app.get("/logout", async (req, res) => {
@@ -793,19 +819,31 @@ app.get("/api/postings", async (req, res) => {
 
 app.get("/api/ucds-data/:id", async (req, res) => {
   const { id } = req.params;
-  console.log(`Received request for id: ${id}`);
+
+  //console.log(`Received request for id: ${id}`);
+
+  // Validate id parameter
+  if (!id || isNaN(id)) {
+    return res.status(400).json({ error: "Valid ID parameter is required" });
+  }
 
   try {
-    const data = await ucdsCollection.findOne({ id_no: id });
-    console.log(`Data found: ${data}`);
+    // Convert id to a number
+    const idNumber = parseInt(id, 10);
+
+    // Query the database
+    const data = await ucdsCollection.findOne({ id_no: idNumber });
+
+    //console.log(`Data found: ${JSON.stringify(data)}`);
+
     if (!data) {
-      res.status(404).json({ error: "Data not found" });
+      return res.status(404).json({ error: "Data not found" });
     } else {
-      res.json(data);
+      return res.json(data);
     }
   } catch (error) {
     console.error("Error fetching data:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

@@ -12,6 +12,7 @@ import {
   Typography,
   Menu,
   Dropdown,
+  Spin
 } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import "./provincemodal.css";
@@ -115,86 +116,78 @@ const ProvinceModal = ({
     setIsModalVisible(false); // Close modal
   };
 
-  const handleMenuClick = async (e) => {
-    try {
-      setLoadingPDF(true);
-      document.body.style.cursor = "wait";
-      Modal.info({
-        title: "Generating PDF...",
-        content: (
-          <Spin spinning={true} size="large">
-            <p>Please wait...</p>
-          </Spin>
-        ),
-        maskClosable: false,
-        okButtonProps: { disabled: true },
-        zIndex: 10000,
-      });
+ const handleMenuClick = async (e) => {
+  try {
+    setLoadingPDF(true);
+    document.body.style.cursor = "wait";
 
-      const params = new URLSearchParams();
-      Object.keys(selectedData).forEach((key) => {
-        params.append(key, selectedData[key]);
-      });
+    // Show Swal alert for PDF generation
+    Swal.fire({
+      title: "Generating PDF...",
+      text: "Please wait...",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
 
-      const url = `http://localhost:8081/generate-custom-icir/${
-        editedRecord.id_no
-      }?${params.toString()}`;
-      console.log(`Request URL: ${url}`);
-      console.log(`Request Params: ${params.toString()}`);
-
-      const response = await axios.get(url, {
+    const response = await axios.get(
+      `http://localhost:8081/generate-icir/${record.id_no}`,
+      {
         responseType: "blob",
-      });
-
-      setLoadingPDF(false);
-
-      // Reset cursor
-      document.body.style.cursor = "default";
-
-      // Close Swal alert after PDF generation
-      Swal.close();
-
-      if (response.status === 200) {
-        const blob = new Blob([response.data], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-
-        // Create a temporary anchor element
-        const a = document.createElement("a");
-        a.href = url;
-        a.target = "_blank"; // Open in new tab
-        a.download = `ICIR-${record.title}.pdf`; // Set the file name for download
-        a.click();
-
-        window.open(url, "_blank");
-
-        // Clean up
-        URL.revokeObjectURL(url);
-
-        // Optional: Inform user if needed
-        Swal.fire(
-          "PDF Generated",
-          "The PDF has been generated successfully!",
-          "success"
-        );
-      } else {
-        Swal.fire(
-          "Error",
-          `Failed to generate ${e.item.props.children}`,
-          "error"
-        );
       }
-    } catch (error) {
-      setLoadingPDF(false);
-      document.body.style.cursor = "default";
-      Swal.close();
+    );
+
+    setLoadingPDF(false);
+    // Reset cursor
+    document.body.style.cursor = "default";
+
+    // Close Swal alert after PDF generation
+    Swal.close();
+
+    if (response.status === 200) {
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+
+      // Create a temporary anchor element
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank"; // Open in new tab
+      a.download = `ICIR-${record.title}.pdf`; // Set the file name for download
+      a.click();
+
+      window.open(url, "_blank");
+
+      // Clean up
+      URL.revokeObjectURL(url);
+
+      // Optional: Inform user if needed
+      Swal.fire(
+        "PDF Generated",
+        "The PDF has been generated successfully!",
+        "success"
+      );
+    } else {
       Swal.fire(
         "Error",
         `Failed to generate ${e.item.props.children}`,
         "error"
       );
-      console.error(`Error generating ${e.key}:`, error);
     }
-  };
+  } catch (error) {
+    setLoadingPDF(false);
+    document.body.style.cursor = "default";
+    Swal.close();
+    Swal.fire(
+      "Error",
+      `Failed to generate ${e.item.props.children}`,
+      "error"
+    );
+    console.error(`Error generating ${e.key}:`, error);
+  }
+};
+
 
   const menu = (
     <Menu onClick={handleMenuClick}>

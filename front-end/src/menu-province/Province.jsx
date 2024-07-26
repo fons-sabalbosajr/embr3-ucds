@@ -117,7 +117,6 @@ const Province = ({ theme }) => {
     }
   };
 
- 
   const handleToggleEdit = () => {
     setIsEditing(!isEditing);
   };
@@ -250,6 +249,7 @@ const Province = ({ theme }) => {
               </Button>
             </Tooltip>
           )}
+
           {record.wwdp_code && (
             <Tooltip
               title={
@@ -263,7 +263,9 @@ const Province = ({ theme }) => {
               color="#b45248"
             >
               <Button type="text" className="custom-button-orange" size="small">
-                {record.wwdp_code.includes("DP") ? "WWDP" : record.wwdp_code}
+                {String(record.wwdp_code).includes("DP")
+                  ? "WWDP"
+                  : record.wwdp_code}
               </Button>
             </Tooltip>
           )}
@@ -418,7 +420,7 @@ const Province = ({ theme }) => {
       ),
     },
   ];
-  
+
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
