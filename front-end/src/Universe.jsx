@@ -5,12 +5,11 @@ import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import Dashboard from "./menu-component/Dashboard";
 import Province from "./menu-province/Province";
-import Survey from "./menu-component/Survey";
+import Survey from "./menu-survey/Survey";
 import MBU from "./menu-component/MBU";
-import ExportData from "./menu-component/ExportData";
 import Admin from "./menu-component/Admin";
 import Accounts from "./menu-component/UserAccounts";
-import Extract from "./menu-component/ExtractData";
+import Extract from "./components/ExtractData/ExtractData"
 import Report from "./menu-component/AdminReport";
 import Posting from "./menu-component/Posting";
 import "./index.css";
@@ -240,7 +239,6 @@ const Universe = () => {
                   />
                   <Route path="survey" element={<Survey />} />
                   <Route path="mbu" element={<MBU />} />
-                  <Route path="exportdata" element={<ExportData />} />
                   {permissions.includes("admin") && (
                     <Route path="admin" element={<Admin />} />
                   )}

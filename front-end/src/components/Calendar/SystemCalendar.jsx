@@ -113,28 +113,33 @@ const SystemCalendar = () => {
       key: "title",
       render: (text) => <Typography.Text strong>{text}</Typography.Text>,
       width: "200px",
+      align: "left",
     },
     {
       title: "Address",
       dataIndex: "address",
       key: "address",
       width: "200px",
+      align: "left",
     },
     {
       title: "Industry Class",
       dataIndex: "industry_class",
       key: "industry_class",
+      align: "left",
     },
     {
       title: "Date Monitored",
       dataIndex: "date_monitored",
       key: "date_monitored",
+      align: "left",
     },
     {
       title: "Date Routed to IIS",
       dataIndex: "date_routed",
       key: "date_routed",
       width: "150px",
+      align: "left",
     },
     {
       title: "IIS No",
@@ -142,32 +147,20 @@ const SystemCalendar = () => {
       key: "iis_no",
       width: "150px",
       render: (text) => renderIISNo(text),
+      align: "left",
     },
     {
       title: "Section Incharge",
       dataIndex: "section_incharge",
       key: "section_incharge",
       width: "100px",
+      align: "left",
     },
     {
       title: "Remarks/Recommendation",
       dataIndex: "remarks_recommendation",
       key: "remarks_recommendation",
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      render: (text, record) => (
-        <Dropdown
-          overlay={menu(record)}
-          trigger={["click"]}
-          placement="bottomCenter"
-        >
-          <Button type="primary" icon={<DownOutlined />}>
-            Generate
-          </Button>
-        </Dropdown>
-      ),
+      align: "left",
     },
   ];
 

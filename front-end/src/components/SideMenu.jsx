@@ -104,17 +104,29 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
                   Manila Bay Unit
                 </Link>
               </Menu.Item>
+              <Menu.Item key="subreports-3">
+                <Link
+                  to="/universe/extract"
+                  className={`link-menu-hover ${
+                    isMenuSelected("extract") ? "selected" : ""
+                  }`}
+                >
+                  Extract Data
+                </Link>
+              </Menu.Item>
+              <Menu.Item key="subreports-4">
+                  <Link
+                    to="/universe/report"
+                    className={`link-menu-hover ${
+                      isMenuSelected("report") ? "selected" : ""
+                    }`}
+                  >
+                    Generate Report
+                  </Link>
+                </Menu.Item>
+
             </Menu.SubMenu>
 
-            {/* <Menu.Item key="4" icon={<DownCircleFilled />}>
-              <Link
-                to="/universe/exportdata"
-                className="link-menu"
-                onClick={handleExportDataClick}
-              >
-                Export Data
-              </Link>
-            </Menu.Item> */}
 
             {showAdminMenu && (
               <Menu.SubMenu key="admin" icon={<SettingFilled />} title="Admin">
@@ -128,27 +140,8 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
                     User Accounts
                   </Link>
                 </Menu.Item>
+                
                 <Menu.Item key="admin-2">
-                  <Link
-                    to="/universe/extract"
-                    className={`link-menu-hover ${
-                      isMenuSelected("extract") ? "selected" : ""
-                    }`}
-                  >
-                    Extract Data
-                  </Link>
-                </Menu.Item>
-                <Menu.Item key="admin-3">
-                  <Link
-                    to="/universe/report"
-                    className={`link-menu-hover ${
-                      isMenuSelected("report") ? "selected" : ""
-                    }`}
-                  >
-                    Generate Report
-                  </Link>
-                </Menu.Item>
-                <Menu.Item key="admin-4">
                   <Link
                     to="/universe/posting"
                     className={`link-menu-hover ${

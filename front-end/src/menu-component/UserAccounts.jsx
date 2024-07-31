@@ -213,18 +213,21 @@ const UserAccounts = () => {
       render: (name, record) => (
         <AvatarWithName avatar={record.avatar} name={name} />
       ),
+       align: "left",
     },
     {
       title: "Email Address",
       dataIndex: "email",
       key: "email",
       ellipsis: true,
+       align: "left",
     },
     {
       title: "Designation/Position",
       dataIndex: "division",
       key: "division",
       ellipsis: true,
+       align: "left",
     },
     {
       title: "Permission",
@@ -264,6 +267,7 @@ const UserAccounts = () => {
           </span>
         );
       },
+       align: "left",
     },
     {
       title: "Status",
@@ -297,11 +301,13 @@ const UserAccounts = () => {
           </span>
         );
       },
+      align: "left",
     },
     {
       title: "Action",
       dataIndex: "action",
-      key: "action",
+      key: "action", 
+      align: "left",
       render: (_, record) => (
         <Popover
           content={
@@ -336,6 +342,7 @@ const UserAccounts = () => {
       dataIndex: "name",
       key: "name",
       ellipsis: true,
+      align: "left",
       render: (name, record) => (
         <div style={{ display: "flex", alignItems: "center" }}>
           {record.avatar ? (
@@ -357,18 +364,21 @@ const UserAccounts = () => {
       dataIndex: "division",
       key: "division",
       ellipsis: true,
+      align: "left",
     },
     {
       title: "Position",
       dataIndex: "position",
       key: "position",
       ellipsis: true,
+      align: "left",
     },
     {
       title: "Email",
       dataIndex: "email",
       key: "email",
       ellipsis: true,
+      align: "left",
     },
     {
       title: "Status",
@@ -440,11 +450,13 @@ const UserAccounts = () => {
           </Select>
         );
       },
+      align: "left",
     },
     {
       title: "Action",
       dataIndex: "action",
       key: "action",
+      align: "left",
       render: (_, record) => (
         <Popover
           content={
@@ -542,7 +554,6 @@ const UserAccounts = () => {
 
   return (
     <div>
-      {/* Original User Accounts Container */}
       <div className="user-accounts-container">
         <h2 className="account-title">User Accounts</h2>
         <div className="filter-options">

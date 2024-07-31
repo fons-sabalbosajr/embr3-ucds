@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Table, Checkbox, Button, Modal, Spin, Select } from "antd";
-import "./icir.css";
+import { Table, Checkbox, Button, Modal, Spin, Menu, Dropdown } from "antd";
 import axios from "axios";
-import Swal from "sweetalert2";
+import "./icir.css";
 
 const fieldTitles = {
   id_no: "Firm ID",
@@ -21,7 +20,6 @@ const fieldTitles = {
   long: "Longitude",
   lat: "Latitude",
   cong_district: "Congressional District",
-  address: "Complete Address",
   street: "Street",
   brgy: "Barangay",
   city: "City",
@@ -105,21 +103,12 @@ const fieldTitles = {
   // Add more field titles as needed
 };
 
-const colorCategories = {
-  "skyblue-row": "General Information",
-  "orange-row": "Planning Unit",
-  "yellow-row": "Manila Bay Unit",
-  "green-row": "Concerned Unit",
-  "blue-row": "Permits and Clearances",
-  "gray-row": "Legal Services Unit",
-};
-
-const ICIR = ({ editedRecord }) => {
+const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   const [ucdsData, setUcdsData] = useState([]);
   const [includedFields, setIncludedFields] = useState({});
   const [selectedData, setSelectedData] = useState({});
   const [loadingPDF, setLoadingPDF] = useState(false);
-  const [selectedColor, setSelectedColor] = useState("");
+  const [selectAllChecked, setSelectAllChecked] = useState(false);
 
   useEffect(() => {
     axios
@@ -130,6 +119,11 @@ const ICIR = ({ editedRecord }) => {
       .catch((error) => {
         console.error(error);
       });
+
+    // Reset fields when editedRecord changes
+    setIncludedFields({});
+    setSelectedData({});
+    setSelectAllChecked(false);
   }, [editedRecord]);
 
   const handleCheckboxChange = (field, checked) => {
@@ -151,10 +145,130 @@ const ICIR = ({ editedRecord }) => {
     }
   };
 
+  useEffect(() => {
+    // Reset checkboxes when resetCheckboxesKey changes
+    setIncludedFields({});
+    setSelectAllChecked(false); // Reset Select All checkbox
+  }, [resetCheckboxesKey]);
+
+  const handleSelectAllChange = (e) => {
+    const isChecked = e.target.checked;
+    setSelectAllChecked(isChecked);
+    const fieldsToInclude = [
+      "id_no",
+      "title",
+      "name",
+      "address",
+      "industry_class",
+      "psic_code",
+      "emp_no_total",
+      "ecc_cnc",
+      "date_approved",
+      "haz_id",
+      "haz_issued",
+      "pto_code",
+      "pto_issued",
+      "pto_expiration",
+      "wwdp_code",
+      "wwdp_issued",
+      "wwdp_expiration",
+      "long",
+      "lat",
+      "handler",
+    ];
+    fieldsToInclude.forEach((field) => {
+      handleCheckboxChange(field, isChecked);
+    });
+  };
+
   const handleGeneratePDF = async () => {
     try {
       setLoadingPDF(true);
       document.body.style.cursor = "wait";
+
+      // Show processing modal
+      const processingModal = Modal.info({
+        title: "Generating PDF...",
+        content: (
+          <Spin spinning={true} size="large">
+            <p>Please wait...</p>
+          </Spin>
+        ),
+        maskClosable: false,
+        okButtonProps: { disabled: true },
+        zIndex: 10000, // Ensure this modal is on top
+      });
+
+      // Filter and sort selected fields based on your field order
+      const selectedFields = Object.keys(selectedData)
+        .filter((key) => includedFields[key])
+        .reduce((obj, key) => {
+          obj[key] = selectedData[key];
+          return obj;
+        }, {});
+
+      // Convert selected fields to query parameters
+      const queryParams = new URLSearchParams(selectedFields).toString();
+
+      // Call the API to generate PDF
+      const response = await axios.get(
+        `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
+        {
+          params: selectedFields,
+          responseType: "arraybuffer",
+        }
+      );
+
+      // Close processing modal
+      processingModal.destroy();
+
+      // Create a Blob from the PDF data and create a URL for it
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      // Determine the filename
+      const fileName = selectedFields.establishment_name
+        ? `ICIR-${selectedFields.establishment_name}.pdf`
+        : editedRecord.title
+        ? `ICIR-${editedRecord.title}.pdf`
+        : `ICIR-${editedRecord.id_no}.pdf`;
+
+      // Create an anchor tag with the download attribute
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.download = fileName;
+
+      // Simulate a click on the anchor tag
+      a.click();
+
+      // Clean up
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setLoadingPDF(false);
+      document.body.style.cursor = "default";
+      Modal.destroyAll();
+      Modal.error({
+        title: "Error",
+        content: "Failed to generate PDF",
+      });
+      console.error("Error generating PDF:", error);
+    } finally {
+      document.body.style.cursor = "default";
+      setLoadingPDF(false);
+    }
+  };
+
+  const handleGeneratePDFDraft = async () => {
+    try {
+      setLoadingPDF(true);
+      document.body.style.cursor = "wait";
+  
+      // Fetch current user with credentials
+      const userResponse = await axios.get("http://localhost:8081/current-user", {
+        withCredentials: true,
+      });
+      const currentUser = userResponse.data;
   
       // Show processing modal
       const processingModal = Modal.info({
@@ -177,41 +291,57 @@ const ICIR = ({ editedRecord }) => {
           return obj;
         }, {});
   
-      // Convert selected fields to query parameters
-      const queryParams = new URLSearchParams(selectedFields).toString();
-  
       // Call the API to generate PDF
       const response = await axios.get(
         `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
+          withCredentials: true, 
         }
       );
   
       // Close processing modal
       processingModal.destroy();
   
-      // Create a Blob from the PDF data and create a URL for it
+      // Create a Blob from the PDF data
       const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
   
-      // Create a link element to download the PDF
-      const link = document.createElement("a");
-      link.href = url;
-      
       // Determine the filename
       const fileName = selectedFields.establishment_name
-        ? `ICIR-${selectedFields.establishment_name}.pdf`
+        ? `ICIR_Draft-${selectedFields.establishment_name}.pdf`
         : editedRecord.title
-        ? `ICIR-${editedRecord.title}.pdf`
-        : `ICIR-${editedRecord.id_no}.pdf`;
+        ? `ICIR_Draft-${editedRecord.title}.pdf`
+        : `ICIR_Draft-${editedRecord.id_no}.pdf`;
   
-      link.setAttribute("download", fileName);
+      // Create a new FormData object
+      const formData = new FormData();
+      formData.append("reportInfo", JSON.stringify(selectedFields));
+      formData.append("user", JSON.stringify(currentUser));
+      formData.append("date", new Date().toISOString());
+      formData.append("fileName", fileName);
+      formData.append("pdfFile", blob, fileName); // Attach file with filename
   
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      // Save draft report to MongoDB
+      await axios.post("http://localhost:8081/save-draft-report", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          withCredentials: true, 
+        },
+      });
+  
+      Modal.success({
+        title: "Success",
+        content: "Draft report has been saved successfully.",
+      });
+  
+      // Create a temporary link element and trigger the download
+      const downloadLink = document.createElement("a");
+      downloadLink.href = URL.createObjectURL(blob);
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
     } catch (error) {
       setLoadingPDF(false);
       document.body.style.cursor = "default";
@@ -227,11 +357,51 @@ const ICIR = ({ editedRecord }) => {
     }
   };
   
+  
 
-
-  const handleFieldChange = (field, value) => {
-    setSelectedData({ ...selectedData, [field]: value });
+  const confirmGeneratePDF = () => {
+    Modal.confirm({
+      title: "Are you sure you want to generate the PDF?",
+      content:
+        "Please confirm that you want to proceed. \n Note:All data sources can be modified upon generation of PDF.",
+      onOk: handleGeneratePDF,
+      onCancel() {
+        console.log("Cancelled");
+      },
+    });
   };
+
+  const confirmGenerateDraft = () => {
+    Modal.confirm({
+      title: "Save generated PDF to Draft Reports?",
+      content:
+        "Please confirm that you want to proceed. \n Note:All data sources can be modified upon generation of PDF.",
+      onOk: handleGeneratePDFDraft,
+      onCancel() {
+        console.log("Cancelled");
+      },
+    });
+  };
+
+  const draftMenu = (
+    <Menu>
+      <Menu.Item
+        key="monitoring"
+        onClick={() => confirmGenerateDraft("For Monitoring")}
+      >
+        For Monitoring
+      </Menu.Item>
+      <Menu.Item
+        key="inspection"
+        onClick={() => handleSaveDraft("For Inspection")}
+      >
+        For Inspection
+      </Menu.Item>
+      <Menu.Item key="nov" onClick={() => handleSaveDraft("For NOV")}>
+        For NOV
+      </Menu.Item>
+    </Menu>
+  );
 
   const columns = [
     {
@@ -285,19 +455,6 @@ const ICIR = ({ editedRecord }) => {
     return 0;
   });
 
-  const handleColorChange = (value) => {
-    setSelectedColor(value);
-  };
-
-  const filteredData = selectedColor
-    ? Object.entries(ucdsData)
-        .filter(
-          ([key, value]) =>
-            value && value.row_color === selectedColor.replace("-row", "")
-        )
-        .map(([key, value]) => ({ field: key, value: value }))
-    : data;
-
   return (
     <div className="icir-container">
       <div className="icir-header">
@@ -310,48 +467,34 @@ const ICIR = ({ editedRecord }) => {
         </div>
 
         <div className="icir-header-center">
-          <Checkbox
-            onChange={(e) => {
-              const fieldsToInclude = [
-                "title",
-                "name",
-                "address",
-                "industry_class",
-                "psic_code",
-              ];
-              const isChecked = e.target.checked;
-              fieldsToInclude.forEach((field) => {
-                handleCheckboxChange(field, isChecked);
-              });
-            }}
-          >
-            Select Primary Information
+          <Checkbox checked={selectAllChecked} onChange={handleSelectAllChange}>
+            Select Initial Data
           </Checkbox>
         </div>
 
         <div className="icir-header-right">
           <Button
             type="primary"
-            onClick={handleGeneratePDF}
-            disabled={Object.values(includedFields).every((x) => !x)} // disable button if no checkbox is checked
+            className="button-gen-pdf"
+            onClick={confirmGeneratePDF}
+            disabled={Object.values(includedFields).every((x) => !x)}
           >
             Generate PDF
           </Button>
+          <Dropdown
+            overlay={draftMenu}
+            trigger={["click"]}
+            disabled={Object.values(includedFields).every((x) => !x)}
+          >
+            <Button
+              type="primary"
+              className="button-gen-draft"
+              disabled={Object.values(includedFields).every((x) => !x)}
+            >
+              Save Draft
+            </Button>
+          </Dropdown>
         </div>
-      </div>
-
-      <div className="dropdown-container" style={{ textAlign: 'left' }}>
-        <Select
-          placeholder="Select Row Color Category"
-          onChange={handleColorChange}
-          className="drop-down-select"
-        >
-          {Object.entries(colorCategories).map(([key, label]) => (
-            <Option key={key} value={key}>
-              {label}
-            </Option>
-          ))}
-        </Select>
       </div>
 
       <Table

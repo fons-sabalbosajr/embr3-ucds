@@ -15,17 +15,17 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    const { username, value } = e.target;
-    setValues((prevValues) => ({ ...prevValues, [username]: value }));
+    const { name, value } = e.target;
+    setValues((prevValues) => ({ ...prevValues, [name]: value }));
   };
 
-   // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
-   const backendUrl = 'http://localhost:8081';
+  // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
+  const backendUrl = "http://localhost:8081";
 
-   const handleSubmit = async (values) => {
+  const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
-  
+
     try {
       const response = await axios.post(
         `${backendUrl}/login`,
@@ -39,12 +39,12 @@ const Login = () => {
           },
         }
       );
-  
+
       if (response.data?.status === "success") {
         const { token, permission } = response.data;
         localStorage.setItem("authToken", token);
         localStorage.setItem("permission", JSON.stringify(permission)); // Store permissions in localStorage
-  
+
         message.success("Login successful!");
         navigate("/universe"); // Navigate to a protected route
       } else {
@@ -59,54 +59,56 @@ const Login = () => {
       setIsLoading(false);
     }
   };
-  
 
   return (
     <div className="background-login">
-    <div className="background-form">
-      <div className="form">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <img src={homelogo} width="100" height="100" alt="Logo" />
-        </div>
-        <p className="centered">
-          <br />
-          ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-          <br />
-          Universe Centralized Database System
-        </p>
-        {error && <p style={{ color: "red" }}>{error}</p>} {/* Display error message */}
-        <Form onFinish={handleSubmit} layout="vertical">
-          <Form.Item
-            name="username"
-            label="Username"
-            rules={[
-              { required: true, message: "Username is required" },
-            ]}
+      <div className="background-form">
+        <div className="form">
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
           >
-            <Input
-              placeholder="Enter Username"
-              size="large" // Adjust size here
-            />
-          </Form.Item>
+            <img src={homelogo} width="100" height="100" alt="Logo" />
+          </div>
+          <p className="centered">
+            <br />
+            ENVIRONMENTAL MANAGEMENT BUREAU REGION III
+            <br />
+            Universe Centralized Database System
+          </p>
+          {error && <p style={{ color: "red" }}>{error}</p>}{" "}
+          {/* Display error message */}
+          <Form onFinish={handleSubmit} layout="vertical">
+            <Form.Item
+              name="username"
+              label="Username"
+              rules={[{ required: true, message: "Username is required" }]}
+            >
+              <Input
+                name="username" // Add this line
+                placeholder="Enter Username"
+                size="large"
+                onChange={handleChange} // Ensure this line is present
+              />
+            </Form.Item>
 
-          <Form.Item
-            name="password"
-            label="Password"
-            rules={[{ required: true, message: "Password is required" }]}
-          >
-            <Input.Password
-              placeholder="Enter Password"
-              size="large" // Adjust size here
-            />
-          </Form.Item>
+            <Form.Item
+              name="password"
+              label="Password"
+              rules={[{ required: true, message: "Password is required" }]}
+            >
+              <Input.Password
+                name="password" // Add this line
+                placeholder="Enter Password"
+                size="large"
+                onChange={handleChange} // Ensure this line is present
+              />
+            </Form.Item>
 
-          <Form.Item>
+            <Form.Item>
               <Button
                 type="primary"
                 htmlType="submit"
@@ -119,12 +121,15 @@ const Login = () => {
               </Button>
             </Form.Item>
             <Link to="/register">
-              <Button block size="large">Create Account</Button> {/* Adjust size here */}
+              <Button block size="large">
+                Create Account
+              </Button>{" "}
+              {/* Adjust size here */}
             </Link>
-        </Form>
+          </Form>
+        </div>
       </div>
     </div>
-  </div>
   );
 };
 

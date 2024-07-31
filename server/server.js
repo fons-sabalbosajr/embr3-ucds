@@ -3,84 +3,17 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const { MongoClient, ObjectId } = require("mongodb");
+const { MongoClient, ObjectId, GridFSBucket } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, rgb } = require("pdf-lib");
 const fontkit = require("@pdf-lib/fontkit");
 const zlib = require("zlib");
 const dotenv = require("dotenv").config();
+const multer = require("multer");
 
 const app = express();
 const PORT = process.env.PORT || 8081;
-
-// Allowed origins
-const allowedOrigins = [
-  "http://localhost:5173"
-];
-
-// Middleware
-app.use(express.json());
-app.use(cookieParser());
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      //console.log("Origin: ", origin); // Log the origin for debugging
-      if (allowedOrigins.includes(origin) || !origin) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
-    credentials: true,
-    preflightContinue: false, // Ensure preflight requests are handled automatically
-    optionsSuccessStatus: 204, // Response status code for successful OPTIONS requests
-  })
-);
-
-// Middleware to handle OPTIONS requests
-app.options("*", cors());
-
-// MongoDB connection setup
-const mongoUri = process.env.MONGO_URI;
-const client = new MongoClient(mongoUri, {
-  ssl: true,
-});
-
-let db;
-let userCollection;
-let loginStatusCollection;
-let ucdsCollection;
-let dailyNoticesCollection;
-let postingCollection;
-
-// Connect to MongoDB once when the server starts
-async function connectToMongo() {
-  try {
-    await client.connect();
-    console.log("Successfully connected to MongoDB!");
-    db = client.db("universe-db");
-    userCollection = db.collection("users");
-    signUpCollection = db.collection("sign-up");
-    loginStatusCollection = db.collection("login-status");
-    ucdsCollection = db.collection("ucds-data");
-    dailyNoticesCollection = db.collection("ucds-data");
-    postingCollection = db.collection("postings");
-  } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
-    throw error; // Re-throw the error
-  }
-}
-
-connectToMongo().catch(console.error);
-
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not set. Check your environment variables.");
-}
 
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
@@ -103,13 +36,109 @@ function generateRandomPassword(length) {
   return password;
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+
+// Allowed origins
+const allowedOrigins = ["http://localhost:5173"];
+
+// Middleware
+app.use(express.json());
+app.use(cookieParser());
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (allowedOrigins.includes(origin) || !origin) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept", "withCredentials"],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  })
+);
+
+
+// Middleware to handle OPTIONS requests
+app.options("*", cors());
+
+// MongoDB connection setup
+const mongoUri = process.env.MONGO_URI;
+const client = new MongoClient(mongoUri, {
+  ssl: true,
+});
+
+let db;
+let userCollection;
+let signUpCollection;
+let loginStatusCollection;
+let ucdsCollection;
+let dailyNoticesCollection;
+let postingCollection;
+let reportdraftCollection;
+let surveyCollection;
+
+// Connect to MongoDB once when the server starts
+async function connectToMongo() {
+  try {
+    await client.connect();
+    console.log("Successfully connected to MongoDB!");
+    db = client.db("universe-db");
+    userCollection = db.collection("users");
+    signUpCollection = db.collection("sign-up");
+    loginStatusCollection = db.collection("login-status");
+    ucdsCollection = db.collection("ucds-data");
+    dailyNoticesCollection = db.collection("ucds-data");
+    postingCollection = db.collection("postings");
+    reportdraftCollection = db.collection("draft-reports");
+    surveyCollection = db.collection("survey-data");
+  } catch (error) {
+    console.error("Error connecting to MongoDB:", error);
+    throw error; // Re-throw the error
+  }
+}
+
+connectToMongo().catch(console.error);
+
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not set. Check your environment variables.");
+}
+
+const authenticateJWT = (req, res, next) => {
+  const token = req.cookies.token; // Ensure the cookie name is correct
+  //console.log("Token received:", token); // Debug log
+
+  
+  if (token) {
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) {
+        console.error("Token verification failed:", err);
+        return res.sendStatus(403); // Forbidden if token is invalid
+      }
+      req.user = user;
+      next();
+    });
+  } else {
+    console.warn("No token found in cookies");
+    res.sendStatus(401); // Unauthorized if no token is present
+  }
+};
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+
 // Login Route
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
-    return res
-      .status(400)
-      .json({ error: "Username and password are required." });
+    return res.status(400).json({ error: "Username and password are required." });
   }
 
   try {
@@ -145,14 +174,12 @@ app.post("/login", async (req, res) => {
     // Set HTTP-only cookie with token
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
-      sameSite: "None",
+      secure: true, // Ensure this is true if using HTTPS
+      sameSite: "None", // Important for cross-site requests
     });
 
     // Return success response with token and permissions
-    return res
-      .status(200)
-      .json({ status: "success", token, permission: user.permission });
+    return res.status(200).json({ status: "success", token, permission: user.permission });
   } catch (error) {
     console.error("Error during login:", error.message);
     return res.status(500).json({ error: "An unexpected error occurred." });
@@ -293,6 +320,167 @@ app.post("/api/posting", async (req, res) => {
   }
 });
 
+// Configure multer to handle form-data without file upload
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
+// Save draft report endpoint
+app.post('/save-draft-report', upload.single('pdfFile'), async (req, res) => {
+  try {
+    const { reportInfo, user, date, fileName } = req.body;
+
+    // Validate required fields
+    if (!reportInfo || !user || !date) {
+      return res.status(400).send({ message: 'Missing required fields' });
+    }
+
+    // Parse and validate the data
+    let parsedReportInfo;
+    let parsedUser;
+    try {
+      parsedReportInfo = JSON.parse(reportInfo);
+      parsedUser = JSON.parse(user);
+    } catch (parseError) {
+      return res.status(400).send({ message: 'Invalid JSON format' });
+    }
+
+    // Validate fields within the parsed data
+    const { id_no, name, title, ecc_cnc, address } = parsedReportInfo;
+    if (!id_no || !name || !title || !ecc_cnc || !address) {
+      return res.status(400).send({ message: 'Incomplete reportInfo data' });
+    }
+
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).send({ message: 'Invalid date format' });
+    }
+
+    const draftReport = {
+      user: parsedUser,
+      date: parsedDate,
+      reportInfo: { id_no, name, title, ecc_cnc, address },
+      fileName: fileName || "", // Default to empty string if fileName is not provided
+      pdfUrl: "", // No PDF URL as the file is not uploaded
+    };
+
+    await reportdraftCollection.insertOne(draftReport);
+    res.status(200).send({ message: 'Draft report saved successfully' });
+  } catch (error) {
+    console.error('Failed to save draft report:', error);
+    res.status(500).send({ message: 'Failed to save draft report', error: error.message });
+  }
+});
+
+
+// Update color for a specific survey record
+app.post('/api/update-color', async (req, res) => {
+  const { serial_no, color } = req.body;
+
+  if (!serial_no || !color) {
+    return res.status(400).send("Serial number and color are required.");
+  }
+
+  try {
+    const result = await surveyCollection.updateOne(
+      { serial_no },
+      { $set: { color } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send("Record not found.");
+    }
+
+    res.status(200).send("Color updated successfully.");
+  } catch (error) {
+    console.error("Error updating color:", error);
+    res.status(500).send("Internal server error.");
+  }
+});
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+// Use the authentication middleware for routes that require authentication
+app.use('/check-auth', authenticateJWT, (req, res) => {
+  if (req.user) {
+    res.json({
+      status: "Success",
+      name: req.user.name,
+      username: req.user.username,
+      division: req.user.division,
+      notifications: [], // Fetch or add your notifications logic here
+      permissions: req.user.permissions || []
+    });
+  } else {
+    res.status(401).send({ message: "User not authenticated" });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+// Route to get draft reports
+app.get("/api/draft-report", async (req, res) => {
+  if (!reportdraftCollection) {
+    return res.status(500).send("Database not initialized");
+  }
+
+  try {
+    //console.log("Fetching draft reports...");
+    const drafts = await reportdraftCollection.find().toArray();
+    //console.log("Draft reports fetched:", drafts);
+    res.json(drafts);
+  } catch (error) {
+    console.error("Error fetching draft reports:", error.message); // Log the error message
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get('/api/files/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const bucket = new GridFSBucket(db, { bucketName: 'pdfFiles' });
+
+    const downloadStream = bucket.openDownloadStreamByName(filename);
+    
+    downloadStream.on('error', (error) => {
+      console.error("Error fetching file:", error);
+      res.status(500).send("Error fetching file");
+    });
+
+    downloadStream.pipe(res);
+  } catch (error) {
+    console.error("Error serving file:", error);
+    res.status(500).send("Error serving file");
+  }
+});
+
+app.get("/current-user", authenticateJWT, (req, res) => {
+  if (req.user) {
+    res.json({ name: req.user.name }); // Assuming `name` is a field in your user object
+  } else {
+    res.status(401).send({ message: "User not authenticated" });
+  }
+});
+
 // GENERATION OF ICIR FORM PDF AS PRIMARY INFORMATION
 app.get("/generate-icir/:id", async (req, res) => {
   const { id } = req.params;
@@ -400,7 +588,6 @@ app.get("/generate-icir/:id", async (req, res) => {
   }
 });
 
-
 // GENERATION OF CUSTOM ICIR FORM PDF AS PRIMARY INFORMATION
 app.get("/generate-custom-icir/:id", async (req, res) => {
   const { id } = req.params;
@@ -414,7 +601,21 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     name: "contact_person", // Adjust field name as needed
     address: "establishment_address",
     industry_class: "establishment_industry_class",
-    psic_code: "establishment_psic_code"
+    psic_code: "establishment_psic_code",
+    emp_no_total: "emp_total",
+    ecc_cnc: "establishment_ecc_cnc1",
+    date_approved: "ecc_issued1",
+    haz_id: "establishment_haz_id",
+    haz_issued: "haz_issued",
+    pto_code: "establishment_pto_code",
+    pto_issued: "pto_issued",
+    pto_expiration: "pto_expiration",
+    wwdp_code: "establishment_wwdp_code",
+    wwdp_issued: "wwdp_issued",
+    wwdp_expiration: "wwdp_expiration",
+    long: "longitude",
+    lat: "latitude",
+    handler: "inspector1",
   };
 
   try {
@@ -443,11 +644,11 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     formFields.forEach((field) => {
       const fieldName = field.getName();
       const pdfFieldName = Object.keys(fieldMapping).find(
-        key => fieldMapping[key] === fieldName
+        (key) => fieldMapping[key] === fieldName
       );
       if (pdfFieldName) {
         const value = selectedData[pdfFieldName] || "";
-        console.log(`Setting field ${fieldName} to ${value}`); // Log field names and values
+        //console.log(`Setting field ${fieldName} to ${value}`); // Log field names and values
         field.setText(value);
         field.updateAppearances(customFont);
       }
@@ -460,7 +661,7 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="ICIR-${selectedData.title || 'Unknown'}.pdf"`
+      `attachment; filename="ICIR-${selectedData.title || "Unknown"}.pdf"`
     );
     res.setHeader("Content-Encoding", "gzip");
     res.setHeader("Content-Length", compressedPdfBytes.length);
@@ -470,7 +671,6 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     res.status(500).send("Failed to generate ICIR");
   }
 });
-
 
 // Logout Route
 app.get("/logout", async (req, res) => {
@@ -510,30 +710,13 @@ app.get("/logout", async (req, res) => {
   }
 });
 
-// Check Authentication Route
-app.get("/check-auth", async (req, res) => {
-  try {
-    const token = req.cookies.token;
-    if (!token) {
-      return res
-        .status(401)
-        .json({ status: "Failure", error: "No token provided" });
-    }
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return res.json({
-      status: "Success",
-      name: decoded.name,
-      username: decoded.username,
-      division: decoded.division,
-    });
-  } catch (error) {
-    console.error("Error in check-auth:", error.message);
-    return res.status(401).json({ status: "Failure", error: error.message });
-  }
-});
-
 // Check the online users and load
 app.get("/api/online_users", async (req, res) => {
+  if (!loginStatusCollection || !userCollection) {
+    console.error("Collections are not initialized.");
+    return res.status(500).json({ error: "Collections are not initialized." });
+  }
+
   try {
     const onlineUsers = await loginStatusCollection.find().toArray();
 
@@ -847,6 +1030,28 @@ app.get("/api/ucds-data/:id", async (req, res) => {
   }
 });
 
+app.get('/api/surveys', async (req, res) => {
+  try {
+    const surveys = await surveyCollection.find({}).toArray();
+    res.json(surveys);
+  } catch (error) {
+    console.error('Error fetching survey data:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
 //Update the data per provinces
 app.put("/api/update-data/:id", async (req, res) => {
   try {
@@ -959,6 +1164,38 @@ app.put("/api/status/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+// Define an update endpoint for survey data
+app.put('/api/survey/:id', async (req, res) => {
+  const { id } = req.params;
+  const { survey_eia, survey_air, survey_water, survey_haz, survey_chem } = req.body;
+
+  try {
+    const result = await surveyCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          survey_eia,
+          survey_air,
+          survey_water,
+          survey_haz,
+          survey_chem
+        }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.status(200).json({ message: 'Update successful!' });
+    } else {
+      res.status(404).json({ message: 'Record not found or no changes made' });
+    }
+  } catch (error) {
+    console.error('Error updating record:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
 
 // Start server
 app.listen(8081, () => {

@@ -37,7 +37,7 @@
 /* Header Panel */
 .header-panel {
   background-color: #fff;
-  box-shadow: 0 2px 10px rgba(0, 59, 143, 0.3);
+  box-shadow: 0 2px 10px rgba(0, 59, 143, 0.1);
   padding: 10px;
   text-align: center;
   border-radius: 7px;
@@ -113,22 +113,19 @@
   align-items: center;
 }
 
-.search-input {
+.input-search {
   padding: 8px;
   border-radius: 4px;
   font-size: 14px;
   width: 100%;
   border: none;
+  flex: 1; /* Allows the search input to take available space */
+  max-width: 500px; /* Set a max width to prevent stretching */
 }
 
 .search-icon {
   color: white;
   font-size: 20px;
-}
-
-.search-input {
-  flex: 1; /* Allows the search input to take available space */
-  max-width: 500px; /* Set a max width to prevent stretching */
 }
 
 .pagination-dropdown {
@@ -328,6 +325,35 @@
   line-height: 30px; /* Ensure text is vertically centered */
   padding-top: 5px; /* Adjust the top padding as needed */
   padding-bottom: 5px; /* Adjust the bottom padding as needed */
+}
+
+.button-mark{
+  width: 30px;
+  margin-top: 10px;
+}
+
+.custom-dropdown-menu .ant-dropdown-menu {
+  left: 0 !important; /* Ensure the menu aligns to the left of the button */
+}
+
+
+.row-red {
+  background-color: #f8d7da !important; /* Use !important to ensure it overrides other styles */
+}
+.row-green {
+  background-color: #d4edda !important;
+}
+.row-blue {
+  background-color: #d1ecf1 !important;
+}
+.row-yellow {
+  background-color: #fff3cd !important;
+}
+
+
+
+.ant-table-tbody > tr:hover {
+  background-color: inherit;
 }
 
 /* Media Queries for Responsiveness */

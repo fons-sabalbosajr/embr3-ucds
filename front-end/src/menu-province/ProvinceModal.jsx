@@ -12,7 +12,7 @@ import {
   Typography,
   Menu,
   Dropdown,
-  Spin
+  Spin,
 } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import "./provincemodal.css";
@@ -30,7 +30,6 @@ import ICIR from "./reports/icir/ICIR";
 import IC from "./reports/ic/formIC";
 import CIC from "./reports/cic/formCIC";
 import Drafts from "./reports/drafts/ReportDrafts";
-import ReportLog from "./reports/reportlog/ReportLog";
 
 const { TabPane } = Tabs;
 const { Paragraph } = Typography;
@@ -51,6 +50,7 @@ const ProvinceModal = ({
   const [loadingPDF, setLoadingPDF] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false); // State for modal visibility
   const [loadingICIR, setLoadingICIR] = useState(false);
+  const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now()); // Change to reset checkboxes
 
   useEffect(() => {
     setEditedRecord(record);
@@ -109,93 +109,14 @@ const ProvinceModal = ({
   };
 
   const handleModalOk = () => {
-    setIsModalVisible(false); // Close modal
+    setIsModalVisible(false);
+    setResetCheckboxesKey(Date.now()); // Trigger checkbox reset
   };
 
   const handleModalCancel = () => {
-    setIsModalVisible(false); // Close modal
+    setIsModalVisible(false);
+    setResetCheckboxesKey(Date.now()); // Trigger checkbox reset
   };
-
- const handleMenuClick = async (e) => {
-  try {
-    setLoadingPDF(true);
-    document.body.style.cursor = "wait";
-
-    // Show Swal alert for PDF generation
-    Swal.fire({
-      title: "Generating PDF...",
-      text: "Please wait...",
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    const response = await axios.get(
-      `http://localhost:8081/generate-icir/${record.id_no}`,
-      {
-        responseType: "blob",
-      }
-    );
-
-    setLoadingPDF(false);
-    // Reset cursor
-    document.body.style.cursor = "default";
-
-    // Close Swal alert after PDF generation
-    Swal.close();
-
-    if (response.status === 200) {
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-
-      // Create a temporary anchor element
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank"; // Open in new tab
-      a.download = `ICIR-${record.title}.pdf`; // Set the file name for download
-      a.click();
-
-      window.open(url, "_blank");
-
-      // Clean up
-      URL.revokeObjectURL(url);
-
-      // Optional: Inform user if needed
-      Swal.fire(
-        "PDF Generated",
-        "The PDF has been generated successfully!",
-        "success"
-      );
-    } else {
-      Swal.fire(
-        "Error",
-        `Failed to generate ${e.item.props.children}`,
-        "error"
-      );
-    }
-  } catch (error) {
-    setLoadingPDF(false);
-    document.body.style.cursor = "default";
-    Swal.close();
-    Swal.fire(
-      "Error",
-      `Failed to generate ${e.item.props.children}`,
-      "error"
-    );
-    console.error(`Error generating ${e.key}:`, error);
-  }
-};
-
-
-  const menu = (
-    <Menu onClick={handleMenuClick}>
-      <Menu.Item key="icir">Generate ICIR</Menu.Item>
-      <Menu.Item key="cic">Generate CIC</Menu.Item>
-      <Menu.Item key="ic">Generate IC</Menu.Item>
-    </Menu>
-  );
 
   return (
     <div className="modal-container">
@@ -238,7 +159,7 @@ const ProvinceModal = ({
       </Tabs>
 
       <Modal
-        title="Custom Generated Report (DEV)"
+        title="Generate Report"
         visible={isModalVisible}
         onOk={handleModalOk}
         onCancel={handleModalCancel}
@@ -250,8 +171,8 @@ const ProvinceModal = ({
             <TabPane tab={<span>Generate ICIR</span>} key="1">
               <ICIR
                 editedRecord={editedRecord}
-                onIncludeChange={(record, isChecked) => (record, isChecked)}
-                onSaveChanges={handleSaveChanges}
+                onIncludeChange={() => {}}
+                resetCheckboxesKey={resetCheckboxesKey} // Pass reset state as a key
               />
             </TabPane>
             <TabPane tab={<span>Generate CIC</span>} key="2">
@@ -260,25 +181,13 @@ const ProvinceModal = ({
             <TabPane tab={<span>Generate IC</span>} key="3">
               <CIC />
             </TabPane>
-            <TabPane tab={<span>Draft Reports</span>} key="4">
+            <TabPane tab={<span>Reports Logs</span>} key="4">
               <Drafts />
             </TabPane>
-            <TabPane tab={<span>Report Logs</span>} key="5">
-              <ReportLog />
-            </TabPane>
+            
           </Tabs>
         </div>
       </Modal>
-
-      <Dropdown overlay={menu} placement="topLeft">
-        <Button
-          className="button-generate-alpha"
-          type="primary"
-          disabled={loadingPDF}
-        >
-          {loadingPDF ? "Generating PDF..." : "Generate"}
-        </Button>
-      </Dropdown>
 
       <Button
         className="button-generate"
@@ -286,7 +195,7 @@ const ProvinceModal = ({
         onClick={handleopenModal}
         disabled={loadingPDF}
       >
-        {loadingPDF ? "Generating PDF..." : "Custom Generate (DEV)"}
+        {loadingPDF ? "Generating PDF..." : "Generate Report"}
       </Button>
 
       <div className="action-buttons-container">

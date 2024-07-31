@@ -10,11 +10,14 @@ import {
   Select,
   Pagination,
   Spin,
+  Dropdown,
+  Menu,
 } from "antd";
 import {
   SearchOutlined,
   EyeOutlined,
-  ReloadOutlined, // Add the reload icon
+  ReloadOutlined,
+  TagsOutlined,
 } from "@ant-design/icons";
 import "./province.css";
 import ProvinceModal from "./ProvinceModal";
@@ -46,6 +49,7 @@ const Province = ({ theme }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [rowColors, setRowColors] = useState({});
 
   useEffect(() => {
     if (provinceName) {
@@ -134,6 +138,38 @@ const Province = ({ theme }) => {
     }
   };
 
+  const colorMenu = (record) => (
+    <Menu>
+      <Menu.Item key="red" onClick={() => markRowColor(record, "red")}>
+        Red
+      </Menu.Item>
+      <Menu.Item key="green" onClick={() => markRowColor(record, "green")}>
+        Green
+      </Menu.Item>
+      <Menu.Item key="blue" onClick={() => markRowColor(record, "blue")}>
+        Blue
+      </Menu.Item>
+      <Menu.Item key="yellow" onClick={() => markRowColor(record, "yellow")}>
+        Yellow
+      </Menu.Item>
+      <Menu.Item key="transparent" onClick={() => markRowColor(record, "transparent")}>
+        Reset
+      </Menu.Item>
+    </Menu>
+  );
+  const markRowColor = (record, color) => {
+    setRowColors((prevColors) => ({
+      ...prevColors,
+      [record.id_no]: color,
+    }));
+    console.log(`Marking row ${record.id_no} with color ${color}`);
+  };
+
+  const getRowClassName = (record) => {
+    const color = rowColors[record.id_no];
+    return color ? `row-${color}` : '';
+  };
+
   const columns = [
     {
       title: "ID No.",
@@ -177,57 +213,58 @@ const Province = ({ theme }) => {
       key: "permits_clearances",
       render: (text, record) => (
         <div className="permits-clearances-container">
-          {
-            record.ecc_cnc &&
-              ((record.permit_process === "ECC Online" ||
-                record.permit_process === "ECC Manual") &&
-              (record.ecc_cnc.includes("ECC-OL") ||
-                record.ecc_cnc.includes("R3") ||
-                record.ecc_cnc.includes("03") ||
-                record.ecc_cnc.includes("III") ||
-                record.ecc_cnc.includes("RO3") ||
-                record.ecc_cnc.includes("ECC")) ? (
-                <Tooltip
-                  title={
-                    <div className="tooltip-content">
-                      <div>ECC Information</div>
-                      <div>Reference No.: {record.ecc_cnc}</div>
-                      <div>Date Approved: {record.date_approved}</div>
-                      <div>Date Amended: {record.date_amend}</div>
-                    </div>
-                  }
-                  color="#0b5f74"
+          {record.ecc_cnc &&
+            ((record.permit_process === "ECC Online" ||
+              record.permit_process === "ECC Manual") &&
+            typeof record.ecc_cnc === "string" &&
+            (record.ecc_cnc.includes("ECC-OL") ||
+              record.ecc_cnc.includes("R3") ||
+              record.ecc_cnc.includes("03") ||
+              record.ecc_cnc.includes("III") ||
+              record.ecc_cnc.includes("RO3") ||
+              record.ecc_cnc.includes("ECC")) ? (
+              <Tooltip
+                title={
+                  <div className="tooltip-content">
+                    <div>ECC Information</div>
+                    <div>Reference No.: {record.ecc_cnc}</div>
+                    <div>Date Approved: {record.date_approved}</div>
+                    <div>Date Amended: {record.date_amend}</div>
+                  </div>
+                }
+                color="#0b5f74"
+              >
+                <Button
+                  type="text"
+                  className="custom-button-green"
+                  size="small"
                 >
-                  <Button
-                    type="text"
-                    className="custom-button-green"
-                    size="small"
-                  >
-                    ECC
-                  </Button>
-                </Tooltip>
-              ) : record.ecc_cnc.includes("CNC") ||
-                record.ecc_cnc.includes("R03") ? (
-                <Tooltip
-                  title={
-                    <div className="tooltip-content">
-                      <div>CNC Information</div>
-                      <div>Code: {record.ecc_cnc}</div>
-                      <div>Date Issued: {record.date_approved}</div>
-                    </div>
-                  }
-                  color="#bc6e00"
+                  ECC
+                </Button>
+              </Tooltip>
+            ) : typeof record.ecc_cnc === "string" &&
+              (record.ecc_cnc.includes("CNC") ||
+                record.ecc_cnc.includes("R03")) ? (
+              <Tooltip
+                title={
+                  <div className="tooltip-content">
+                    <div>CNC Information</div>
+                    <div>Code: {record.ecc_cnc}</div>
+                    <div>Date Issued: {record.date_approved}</div>
+                  </div>
+                }
+                color="#bc6e00"
+              >
+                <Button
+                  type="text"
+                  className="custom-button-yellow"
+                  size="small"
                 >
-                  <Button
-                    type="text"
-                    className="custom-button-yellow"
-                    size="small"
-                  >
-                    CNC
-                  </Button>
-                </Tooltip>
-              ) : null) // Return null for invalid or empty ecc_cnc
-          }
+                  CNC
+                </Button>
+              </Tooltip>
+            ) : null)}
+
           {record.pto_code && (
             <Tooltip
               title={
@@ -241,9 +278,10 @@ const Province = ({ theme }) => {
               color="#643c6a"
             >
               <Button type="text" className="custom-button-blue" size="small">
-                {record.pto_code.includes("POA") ||
-                record.pto_code.includes("PTO") ||
-                record.pto_code.includes("FLA")
+                {typeof record.pto_code === "string" &&
+                (record.pto_code.includes("POA") ||
+                  record.pto_code.includes("PTO") ||
+                  record.pto_code.includes("FLA"))
                   ? "PTO"
                   : record.pto_code}
               </Button>
@@ -263,12 +301,14 @@ const Province = ({ theme }) => {
               color="#b45248"
             >
               <Button type="text" className="custom-button-orange" size="small">
-                {String(record.wwdp_code).includes("DP")
+                {typeof record.wwdp_code === "string" &&
+                record.wwdp_code.includes("DP")
                   ? "WWDP"
                   : record.wwdp_code}
               </Button>
             </Tooltip>
           )}
+
           {record.haz_id && (
             <Tooltip
               title={
@@ -285,15 +325,17 @@ const Province = ({ theme }) => {
                 className="custom-button-skyblue"
                 size="small"
               >
-                {record.haz_id.includes("GR") ||
-                record.haz_id.includes("M-GR") ||
-                record.pto_code.includes("OL-GR") ||
-                record.pto_code.includes("HW")
+                {typeof record.haz_id === "string" &&
+                (record.haz_id.includes("GR") ||
+                  record.haz_id.includes("M-GR") ||
+                  record.pto_code.includes("OL-GR") ||
+                  record.pto_code.includes("HW"))
                   ? "HWG ID"
                   : record.haz_id}
               </Button>
             </Tooltip>
           )}
+
           {record.tsd_ref_no && (
             <Tooltip
               title={
@@ -306,13 +348,15 @@ const Province = ({ theme }) => {
               color="#542c14"
             >
               <Button type="text" className="custom-button-brown" size="small">
-                {record.tsd_ref_no.includes("TR") ||
-                record.tsd_ref_no.includes("OL-TR")
+                {typeof record.tsd_ref_no === "string" &&
+                (record.tsd_ref_no.includes("TR") ||
+                  record.tsd_ref_no.includes("OL-TR"))
                   ? "TSD ID"
                   : record.tsd_ref_no}
               </Button>
             </Tooltip>
           )}
+
           {record.tp_trc_ref_no && (
             <Tooltip
               title={
@@ -325,14 +369,16 @@ const Province = ({ theme }) => {
               color="#242726"
             >
               <Button type="text" className="custom-button-stone" size="small">
-                {record.tp_trc_ref_no.includes("TR") ||
-                record.tp_trc_ref_no.includes("OL-TP") ||
-                record.tp_trc_ref_no.includes("OL-PTT")
+                {typeof record.tp_trc_ref_no === "string" &&
+                (record.tp_trc_ref_no.includes("TR") ||
+                  record.tp_trc_ref_no.includes("OL-TP") ||
+                  record.tp_trc_ref_no.includes("OL-PTT"))
                   ? "TP/TRC ID"
                   : record.tp_trc_ref_no}
               </Button>
             </Tooltip>
           )}
+
           {record.chemical_code && (
             <Tooltip
               title={
@@ -363,16 +409,18 @@ const Province = ({ theme }) => {
               color="#5e5d3e"
             >
               <Button type="text" className="custom-button-ash" size="small">
-                {record.chemical_code.includes("CCOr") ||
-                record.chemical_code.includes("CCOi") ||
-                record.chemical_code.includes("OL") ||
-                record.chemical_code.includes("PCL") ||
-                record.chemical_code.includes("SQI")
+                {typeof record.chemical_code === "string" &&
+                (record.chemical_code.includes("CCOr") ||
+                  record.chemical_code.includes("CCOi") ||
+                  record.chemical_code.includes("OL") ||
+                  record.chemical_code.includes("PCL") ||
+                  record.chemical_code.includes("SQI"))
                   ? "Chemical Permits"
                   : record.chemical_code}
               </Button>
             </Tooltip>
           )}
+
           {record.pco_no && (
             <Tooltip
               title={
@@ -384,20 +432,25 @@ const Province = ({ theme }) => {
                   <div>PCO Validity: {record.pco_validity}</div>
                 </div>
               }
-              color="#263238"
+              color="#243d57"
             >
               <Button type="text" className="custom-button-slate" size="small">
-                {record.pco_no.includes("L") ||
-                record.pco_no.includes("PCO") ||
-                record.pco_no.includes("R") ||
-                record.pco_no.includes("COA")
-                  ? "PCO"
+                {typeof record.pco_no === "string" &&
+                (record.pco_no.includes("PCO") ||
+                  record.pco_no.includes("PCC") ||
+                  record.pco_no.includes("A-PCO"))
+                  ? "PCO ID"
                   : record.pco_no}
               </Button>
             </Tooltip>
           )}
         </div>
       ),
+    },
+    {
+      title: "Section/Unit Incharged",
+      key: "section_incharge",
+      render: (text, record) => <>{record.section_incharge}</>,
       align: "left",
     },
     {
@@ -409,14 +462,26 @@ const Province = ({ theme }) => {
     {
       title: "Actions",
       key: "actions",
+      align: "left",
+      width: 200,
       render: (text, record) => (
-        <Tooltip title="View Details">
-          <Button
-            icon={<EyeOutlined />}
-            onClick={() => showModal(record)}
-            type="primary"
-          />
-        </Tooltip>
+        <div>
+          <Tooltip title="View Details">
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => showModal(record)}
+              type="primary"
+              className="btn-action"
+            />
+          </Tooltip>
+          {/* <Tooltip title="Mark Row">
+            <Dropdown overlay={colorMenu(record)} trigger={["click"]} overlayClassName="custom-dropdown-menu">
+              <Button className="btn-action">
+                <TagsOutlined />
+              </Button>
+            </Dropdown>
+          </Tooltip> */}
+        </div>
       ),
     },
   ];
@@ -440,7 +505,7 @@ const Province = ({ theme }) => {
         <div className="total-rows">
           <strong>Industry Count: {formatNumber(filteredData.length)}</strong>
         </div>
-        <div className="search-input">
+        <div className="input-search">
           <Input
             placeholder="Search..."
             prefix={<SearchOutlined />}
@@ -526,10 +591,10 @@ const Province = ({ theme }) => {
                 pageSize: itemsPerPage,
                 onChange: (page) => setCurrentPage(page),
               }}
-              onRow={(record) => ({
-                onClick: () => showModal(record),
-              })}
-              rowClassName="clickable-row"
+              // onRow={(record) => ({
+              //   onClick: () => showModal(record),
+              // })}
+              rowClassName={getRowClassName}
               rowKey="id_no"
             />
           </Spin>
