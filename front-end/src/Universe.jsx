@@ -80,7 +80,7 @@ const Universe = () => {
 
   useEffect(() => {
     axios
-      .get("https://embr3-ucds.onrender.com/check-auth", { withCredentials: true })
+      .get("https://embr3-ucds.onrender.com", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);

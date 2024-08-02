@@ -45,6 +45,7 @@ const allowedOrigins = [
   "https://embr3-ucds.render.com"
 ];
 app.use(cookieParser());
+app.use(express);
 app.use(
   cors({
     origin: function (origin, callback) {
