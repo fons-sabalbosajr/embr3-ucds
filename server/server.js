@@ -40,9 +40,11 @@ function generateRandomPassword(length) {
 
 const allowedOrigins = [
   "https://66ac8956a7f4c7e2eb1e291d--regal-pixie-342e48.netlify.app",
-  "http://localhost:5173"
+  "http://localhost:5173",
+  "https://embr3-ucds.onrender.com",
+  "https://embr3-ucds.render.com"
 ];
-
+app.use(cookieParser());
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -62,7 +64,9 @@ app.use(
       "Set-Cookie"
     ],
     credentials: true,
-    exposeHeaders: ["Set-Cookie"], // Allows the client to access cookies
+    exposeHeaders: ["Set-Cookie"],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   })
 );
 
@@ -259,15 +263,10 @@ const logActivity = async (req, res, next) => {
 module.exports = logActivity;
 
 
-
-
-
-
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.token; // Ensure the cookie name is correct
   //console.log("Token received:", token); // Debug log
 
-  
   if (token) {
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) {
