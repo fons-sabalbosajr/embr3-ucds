@@ -1,64 +1,17 @@
 import React from "react";
 import {
-  Table,
   Input,
-  Tooltip,
-  Button,
-  Modal,
-  Progress,
-  Select,
-  Pagination,
-  Tabs,
   Row,
   Col,
-  Checkbox,
   Typography,
-  Card,
-  DatePicker,
-  Space,
-  Spin,
-  TimePicker,
-  notification,
-  Tag,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import styled from "styled-components";
-import moment from "moment";
 import "./geninfo.css";
 import IndustryClass from "../../../components/IndustryClass";
 import IndustryType from "../../../components/IndustryType";
 import IndustrySubType from "../../../components/IndustrySubType";
 
-const { Option } = Select;
-const { TabPane } = Tabs;
 const { Paragraph } = Typography;
-const BoldTab = styled.span`
-  font-weight: 600;
-  font-size: 16px;
-`;
-
-const capitalizeFirstLetter = (str) => {
-  if (!str) return "";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-};
-
-const normalizeAndSplit = (str) => {
-  return str
-    .replace(/_/g, " ") // Replace underscores with spaces
-    .replace(/\s+/g, " ") // Replace multiple spaces with a single space
-    .split(/(?<!,\s)[\n,]/) // Split by new lines and commas
-    .map((s, i, arr) => {
-      if (
-        i < arr.length - 1 &&
-        arr[i + 1] &&
-        arr[i + 1].trim().startsWith(",")
-      ) {
-        return s.trim() + ", ";
-      }
-      return s.trim();
-    }) // Trim each string and add ", " if the next element starts with a comma
-    .filter((s) => s); // Remove empty strings
-};
 
 const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
   return (

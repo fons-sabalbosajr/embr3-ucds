@@ -10,14 +10,12 @@ import {
   Select,
   Pagination,
   Spin,
-  Dropdown,
   Menu,
 } from "antd";
 import {
   SearchOutlined,
   EyeOutlined,
   ReloadOutlined,
-  TagsOutlined,
 } from "@ant-design/icons";
 import "./province.css";
 import ProvinceModal from "./ProvinceModal";
@@ -138,32 +136,7 @@ const Province = ({ theme }) => {
     }
   };
 
-  const colorMenu = (record) => (
-    <Menu>
-      <Menu.Item key="red" onClick={() => markRowColor(record, "red")}>
-        Red
-      </Menu.Item>
-      <Menu.Item key="green" onClick={() => markRowColor(record, "green")}>
-        Green
-      </Menu.Item>
-      <Menu.Item key="blue" onClick={() => markRowColor(record, "blue")}>
-        Blue
-      </Menu.Item>
-      <Menu.Item key="yellow" onClick={() => markRowColor(record, "yellow")}>
-        Yellow
-      </Menu.Item>
-      <Menu.Item key="transparent" onClick={() => markRowColor(record, "transparent")}>
-        Reset
-      </Menu.Item>
-    </Menu>
-  );
-  const markRowColor = (record, color) => {
-    setRowColors((prevColors) => ({
-      ...prevColors,
-      [record.id_no]: color,
-    }));
-    console.log(`Marking row ${record.id_no} with color ${color}`);
-  };
+
 
   const getRowClassName = (record) => {
     const color = rowColors[record.id_no];

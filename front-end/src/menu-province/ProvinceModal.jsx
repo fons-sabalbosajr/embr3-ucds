@@ -1,19 +1,5 @@
 import React, { useContext, useState, useEffect } from "react";
-import {
-  Modal,
-  Button,
-  Form,
-  Input,
-  Row,
-  Col,
-  Tabs,
-  Space,
-  Select,
-  Typography,
-  Menu,
-  Dropdown,
-  Spin,
-} from "antd";
+import { Modal, Button, Tabs, Space, Typography } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import "./provincemodal.css";
 import styled from "styled-components";
@@ -66,7 +52,7 @@ const ProvinceModal = ({
   const handleSaveChanges = async () => {
     try {
       const response = await axios.put(
-        `http://localhost:8081/api/update-data/${record.id_no}`,
+        `https://embr3-ucds.onrender.com/api/update-data/${record.id_no}`,
         editedRecord
       );
 
@@ -184,7 +170,6 @@ const ProvinceModal = ({
             <TabPane tab={<span>Reports Logs</span>} key="4">
               <Drafts />
             </TabPane>
-            
           </Tabs>
         </div>
       </Modal>

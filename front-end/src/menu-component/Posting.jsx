@@ -25,6 +25,7 @@ import "./posting.css";
 import axios from "axios";
 import Swal from "sweetalert2";
 import moment from "moment";
+import { CheckOutlined } from "@ant-design/icons";
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -44,21 +45,25 @@ const Posting = () => {
 
   useEffect(() => {
     // Fetch senders from user collection API
-    // Replace with your actual API call
     const fetchSenders = async () => {
-      const response = await axios.get(" http://localhost:8081/api/users"); // Replace with your API endpoint
+      const response = await axios.get("https://embr3-ucds.onrender.com/api/users"); // Replace with your API endpoint
       const sendersData = response.data;
       setSenders(sendersData);
     };
     fetchSenders();
 
-    const fetchAnnouncements = async () => {
-      const response = await axios.get(" http://localhost:8081/api/postings");
-      const announcementsData = response.data;
-      setAnnouncements(announcementsData);
-    };
     fetchAnnouncements();
   }, []);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const response = await axios.get("https://embr3-ucds.onrender.com/api/postings");
+      const announcementsData = response.data;
+      setAnnouncements(announcementsData);
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+    }
+  };
 
   const showModal = () => {
     setVisible(true);
@@ -79,7 +84,7 @@ const Posting = () => {
 
   const handleFormSubmit = async (values) => {
     try {
-      const response = await fetch(" http://localhost:8081/api/posting", {
+      const response = await fetch("https://embr3-ucds.onrender.com/api/posting", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -97,17 +102,19 @@ const Posting = () => {
         });
 
         setVisible(false); // Close the modal
-        fetchAnnouncements();
+        fetchAnnouncements(); // Refresh the announcements
       } else {
         const error = await response.json();
+        console.error("Server response error:", error); // Log the error
         Swal.fire({
           title: "Error",
-          text: error.message,
+          text: error.message || "Error saving announcement",
           icon: "error",
           confirmButtonText: "OK",
         });
       }
     } catch (error) {
+      console.error("Network error:", error); // Log network errors
       Swal.fire({
         title: "Error",
         text: "Error saving announcement",
@@ -189,7 +196,6 @@ const Posting = () => {
     },
   ];
 
-
   return (
     <div>
       <div className="user-accounts-container">
@@ -266,6 +272,7 @@ const Posting = () => {
                     </Radio.Button>
                     <span className="icon-label">Alerts</span>
                   </Col>
+
                   <Col span={6}>
                     <Radio.Button
                       value="information"
@@ -275,14 +282,13 @@ const Posting = () => {
                       } ${clickedIcon === "information" ? "active" : ""}`}
                     >
                       <Tooltip title="Information">
-                        <span style={{ fontSize: 30 }}>
-                          {iconMap.information}
-                        </span>
+                        <span style={{ fontSize: 30 }}>{iconMap.information}</span>
                         {iconType === "information" && <CheckOutlined />}
                       </Tooltip>
                     </Radio.Button>
                     <span className="icon-label">Information</span>
                   </Col>
+
                   <Col span={6}>
                     <Radio.Button
                       value="warning"
@@ -298,6 +304,7 @@ const Posting = () => {
                     </Radio.Button>
                     <span className="icon-label">Warning</span>
                   </Col>
+
                   <Col span={6}>
                     <Radio.Button
                       value="announcement"
@@ -307,9 +314,7 @@ const Posting = () => {
                       } ${clickedIcon === "announcement" ? "active" : ""}`}
                     >
                       <Tooltip title="Announcement">
-                        <span style={{ fontSize: 30 }}>
-                          {iconMap.announcement}
-                        </span>
+                        <span style={{ fontSize: 30 }}>{iconMap.announcement}</span>
                         {iconType === "announcement" && <CheckOutlined />}
                       </Tooltip>
                     </Radio.Button>
@@ -318,16 +323,10 @@ const Posting = () => {
                 </Row>
               </Space>
             </Form.Item>
-            <Form.Item wrapperCol={{ span: 24 }}>
+
+            <Form.Item wrapperCol={{ offset: 6 }}>
               <Button type="primary" htmlType="submit">
                 Save
-              </Button>
-              <Button
-                type="default"
-                onClick={handleCancel}
-                style={{ marginLeft: 16 }}
-              >
-                Cancel
               </Button>
             </Form.Item>
           </Form>

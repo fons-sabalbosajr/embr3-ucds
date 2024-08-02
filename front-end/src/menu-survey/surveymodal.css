@@ -1,0 +1,13 @@
+.action-buttons-container {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+.btn-cancel-right{
+    margin-right: 10px;
+}
+  

@@ -31,10 +31,13 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
     navigate("/universe/exportdata"); // navigate to Export Data
   };
 
-   // Check localStorage for permissions
-   const storedPermissions = JSON.parse(localStorage.getItem("permission")) || [];
-   const showAdminMenu = storedPermissions.includes("admin") || storedPermissions.includes("developer");
- 
+  // Check localStorage for permissions
+  const storedPermissions =
+    JSON.parse(localStorage.getItem("permission")) || [];
+  const showAdminMenu =
+    storedPermissions.includes("admin") ||
+    storedPermissions.includes("developer");
+
   return (
     <Sider
       collapsible
@@ -53,10 +56,7 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
               icon={<DashboardFilled />}
               className="menu-bar-item"
             >
-              <Link
-                to="/universe/dashboard"
-                className="link-menu"
-              >
+              <Link to="/universe/dashboard" className="link-menu">
                 Dashboard
               </Link>
             </Menu.Item>
@@ -115,18 +115,16 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
                 </Link>
               </Menu.Item>
               <Menu.Item key="subreports-4">
-                  <Link
-                    to="/universe/report"
-                    className={`link-menu-hover ${
-                      isMenuSelected("report") ? "selected" : ""
-                    }`}
-                  >
-                    Generate Report
-                  </Link>
-                </Menu.Item>
-
+                <Link
+                  to="/universe/report"
+                  className={`link-menu-hover ${
+                    isMenuSelected("report") ? "selected" : ""
+                  }`}
+                >
+                  Generate Report
+                </Link>
+              </Menu.Item>
             </Menu.SubMenu>
-
 
             {showAdminMenu && (
               <Menu.SubMenu key="admin" icon={<SettingFilled />} title="Admin">
@@ -140,7 +138,7 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
                     User Accounts
                   </Link>
                 </Menu.Item>
-                
+
                 <Menu.Item key="admin-2">
                   <Link
                     to="/universe/posting"
@@ -149,6 +147,17 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
                     }`}
                   >
                     Post to Bulletin
+                  </Link>
+                </Menu.Item>
+
+                <Menu.Item key="admin-3">
+                  <Link
+                    to="/universe/activitylog"
+                    className={`link-menu-hover ${
+                      isMenuSelected("activitylog") ? "selected" : ""
+                    }`}
+                  >
+                    Activity Logs
                   </Link>
                 </Menu.Item>
               </Menu.SubMenu>

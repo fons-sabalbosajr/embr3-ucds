@@ -27,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import SurveyModal from "./SurveyModal";
 import axios from "axios";
 
+
 const { Option } = Select;
 
 const Survey = ({ theme }) => {
@@ -39,7 +40,7 @@ const Survey = ({ theme }) => {
   const [selectedResponsibleUnit, setSelectedResponsibleUnit] = useState("");
   const [loading, setLoading] = useState(true);
   const [industryClasses, setIndustryClasses] = useState([]);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [selectedRow, setSelectedRow] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modifiedRows, setModifiedRows] = useState(new Set());
@@ -48,30 +49,44 @@ const Survey = ({ theme }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
-  const navigate = useNavigate();
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentRecord, setCurrentRecord] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [editedRecord, setEditedRecord] = useState(null);
+  const [filter, setFilter] = useState(null);
+  const [responsibleUnit, setResponsibleUnit] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8081/api/surveys");
+      const response = await fetch("https://embr3-ucds.onrender.com/api/surveys", {
+        method: 'GET',
+        credentials: 'include' // Include credentials (cookies) in the request
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text(); // Read the error text
+        throw new Error(errorText);
+      }
+  
       const result = await response.json();
       setData(result);
       setFilteredData(result);
-
+  
       const uniqueIndustryClasses = [
         ...new Set(result.map((item) => item.industry_class)),
       ];
       setIndustryClasses(uniqueIndustryClasses);
-
+  
       const uniqueResponsibleUnits = [
         ...new Set(result.map((item) => item.resp_unit)),
       ];
       setResponsibleUnits(uniqueResponsibleUnits);
-
+  
       // Store initial states
       const stateMap = new Map();
       result.forEach((item) => {
-        stateMap.set(item.serial_no, {
+        stateMap.set(item.id_no, {
           survey_eia: item.survey_eia,
           survey_air: item.survey_air,
           survey_water: item.survey_water,
@@ -81,16 +96,22 @@ const Survey = ({ theme }) => {
       });
       setInitialState(stateMap);
     } catch (error) {
-      console.error("Error fetching survey data:", error);
+      console.error("Error fetching survey data:", error.message);
     } finally {
       setLoading(false);
       setTableLoading(false);
     }
   };
-
+  
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (selectedRecord) {
+      setEditedRecord({ ...selectedRecord }); // Initialize editedRecord with selectedRecord
+    }
+  }, [selectedRecord]);
 
   const handleSearch = (e) => {
     const value = e.target.value;
@@ -109,11 +130,13 @@ const Survey = ({ theme }) => {
   };
 
   const filterData = (search, filter, responsibleUnit) => {
-    const lowerSearch = search.toLowerCase();
+    // Ensure search is a string
+    const lowerSearch = typeof search === 'string' ? search.toLowerCase() : '';
+    
     const filtered = data.filter((item) => {
       const matchSearch = Object.values(item).some(
         (val) =>
-          typeof val === "string" && val.toLowerCase().includes(lowerSearch)
+          typeof val === 'string' && val.toLowerCase().includes(lowerSearch)
       );
       const matchFilter = filter ? item.industry_class === filter : true;
       const matchResponsibleUnit = responsibleUnit
@@ -121,8 +144,10 @@ const Survey = ({ theme }) => {
         : true;
       return matchSearch && matchFilter && matchResponsibleUnit;
     });
+    
     setFilteredData(filtered);
   };
+  
 
   const handleTableChange = (pagination) => {
     setPagination(pagination);
@@ -147,7 +172,7 @@ const Survey = ({ theme }) => {
     });
 
     try {
-      await fetch("http://localhost:8081/api/update-color", {
+      await fetch("https://embr3-ucds.onrender.com/api/update-color", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serial_no: selectedRow.serial_no, color }),
@@ -235,7 +260,7 @@ const Survey = ({ theme }) => {
   const handleUpdate = async (record) => {
     try {
       // Update the record
-      await axios.put(`http://localhost:8081/api/survey/${record._id}`, {
+      await axios.put(`https://embr3-ucds.onrender.com/api/survey/${record._id}`, {
         survey_eia: record.survey_eia,
         survey_air: record.survey_air,
         survey_water: record.survey_water,
@@ -264,6 +289,7 @@ const Survey = ({ theme }) => {
       console.error("Error updating record:", error);
     }
   };
+
   const handleDiscardChanges = () => {
     // Clear modifications when discarding changes
     setModifiedRows((prev) => {
@@ -272,17 +298,56 @@ const Survey = ({ theme }) => {
       return updated;
     });
     setModalVisible(false);
+    setIsEditing(false);
   };
 
+
   const showModal = (record) => {
-    setSelectedRow(record);
+    setSelectedRecord(record);
+    setIsEditing(false);
     setModalVisible(true);
   };
 
   const handleCloseModal = () => {
-    setModalVisible(false);
-    setSelectedRow(null);
+    if (isEditing && editedRecord !== selectedRecord) {
+      Swal.fire({
+        title: "Unsaved changes",
+        text: "You have unsaved changes. Are you sure you want to close the modal?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Close",
+        cancelButtonText: "Stay",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setModalVisible(false);
+          setIsEditing(false);
+          setEditMode(false);
+        }
+      });
+    } else {
+      setModalVisible(false);
+      setIsEditing(false);
+    }
   };
+
+  const handleToggleEdit = () => {
+    setIsEditing(!isEditing);
+  };
+
+  const handleReload = async () => {
+    try {
+      setTableLoading(true);
+      await fetchData();
+      // Pass searchText directly to filterData
+      filterData(searchText, filter, responsibleUnit); 
+      // Note: Make sure `filter` and `responsibleUnit` are defined
+    } catch (error) {
+      console.error("Error reloading data:", error);
+    } finally {
+      setTableLoading(false);
+    }
+  };
+  
 
   // Handles row selection
   const onSelectChange = (selectedKeys, selectedRows) => {
@@ -348,8 +413,8 @@ const Survey = ({ theme }) => {
   const columns = [
     {
       title: "No.",
-      dataIndex: "serial_no",
-      key: "serial_no",
+      dataIndex: "id_no",
+      key: "id_no",
       align: "left",
     },
     {
@@ -555,9 +620,9 @@ const Survey = ({ theme }) => {
                 const color = selectedColor[record.serial_no];
                 return color ? `row-color-${color.replace("#", "")}` : "";
               }}
-              rowSelection={rowSelection} // Add rowSelection to Table component
+              //rowSelection={rowSelection} // Add rowSelection to Table component
             />
-            {contextMenu && (
+            {/* {contextMenu && (
               <Dropdown
                 overlay={menu}
                 visible={contextMenu.visible}
@@ -580,7 +645,7 @@ const Survey = ({ theme }) => {
                   <MoreOutlined />
                 </Button>
               </Dropdown>
-            )}
+            )} */}
           </Spin>
         )}
       </div>
@@ -596,25 +661,31 @@ const Survey = ({ theme }) => {
               {selectedRow?.project_title || ""}
             </span>
             <span className="modal-title">
-              {
-                <a
-                  href={`https://iis.emb.gov.ph/embis`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {selectedRow?.iis_no || ""}
-                </a>
-              }
+              <a
+                href={`https://iis.emb.gov.ph/embis`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {selectedRow?.iis_no || ""}
+              </a>
             </span>
           </div>
         }
-        onCancel={handleDiscardChanges}
         width={1300}
         footer={null}
-        onClose={handleDiscardChanges}
+        onCancel={handleDiscardChanges}
+        onClose={handleCloseModal}
       >
         {selectedRow && (
-          <SurveyModal record={selectedRow} onClose={handleCloseModal} />
+          <SurveyModal
+            record={selectedRecord}
+            isEditing={isEditing}
+            setIsEditing={setIsEditing}
+            onToggleEdit={handleToggleEdit}
+            onClose={handleCloseModal}
+            handleReload={handleReload}
+            centered
+          />
         )}
       </Modal>
     </div>

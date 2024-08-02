@@ -233,7 +233,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   <strong className="label_title">Total No. of Days:</strong>
                   <p className="label">(Date Monitored VS Date Submitted)</p>
                 </span>
-                <InspectionType
+                <Input
                   value={editedRecord ? editedRecord.days_dmds : ""}
                   onChange={(value) => handleChange("days_dmds", value)}
                   disabled={!isEditing}
@@ -247,7 +247,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   <strong className="label_title">Total No. of Days:</strong>
                   <p className="label">(Date Submitted VS Date Signed)</p>
                 </span>
-                <ReportType
+                <Input
                   value={editedRecord ? editedRecord.days_dsdrs : ""}
                   onChange={(value) => handleChange("days_dsdrs", value)}
                   disabled={!isEditing}

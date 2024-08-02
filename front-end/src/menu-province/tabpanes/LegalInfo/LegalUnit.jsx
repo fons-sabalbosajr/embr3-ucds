@@ -1,33 +1,16 @@
 import React from "react";
 import {
-  Table,
   Input,
-  Tooltip,
-  Button,
-  Modal,
-  Progress,
-  Select,
-  Pagination,
-  Tabs,
   Row,
   Col,
   Checkbox,
   Typography,
   Card,
-  DatePicker,
-  Space,
-  Spin,
-  TimePicker,
-  notification,
-  Tag,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
-import moment from "moment";
 import "./legalunit.css";
 
-const { Option } = Select;
-const { TabPane } = Tabs;
 const { Paragraph } = Typography;
 const BoldTab = styled.span`
   font-weight: 600;
@@ -149,7 +132,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Col xs={24} sm={24} md={12} lg={12}></Col>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
-                  <strong>NOV Date Release</strong>
+                  <strong>NOV Date Released</strong>
                   <Input
                     value={editedRecord ? editedRecord.nov_released : ""}
                     onChange={(e) =>

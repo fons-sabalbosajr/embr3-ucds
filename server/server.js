@@ -53,14 +53,20 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept", "withCredentials"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Origin",
+      "Accept",
+      "Cookie",
+      "Set-Cookie",
+      "withCredentials"
+    ],
     credentials: true,
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
+    exposeHeaders: ["Set-Cookie"], // Add this line
   })
 );
-
 
 // Middleware to handle OPTIONS requests
 app.options("*", cors());
@@ -80,6 +86,7 @@ let dailyNoticesCollection;
 let postingCollection;
 let reportdraftCollection;
 let surveyCollection;
+let activityLogsCollection;
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -95,6 +102,7 @@ async function connectToMongo() {
     postingCollection = db.collection("postings");
     reportdraftCollection = db.collection("draft-reports");
     surveyCollection = db.collection("survey-data");
+    activityLogsCollection = db.collection("app-logs");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error; // Re-throw the error
@@ -108,6 +116,153 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not set. Check your environment variables.");
 }
+
+const logActivity = async (req, res, next) => {
+  const { method, path, body } = req;
+
+  // Only log POST (add), PUT (update), PATCH (partial update), and GET (view) requests
+  if (!["POST", "PUT", "PATCH", "GET"].includes(method)) {
+    return next();
+  }
+
+  // Get the current user's details from req.user
+  const userId = req.user ? req.user.userId : null;
+  const username = req.user ? req.user.username : "Anonymous";
+
+  // Determine action type and label
+  let actionType;
+  let actionLabel;
+  let changes = null; // For logging changes
+
+  if (method === "PUT" || method === "PATCH") {
+    const { id } = req.params;
+
+    // Determine if the ID is a valid ObjectId or numeric ID
+    let filter;
+    if (ObjectId.isValid(id)) {
+      filter = { _id: new ObjectId(id) };
+    } else if (!isNaN(id)) {
+      filter = { id_no: parseInt(id, 10) }; // Adjust this filter based on your ID field
+    } else {
+      console.error("Invalid ID format:", id);
+      return next(); // Exit if ID format is invalid
+    }
+
+    // Ensure connection to the database
+    try {
+      if (!client.topology.isConnected()) {
+        await client.connect();
+      }
+
+      const database = client.db("universe-db");
+      const collection = database.collection("ucds-data"); // Adjust collection as needed
+
+      // Fetch the original data
+      const originalData = await collection.findOne(filter);
+      if (!originalData) {
+        console.error("Original data not found for ID:", id);
+        return next(); // Exit if original data not found
+      }
+
+      // Determine changes
+      changes = {};
+      for (let key in body) {
+        if (body[key] !== originalData[key]) {
+          changes[key] = {
+            old: originalData[key],
+            new: body[key],
+          };
+        }
+      }
+
+      // Construct the action label based on the changes
+      actionType = method === "PUT" ? "Update" : "Patch";
+      actionLabel = `Updated fields: ${JSON.stringify(changes)}`;
+    } catch (error) {
+      console.error("Error fetching original data:", error);
+      return next(); // Exit on error
+    }
+  } else if (method === "POST") {
+    actionType = "Add";
+    actionLabel = `Added data: ${JSON.stringify(body)}`;
+  } else if (method === "GET") {
+    const { id } = req.params;
+    let filter;
+
+    if (id) {
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else if (!isNaN(id)) {
+        filter = { id_no: parseInt(id, 10) }; // Adjust this filter based on your ID field
+      } else {
+        console.error("Invalid ID format:", id);
+        return next(); // Exit if ID format is invalid
+      }
+
+      // Ensure connection to the database
+      try {
+        if (!client.topology.isConnected()) {
+          await client.connect();
+        }
+
+        const database = client.db("universe-db");
+        const collection = database.collection("survey-data"); // Adjust collection as needed
+
+        // Fetch the viewed data
+        const viewedData = await collection.findOne(filter);
+        if (!viewedData) {
+          console.error("Viewed data not found for ID:", id);
+          return next(); // Exit if viewed data not found
+        }
+
+        // Construct the action label with the name of the data
+        const dataName = viewedData.project_title || "Unknown"; // Use 'project_title' as the name of the data
+        actionLabel = `Viewed data: ${dataName}`;
+      } catch (error) {
+        console.error("Error fetching viewed data:", error);
+        return next(); // Exit on error
+      }
+    } else {
+      actionLabel = `Viewed data`;
+    }
+  }
+
+  // Construct the activity log
+  const activityLog = {
+    userId: userId,
+    username: username,
+    method,
+    path,
+    actionType,
+    actionLabel,
+    requestData: body,
+    timestamp: new Date(),
+  };
+
+  // Ensure connection to the database
+  try {
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const activityLogsCollection = database.collection("app-logs");
+
+    await activityLogsCollection.insertOne(activityLog);
+    console.log("Activity logged:", activityLog);
+  } catch (error) {
+    console.error("Error logging activity:", error);
+  }
+
+  next();
+};
+
+module.exports = logActivity;
+
+
+
+
+
 
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.token; // Ensure the cookie name is correct
@@ -129,10 +284,9 @@ const authenticateJWT = (req, res, next) => {
   }
 };
 
-
+app.use(authenticateJWT);
+app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 // Login Route
 app.post("/login", async (req, res) => {
@@ -223,7 +377,7 @@ app.post("/register", async (req, res) => {
 });
 
 // POST /api/newusers - Create a new user with password encryption
-app.post("/api/newusers", async (req, res) => {
+app.post("/api/newusers", logActivity, async (req, res) => {
   console.log("Received request:", req.body);
 
   const { name, email, division, status, password, username } = req.body;
@@ -299,8 +453,7 @@ app.post("/api/newusers", async (req, res) => {
 
 app.post("/api/posting", async (req, res) => {
   try {
-    const { title, message, date, acknowledgement, iconType, createdDate } =
-      req.body;
+    const { title, message, date, acknowledgement, iconType } = req.body;
 
     // Create a new document in the "posting" collection
     const postingCollection = db.collection("postings");
@@ -315,7 +468,7 @@ app.post("/api/posting", async (req, res) => {
 
     res.status(201).send({ message: "Announcement saved successfully!" });
   } catch (error) {
-    console.error(error);
+    console.error("Error saving announcement:", error); // Detailed server-side error
     res.status(500).send({ message: "Error saving announcement" });
   }
 });
@@ -325,55 +478,61 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // Save draft report endpoint
-app.post('/save-draft-report', upload.single('pdfFile'), async (req, res) => {
-  try {
-    const { reportInfo, user, date, fileName } = req.body;
-
-    // Validate required fields
-    if (!reportInfo || !user || !date) {
-      return res.status(400).send({ message: 'Missing required fields' });
-    }
-
-    // Parse and validate the data
-    let parsedReportInfo;
-    let parsedUser;
+app.post(
+  "/save-draft-report",
+  upload.single("pdfFile"),
+  logActivity,
+  async (req, res) => {
     try {
-      parsedReportInfo = JSON.parse(reportInfo);
-      parsedUser = JSON.parse(user);
-    } catch (parseError) {
-      return res.status(400).send({ message: 'Invalid JSON format' });
+      const { reportInfo, user, date, fileName } = req.body;
+
+      // Validate required fields
+      if (!reportInfo || !user || !date) {
+        return res.status(400).send({ message: "Missing required fields" });
+      }
+
+      // Parse and validate the data
+      let parsedReportInfo;
+      let parsedUser;
+      try {
+        parsedReportInfo = JSON.parse(reportInfo);
+        parsedUser = JSON.parse(user);
+      } catch (parseError) {
+        return res.status(400).send({ message: "Invalid JSON format" });
+      }
+
+      // Validate fields within the parsed data
+      const { id_no, name, title, ecc_cnc, address } = parsedReportInfo;
+      if (!id_no || !name || !title || !ecc_cnc || !address) {
+        return res.status(400).send({ message: "Incomplete reportInfo data" });
+      }
+
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).send({ message: "Invalid date format" });
+      }
+
+      const draftReport = {
+        user: parsedUser,
+        date: parsedDate,
+        reportInfo: { id_no, name, title, ecc_cnc, address },
+        fileName: fileName || "", // Default to empty string if fileName is not provided
+        pdfUrl: "", // No PDF URL as the file is not uploaded
+      };
+
+      await reportdraftCollection.insertOne(draftReport);
+      res.status(200).send({ message: "Draft report saved successfully" });
+    } catch (error) {
+      console.error("Failed to save draft report:", error);
+      res
+        .status(500)
+        .send({ message: "Failed to save draft report", error: error.message });
     }
-
-    // Validate fields within the parsed data
-    const { id_no, name, title, ecc_cnc, address } = parsedReportInfo;
-    if (!id_no || !name || !title || !ecc_cnc || !address) {
-      return res.status(400).send({ message: 'Incomplete reportInfo data' });
-    }
-
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).send({ message: 'Invalid date format' });
-    }
-
-    const draftReport = {
-      user: parsedUser,
-      date: parsedDate,
-      reportInfo: { id_no, name, title, ecc_cnc, address },
-      fileName: fileName || "", // Default to empty string if fileName is not provided
-      pdfUrl: "", // No PDF URL as the file is not uploaded
-    };
-
-    await reportdraftCollection.insertOne(draftReport);
-    res.status(200).send({ message: 'Draft report saved successfully' });
-  } catch (error) {
-    console.error('Failed to save draft report:', error);
-    res.status(500).send({ message: 'Failed to save draft report', error: error.message });
   }
-});
-
+);
 
 // Update color for a specific survey record
-app.post('/api/update-color', async (req, res) => {
+app.post("/api/update-color", logActivity, async (req, res) => {
   const { serial_no, color } = req.body;
 
   if (!serial_no || !color) {
@@ -397,11 +556,7 @@ app.post('/api/update-color', async (req, res) => {
   }
 });
 
-
-
-
 //////////////////////////////////////////////////////////////////////////////////////////
-
 
 
 // Use the authentication middleware for routes that require authentication
@@ -420,22 +575,7 @@ app.use('/check-auth', authenticateJWT, (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
 //////////////////////////////////////////////////////////////////////////////////////////
-
-
-
 
 // Route to get draft reports
 app.get("/api/draft-report", async (req, res) => {
@@ -454,14 +594,24 @@ app.get("/api/draft-report", async (req, res) => {
   }
 });
 
-app.get('/api/files/:filename', async (req, res) => {
+app.get("/api/surveys", async (req, res) => {
+  try {
+    const surveys = await surveyCollection.find({}).toArray();
+    res.json(surveys);
+  } catch (error) {
+    console.error("Error fetching survey data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/files/:filename", async (req, res) => {
   try {
     const filename = req.params.filename;
-    const bucket = new GridFSBucket(db, { bucketName: 'pdfFiles' });
+    const bucket = new GridFSBucket(db, { bucketName: "pdfFiles" });
 
     const downloadStream = bucket.openDownloadStreamByName(filename);
-    
-    downloadStream.on('error', (error) => {
+
+    downloadStream.on("error", (error) => {
       console.error("Error fetching file:", error);
       res.status(500).send("Error fetching file");
     });
@@ -992,11 +1142,11 @@ app.get("/api/daily_notices", async (req, res) => {
 
 app.get("/api/postings", async (req, res) => {
   try {
-    const postings = await postingCollection.find().toArray(); // Fetch all postings from the "postings" collection
-    res.json(postings); // Return the postings as JSON
+    const postings = await postingCollection.find().toArray();
+    res.json(postings);
   } catch (error) {
     console.error("Error fetching postings data:", error);
-    res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -1030,30 +1180,11 @@ app.get("/api/ucds-data/:id", async (req, res) => {
   }
 });
 
-app.get('/api/surveys', async (req, res) => {
-  try {
-    const surveys = await surveyCollection.find({}).toArray();
-    res.json(surveys);
-  } catch (error) {
-    console.error('Error fetching survey data:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-
-
-
-
-
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-
 //Update the data per provinces
-app.put("/api/update-data/:id", async (req, res) => {
+app.put("/api/update-data/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params;
     const newData = req.body;
@@ -1092,7 +1223,7 @@ app.put("/api/update-data/:id", async (req, res) => {
 });
 
 // Update users data from admin panel
-app.put("/api/users/:id", async (req, res) => {
+app.put("/api/users/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params;
     const updatedUser = req.body;
@@ -1135,7 +1266,7 @@ app.put("/api/users/:id", async (req, res) => {
   }
 });
 
-app.put("/api/status/:id", async (req, res) => {
+app.put("/api/status/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1166,9 +1297,10 @@ app.put("/api/status/:id", async (req, res) => {
 });
 
 // Define an update endpoint for survey data
-app.put('/api/survey/:id', async (req, res) => {
+app.put("/api/survey/:id", logActivity, async (req, res) => {
   const { id } = req.params;
-  const { survey_eia, survey_air, survey_water, survey_haz, survey_chem } = req.body;
+  const { survey_eia, survey_air, survey_water, survey_haz, survey_chem } =
+    req.body;
 
   try {
     const result = await surveyCollection.updateOne(
@@ -1179,21 +1311,76 @@ app.put('/api/survey/:id', async (req, res) => {
           survey_air,
           survey_water,
           survey_haz,
-          survey_chem
-        }
+          survey_chem,
+        },
       }
     );
 
     if (result.modifiedCount > 0) {
-      res.status(200).json({ message: 'Update successful!' });
+      res.status(200).json({ message: "Update successful!" });
     } else {
-      res.status(404).json({ message: 'Record not found or no changes made' });
+      res.status(404).json({ message: "Record not found or no changes made" });
     }
   } catch (error) {
-    console.error('Error updating record:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error("Error updating record:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
+
+app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newData = req.body;
+
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("survey-data");
+
+    // Perform the update operation
+    const result = await collection.updateOne(
+      { id_no: parseInt(id) },
+      { $set: newData }
+    );
+
+    // Check the result of the update operation
+    if (result.modifiedCount === 1) {
+      res.status(200).json({ message: "Data updated successfully" });
+    } else {
+      res.status(404).json({ error: "Data not found or no changes were made" });
+    }
+  } catch (error) {
+    console.error("Error updating data:", error);
+    res.status(500).json({ error: "Failed to update data. Please try again later." });
+  }
+});
+
+
+
+
+app.patch("/api/postings/:id", logActivity, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isRead, showAgain } = req.body;
+
+    const updateFields = {};
+    if (isRead !== undefined) updateFields.isRead = isRead;
+    if (showAgain !== undefined) updateFields.showAgain = showAgain;
+
+    await postingCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateFields }
+    );
+    res.json({ message: "Announcement updated" });
+  } catch (error) {
+    console.error("Error updating announcement:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 
 

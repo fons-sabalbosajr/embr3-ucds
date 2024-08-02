@@ -9,7 +9,7 @@ import Survey from "./menu-survey/Survey";
 import MBU from "./menu-component/MBU";
 import Admin from "./menu-component/Admin";
 import Accounts from "./menu-component/UserAccounts";
-import Extract from "./components/ExtractData/ExtractData"
+import Extract from "./menu-extract/ExtractData";
 import Report from "./menu-component/AdminReport";
 import Posting from "./menu-component/Posting";
 import "./index.css";
@@ -18,6 +18,7 @@ import UserPopover from "./components/PopOverUser";
 import NotificationsPopover from "./components/PopOverNotification";
 import SideMenu from "./components/SideMenu";
 import AvatarWithName from "./components/AvatarwithName";
+import ActivityLog from "./menu-component/ActivityLog";
 
 const { Header, Content } = Layout;
 
@@ -53,7 +54,7 @@ const Universe = () => {
 
   const handleLogout = () => {
     axios
-      .get(" http://localhost:8081/logout", { withCredentials: true })
+      .get(" https://embr3-ucds.onrender.com/logout", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Logout Success") {
           localStorage.removeItem("authToken");
@@ -79,7 +80,7 @@ const Universe = () => {
 
   useEffect(() => {
     axios
-      .get("http://localhost:8081/check-auth", { withCredentials: true })
+      .get("https://embr3-ucds.onrender.com/check-auth", { withCredentials: true })
       .then((res) => {
         if (res.data.status === "Success") {
           setAuth(true);
@@ -95,15 +96,16 @@ const Universe = () => {
           );
 
           // Fetch user avatar
-          axios.get('http://localhost:8081/api/user/avatar', {
-            params: { name: res.data.name }
-          })
-          .then(response => {
-            setAvatar(response.data.avatar);
-          })
-          .catch(error => {
-            console.error('Error fetching user avatar:', error);
-          });
+          axios
+            .get("https://embr3-ucds.onrender.com/api/user/avatar", {
+              params: { name: res.data.name },
+            })
+            .then((response) => {
+              setAvatar(response.data.avatar);
+            })
+            .catch((error) => {
+              console.error("Error fetching user avatar:", error);
+            });
         } else {
           setAuth(false);
           navigate("/login", { replace: true });
@@ -138,7 +140,6 @@ const Universe = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
-
 
   const popoverContent = (
     <List
@@ -202,7 +203,7 @@ const Universe = () => {
                   onVisibleChange={handleVisibleChange}
                 >
                   <div style={{ display: "flex", alignItems: "center" }}>
-                  <AvatarWithName avatar={avatar}/>
+                    <AvatarWithName avatar={avatar} />
                   </div>
                 </Popover>
 
@@ -232,7 +233,10 @@ const Universe = () => {
                     path="/"
                     element={<Navigate to="dashboard" replace />}
                   />
-                  <Route path="dashboard" element={<Dashboard avatar={avatar} name={name} />} />
+                  <Route
+                    path="dashboard"
+                    element={<Dashboard avatar={avatar} name={name} />}
+                  />
                   <Route
                     path="/province/:provinceName"
                     element={<Province />}
@@ -243,9 +247,10 @@ const Universe = () => {
                     <Route path="admin" element={<Admin />} />
                   )}
                   <Route path="accounts" element={<Accounts />} />
-                  <Route path="extract" element={<Extract />} />
+                  <Route path="extract/*" element={<Extract />} />
                   <Route path="report" element={<Report />} />
                   <Route path="posting" element={<Posting />} />
+                  <Route path="activitylog" element={<ActivityLog />} />
                   <Route path="*" element={<Navigate to="dashboard" />} />
                 </Routes>
               </Spin>

@@ -4,7 +4,7 @@
 #for production
 #server.js
 
-#1.replace all  http://localhost:8081 to ' http://localhost:8081'
+#1.replace all  https://embr3-ucds.onrender.com to ' https://embr3-ucds.onrender.com'
 #2.deploy to render.com (deploy latest commit)
 
 

@@ -11,7 +11,7 @@ const UserStatus = ({ avatar, name }) => {
   useEffect(() => {
     const fetchOnlineUsers = async () => {
       try {
-        const response = await axios.get(" http://localhost:8081/api/online_users");
+        const response = await axios.get(" https://embr3-ucds.onrender.com/api/online_users");
         const allUsers = response.data.onlineUsers;
 
         const latestOnlineUsers = allUsers.reduce((acc, user) => {
