@@ -38,12 +38,11 @@ function generateRandomPassword(length) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-// Allowed origins
-const allowedOrigins = ["http://localhost:5173" || "https://66ac86730175d3ef9a536656--comfy-heliotrope-1a1a36.netlify.app"];
+const allowedOrigins = [
+  "https://66ac8956a7f4c7e2eb1e291d--regal-pixie-342e48.netlify.app",
+  "http://localhost:5173"
+];
 
-// Middleware
-app.use(express.json());
-app.use(cookieParser());
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -60,16 +59,16 @@ app.use(
       "Origin",
       "Accept",
       "Cookie",
-      "Set-Cookie",
-      "withCredentials"
+      "Set-Cookie"
     ],
     credentials: true,
-    exposeHeaders: ["Set-Cookie"], // Add this line
+    exposeHeaders: ["Set-Cookie"], // Allows the client to access cookies
   })
 );
 
 // Middleware to handle OPTIONS requests
 app.options("*", cors());
+
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
