@@ -326,7 +326,7 @@ app.post("/login", async (req, res) => {
     // Set HTTP-only cookie with token
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true, // Ensure this is true if using HTTPS
+      secure: process.env.NODE_ENV === "production", // Set to true if using HTTPS
       sameSite: "None", // Important for cross-site requests
     });
 
