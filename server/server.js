@@ -39,7 +39,7 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 // Allowed origins
-const allowedOrigins = ["http://localhost:5173"];
+const allowedOrigins = ["http://localhost:5173" || "https://66ac86730175d3ef9a536656--comfy-heliotrope-1a1a36.netlify.app"];
 
 // Middleware
 app.use(express.json());
