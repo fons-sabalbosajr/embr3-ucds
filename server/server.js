@@ -105,16 +105,16 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-app.use(cors(corsOptions, (req, res, next) => {
-  console.log(`CORS request from ${req.headers.origin}`);
-  next();
-}));
+// app.use(cors(corsOptions, (req, res, next) => {
+//   console.log(`CORS request from ${req.headers.origin}`);
+//   next();
+// }));
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
 // Handle preflight requests
-//app.options("*", cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
