@@ -56,7 +56,7 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
       }
 
       const response = await axios.put(
-        ` https://embr3-ucds.onrender.com/api/users/${editableUser._id}`,
+        `https://embr3-ucds.onrender.com/api/users/${editableUser._id}`,
         updatedUserData,
         {
           headers: {
@@ -65,15 +65,10 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
         }
       );
 
-      // Check if the update was successful by examining the response
       if (response.status === 200 && response.data) {
-        // Update the original user state with the latest changes
         setOriginalUser({ ...updatedUserData });
-
-        // Turn off editing mode
         setIsEditing(false);
 
-        // Display success message using SweetAlert2
         Swal.fire({
           title: "Success!",
           text: "User information updated successfully!",
@@ -81,24 +76,20 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
           confirmButtonText: "OK",
         });
       } else {
-        // If the update was not successful, display an error message
         Swal.fire({
           title: "Error!",
           text: "Failed to update user information. Please try again.",
           icon: "error",
           confirmButtonText: "OK",
         });
-
         await fetchUserData();
       }
     } catch (error) {
-      // Log the error details
       console.error(
         "Error updating user:",
         error.response ? error.response.data : error
       );
 
-      // Handle error and display message using SweetAlert2
       Swal.fire({
         title: "Error!",
         text: error.response
@@ -148,15 +139,13 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
   const handleUploadAvatar = async (avatarUrl) => {
     try {
       setUploading(true);
-      // Simulate upload progress
       for (let i = 0; i <= 100; i += 20) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         setUploadProgress(i);
       }
-      setUploadProgress(100); // Ensure progress reaches 100%
+      setUploadProgress(100);
       setUploading(false);
 
-      // Update the avatar URL in the editableUser state
       setEditableUser({
         ...editableUser,
         avatar: avatarUrl,
@@ -310,7 +299,7 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
             >
               {isEditing ? "Save" : "Edit"}
             </Button>
-            <Button onClick={handleCancel} type="primary">
+            <Button onClick={handleCancel} className="button-cancel">
               {isEditing ? "Cancel" : "Close"}
             </Button>
           </div>
@@ -319,9 +308,8 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
 
       <AvatarSelectionModal
         visible={isAvatarModalVisible}
-        onSelect={handleAvatarSelect}
         onCancel={() => setIsAvatarModalVisible(false)}
-        onUpload={handleUploadAvatar} // Pass handleUploadAvatar function to receive uploaded avatar URL
+        onSelect={handleAvatarSelect}
       />
     </Modal>
   );

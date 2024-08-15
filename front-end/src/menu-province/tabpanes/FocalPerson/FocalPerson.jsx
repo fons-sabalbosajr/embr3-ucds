@@ -25,12 +25,12 @@ import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
 import moment from "moment";
 import "./focalperson.css";
-import SectionInCharged from "../../../components/SectionInCharge";
-import Inspector from "../../../components/Inspectors";
-import Month from "../../../components/Month";
-import ReportType from "../../../components/ReportType";
-import InspectionType from "../../../components/InspectionType";
-import Inspectors from "../../../components/Inspectors";
+import SectionInCharged from "../../../components/Autocomplete/SectionInCharge";
+import Inspector from "../../../components/Autocomplete/Inspectors";
+import Month from "../../../components/Autocomplete/Month";
+import ReportType from "../../../components/Autocomplete/ReportType";
+import InspectionType from "../../../components/Autocomplete/InspectionType";
+import Inspectors from "../../../components/Autocomplete/Inspectors";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -64,7 +64,6 @@ const normalizeAndSplit = (str) => {
 };
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
-
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
@@ -218,68 +217,83 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             </Paragraph>
           </Col>
         </Row>
-        <Card
-          style={{
-            width: 600,
-            marginBottom: 5,
-          }}
-          size="small"
-        >
-          <strong>PLANNING UNIT</strong>
-          <Row gutter={[16, 16]} className="row-auto">
-            <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-              <Paragraph>
-                <span className="label_container">
-                  <strong className="label_title">Total No. of Days:</strong>
-                  <p className="label">(Date Monitored VS Date Submitted)</p>
-                </span>
-                <Input
-                  value={editedRecord ? editedRecord.days_dmds : ""}
-                  onChange={(value) => handleChange("days_dmds", value)}
-                  disabled={!isEditing}
-                  placeholder="No data"
-                />
-              </Paragraph>
-            </Col>
-            <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-              <Paragraph>
-                <span className="label_container">
-                  <strong className="label_title">Total No. of Days:</strong>
-                  <p className="label">(Date Submitted VS Date Signed)</p>
-                </span>
-                <Input
-                  value={editedRecord ? editedRecord.days_dsdrs : ""}
-                  onChange={(value) => handleChange("days_dsdrs", value)}
-                  disabled={!isEditing}
-                  placeholder="No data"
-                />
-              </Paragraph>
-            </Col>
-          </Row>
-          <Paragraph>
-            <strong>Remarks/Recommendations:</strong> <br />
-            <TextArea
-              value={editedRecord ? editedRecord.remarks_recommendations : ""}
-              onChange={(e) => handleChange("street", e.target.value)}
-              disabled={!isEditing}
-              placeholder="No data"
-            />
-          </Paragraph>
-          <Paragraph>
-            <strong>Tracking of Reports (Received by Planning Unit): </strong>{" "}
-            <br />
-            <Checkbox
-              checked={editedRecord?.pismu_tracking === "✔"}
-              disabled={!isEditing}
-              onChange={(e) =>
-                handleChange("pismu_tracking", e.target.checked ? "✔" : "")
-              }
-              style={{ fontSize: "15px" }}
+
+        <Row gutter={[16, 16]} className="row-auto">
+          <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
+            <Card
+              style={{
+                width: 500,
+                marginBottom: 5,
+              }}
+              size="small"
             >
-              {editedRecord?.pismu_tracking === "✔" ? "Yes" : "No"}
-            </Checkbox>
-          </Paragraph>
-        </Card>
+              <strong>PLANNING UNIT</strong>
+              <Row gutter={[16, 16]} className="row-auto">
+                <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+                  <Paragraph>
+                    <span className="label_container">
+                      <strong className="label_title">
+                        Total No. of Days:
+                      </strong>
+                      <p className="label">
+                        (Date Monitored VS Date Submitted)
+                      </p>
+                    </span>
+                    <Input
+                      value={editedRecord ? editedRecord.days_dmds : ""}
+                      onChange={(value) => handleChange("days_dmds", value)}
+                      disabled={!isEditing}
+                      placeholder="No data"
+                    />
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+                  <Paragraph>
+                    <span className="label_container">
+                      <strong className="label_title">
+                        Total No. of Days:
+                      </strong>
+                      <p className="label">(Date Submitted VS Date Signed)</p>
+                    </span>
+                    <Input
+                      value={editedRecord ? editedRecord.days_dsdrs : ""}
+                      onChange={(value) => handleChange("days_dsdrs", value)}
+                      disabled={!isEditing}
+                      placeholder="No data"
+                    />
+                  </Paragraph>
+                </Col>
+              </Row>
+              <Paragraph>
+                <strong>Remarks/Recommendations:</strong> <br />
+                <TextArea
+                  value={
+                    editedRecord ? editedRecord.remarks_recommendations : ""
+                  }
+                  onChange={(e) => handleChange("street", e.target.value)}
+                  disabled={!isEditing}
+                  placeholder="No data"
+                />
+              </Paragraph>
+              <Paragraph>
+                <strong>
+                  Tracking of Reports (Received by Planning Unit):{" "}
+                </strong>{" "}
+                <br />
+                <Checkbox
+                  checked={editedRecord?.pismu_tracking === "✔"}
+                  disabled={!isEditing}
+                  onChange={(e) =>
+                    handleChange("pismu_tracking", e.target.checked ? "✔" : "")
+                  }
+                  style={{ fontSize: "15px" }}
+                >
+                  {editedRecord?.pismu_tracking === "✔" ? "Yes" : "No"}
+                </Checkbox>
+              </Paragraph>
+            </Card>
+          </Col>
+        </Row>
       </Col>
     </Row>
   );

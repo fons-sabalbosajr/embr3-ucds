@@ -14,29 +14,100 @@
   color: #ffffff;
 }
 
+/* Ensure the header container is the correct height */
 .header-container {
   display: flex;
-  justify-content: space-between; /* Aligns children to opposite ends (left and right) */
+  justify-content: space-between;
   align-items: center;
-  padding: 0 20px 20px;
-  height: 85px; /* Adjust height as needed */
-  background-color: #001529; /* Example background color */
+  padding: 0 20px;
+  height: 100px;
 }
 
 .header-content {
   display: flex;
-  justify-content: flex-end; /* Aligns content to the right */
+  justify-content: flex-end;
   align-items: center;
-  width: 100%; /* Ensures full width */
+  width: 100%; 
+  //height: 100px;
 }
+
+.content-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+}
+
 
 .ant-menu-item-dark > a {
   color: #b6bbc4;
 }
 
+/* Ensure the entire layout container takes the full height of the viewport */
+.layout-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure the header container is the correct height */
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 64px;
+  background-color: #001529; /* Adjust based on theme */
+}
+
+/* Adjust the header content */
+.header-content {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+}
+
+/* Theme switch styles */
+.theme-switch {
+  display: flex;
+  align-items: center;
+  //margin-left: 10px;
+  padding-bottom: 7px;
+}
+
+/* Theme button styles */
+.theme-button {
+  color: #ffffff; /* Adjust color based on theme */
+}
+
+.content {
+  padding: 20px;
+  background-color: #f0f2f5;
+  flex: 1; 
+  display: flex;
+  flex-direction: column; 
+  justify-content: flex-start; 
+}
+
+.ant-layout-content {
+  min-height: calc(100vh - 64px); 
+}
+
+
+/* Adjust header background color and padding */
+.ant-layout-header {
+  background: #001529;
+  padding: 0 24px; 
+  line-height: 64px; 
+}
+
+/* Center align the footer text */
+.ant-layout-footer {
+  text-align: center;
+}
 
 .toggle {
-  position: fixed;
+  //position: fixed;
   bottom: 25px;
   left: 20px;
   z-index: 1;
@@ -51,29 +122,35 @@
 }
 
 .user-name {
-  font-size: 15px;
+  font-size: 11px;
   font-weight: 400;
   color: #ffffff;
-  margin-right: 20px; /* Add space to the right */
-  display: flex; /* Ensure flex behavior */
-  align-items: center; /* Vertically center the text */
+  margin-right: 20px; 
+  display: flex; 
+  align-items: center;
+  margin-right: 10px;
+  height: 15px;
+}
+
+.avatar-header{
+  display: flex;
+  align-items: center;
 }
 
 .profile_container {
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  height: 85px;
 }
 
 .notification-icon {
-  margin-right: 10px; /* Consistent spacing */
-  font-size: 20px;
+  margin-right: 10px; 
+  font-size: 15px;
   color: white;
 }
 
 .theme-button {
-  font-size: 20px;
+  font-size: 30px;
 }
 
 .link-menu {
@@ -95,13 +172,13 @@
 }
 
 .dark-theme {
-  background-color: #091529; /* Adjusted dark theme background color */
-  color: #ffffff; /* Adjusted dark theme text color */
+  background-color: #091529; 
+  color: #ffffff;
 }
 
 .light-theme {
-  background-color: #ffffff; /* Adjusted light theme background color */
-  color: #222222; /* Adjusted light theme text color */
+  background-color: #ffffff;
+  color: #222222;
 }
 
 .dark-theme .logo-icon-text {

@@ -34,11 +34,17 @@
   }
 }
 
+.header-title {
+  font-size: 15px;
+  color: #5a5a5a;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
 .add-industry-button {
   padding: 8px 16px;
   font-size: 14px;
   color: white;
-  background-color: #4057d6;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s ease;
@@ -51,6 +57,18 @@
   font-size: 14px;
   color: white;
   background-color: #0056b3;
+}
+
+.refresh-button {
+  margin-left: 10px;
+  align-items: flex-start;
+  margin-top: -10px;
+  height: 30px;
+  width: 30px;
+}
+
+.refresh-button:hover {
+  background-color: #40a9ff; /* Darker background color on hover */
 }
 
 .filter-container {
@@ -99,22 +117,32 @@
 
 .checkbox-wrapper.eia {
   background-color: #aab4f2;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .checkbox-wrapper.air {
   background-color: #c7cace;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .checkbox-wrapper.water {
   background-color: #72dfe9;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .checkbox-wrapper.haz {
   background-color: #ffc568;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .checkbox-wrapper.chem {
   background-color: #95e05f;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .checkbox-label {
@@ -123,14 +151,20 @@
 
 .btn-action {
   margin-right: 8px;
-  width: 35px;
 }
 
-
+.total-rows {
+  margin-left: 10px;
+  font-weight: 600;
+}
 
 /* Default row color */
 .ant-table-row {
   transition: background-color 0.3s;
+}
+
+.industry-label {
+  font-size: 11px;
 }
 
 :root {
@@ -166,7 +200,6 @@
 .row-color-eeeeee {
   background-color: var(--color-eeeeee) !important;
 }
-
 
 .dark-theme {
   background-color: #001529 !important;

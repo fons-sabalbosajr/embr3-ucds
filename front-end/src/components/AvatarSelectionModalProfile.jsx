@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Modal, Avatar, Upload, message, Button, Progress } from "antd";
 import NiceAvatar, { genConfig } from "react-nice-avatar";
-import domtoimage from 'dom-to-image';
-import download from 'downloadjs';
+import { SelectOutlined, DownloadOutlined, UploadOutlined } from "@ant-design/icons";
+import domtoimage from "dom-to-image";
+import download from "downloadjs";
 import "./avatarselectionmodal.css";
 
 const { Dragger } = Upload;
@@ -22,42 +23,57 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
     return newAvatars;
   }
 
-  // Function to handle custom avatar upload
   const handleCustomUpload = async (file) => {
     setUploading(true);
-
-    // Simulate an upload progress (you can replace this with actual upload logic)
     for (let percent = 0; percent <= 100; percent += 10) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       setUploadProgress(percent);
     }
-
-    // Simulating setting custom avatar after upload
-    setCustomAvatar(URL.createObjectURL(file));
+    const avatarUrl = URL.createObjectURL(file);
+    setCustomAvatar(avatarUrl);
     setUploading(false);
-    setUploadProgress(0); // Reset progress after successful upload
-    onUpload(URL.createObjectURL(file)); // Pass the uploaded avatar URL to parent component
+    setUploadProgress(0);
+    if (typeof onUpload === "function") {
+      onUpload(avatarUrl); // Pass the URL to the parent component
+    } else {
+      console.error("onUpload is not a function");
+    }
+  };
+  
+
+  // Function to download avatar as image
+  const handleDownloadAvatar = () => {
+    const node = document.getElementById("avatar-container");
+
+    // Use dom-to-image library to convert DOM node to image
+    domtoimage
+      .toPng(node)
+      .then(function (dataUrl) {
+        // Use downloadjs to trigger download of image file
+        download(dataUrl, "avatar.png");
+      })
+      .catch(function (error) {
+        console.error("Error generating avatar image:", error);
+      });
   };
 
-    // Function to download avatar as image
-    const handleDownloadAvatar = () => {
-      const node = document.getElementById("avatar-container");
-  
-      // Use dom-to-image library to convert DOM node to image
-      domtoimage
-        .toPng(node)
-        .then(function (dataUrl) {
-          // Use downloadjs to trigger download of image file
-          download(dataUrl, "avatar.png");
-        })
-        .catch(function (error) {
-          console.error("Error generating avatar image:", error);
-        });
-    };
-
-  // Function to handle selection of an avatar
   const handleSelectAvatar = (config) => {
-    onSelect(config); // Pass the selected avatar configuration to parent component
+    if (typeof onSelect === "function") {
+      onSelect(config); // Pass the avatar configuration object
+    } else {
+      console.error("onSelect is not a function");
+    }
+  };
+
+  const handleCustomSelect = () => {
+    if (typeof onSelect === "function" && customAvatar) {
+      onSelect(customAvatar);
+      setCustomAvatar(null);
+    } else {
+      console.error(
+        "Custom avatar is not selected or onSelect is not a function"
+      );
+    }
   };
 
   // Function to generate new random avatars
@@ -65,7 +81,6 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
     const newAvatars = generateInitialAvatars();
     setAvatars(newAvatars);
   };
-
 
   // Render the modal with avatars and custom upload
   return (
@@ -77,7 +92,6 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
       maskClosable={false} // Prevent closing modal on mask click
     >
       <div className="avatar-selection-container">
-        {/* Display initial avatars in a grid layout */}
         <div className="avatar-grid">
           {avatars.map((config, index) => (
             <div
@@ -85,7 +99,7 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
               className="avatar-grid-item"
               onClick={() => handleSelectAvatar(config)}
             >
-             <NiceAvatar
+              <NiceAvatar
                 style={{ width: "80px", height: "80px" }}
                 {...config}
               />
@@ -96,12 +110,13 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
           onClick={handleGenerateRandomAvatars}
           className="generate-avatar-btn"
           type="primary"
+          size="small"
         >
           Generate Avatar
         </Button>
 
-         {/* Custom avatar upload section */}
-         <div className="custom-avatar-container">
+        {/* Custom avatar upload section */}
+        <div className="custom-avatar-container">
           <div className="custom-avatar-title">Or Upload a Custom Avatar</div>
           <div className="custom-avatar-upload">
             <input
@@ -111,14 +126,6 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
               style={{ display: "none" }}
             />
             <div className="custom-avatar-buttons">
-              <Button
-                className="custom-avatar-button"
-                onClick={() =>
-                  document.getElementById("avatar-upload-input").click()
-                }
-              >
-                Browse Avatar
-              </Button>
               <input
                 id="avatar-upload-input"
                 type="file"
@@ -128,7 +135,17 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
               />
             </div>
             {customAvatar && (
-              <Avatar id="avatar-container" size={100} src={customAvatar} />
+              <>
+                <Avatar id="avatar-container" size={100} src={customAvatar} />
+                <Button
+                  type="primary"
+                  onClick={handleCustomSelect}
+                  className="button-select-custom-avatar"
+                  size="small"
+                >
+                  <UploadOutlined />
+                </Button>
+              </>
             )}
             {uploading && <Progress percent={uploadProgress} status="active" />}
           </div>
@@ -136,8 +153,23 @@ const AvatarSelectionModal = ({ visible, onSelect, onCancel, onUpload }) => {
 
         {/* Button to download avatar as image */}
         <div className="download-avatar-button">
-          <Button type="primary" onClick={handleDownloadAvatar}>
-            Download Avatar as Image
+          <Button
+            className="custom-avatar-button"
+            type="primary"
+            size="small"
+            onClick={() =>
+              document.getElementById("avatar-upload-input").click()
+            }
+          >
+            <SelectOutlined />
+          </Button>
+          <Button
+            type="primary"
+            size="small"
+            onClick={handleDownloadAvatar}
+            className="btn-download"
+          >
+            <DownloadOutlined />
           </Button>
         </div>
       </div>

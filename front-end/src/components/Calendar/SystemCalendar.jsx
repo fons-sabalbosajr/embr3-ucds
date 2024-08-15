@@ -248,7 +248,7 @@ const SystemCalendar = () => {
           {displayNotices.length > 0 &&
             displayNotices.map((notice, index) => (
               <li key={index}>
-                <Badge status="success" text={notice.title} />
+                <Badge status="success" text={notice.title} className="event-title" />
               </li>
             ))}
           {dailyNotices.length > 1 && (
@@ -261,14 +261,19 @@ const SystemCalendar = () => {
 
   return (
     <div className="calendar-container">
-      <h2 className="calendar-title">Monitoring Calendar</h2>
-      <Calendar onSelect={onSelect} cellRender={dateCellRender} />
+      <h3 className="calendar-title">Monitoring Calendar</h3>
+      <Calendar
+        onSelect={onSelect}
+        cellRender={dateCellRender}
+        className="custom-calendar"
+        style={{ height: '100%', width: '100%' }}
+      />
       <Modal
         title={`Monitored Industries as of ${selectedDate}`}
         visible={isModalVisible}
         onCancel={handleCancel}
         footer={null}
-        width={1600} // Adjust width as needed
+        width={1400} // Adjust width as needed
       >
         <div
           style={{
@@ -280,13 +285,18 @@ const SystemCalendar = () => {
           <Search
             placeholder="Search industries"
             onChange={(e) => handleSearch(e.target.value)}
-            style={{ width: 500 }}
+            style={{ width: 300 }}
+            prefix={<SearchOutlined />}
+            allowClear
+            value={searchText}
           />
         </div>
         <Table
+          dataSource={filteredData.length > 0 ? filteredData : selectedNotices}
           columns={columns}
-          dataSource={searchText ? filteredData : selectedNotices}
           pagination={{ pageSize: 10 }}
+          scroll={{ y: 700 }}
+          size="small"
         />
       </Modal>
     </div>
@@ -294,3 +304,4 @@ const SystemCalendar = () => {
 };
 
 export default SystemCalendar;
+

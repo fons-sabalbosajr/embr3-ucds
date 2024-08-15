@@ -9,12 +9,12 @@ const NotificationsPopover = ({ popoverContent, theme, notifications }) => {
       title="Notifications"
       trigger="click"
       placement="bottomRight"
-      overlayStyle={{ width: "600px", maxWidth: "800px" }}
+      overlayStyle={{ width: "600px", maxWidth: "800px", fontSize: "11px" }}
     >
       <Badge count={notifications.length} offset={[10, 0]}>
         <BellOutlined
           className={`notification-icon ${
-            theme === "light" ? "light-theme-icon" : "dark-theme-icon"
+            theme === "dark" ? "dark-theme" : "light-theme"
           }`}
         />
       </Badge>

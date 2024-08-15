@@ -14,7 +14,7 @@ const Home = () => {
   };
 
   return (
-    <div className="container">
+    <div className="home-container">
       <nav className="navbar">
         <div className="logo_container">
           <img src={homelogo} alt="Logo" className="logo" />
@@ -38,7 +38,7 @@ const Home = () => {
         </ul>
       </nav>
 
-      <div className="content">
+      <div className="home-content">
         <div className="text-content">
           <h1>Universe <span className="highlight">Centralized Database System</span></h1>
           <p className="subheading">

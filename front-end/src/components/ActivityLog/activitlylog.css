@@ -1,0 +1,18 @@
+.action-label {
+    white-space: normal; 
+    word-wrap: break-word; 
+    overflow-wrap: break-word;
+  }
+
+
+  .dropdown-option {
+    padding: 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+    color: #000;
+  }
+  
+  .dropdown-option:hover {
+    opacity: 0.7;
+  }
+  

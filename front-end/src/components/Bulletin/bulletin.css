@@ -20,7 +20,26 @@
 }
 
 .bulletin-button{
-  font-size: 12px;
+  font-size: 11px;
+  width: 50px;
+}
+
+.bulletin-title{
+  font-size: 15px;
+  color: #5a5a5a;
+  margin-bottom: 10px; 
+  font-weight: 500;
+}
+
+.data-title{
+  font-size: 13px;
+  font-weight: 500;
+}
+
+
+.data-label{
+  font-size: 11px;
+  color: #5a5a5a;
 }
 
 @media screen and (max-width: 768px) {

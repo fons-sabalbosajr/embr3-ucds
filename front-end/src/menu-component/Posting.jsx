@@ -33,6 +33,7 @@ const { Option } = Select;
 const Posting = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [visible, setVisible] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     message: "",
@@ -42,6 +43,9 @@ const Posting = () => {
   const [senders, setSenders] = useState([]);
   const [iconType, setIconType] = useState("");
   const [clickedIcon, setClickedIcon] = useState("");
+  const [editId, setEditId] = useState(""); // New state
+  const [editing, setEditing] = useState(false); 
+  const [selectedPosting, setSelectedPosting] = useState(null);
 
   useEffect(() => {
     // Fetch senders from user collection API
@@ -67,6 +71,14 @@ const Posting = () => {
 
   const showModal = () => {
     setVisible(true);
+    setEditing(false); // Ensure we are not in editing mode
+    setFormData({
+      title: "",
+      message: "",
+      acknowledgement: false,
+      iconType: "alerts",
+      date: null,
+    });
   };
 
   const handleCancel = () => {
@@ -90,6 +102,7 @@ const Posting = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(values),
+        credentials: "include", // Include credentials
       });
 
       if (response.ok) {
@@ -124,6 +137,100 @@ const Posting = () => {
     }
   };
 
+  const handleEdit = (record) => {
+    setSelectedPosting(record);
+    setFormData({
+      title: record.title,
+      message: record.message,
+      acknowledgement: record.acknowledgement,
+      iconType: record.iconType,
+      date: moment(record.createdDate),
+    });
+    setVisible(true);
+    setEditing(true);
+  };
+
+  const handleEditSubmit = async (values) => {
+    try {
+      const response = await fetch(`https://embr3-ucds.onrender.com/api/postings/${selectedPosting._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+        credentials: "include", // Include credentials
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Swal.fire({
+          title: "Success!",
+          text: result.message,
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+
+        setEditVisible(false); // Close the modal
+        fetchAnnouncements(); // Refresh the announcements
+      } else {
+        const error = await response.json();
+        console.error("Server response error:", error); // Log the error
+        Swal.fire({
+          title: "Error",
+          text: error.message || "Error updating announcement",
+          icon: "error",
+          confirmButtonText: "OK",
+        });
+      }
+    } catch (error) {
+      console.error("Network error:", error); // Log network errors
+      Swal.fire({
+        title: "Error",
+        text: "Error updating announcement",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(`https://embr3-ucds.onrender.com/api/postings/${id}`, {
+        method: "DELETE",
+        credentials: "include", // Include credentials
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Swal.fire({
+          title: "Success!",
+          text: result.message,
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+
+        fetchAnnouncements(); // Refresh the announcements
+      } else {
+        const error = await response.json();
+        console.error("Server response error:", error); // Log the error
+        Swal.fire({
+          title: "Error",
+          text: error.message || "Error deleting announcement",
+          icon: "error",
+          confirmButtonText: "OK",
+        });
+      }
+    } catch (error) {
+      console.error("Network error:", error); // Log network errors
+      Swal.fire({
+        title: "Error",
+        text: "Error deleting announcement",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+    }
+  };
+
   const iconMap = {
     alerts: (
       <ExclamationCircleOutlined
@@ -138,10 +245,7 @@ const Posting = () => {
       />
     ),
     warning: (
-      <WarningFilled
-        style={{ color: "orange" }}
-        className="icon-buttton-warn"
-      />
+      <WarningFilled style={{ color: "orange" }} className="icon-button-warn" />
     ),
     announcement: (
       <BellFilled
@@ -153,12 +257,12 @@ const Posting = () => {
 
   const columns = [
     {
-      title: "Icon",
+      title: " ",
       dataIndex: "iconType",
       key: "iconType",
-      align: "left", // Align contents to the left
+      align: "left",
       render: (iconType) => (
-        <span style={{ fontSize: 30 }}>{iconMap[iconType]}</span> // Adjust the font size as needed
+        <span style={{ fontSize: 30 }}>{iconMap[iconType]}</span>
       ),
     },
     {
@@ -166,7 +270,8 @@ const Posting = () => {
       dataIndex: "createdDate",
       key: "createdDate",
       align: "left",
-      render: (createdDate) => moment(createdDate).format("MMMM DD, YYYY hh:mm a"),
+      render: (createdDate) =>
+        moment(createdDate).format("MMMM DD, YYYY hh:mm a"),
     },
     {
       title: "Announcement",
@@ -187,11 +292,31 @@ const Posting = () => {
       align: "left",
       render: (_, record) => (
         <Space size="middle">
-          <Button type="primary">Edit</Button>
-          <Button type="primary" danger>
+        <Button type="primary" onClick={() => handleEdit(record)}>
+          Edit
+        </Button>
+        <Button
+            type="primary"
+            danger
+            onClick={() => {
+              Swal.fire({
+                title: "Are you sure?",
+                text: "You won't be able to recover this announcement!",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#3085d6",
+                cancelButtonColor: "#d33",
+                confirmButtonText: "Yes, delete it!",
+              }).then((result) => {
+                if (result.isConfirmed) {
+                  handleDelete(record._id);
+                }
+              });
+            }}
+          >
             Delete
           </Button>
-        </Space>
+      </Space>
       ),
     },
   ];
@@ -282,7 +407,9 @@ const Posting = () => {
                       } ${clickedIcon === "information" ? "active" : ""}`}
                     >
                       <Tooltip title="Information">
-                        <span style={{ fontSize: 30 }}>{iconMap.information}</span>
+                        <span style={{ fontSize: 30 }}>
+                          {iconMap.information}
+                        </span>
                         {iconType === "information" && <CheckOutlined />}
                       </Tooltip>
                     </Radio.Button>
@@ -314,7 +441,9 @@ const Posting = () => {
                       } ${clickedIcon === "announcement" ? "active" : ""}`}
                     >
                       <Tooltip title="Announcement">
-                        <span style={{ fontSize: 30 }}>{iconMap.announcement}</span>
+                        <span style={{ fontSize: 30 }}>
+                          {iconMap.announcement}
+                        </span>
                         {iconType === "announcement" && <CheckOutlined />}
                       </Tooltip>
                     </Radio.Button>
@@ -327,6 +456,69 @@ const Posting = () => {
             <Form.Item wrapperCol={{ offset: 6 }}>
               <Button type="primary" htmlType="submit">
                 Save
+              </Button>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title="Edit Announcement"
+          visible={editVisible}
+          onCancel={handleCancel}
+          footer={null}
+          width={800}
+        >
+          <Form
+            name="editAnnouncementForm"
+            onFinish={handleEditSubmit}
+            initialValues={formData}
+            labelAlign="left"
+            labelCol={{ span: 6 }}
+            wrapperCol={{ span: 15 }}
+          >
+            <Form.Item
+              label="Title"
+              name="title"
+              rules={[{ required: true, message: "Please enter a title" }]}
+            >
+              <Input placeholder="Announcement Title" />
+            </Form.Item>
+
+            <Form.Item
+              label="Message"
+              name="message"
+              rules={[{ required: true, message: "Please enter a message" }]}
+            >
+              <Input.TextArea rows={6} placeholder="Type your message here" />
+            </Form.Item>
+
+            <Form.Item
+              label="Date"
+              name="date"
+              rules={[{ required: true, message: "Please select a date" }]}
+            >
+              <DatePicker style={{ width: "100%" }} />
+            </Form.Item>
+
+            <Form.Item label="User Acknowledgement">
+              <Radio.Group name="acknowledgement" value={formData.acknowledgement} onChange={(e) => setFormData({ ...formData, acknowledgement: e.target.value })}>
+                <Radio value={true}>Required</Radio>
+                <Radio value={false}>Not Required</Radio>
+              </Radio.Group>
+            </Form.Item>
+
+            <Form.Item label="Icon Type" name="iconType">
+              <Select onChange={handleIconChange} defaultValue={formData.iconType}>
+                <Option value="alerts">Alerts</Option>
+                <Option value="information">Information</Option>
+                <Option value="warning">Warning</Option>
+                <Option value="announcement">Announcement</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item>
+              <Button type="primary" htmlType="submit">
+                Update Announcement
               </Button>
             </Form.Item>
           </Form>

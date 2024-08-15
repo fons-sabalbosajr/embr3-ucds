@@ -18,14 +18,15 @@
 .custom-avatar-container {
   margin-top: 20px;
   border: 1px solid rgb(171, 171, 171);
-  border-radius: 10px;
+  border-radius: 5px;
+  height: 200px;
 }
 
 .custom-avatar-title {
-  font-size: medium;
+  font-size: 12px;
   font-weight: 600;
   margin-left: 10px;
-  margin-top: 10px;
+  margin-top: 5px;
 }
 
 .custom-avatar-upload {
@@ -40,6 +41,7 @@
 
 .generate-avatar-btn {
   margin-top: 20px;
+  font-size: 12px;
 }
 
 .custom-avatar-upload .ant-avatar {
@@ -47,7 +49,11 @@
 }
 
 .custom-avatar-button {
-  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.btn-download{
+  margin-top: 10px;
 }
 
 .upload-avatar-button {
@@ -70,4 +76,10 @@
   justify-content: center;
   width: 100%;
   gap: 10px;
+}
+
+.button-select-custom-avatar{
+  top: 125px;
+  right: 20px;
+  background-color: rgb(83, 174, 83);
 }

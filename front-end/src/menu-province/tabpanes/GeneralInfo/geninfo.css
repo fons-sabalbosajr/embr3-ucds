@@ -1,3 +1,11 @@
 .row-auto{
     margin-bottom: -10px;
 }
+
+.textbox-label{
+    font-size: 12px;
+}
+
+.label-title{
+    margin-top: 5px;
+}

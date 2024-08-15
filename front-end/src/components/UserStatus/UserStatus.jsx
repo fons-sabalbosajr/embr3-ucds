@@ -42,7 +42,7 @@ const UserStatus = ({ avatar, name }) => {
     };
 
     fetchOnlineUsers();
-    const intervalId = setInterval(fetchOnlineUsers, 5000);
+    const intervalId = setInterval(fetchOnlineUsers, 30000);
     return () => clearInterval(intervalId);
   }, []);
 
@@ -55,11 +55,11 @@ const UserStatus = ({ avatar, name }) => {
     if (diffMinutes > 2160) {
       return ""; // Remove calculation for long offline duration
     } else if (diffMinutes < 60) {
-      return `${diffMinutes} min${diffMinutes !== 1 ? "" : ""} ago`;
+      return `${diffMinutes} min${diffMinutes !== 1 ? "" : ""}`;
     } else if (diffMinutes < 1440) {
       // Less than 1 day
       const diffHours = Math.floor(diffMinutes / 60);
-      return `${diffHours} hr${diffHours !== 1 ? "s" : ""} ago`;
+      return `${diffHours} hr${diffHours !== 1 ? "s" : ""}`;
     } else {
       // Less than 1.5 days
       const diffDays = Math.floor(diffMinutes / 1440);
@@ -67,14 +67,14 @@ const UserStatus = ({ avatar, name }) => {
       const diffHours = Math.floor(remainingMinutes / 60);
       return `${diffDays} day${
         diffDays !== 1 ? "s" : ""
-      } and ${diffHours} hr${diffHours !== 1 ? "s" : ""} ago`;
+      } and ${diffHours} hr${diffHours !== 1 ? "s" : ""}`;
     }
   };
 
 
   return (
     <div>
-      <h2 className="user-status-title">Online Users</h2>
+      <h3 className="user-status-title">Online Users</h3>
       {onlineUsers.length > 0 ? (
         <List
           itemLayout="horizontal"
@@ -83,9 +83,9 @@ const UserStatus = ({ avatar, name }) => {
             <List.Item className="user-status-item" style={{ opacity: user.isLoggedIn ? 1 : 0.75 }}>
               <div style={{ position: "relative" }}>
                 {user.avatar ? (
-                  <NiceAvatar style={{ width: '40px', height: '40px' }} {...user.avatar} />
+                  <NiceAvatar style={{ width: '30px', height: '30px' }} {...user.avatar} />
                 ) : (
-                  <NiceAvatar style={{ width: '40px', height: '40px' }} />
+                  <NiceAvatar style={{ width: '30px', height: '30px' }} />
                 )}
                 <div
                   className="user-status-dot"
@@ -93,8 +93,8 @@ const UserStatus = ({ avatar, name }) => {
                     position: "absolute",
                     bottom: 0,
                     right: 0,
-                    width: "12px",
-                    height: "12px",
+                    width: "10px",
+                    height: "10px",
                     borderRadius: "50%",
                     backgroundColor: user.isLoggedIn
                       ? "#52c41a"

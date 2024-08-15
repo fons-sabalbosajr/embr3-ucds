@@ -61,11 +61,11 @@ const Survey = ({ theme }) => {
     try {
       const response = await fetch("https://embr3-ucds.onrender.com/api/surveys", {
         method: 'GET',
-        credentials: 'include' // Include credentials (cookies) in the request
+        credentials: 'include' 
       });
   
       if (!response.ok) {
-        const errorText = await response.text(); // Read the error text
+        const errorText = await response.text(); 
         throw new Error(errorText);
       }
   
@@ -92,6 +92,7 @@ const Survey = ({ theme }) => {
           survey_water: item.survey_water,
           survey_haz: item.survey_haz,
           survey_chem: item.survey_chem,
+          color: item.color, // Include the color field
         });
       });
       setInitialState(stateMap);
@@ -109,7 +110,7 @@ const Survey = ({ theme }) => {
 
   useEffect(() => {
     if (selectedRecord) {
-      setEditedRecord({ ...selectedRecord }); // Initialize editedRecord with selectedRecord
+      setEditedRecord({ ...selectedRecord }); 
     }
   }, [selectedRecord]);
 
@@ -147,7 +148,6 @@ const Survey = ({ theme }) => {
     
     setFilteredData(filtered);
   };
-  
 
   const handleTableChange = (pagination) => {
     setPagination(pagination);
@@ -159,14 +159,14 @@ const Survey = ({ theme }) => {
       return;
     }
 
-    if (!selectedRow.serial_no) {
-      console.error("Selected row serial_no is missing:", selectedRow);
+    if (!selectedRow.id_no) {
+      console.error("Selected row id_no is missing:", selectedRow);
       return;
     }
 
     // Update the local state
     setSelectedColor((prevColors) => {
-      const newColors = { ...prevColors, [selectedRow.serial_no]: color };
+      const newColors = { ...prevColors, [selectedRow.id_no]: color };
       console.log("Updated colors:", newColors);
       return newColors;
     });
@@ -174,10 +174,14 @@ const Survey = ({ theme }) => {
     try {
       await fetch("https://embr3-ucds.onrender.com/api/update-color", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serial_no: selectedRow.serial_no, color }),
+        headers: {
+          "Content-Type": "application/json",
+          // Include Authorization header if using tokens
+          // "Authorization": `Bearer ${token}`,
+        },
+        credentials: "include", // Include this if you use sessions
+        body: JSON.stringify({ id_no: selectedRow.id_no, color }),
       });
-      // Notify user with project title
       notification.success({
         message: "Industry marked successfully",
         description: `The "${selectedRow.project_title}" has been marked.`,
@@ -224,7 +228,7 @@ const Survey = ({ theme }) => {
               outline:
                 (selectedRow &&
                   selectedColor &&
-                  selectedColor[selectedRow.serial_no]) === color
+                  selectedColor[selectedRow.id_no]) === color
                   ? "2px solid #B4B4B8"
                   : "none",
             }}
@@ -236,7 +240,7 @@ const Survey = ({ theme }) => {
 
   const handleCheckboxChange = (field, value, record) => {
     const updatedData = data.map((item) =>
-      item.serial_no === record.serial_no
+      item.id_no === record.id_no
         ? { ...item, [field]: value ? "✔" : "" }
         : item
     );
@@ -246,12 +250,12 @@ const Survey = ({ theme }) => {
     // Track modified rows
     setModifiedRows((prev) => {
       const newModifiedRows = new Set(prev);
-      const original = initialState.get(record.serial_no);
+      const original = initialState.get(record.id_no);
       const hasChanges = original && original[field] !== (value ? "✔" : "");
       if (hasChanges) {
-        newModifiedRows.add(record.serial_no);
+        newModifiedRows.add(record.id_no);
       } else {
-        newModifiedRows.delete(record.serial_no);
+        newModifiedRows.delete(record.id_no);
       }
       return newModifiedRows;
     });
@@ -267,6 +271,7 @@ const Survey = ({ theme }) => {
         survey_haz: record.survey_haz,
         survey_chem: record.survey_chem,
       });
+      
 
       // Notify user of success
       notification.success({
@@ -277,14 +282,14 @@ const Survey = ({ theme }) => {
       // Clear modifications after update
       setModifiedRows((prev) => {
         const updated = new Set(prev);
-        updated.delete(record.serial_no);
+        updated.delete(record.id_no);
         return updated;
       });
     } catch (error) {
       // Handle errors
       notification.error({
         message: "Update Failed",
-        description: `Failed to update data for ${record.serial_no}.`,
+        description: `Failed to update data for ${record.id_no}.`,
       });
       console.error("Error updating record:", error);
     }
@@ -300,7 +305,6 @@ const Survey = ({ theme }) => {
     setModalVisible(false);
     setIsEditing(false);
   };
-
 
   const showModal = (record) => {
     setSelectedRecord(record);
@@ -349,20 +353,6 @@ const Survey = ({ theme }) => {
   };
   
 
-  // Handles row selection
-  const onSelectChange = (selectedKeys, selectedRows) => {
-    setSelectedRowKeys(selectedKeys);
-    setSelectedRows(selectedRows);
-  };
-
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: onSelectChange,
-    getCheckboxProps: (record) => ({
-      disabled: record.disabled, // Disable checkboxes if needed
-    }),
-  };
-
   // Handle right-click to show context menu
   const handleRowContextMenu = (e, record) => {
     e.preventDefault();
@@ -374,41 +364,10 @@ const Survey = ({ theme }) => {
     });
   };
 
-  // Hide context menu
-  const hideContextMenu = () => setContextMenu(null);
-
-  // Handle "Mark As" option
-  const handleMarkAs = () => {
-    // Implement mark as functionality here
-    notification.info({
-      message: "Mark As",
-      description: `Marked as for ${selectedRows
-        .map((row) => row.serial_no)
-        .join(", ")}`,
-    });
-    hideContextMenu();
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-US").format(number);
   };
 
-  // Handle "Export As" option
-  const handleExportAs = () => {
-    // Implement export as functionality here
-    notification.info({
-      message: "Export As",
-      description: `Exporting ${selectedRows
-        .map((row) => row.serial_no)
-        .join(", ")}`,
-    });
-    hideContextMenu();
-    // Optionally navigate to an export page
-    // history.push('/export');
-  };
-
-  const menu = (
-    <Menu>
-      <Menu.Item onClick={handleMarkAs}>Mark As</Menu.Item>
-      <Menu.Item onClick={handleExportAs}>Export As</Menu.Item>
-    </Menu>
-  );
 
   const columns = [
     {
@@ -416,6 +375,7 @@ const Survey = ({ theme }) => {
       dataIndex: "id_no",
       key: "id_no",
       align: "left",
+      render: (text) => <div className="industry-label">{text}</div>,
     },
     {
       title: "Applicable Laws",
@@ -480,8 +440,8 @@ const Survey = ({ theme }) => {
       align: "left",
       render: (text, record) => (
         <div>
-          <strong>{text}</strong>
-          <div>
+          <strong className="industry-label">{text}</strong>
+          <div className="industry-label">
             <p style={{ fontStyle: "italic" }}>{record.address}</p>
             <p>Date Surveyed: {record.date_surveyed}</p>
             <p>Responsible Unit: {record.resp_unit}</p>
@@ -504,12 +464,21 @@ const Survey = ({ theme }) => {
       dataIndex: "industry_class",
       key: "industry_class",
       align: "left",
+      render: (text) => <div className="industry-label">{text}</div>,
+    },
+    {
+      title: "Responsible Unit",
+      dataIndex: "resp_unit",
+      key: "resp_unit",
+      align: "left",
+      render: (text) => <div className="industry-label">{text}</div>,
     },
     {
       title: "Status/Remarks",
       dataIndex: "remarks",
       key: "remarks",
       align: "left",
+      render: (text) => <div className="industry-label">{text}</div>,
     },
     {
       title: "Actions",
@@ -519,27 +488,27 @@ const Survey = ({ theme }) => {
       render: (text, record) => (
         <div>
           <Tooltip title="View Info">
-            <Button onClick={() => showModal(record)} className="btn-action">
+            <Button onClick={() => showModal(record)} className="btn-action" size="small">
               <EyeOutlined />
             </Button>
           </Tooltip>
           <Tooltip title="Mark Row As">
             <Dropdown overlay={colorMenu} placement="bottomLeft" arrow>
-              <Button className="btn-action">
+              <Button className="btn-action" size="small">
                 <BgColorsOutlined />
               </Button>
             </Dropdown>
           </Tooltip>
           <Tooltip title="Update">
             <Badge
-              count={modifiedRows.has(record.serial_no) ? 1 : 0}
+              count={modifiedRows.has(record.id_no) ? 1 : 0}
               style={{ backgroundColor: "#f5222d", marginRight: "10px" }}
             >
               <Button
                 onClick={() => handleUpdate(record)}
                 type="primary"
                 icon={<SaveOutlined />}
-                className="btn-action"
+                className="btn-action" size="small"
               />
             </Badge>
           </Tooltip>
@@ -551,7 +520,7 @@ const Survey = ({ theme }) => {
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
-        <h2>Survey Template</h2>
+        <h3 className="header-title">Survey Template</h3>
         <Button
           className="refresh-button"
           icon={<ReloadOutlined />}
@@ -563,6 +532,9 @@ const Survey = ({ theme }) => {
       </div>
 
       <div className="filter-container">
+        <div className="total-rows">
+          Industry Count: {formatNumber(filteredData.length)}
+        </div>
         <Input
           placeholder="Search..."
           prefix={<SearchOutlined />}
@@ -609,7 +581,7 @@ const Survey = ({ theme }) => {
               columns={columns}
               dataSource={filteredData}
               loading={tableLoading}
-              rowKey="serial_no"
+              rowKey="id_no"
               pagination={pagination}
               onChange={handleTableChange}
               onRow={(record) => ({
@@ -617,35 +589,12 @@ const Survey = ({ theme }) => {
                 onContextMenu: (e) => handleRowContextMenu(e, record),
               })}
               rowClassName={(record) => {
-                const color = selectedColor[record.serial_no];
+                const color = selectedColor[record.id_no];
                 return color ? `row-color-${color.replace("#", "")}` : "";
               }}
-              //rowSelection={rowSelection} // Add rowSelection to Table component
+              size="small"
+              className="custom-table"
             />
-            {/* {contextMenu && (
-              <Dropdown
-                overlay={menu}
-                visible={contextMenu.visible}
-                onClick={hideContextMenu}
-                trigger={["click"]}
-                overlayStyle={{
-                  position: "absolute",
-                  top: contextMenu.top,
-                  left: contextMenu.left,
-                }}
-              >
-                <Button
-                  type="link"
-                  style={{
-                    position: "absolute",
-                    top: contextMenu.top,
-                    left: contextMenu.left,
-                  }}
-                >
-                  <MoreOutlined />
-                </Button>
-              </Dropdown>
-            )} */}
           </Spin>
         )}
       </div>
@@ -655,7 +604,7 @@ const Survey = ({ theme }) => {
         title={
           <div className="modal-title-container">
             <span className="modal-title">
-              Firm No.: {selectedRow?.serial_no || "Unknown"}
+              Firm No.: {selectedRow?.id_no || "Unknown"}
             </span>
             <span className="modal-title">
               {selectedRow?.project_title || ""}

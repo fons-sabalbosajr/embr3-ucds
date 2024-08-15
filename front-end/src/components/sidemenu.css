@@ -20,7 +20,7 @@
 }
 
 .logo.collapsed .logo-icon {
-  margin-left: 10px; /* Adjust margin when sidebar is collapsed */
+  margin-left: -5px; /* Adjust margin when sidebar is collapsed */
 }
 
 .logo-icon-img {
@@ -34,9 +34,46 @@
   font-weight: 600;
   white-space: nowrap;
   background-color: transparent;
-  display: inline-block; /* Ensure text is block when not collapsed */
-  transition: opacity 0.3s ease; /* Add transition for smooth fade effect */
+  display: inline-block;
+  transition: opacity 0.3s ease;
   color: #959595;
+}
+
+.sider-container {
+  height: 100vh;
+  overflow: auto;
+}
+
+.sider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 16px;
+  margin-top: -10px;
+}
+
+.collapse-toggle-button {
+  margin-left: 23px;
+}
+
+.menu-container {
+  margin-top: 16px; /* Adjust this if needed to provide spacing */
+}
+
+.menu-bar-item {
+  padding: 0 16px; /* Adjust padding as needed */
+  font-size: 11px; /* Set font size for menu items */
+}
+
+.link-menu {
+  display: flex;
+  align-items: center;
+  font-size: 12px; /* Set font size for links */
+}
+
+.link-menu-hover:hover {
+  color: #1890ff;
+  
 }
 
 .logo.collapsed .logo-icon-text {
@@ -54,4 +91,11 @@
 
 .light-theme-icon img {
   filter: invert(0%);
+}
+
+
+.menu-container .ant-menu-item,
+.menu-container .ant-menu-submenu-title,
+.menu-container .link-menu-hover {
+  font-size: 12px;
 }

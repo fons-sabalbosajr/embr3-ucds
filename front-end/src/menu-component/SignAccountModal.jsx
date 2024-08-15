@@ -3,8 +3,10 @@ import { Modal, Avatar, Input, Button, Divider, Tooltip } from "antd";
 import AvatarSelectionModal from "../components/AvatarSelectionModalProfile";
 import { UserOutlined, UploadOutlined } from "@ant-design/icons";
 import "./signaccountmodal.css";
+import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
 import Swal from "sweetalert2";
+import emailjs from "emailjs-com"; // Add this import
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -21,7 +23,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
   const [generateUsername, setGenerateUsername] = useState("");
   const [generatePassword, setGeneratePassword] = useState("");
   const [approving, setApproving] = useState(false);
-  const [selectedAvatar, setSelectedAvatar] = useState(null); // State to store selected avatar URL
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
   const fetchPassword = async () => {
     try {
       const response = await axios.get(
-        " https://embr3-ucds.onrender.com/api/generate-password"
+        "https://embr3-ucds.onrender.com/api/generate-password"
       );
       const { password } = response.data;
       setGeneratePassword(password);
@@ -44,8 +46,8 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
 
   useEffect(() => {
     if (user) {
-      const firstName = user.name.split(" ")[0]; // Assuming first part is first name
-      const lastName = user.name.split(" ")[1]; // Assuming second part is last name
+      const firstName = user.name.split(" ")[0];
+      const lastName = user.name.split(" ")[1];
       const firstLetter = firstName.charAt(0).toLowerCase();
       const surname = lastName.toLowerCase();
       const username = `${firstLetter}${surname}`;
@@ -74,7 +76,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
 
         // Step 1: Add user to 'users' collection
         const userResponse = await axios.post(
-          " https://embr3-ucds.onrender.com/api/newusers",
+          "https://embr3-ucds.onrender.com/api/newusers",
           {
             name,
             email,
@@ -89,7 +91,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
 
         // Step 2: Update status in 'sign-up' collection
         const updateResponse = await axios.put(
-          ` https://embr3-ucds.onrender.com/api/status/${response.data.user._id}`
+          `https://embr3-ucds.onrender.com/api/status/${user._id}`
         );
 
         console.log(
@@ -99,10 +101,13 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
 
         // Handle success based on both requests
         if (userResponse.status === 201 && updateResponse.status === 200) {
+          // Send credentials email to the user
+          await sendCredentialsEmail(email, username, password);
+
           Swal.fire({
             icon: "success",
             title: "Success!",
-            text: "User saved and approved successfully.",
+            text: "User saved and approved successfully. Credentials have been sent to the user's email.",
           });
           onCancel(); // Close the modal after successful save
         } else {
@@ -116,25 +121,15 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
       } catch (error) {
         console.error("Error saving user:", error);
 
-        // Check if the error response indicates user was saved
-        if (error.response && error.response.data && error.response.data.user) {
-          Swal.fire({
-            icon: "success",
-            title: "Success!",
-            text: "User saved successfully despite an error.",
-          });
-          onCancel(); // Close the modal after successful save
-        } else {
-          Swal.fire({
-            icon: "error",
-            title: "Error!",
-            text: `Failed to save user. ${
-              error.response
-                ? error.response.data.error
-                : "Please check server logs for details."
-            }`,
-          });
-        }
+        Swal.fire({
+          icon: "error",
+          title: "Error!",
+          text: `Failed to save user. ${
+            error.response
+              ? error.response.data.error
+              : "Please check server logs for details."
+          }`,
+        });
       } finally {
         setApproving(false); // Reset loading state
       }
@@ -144,9 +139,38 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
     }
   };
 
-  const handleAvatarSelect = (avatarUrl) => {
-    setSelectedAvatar(avatarUrl); // Update selectedAvatar state with the chosen URL
+  const sendCredentialsEmail = async (email, username, password) => {
+    // Environment variables
+    const serviceId = "service_0etqm0f";
+    const templateId = "template_b72q5bm";
+    const publicKey = "bgYF-06ZE7QHB5_lJ";
+
+    if (!serviceId || !templateId || !publicKey) {
+      console.error("Missing EmailJS configuration");
+      return;
+    }
+
+    const templateParams = {
+      to_email: email,
+      username,
+      password,
+    };
+
+    try {
+      await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      console.log("Credentials email sent successfully!");
+    } catch (error) {
+      console.error("Error sending credentials email:", error);
+    }
+  };
+
+  const handleAvatarSelect = (config) => {
+    setSelectedAvatar(config); // Store the entire configuration object
     setAvatarModalVisible(false); // Close the avatar selection modal
+  };
+
+  const handleAvatarUpload = (avatarUrl) => {
+    setSelectedAvatar({ src: avatarUrl });
   };
 
   return (
@@ -161,17 +185,9 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
         <div className="modal-content">
           <div className="avatar-section">
             {selectedAvatar ? (
-              <NiceAvatar
-                style={{ width: 150, height: 150 }}
-                src={selectedAvatar}
-                className="avatar"
-              />
+              <Avatar size={150} src={selectedAvatar.src} />
             ) : (
-              <Avatar
-                size={150}
-                icon={<UserOutlined />}
-                style={{ marginBottom: 10 }}
-              />
+              <Avatar size={150} icon={<UserOutlined />} />
             )}
             <Tooltip title="Change Avatar">
               <Button
@@ -231,7 +247,8 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
           <AvatarSelectionModal
             visible={avatarModalVisible}
             onCancel={() => setAvatarModalVisible(false)}
-            onSelectAvatar={handleAvatarSelect} // Pass handleAvatarSelect function as a prop
+            onSelect={handleAvatarSelect}
+            onUpload={handleAvatarUpload}
           />
         </div>
       )}

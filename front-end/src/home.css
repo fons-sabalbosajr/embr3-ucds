@@ -7,7 +7,7 @@
   font-family: "Poppins", sans-serif;
 }
 
-.container {
+.home-container {
   width: 100vw;
   display: flex;
   flex-direction: column;
@@ -62,9 +62,9 @@
   color: #fff !important;
 }
 
-.content {
+.home-content {
   display: grid;
-  grid-template-columns: 40% 60%; /* Adjust the percentages to set the widths */
+  grid-template-columns: 60% 60%; /* Adjust the percentages to set the widths */
   align-items: center;
   justify-content: center; /* Center content horizontally */
   width: 100%;
@@ -74,7 +74,7 @@
 }
 
 .text-content {
-  max-width: 70%;
+  max-width: 100%;
 }
 
 h1 {
@@ -115,6 +115,8 @@ h1 {
   max-width: 100%; /* Adjust as needed */
   display: flex;
   justify-content: center;
+  padding-left: 20px;
+  width: 200px;
 }
 
 .illustration {
@@ -122,6 +124,7 @@ h1 {
   height: auto;
   object-fit: contain;
   border-radius: 10px;
+  margin-left: 500px;
 }
 
 /* Media Queries */

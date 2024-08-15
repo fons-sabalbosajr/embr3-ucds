@@ -25,7 +25,7 @@ const Login = () => {
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
-
+  
     try {
       const response = await axios.post(
         `${backendUrl}/login`,
@@ -37,15 +37,14 @@ const Login = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          withCredentials: true,
+          withCredentials: true, // Ensure cookies are sent with the request
         }
       );
-
+  
       if (response.data?.status === "success") {
-        const { token, permission } = response.data;
-        localStorage.setItem("authToken", token);
+        const { permission } = response.data;
         localStorage.setItem("permission", JSON.stringify(permission)); // Store permissions in localStorage
-
+  
         message.success("Login successful!");
         navigate("/universe"); // Navigate to a protected route
       } else {
@@ -60,6 +59,7 @@ const Login = () => {
       setIsLoading(false);
     }
   };
+  
   
 
   return (

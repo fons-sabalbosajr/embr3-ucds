@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
 import { Form, Input, Row, Col, Typography, Card, Checkbox } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import SectionInCharge from "../../../components/SectionInCharge";
-import Inspectors from "../../../components/Inspectors";
+import SectionInCharge from "../../../components/Autocomplete/SectionInCharge";
+import Inspectors from "../../../components/Autocomplete/Inspectors";
 import moment from "moment";
 import dayjs from "dayjs";
 import "./focalperson.css";

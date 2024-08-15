@@ -4,47 +4,40 @@ import "./dashboard.css";
 import UserStatus from "../components/UserStatus/UserStatus";
 import Bulletin from "../components/Bulletin/Bulletin";
 import Calendar from "../components/Calendar/SystemCalendar";
-import Summary from "../components/Summary/Summary";
-import History from "../components/Summary/History";
+import Summary from "../components/History/History";
+import Activity from "../components/Summary/Activity"; // Updated import name
 
 const Dashboard = ({ avatar, name }) => {
   return (
-    <>
+    <div className="dashboard-container">
       <Row gutter={[16, 16]}>
-        <Col span={5} push={19}>
+        <Col xs={24} lg={19}>
           <div className="card">
-            <div className="card-body-bulletin">
-              <UserStatus avatar={avatar} name={name} />
-            </div>
+            <Bulletin />
           </div>
         </Col>
-        <Col span={19} pull={5}>
+        <Col xs={24} lg={5}>
           <div className="card">
-            <div className="card-body-users">
-              <Bulletin />
-            </div>
+            <UserStatus avatar={avatar} name={name} />
           </div>
         </Col>
       </Row>
-
       <Row gutter={[16, 16]} className="row-gap">
-        <Col span={7} push={17}>
-          <div className="card">
-            <div className="card-body-calendar">
-              <Summary />
-              <History />
-            </div>
+        <Col xs={24} lg={17}>
+          <div className="card-bottom">
+            <Calendar />
           </div>
         </Col>
-        <Col span={17} pull={7}>
-          <div className="card">
-            <div className="card-history">
-            <Calendar />
-            </div>
+        <Col xs={24} lg={7} className="right-column">
+          <div className="card-bottom">
+            <Activity />
+          </div>
+          <div className="card-changes">
+            <Summary />
           </div>
         </Col>
       </Row>
-    </>
+    </div>
   );
 };
 

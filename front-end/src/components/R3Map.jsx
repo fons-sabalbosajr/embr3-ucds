@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { Card, Row, Col, Button, Alert, Spin } from 'antd';
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyBQSWuvJx6N7wQ2adHqBEdNyurA3G9-ogc"; // Replace with your actual API key
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const mapContainerStyle = {
   width: '100%',

@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Table, Button, Typography, Space, Modal, Badge } from 'antd';
 import {
-  ExclamationCircleOutlined,
-  InfoCircleFilled,
-  WarningFilled,
-  BellFilled,
-  CheckCircleOutlined, // Icon for read announcements
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import moment from "moment";
 import "./bulletin.css";
-
-const { Title } = Typography;
 
 const Bulletin = () => {
   const [bulletins, setBulletins] = useState([]);
@@ -43,25 +37,19 @@ const Bulletin = () => {
     fetchData();
   }, [dontShowAgainIds]);
 
-  const iconMap = {
-    alerts: <ExclamationCircleOutlined style={{ color: "rgb(236, 71, 71)" }} />,
-    information: <InfoCircleFilled style={{ color: "rgb(54, 138, 223)" }} />,
-    warning: <WarningFilled style={{ color: "orange" }} />,
-    announcement: <BellFilled style={{ color: "green" }} />,
-  };
-
   const columns = [
     {
       title: "Date",
       dataIndex: "createdDate",
       key: "createdDate",
       align: "left",
+      width: 120,
       render: (createdDate, record) => (
         <div style={{ display: 'flex', alignItems: 'center' }}>
           {!record.isRead && !dontShowAgainIds.has(record._id) && (
             <Badge.Ribbon text="New" color="red" style={{ marginRight: 8 }} />
           )}
-          <span>{moment(createdDate).format("MMMM DD, YYYY hh:mm a")}</span>
+          <span className="data-label">{moment(createdDate).format("MMMM DD, YYYY hh:mm a")}</span>
         </div>
       ),
     },
@@ -73,7 +61,8 @@ const Bulletin = () => {
         <div>
           <Typography.Text 
             strong={!record.isRead}
-            style={{ color: record.isRead ? "gray" : "black" }} // Conditional styling
+            style={{ color: record.isRead ? "gray" : "black" }}
+            className="data-title" // Conditional styling
           >
             {record.isRead ? (
               <>
@@ -85,7 +74,7 @@ const Bulletin = () => {
             )}
           </Typography.Text>
           <br />
-          <Typography.Text>{record.message}</Typography.Text>
+          <Typography.Text className="data-label">{record.message}</Typography.Text>
         </div>
       ),
     },
@@ -133,12 +122,13 @@ const Bulletin = () => {
 
   return (
     <div className="bulletin-content">
-      <Title level={2} className="calendar-title">Bulletin Table</Title>
+      <h3 className="bulletin-title">Bulletin Board</h3>
       <Table
         columns={columns}
         dataSource={bulletins}
-        pagination={{ pageSize: 5 }} // Limit rows per page
+        pagination={{ pageSize: 2 }} // Limit rows per page
         rowKey="_id" // Ensure unique key for rows
+        size="small"
       />
       <Modal
         title="Bulletin Details"

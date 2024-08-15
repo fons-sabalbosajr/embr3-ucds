@@ -1,19 +1,22 @@
-import React from "react";
-import { ConfigProvider, Layout, Menu } from "antd";
+import React, { useState } from "react";
+import { ConfigProvider, Layout, Menu, Button } from "antd";
 import {
   DashboardFilled,
   CheckCircleFilled,
   PushpinFilled,
-  DownCircleFilled,
   SettingFilled,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from "@ant-design/icons";
 import Logo from "./Logo";
 import "./sidemenu.css";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const { Sider } = Layout;
+const { SubMenu } = Menu;
 
-const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
+const SideMenu = ({ theme, permissions }) => {
+  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -21,17 +24,14 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
     setCollapsed(collapsed);
   };
 
-  //console.log("Permissions:", permissions);
-
   const isMenuSelected = (path) => {
     return location.pathname.includes(path);
   };
 
   const handleExportDataClick = () => {
-    navigate("/universe/exportdata"); // navigate to Export Data
+    navigate("/universe/exportdata"); // Navigate to Export Data
   };
 
-  // Check localStorage for permissions
   const storedPermissions =
     JSON.parse(localStorage.getItem("permission")) || [];
   const showAdminMenu =
@@ -40,130 +40,147 @@ const SideMenu = ({ theme, collapsed, setCollapsed, permissions }) => {
 
   return (
     <Sider
-      collapsible
       collapsed={collapsed}
       onCollapse={onCollapse}
       theme={theme}
-      width={230}
+      width={220}
+      className="sider-container"
+      trigger={null} // Remove default collapse trigger
     >
-      <Logo theme="dark" collapsed={collapsed} />
+      <div className="sider-header">
+        <Logo theme={theme} collapsed={collapsed} />
+      </div>
 
+      <div>
+        <Button
+          type="primary"
+          onClick={() => setCollapsed(!collapsed)}
+          className="collapse-toggle-button"
+          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          size="small"
+        />
+      </div>
       <ConfigProvider>
-        <div className="menu-bar-container">
-          <Menu theme={theme} defaultSelectedKeys={["1"]} mode="inline">
-            <Menu.Item
-              key="1"
-              icon={<DashboardFilled />}
-              className="menu-bar-item"
-            >
-              <Link to="/universe/dashboard" className="link-menu">
-                Dashboard
+        <Menu
+          theme={theme}
+          defaultSelectedKeys={["1"]}
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          inlineCollapsed={collapsed}
+          className="menu-container"
+        >
+          <Menu.Item
+            key="/universe/dashboard"
+            icon={<DashboardFilled />}
+            className="menu-bar-item"
+          >
+            <Link to="/universe/dashboard" className="link-menu">
+              Dashboard
+            </Link>
+          </Menu.Item>
+
+          <SubMenu
+            key="r3-monitoring"
+            icon={<CheckCircleFilled />}
+            title="R3 Monitoring Plan"
+          >
+            {[
+              "Aurora",
+              "Bataan",
+              "Bulacan",
+              "Nueva_Ecija",
+              "Pampanga",
+              "Tarlac",
+              "Zambales",
+            ].map((province) => (
+              <Menu.Item key={`/universe/province/${province.toLowerCase()}`}>
+                <Link to={`/universe/province/${province.toLowerCase()}`} className="link-menu">
+                  {province}
+                </Link>
+              </Menu.Item>
+            ))}
+          </SubMenu>
+
+          <SubMenu key="reports" icon={<PushpinFilled />} title="Reports">
+            <Menu.Item key="/universe/survey">
+              <Link
+                to="/universe/survey"
+                className={`link-menu-hover ${
+                  isMenuSelected("survey") ? "selected" : ""
+                }`}
+              >
+                Survey List
               </Link>
             </Menu.Item>
+            <Menu.Item key="/universe/mbu">
+              <Link
+                to="/universe/mbu"
+                className={`link-menu-hover ${
+                  isMenuSelected("mbu") ? "selected" : ""
+                }`}
+              >
+                Manila Bay Unit
+              </Link>
+            </Menu.Item>
+            <Menu.Item key="/universe/extract">
+              <Link
+                to="/universe/extract"
+                className={`link-menu-hover ${
+                  isMenuSelected("extract") ? "selected" : ""
+                }`}
+              >
+                Extract Data
+              </Link>
+            </Menu.Item>
+            <Menu.Item key="/universe/report">
+              <Link
+                to="/universe/report"
+                className={`link-menu-hover ${
+                  isMenuSelected("report") ? "selected" : ""
+                }`}
+              >
+                Generate Report
+              </Link>
+            </Menu.Item>
+          </SubMenu>
 
-            <Menu.SubMenu
-              key="2"
-              icon={<CheckCircleFilled />}
-              title="R3 Monitoring Plan"
-            >
-              {[
-                "Aurora",
-                "Bataan",
-                "Bulacan",
-                "Nueva_Ecija",
-                "Pampanga",
-                "Tarlac",
-                "Zambales",
-              ].map((province) => (
-                <Menu.Item key={province.toLowerCase()}>
-                  <Link to={`/universe/province/${province.toLowerCase()}`}>
-                    {province}
-                  </Link>
-                </Menu.Item>
-              ))}
-            </Menu.SubMenu>
-
-            <Menu.SubMenu key="3" icon={<PushpinFilled />} title="Reports">
-              <Menu.Item key="subreports-1">
+          {showAdminMenu && (
+            <SubMenu key="admin" icon={<SettingFilled />} title="Admin">
+              <Menu.Item key="/universe/accounts">
                 <Link
-                  to="/universe/survey"
+                  to="/universe/accounts"
                   className={`link-menu-hover ${
-                    isMenuSelected("survey") ? "selected" : ""
+                    isMenuSelected("accounts") ? "selected" : ""
                   }`}
                 >
-                  Survey List
+                  User Accounts
                 </Link>
               </Menu.Item>
-              <Menu.Item key="subreports-2">
+
+              <Menu.Item key="/universe/posting">
                 <Link
-                  to="/universe/mbu"
+                  to="/universe/posting"
                   className={`link-menu-hover ${
-                    isMenuSelected("mbu") ? "selected" : ""
+                    isMenuSelected("posting") ? "selected" : ""
                   }`}
                 >
-                  Manila Bay Unit
+                  Post to Bulletin
                 </Link>
               </Menu.Item>
-              <Menu.Item key="subreports-3">
+
+              <Menu.Item key="/universe/activitylog">
                 <Link
-                  to="/universe/extract"
+                  to="/universe/activitylog"
                   className={`link-menu-hover ${
-                    isMenuSelected("extract") ? "selected" : ""
+                    isMenuSelected("activitylog") ? "selected" : ""
                   }`}
                 >
-                  Extract Data
+                  Activity Logs
                 </Link>
               </Menu.Item>
-              <Menu.Item key="subreports-4">
-                <Link
-                  to="/universe/report"
-                  className={`link-menu-hover ${
-                    isMenuSelected("report") ? "selected" : ""
-                  }`}
-                >
-                  Generate Report
-                </Link>
-              </Menu.Item>
-            </Menu.SubMenu>
-
-            {showAdminMenu && (
-              <Menu.SubMenu key="admin" icon={<SettingFilled />} title="Admin">
-                <Menu.Item key="admin-1">
-                  <Link
-                    to="/universe/accounts"
-                    className={`link-menu-hover ${
-                      isMenuSelected("accounts") ? "selected" : ""
-                    }`}
-                  >
-                    User Accounts
-                  </Link>
-                </Menu.Item>
-
-                <Menu.Item key="admin-2">
-                  <Link
-                    to="/universe/posting"
-                    className={`link-menu-hover ${
-                      isMenuSelected("posting") ? "selected" : ""
-                    }`}
-                  >
-                    Post to Bulletin
-                  </Link>
-                </Menu.Item>
-
-                <Menu.Item key="admin-3">
-                  <Link
-                    to="/universe/activitylog"
-                    className={`link-menu-hover ${
-                      isMenuSelected("activitylog") ? "selected" : ""
-                    }`}
-                  >
-                    Activity Logs
-                  </Link>
-                </Menu.Item>
-              </Menu.SubMenu>
-            )}
-          </Menu>
-        </div>
+            </SubMenu>
+          )}
+        </Menu>
       </ConfigProvider>
     </Sider>
   );

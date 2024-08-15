@@ -25,8 +25,6 @@ import "./permits.css";
 import moment from "moment";
 import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
-import { PlusOutlined, MinusOutlined } from "@ant-design/icons";
-import PermitSource from "../../../components/PermitSource";
 
 const { Option } = Select;
 const { TabPane } = Tabs;

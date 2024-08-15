@@ -4,30 +4,77 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+import emailjs from "emailjs-com";
 import homelogo from "./assets/emblogomenu.png";
 import { LoadingOutlined } from "@ant-design/icons";
-import './register.css';
+import "./register.css";
 
 const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const MySwal = withReactContent(Swal);
 
+  // Environment variables
+  const serviceId = "service_0etqm0f";
+  const templateId = "template_inuuzin";
+  const publicKey = "bgYF-06ZE7QHB5_lJ";
+
+
+  // Function to send email using emailjs-com
+  const sendEmail = async (formData) => {
+    if (!serviceId || !templateId || !publicKey) {
+      console.error("Missing EmailJS configuration");
+      MySwal.fire({
+        icon: "error",
+        title: "Configuration Error",
+        text: "EmailJS configuration is missing. Please contact support.",
+      });
+      return;
+    }
+
+    try {
+      const response = await emailjs.send(serviceId, templateId, formData, publicKey);
+      console.log("Email sent successfully:", response);
+    } catch (error) {
+      console.error("Error sending email:", error);
+      MySwal.fire({
+        icon: "error",
+        title: "Email Sending Failed",
+        text: "There was an issue sending the email. Please try again later.",
+      });
+    }
+  };
+
   const onFinish = async (values) => {
     setIsLoading(true);
+
     try {
       const response = await axios.post(
-        "https://embr3-ucds.onrender.com/register" ||
-          " https://embr3-ucds.onrender.com/register",
+        "https://embr3-ucds.onrender.com/register",
         {
           name: values.name,
           division: values.division,
           position: values.position,
           email: values.email,
-        }
+        },
+        { withCredentials: true }
       );
 
       if (response.status === 201) {
+        // Prepare the email form data for system email
+        const formData = {
+          to_email: "emb.idms@gmail.com", // System email address
+          from_name: values.name,
+          to_name: "Admin", // Optional, use if needed in your template
+          name: values.name,
+          division: values.division,
+          position: values.position,
+          email: values.email,
+        };
+
+        // Send the email
+        await sendEmail(formData);
+
         MySwal.fire({
           icon: "info",
           title: "Registration submitted for approval",
@@ -43,7 +90,7 @@ const Register = () => {
         });
       }
     } catch (error) {
-      console.error('Error response:', error.response);
+      console.error("Error response:", error.response);
       MySwal.fire({
         icon: "error",
         title: "Registration failed",
@@ -133,7 +180,9 @@ const Register = () => {
               </Button>
             </Form.Item>
             <Link to="/login">
-              <Button block size="large">Back to Log In</Button>
+              <Button block size="large">
+                Back to Log In
+              </Button>
             </Link>
           </Form>
         </div>

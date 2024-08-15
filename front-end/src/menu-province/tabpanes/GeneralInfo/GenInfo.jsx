@@ -7,9 +7,9 @@ import {
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import "./geninfo.css";
-import IndustryClass from "../../../components/IndustryClass";
-import IndustryType from "../../../components/IndustryType";
-import IndustrySubType from "../../../components/IndustrySubType";
+import IndustryClass from "../../../components/Autocomplete/IndustryClass";
+import IndustryType from "../../../components/Autocomplete/IndustryType";
+import IndustrySubType from "../../../components/Autocomplete/IndustrySubType";
 
 const { Paragraph } = Typography;
 
@@ -24,6 +24,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("title", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>
@@ -33,6 +34,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("name", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
 
@@ -88,6 +90,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("lat", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="textbox-label"
               />
             </Paragraph>
           </Col>
@@ -99,6 +102,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("long", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="textbox-label"
               />
             </Paragraph>
           </Col>
@@ -113,6 +117,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("address", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>
@@ -122,6 +127,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("street", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>
@@ -131,6 +137,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("brgy", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>
@@ -140,6 +147,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("city", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>
@@ -149,6 +157,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("province", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
 
@@ -161,10 +170,9 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                onChange={(e) => handleChange("cong_district", e.target.value)}
                disabled={!isEditing}
                placeholder="No data"
+               className="textbox-label"
               />
             </Paragraph>
-          </Col>
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
           </Col>
         </Row>
       </Col>

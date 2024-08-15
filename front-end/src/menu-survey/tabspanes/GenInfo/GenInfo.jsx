@@ -1,9 +1,9 @@
 import React, { useEffect } from "react";
 import { Form, Input, Row, Col, Typography, Checkbox } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import IndustryClass from "../../../components/IndustryClass"; // Adjust the import path as needed
-import IndustryType from "../../../components/IndustryType"; // Adjust the import path as needed
-import IndustrySubType from "../../../components/IndustrySubType"; // Adjust the import path as needed
+import IndustryClass from "../../../components/Autocomplete/IndustryClass"
+import IndustryType from "../../../components/Autocomplete/IndustryType"; // Adjust the import path as needed
+import IndustrySubType from "../../../components/Autocomplete/IndustrySubType"; // Adjust the import path as needed
 import "./geninfo.css"; // Ensure this CSS file exists
 
 const { Paragraph } = Typography;

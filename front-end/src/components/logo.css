@@ -2,5 +2,6 @@
     width: 200px; /* Adjust this value as needed */
     height: 200px; /* Adjust this value as needed */
     object-fit: contain; /* This ensures the image maintains its aspect ratio */
+    background-color: transparent;
   }
   

@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Layout, Button, Avatar, Spin, Popover, List } from "antd";
+import NiceAvatar from "react-nice-avatar"; 
+import { Layout, Button, Avatar, Spin, Popover, List, message } from "antd";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import Dashboard from "./menu-component/Dashboard";
 import Province from "./menu-province/Province";
 import Survey from "./menu-survey/Survey";
-import MBU from "./menu-component/MBU";
+import MBU from "./menu-mbu/MBU";
 import Admin from "./menu-component/Admin";
 import Accounts from "./menu-component/UserAccounts";
 import Extract from "./menu-extract/ExtractData";
-import Report from "./menu-component/AdminReport";
+import Report from "./menu-component/Admin";
 import Posting from "./menu-component/Posting";
 import "./index.css";
 import { DataProvider } from "./menu-province/DataContext";
@@ -18,7 +19,8 @@ import UserPopover from "./components/PopOverUser";
 import NotificationsPopover from "./components/PopOverNotification";
 import SideMenu from "./components/SideMenu";
 import AvatarWithName from "./components/AvatarwithName";
-import ActivityLog from "./menu-component/ActivityLog";
+import ActivityLog from "./components/ActivityLog/ActivityLog";
+import Z_CustomSpinner from "./Z_CustomSpinner";
 
 const { Header, Content } = Layout;
 
@@ -33,9 +35,16 @@ const Universe = () => {
   const [userHandle, setUserHandle] = useState("");
   const [selection, setSelection] = useState("");
   const [permissions, setPermissions] = useState([]);
-  const [avatar, setAvatar] = useState(null);
+  const [avatar, setAvatar] = useState("default-avatar-url");
+  const [errorMessage, setErrorMessage] = useState("");
 
   axios.defaults.withCredentials = true;
+
+  const getInitials = (name) => {
+    const splitName = name.split(" ");
+    const initials = splitName.map((part) => part[0].toUpperCase());
+    return initials.join("");
+  };
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -52,75 +61,100 @@ const Universe = () => {
     setSelection(key);
   };
 
-  const handleLogout = () => {
-    axios
-      .get(" https://embr3-ucds.onrender.com/logout", { withCredentials: true })
-      .then((res) => {
-        if (res.data.status === "Logout Success") {
-          localStorage.removeItem("authToken");
-          localStorage.removeItem("permissions");
-          localStorage.removeItem("permission");
-
-          setAuth(false);
-          navigate("/login", { replace: true });
-        } else {
-          console.error("Unexpected response during logout:", res.data);
-        }
-      })
-      .catch((err) => {
-        console.error("Error during logout:", err.message);
-      });
+  const handleLogout = async () => {
+    try {
+      const response = await axios.post(
+        "https://embr3-ucds.onrender.com/logout",
+        {},
+        { withCredentials: true }
+      );
+      if (response.status === 200) {
+        localStorage.removeItem("permission");
+        navigate("/login"); // Redirect to login page after logout
+      } else {
+        console.error("Unexpected response status:", response.status);
+        message.error("Logout failed. Please try again.");
+      }
+    } catch (error) {
+      console.error(
+        "Error during logout:",
+        error.response ? error.response.data : error.message
+      );
+      message.error("Logout failed. Please try again.");
+    }
   };
 
-  const getInitials = (name) => {
-    const splitName = name.split(" ");
-    const initials = splitName.map((part) => part[0].toUpperCase());
-    return initials.join("");
+  const handleRetry = () => {
+    setLoading(true);
+    setErrorMessage("");
+    fetchAuthStatus();
+  };
+
+  const handleHelp = () => {
+    alert("Help requested!");
+  };
+
+  const fetchAuthStatus = async () => {
+    try {
+      const res = await axios.get("https://embr3-ucds.onrender.com/check-auth", {
+        withCredentials: true,
+      });
+
+      if (res.data.status === "Success") {
+        setAuth(true);
+
+        // Ensure `division` is defined before splitting
+        const divisionParts = (res.data.division || "").split("/");
+        const formattedName = `${divisionParts[0]} | ${res.data.name}`;
+
+        setName(formattedName);
+        setUserHandle(res.data.username || "Unknown User");
+        setNotifications(res.data.notifications || []);
+        setPermissions(res.data.permissions || []);
+        localStorage.setItem(
+          "permissions",
+          JSON.stringify(res.data.permissions || [])
+        );
+
+        // Fetch user avatar
+        try {
+          const avatarRes = await axios.get(
+            "https://embr3-ucds.onrender.com/api/user/avatar",
+            {
+              params: { name: res.data.username }, // Ensure you are sending the correct name
+            }
+          );
+
+          if (avatarRes.data.avatar) {
+            setAvatar(avatarRes.data.avatar);
+          } else {
+            console.warn("Avatar not found, setting default avatar.");
+            setAvatar(null); // Set to null to trigger default avatar
+          }
+        } catch (avatarError) {
+          console.error("Error fetching avatar:", avatarError.message);
+          setAvatar(null); // Set to null to trigger default avatar
+        }
+      } else {
+        setAuth(false);
+        navigate("/login", { replace: true });
+      }
+    } catch (err) {
+      console.error("Error fetching auth status:", err.message);
+      setErrorMessage(
+        "Error fetching authentication status. Please try again."
+      );
+      setAuth(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    axios
-      .get("https://embr3-ucds.onrender.com", { withCredentials: true })
-      .then((res) => {
-        if (res.data.status === "Success") {
-          setAuth(true);
-          const divisionParts = res.data.division.split("/");
-          const formattedName = `${divisionParts[0]} | ${res.data.name}`;
-          setName(formattedName);
-          setUserHandle(res.data.username);
-          setNotifications(res.data.notifications || []);
-          setPermissions(res.data.permissions || []);
-          localStorage.setItem(
-            "permissions",
-            JSON.stringify(res.data.permissions || [])
-          );
-
-          // Fetch user avatar
-          axios
-            .get("https://embr3-ucds.onrender.com/api/user/avatar", {
-              params: { name: res.data.name },
-            })
-            .then((response) => {
-              setAvatar(response.data.avatar);
-            })
-            .catch((error) => {
-              console.error("Error fetching user avatar:", error);
-            });
-        } else {
-          setAuth(false);
-          navigate("/login", { replace: true });
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching auth status:", err.message);
-        setAuth(false);
-        navigate("/login", { replace: true });
-      })
-      .finally(() => setLoading(false));
+    fetchAuthStatus();
   }, [navigate]);
 
   useEffect(() => {
-    // Fetch and set permissions from localStorage or API response
     const storedPermissions = JSON.parse(localStorage.getItem("permissions"));
     if (storedPermissions) {
       setPermissions(storedPermissions);
@@ -128,11 +162,7 @@ const Universe = () => {
   }, []);
 
   useEffect(() => {
-    const handleBeforeUnload = (event) => {
-      // Optional: Save necessary state or show a confirmation dialog here
-      // event.preventDefault();
-      // event.returnValue = '';
-    };
+    const handleBeforeUnload = (event) => {};
 
     window.addEventListener("beforeunload", handleBeforeUnload);
 
@@ -148,17 +178,23 @@ const Universe = () => {
     />
   );
 
-  if (loading) {
-    return <Spin spinning />;
+  if (loading || errorMessage) {
+    return (
+      <Z_CustomSpinner
+        errorMessage={errorMessage}
+        onRetry={handleRetry}
+        onHelp={handleHelp}
+      />
+    );
   }
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
+    <Layout className="layout-container">
       <SideMenu
         theme={theme}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-        permissions={permissions} // Pass permissions to SideMenu
+        permissions={permissions}
       />
 
       <Layout>
@@ -187,7 +223,6 @@ const Universe = () => {
                     <UserPopover
                       name={name}
                       userHandle={userHandle}
-                      theme={theme}
                       handleMenuItemClick={handleMenuItemClick}
                       navigate={navigate}
                       handleLogout={handleLogout}
@@ -199,11 +234,17 @@ const Universe = () => {
                   }
                   trigger="click"
                   placement="bottomRight"
-                  theme={theme === "light" ? "light" : "dark"}
+                  theme={theme === "dark" ? "dark-theme" : "light-theme"}
                   onVisibleChange={handleVisibleChange}
                 >
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <AvatarWithName avatar={avatar} />
+                  <div className="avatar-header">
+                    {avatar ? (
+                      <Avatar src={avatar} size={30} />
+                    ) : (
+                      <NiceAvatar
+                        style={{ width: 30, height: 30 }}
+                      />
+                    )}
                   </div>
                 </Popover>
 
@@ -226,7 +267,7 @@ const Universe = () => {
 
         <DataProvider>
           {auth && (
-            <Content style={{ padding: "24px", backgroundColor: "#F0F2F5" }}>
+            <Content className="content-container">
               <Spin spinning={!auth}>
                 <Routes>
                   <Route
@@ -248,10 +289,9 @@ const Universe = () => {
                   )}
                   <Route path="accounts" element={<Accounts />} />
                   <Route path="extract/*" element={<Extract />} />
-                  <Route path="report" element={<Report />} />
+                  <Route path="admin-report" element={<Report />} />
                   <Route path="posting" element={<Posting />} />
                   <Route path="activitylog" element={<ActivityLog />} />
-                  <Route path="*" element={<Navigate to="dashboard" />} />
                 </Routes>
               </Spin>
             </Content>

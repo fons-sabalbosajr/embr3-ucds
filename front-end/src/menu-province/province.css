@@ -34,6 +34,10 @@
   border-radius: 7px; /* Add border-radius for smooth edges */
 }
 
+.custom-table .ant-table-thead > tr > th {
+  font-size: 11px;
+}
+
 /* Header Panel */
 .header-panel {
   background-color: #fff;
@@ -56,11 +60,17 @@
   }
 }
 
+.header-title{
+  font-size: 15px;
+  color: #5a5a5a;
+  margin-bottom: 10px; 
+  font-weight: 600;
+}
+
 .add-industry-button {
   padding: 8px 16px;
   font-size: 14px;
   color: white;
-  background-color: #4057d6;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s ease;
@@ -248,7 +258,7 @@
 .refresh-button {
   margin-left: 10px; 
   align-items: flex-start;
-  margin-top: -20px;
+  margin-top: -10px;
   height: 30px;
   width: 30px;
 }
@@ -257,66 +267,78 @@
   background-color: #40a9ff; /* Darker background color on hover */
 }
 
-
 .permits-clearances-container {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
+
+
+
+
+
 .custom-button-green{
   background-color: #0b5f74;
   border: none;
   color: white;
-    
+  font-size: 9px;
 }
 
 .custom-button-yellow {
   background-color: #bc6e00;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-blue {
   background-color: #4a2250;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-orange {
   background-color: #b45248;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-skyblue {
   background-color: #415e20;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-brown {
   background-color: #542c14;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-stone {
   background-color: #242726;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-ash {
   background-color: #5e5d3e;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 .custom-button-slate {
   background-color: #263238;
   border: none;
   color: white;
+  font-size: 9px;
 }
 
 
@@ -336,6 +358,10 @@
   left: 0 !important; /* Ensure the menu aligns to the left of the button */
 }
 
+.industry-label{
+  font-size: 11px;
+}
+
 
 .row-red {
   background-color: #f8d7da !important; /* Use !important to ensure it overrides other styles */
@@ -350,11 +376,14 @@
   background-color: #fff3cd !important;
 }
 
-
-
-.ant-table-tbody > tr:hover {
-  background-color: inherit;
+.ant-table-tbody > tr > td:first-child {
+  width: 100px;
 }
+
+.custom-table .ant-table-tbody > tr {
+  transition: background-color 0.3s;
+}
+
 
 /* Media Queries for Responsiveness */
 @media (max-width: 768px) {
