@@ -40,7 +40,6 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const allowedOrigins = [
-  "https://66bd54886e53bb3309b85302--beautiful-choux-53998e.netlify.app",
   "https://beautiful-choux-53998e.netlify.app/",
   "http://localhost:5173",
 ];
@@ -99,12 +98,18 @@ async function connectToMongo() {
   }
 }
 
+connectToMongo().catch((error) => {
+  console.error("Error during MongoDB connection:", error);
+  process.exit(1); // Exit the process on failure
+});
+
 app.use(cookieParser());
 app.use(express.json());
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (allowedOrigins.includes(origin) || !origin) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -121,11 +126,10 @@ app.use(
     ],
     credentials: true,
     exposedHeaders: ["Set-Cookie"],
-    optionsSuccessStatus: 204,
     preflightContinue: false,
+    optionsSuccessStatus: 204,
   })
 );
-
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
@@ -199,10 +203,7 @@ app.use(
   })
 );
 
-connectToMongo().catch((error) => {
-  console.error("Error during MongoDB connection:", error);
-  process.exit(1); // Exit the process on failure
-});
+
 
 const logActivity = async (req, res, next) => {
   const { method, path, body } = req;
