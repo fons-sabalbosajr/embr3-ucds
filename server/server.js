@@ -88,27 +88,24 @@ connectToMongo().catch((error) => {
   process.exit(1);
 });
 
-// CORS configuration
+
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: allowedOrigins, // List of allowed origins
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "Origin",
-    "Accept",
-    "Cookie",
-    "Set-Cookie",
+      "Content-Type",
+      "Authorization",
+      "Origin",
+      "Accept",
+      "Cookie",
+      "Set-Cookie",
   ],
-  credentials: true,
+  credentials: true, // This must be true to allow cookies to be sent
   exposedHeaders: ["Set-Cookie"],
-  preflightContinue: false,
 };
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
-
-// Handle preflight requests
 app.options("*", cors(corsOptions));
 
 // Apply middleware for cookies and JSON parsing
@@ -168,6 +165,7 @@ app.use(
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      domain: ".onrender.com",
     },
   }),
   (req, res, next) => {
