@@ -40,9 +40,10 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const allowedOrigins = [
-  "https://66bd54886e53bb3309b85302--beautiful-choux-53998e.netlify.app/",
+  "https://66bd54886e53bb3309b85302--beautiful-choux-53998e.netlify.app",
   "http://localhost:5173",
 ];
+
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -118,15 +119,31 @@ app.use(
       "Set-Cookie",
     ],
     credentials: true,
-    exposeHeaders: ["Set-Cookie"],
-    preflightContinue: false,
+    exposedHeaders: ["Set-Cookie"],
     optionsSuccessStatus: 204,
+    preflightContinue: false,
   })
 );
+
 
 connectToMongo().catch(console.error);
 
 app.options("*", cors());
+app.options("*", (req, res) => {
+  res.set("Access-Control-Allow-Origin", req.headers.origin);
+  res.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+  );
+  res.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, Origin, Accept, Cookie, Set-Cookie"
+  );
+  res.set("Access-Control-Allow-Credentials", "true");
+  res.set("Access-Control-Expose-Headers", "Set-Cookie");
+  res.sendStatus(204);
+});
+
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
