@@ -344,12 +344,8 @@ const logActivity = async (req, res, next) => {
 module.exports = logActivity;
 
 app.use((req, res, next) => {
-  res.header(
-    "Access-Control-Allow-Origin",
-    "https://beautiful-choux-53998e.netlify.app"
-  );
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
 });
 
@@ -399,7 +395,15 @@ app.post("/login", async (req, res) => {
       .json({ status: "success", permission: user.permission });
   } catch (error) {
     console.error("Error during login:", error.message);
-    return res.status(500).json({ error: "An unexpected error occurred." });
+    if (error.message.includes("userCollection")) {
+      return res.status(500).json({ error: "Error querying user collection." });
+    } else if (error.message.includes("bcrypt.compare")) {
+      return res.status(500).json({ error: "Error comparing passwords." });
+    } else if (error.message.includes("loginStatusCollection")) {
+      return res.status(500).json({ error: "Error updating login status collection." });
+    } else {
+      return res.status(500).json({ error: "An unexpected error occurred." });
+    }
   }
 });
 
