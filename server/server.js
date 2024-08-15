@@ -90,7 +90,7 @@ connectToMongo().catch((error) => {
 
 
 const corsOptions = {
-  origin: allowedOrigins, // List of allowed origins
+  origin: ["https://boisterous-chimera-b199a3.netlify.app"],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
       "Content-Type",
@@ -168,11 +168,6 @@ app.use(
       domain: ".onrender.com",
     },
   }),
-  (req, res, next) => {
-    console.log("Session ID:", req.sessionID);
-    console.log("Session data:", req.session);
-    next();
-  }
 );
 
 // CORS setup with logging
