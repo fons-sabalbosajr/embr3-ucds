@@ -104,6 +104,7 @@ const corsOptions = {
   preflightContinue: false,
 };
 
+
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
@@ -113,6 +114,7 @@ app.options("*", cors(corsOptions));
 // Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
 app.use(express.json());
+
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
