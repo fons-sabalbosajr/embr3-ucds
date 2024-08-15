@@ -89,13 +89,7 @@ connectToMongo().catch((error) => {
 
 // CORS configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
@@ -342,12 +336,6 @@ const logActivity = async (req, res, next) => {
 };
 
 module.exports = logActivity;
-
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
-});
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
