@@ -88,20 +88,20 @@ connectToMongo().catch((error) => {
   process.exit(1);
 });
 
-
 const corsOptions = {
-  origin: ["https://boisterous-chimera-b199a3.netlify.app"],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Origin",
-      "Accept",
-      "Cookie",
-      "Set-Cookie",
+    "Content-Type",
+    "Authorization",
+    "Origin",
+    "Accept",
+    "Cookie",
+    "Set-Cookie",
   ],
-  credentials: true, // This must be true to allow cookies to be sent
+  credentials: true,
   exposedHeaders: ["Set-Cookie"],
+  preflightContinue: false,
 };
 
 // Apply CORS middleware
@@ -165,9 +165,8 @@ app.use(
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      domain: ".onrender.com",
     },
-  }),
+  })
 );
 
 // CORS setup with logging
@@ -369,13 +368,12 @@ app.post("/login", async (req, res) => {
       division: user.division,
     };
 
-    // Set the cookie to be secure and accessible across subdomains
     res.cookie("sessionId", req.sessionID, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Use secure cookies only in production
-      sameSite: "none", 
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       domain: ".onrender.com",
-      path: "/", 
+      path: "/",
     });
 
     // Save login status
@@ -486,12 +484,10 @@ app.get("/check-auth", async (req, res) => {
 });
 
 const authenticateSession = (req, res, next) => {
-  if (req.session.user) {
-    req.user = req.session.user;
-    next();
-  } else {
-    res.status(401).json({ error: "Unauthorized" });
+  if (req.session && req.session.user) {
+    return next();
   }
+  return res.status(401).json({ error: "Unauthorized" });
 };
 
 app.use(authenticateSession);
