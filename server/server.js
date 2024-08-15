@@ -16,6 +16,7 @@ const MongoStore = require("connect-mongo");
 const app = express();
 const PORT = process.env.PORT || 8081;
 
+
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
   return input
@@ -51,21 +52,6 @@ const client = new MongoClient(mongoUri, {
   ssl: true,
 });
 
-const collections = {
-  "app-logs": "app-logs",
-  "draft-reports": "draft-reports",
-  "encode-logs": "encode-logs",
-  "login-status": "login-status",
-  "pdfFiles.chunks": "pdfFiles.chunks",
-  "pdfFiles.files": "pdfFiles.files",
-  postings: "postings",
-  sessions: "sessions",
-  "sign-up": "sign-up",
-  "survey-data": "survey-data",
-  "ucds-data": "ucds-data",
-  users: "users",
-};
-
 let db;
 let userCollection;
 let signUpCollection;
@@ -94,57 +80,46 @@ async function connectToMongo() {
     activityLogsCollection = db.collection("app-logs");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
-    throw error; // Re-throw the error
+    throw error;
   }
 }
 
 connectToMongo().catch((error) => {
   console.error("Error during MongoDB connection:", error);
-  process.exit(1); // Exit the process on failure
+  process.exit(1);
 });
 
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Origin",
+    "Accept",
+    "Cookie",
+    "Set-Cookie",
+  ],
+  credentials: true,
+  exposedHeaders: ["Set-Cookie"],
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
 app.use(express.json());
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Origin",
-      "Accept",
-      "Cookie",
-      "Set-Cookie",
-    ],
-    credentials: true,
-    exposedHeaders: ["Set-Cookie"],
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-  })
-);
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, Origin, Accept, Cookie, Set-Cookie"
-  );
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Expose-Headers", "Set-Cookie");
-  next();
-});
+
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -188,6 +163,7 @@ const sessionStore = MongoStore.create({
   collectionName: "sessions",
 });
 
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -202,7 +178,6 @@ app.use(
     },
   })
 );
-
 
 
 const logActivity = async (req, res, next) => {
