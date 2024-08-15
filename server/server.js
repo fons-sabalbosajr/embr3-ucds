@@ -173,6 +173,19 @@ app.use(
   })
 );
 
+
+const authenticateSession = (req, res, next) => {
+  if (req.session.user) {
+    req.user = req.session.user;
+    next();
+  } else {
+    res.status(401).json({ error: "Unauthorized" });
+  }
+};
+
+
+app.use(authenticateSession);
+
 const logActivity = async (req, res, next) => {
   const { method, path, body } = req;
 
@@ -384,16 +397,8 @@ app.post("/login", async (req, res) => {
       .status(200)
       .json({ status: "success", permission: user.permission });
   } catch (error) {
-    console.error("Error during login:", error.message);
-    if (error.message.includes("userCollection")) {
-      return res.status(500).json({ error: "Error querying user collection." });
-    } else if (error.message.includes("bcrypt.compare")) {
-      return res.status(500).json({ error: "Error comparing passwords." });
-    } else if (error.message.includes("loginStatusCollection")) {
-      return res.status(500).json({ error: "Error updating login status collection." });
-    } else {
-      return res.status(500).json({ error: "An unexpected error occurred." });
-    }
+    console.error("Error during login:", error);
+    return res.status(500).json({ error: "An unexpected error occurred." });
   }
 });
 
@@ -440,7 +445,7 @@ app.post("/logout", logActivity, async (req, res) => {
 // Check auth route
 app.get("/check-auth", (req, res) => {
   // Debugging line
-  // console.log('Session data:', req.session.user);
+  console.log('Session data:', req.session.user);
 
   if (req.session.user) {
     res.json({
@@ -455,17 +460,6 @@ app.get("/check-auth", (req, res) => {
     res.status(401).send({ message: "User not authenticated" });
   }
 });
-
-const authenticateSession = (req, res, next) => {
-  if (req.session.user) {
-    req.user = req.session.user;
-    next();
-  } else {
-    res.status(401).json({ error: "Unauthorized" });
-  }
-};
-
-app.use(authenticateSession);
 
 // POST /api/newusers - Create a new user with password encryption
 app.post("/api/newusers", async (req, res) => {

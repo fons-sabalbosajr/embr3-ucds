@@ -52,9 +52,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error("Error during login:", error);
-      const errorMessage =
-        error.response?.data?.error || "An unexpected error occurred.";
-      setError(errorMessage);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
     }
