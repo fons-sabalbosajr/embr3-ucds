@@ -105,11 +105,6 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-// app.use(cors(corsOptions, (req, res, next) => {
-//   console.log(`CORS request from ${req.headers.origin}`);
-//   next();
-// }));
-
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
@@ -169,11 +164,24 @@ app.use(
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Use true if you have HTTPS
+      secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     },
+  }),
+  (req, res, next) => {
+    console.log("Session ID:", req.sessionID);
+    console.log("Session data:", req.session);
+    next();
+  }
+);
+
+// CORS setup with logging
+app.use(
+  cors(corsOptions, (req, res, next) => {
+    console.log(`CORS request from ${req.headers.origin}`);
+    next();
   })
 );
 
@@ -368,12 +376,13 @@ app.post("/login", async (req, res) => {
       division: user.division,
     };
 
+    // Set the cookie to be secure and accessible across subdomains
     res.cookie("sessionId", req.sessionID, {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
+      secure: process.env.NODE_ENV === "production", // Use secure cookies only in production
+      sameSite: "none", 
       domain: ".onrender.com",
-      path: "/",
+      path: "/", 
     });
 
     // Save login status
@@ -453,12 +462,13 @@ app.get("/check-auth", async (req, res) => {
     return res.status(401).send({ message: "User not authenticated" });
   }
 
-  
   if (req.session.user) {
     console.log("User is authenticated");
     try {
       // Verify the user's details
-      const user = await userCollection.findOne({ _id: req.session.user.userId });
+      const user = await userCollection.findOne({
+        _id: req.session.user.userId,
+      });
       if (!user) {
         console.log("User not found in database");
         // Remove the session user data to prevent further unauthorized access
