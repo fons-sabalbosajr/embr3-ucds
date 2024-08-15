@@ -40,7 +40,8 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const allowedOrigins = [
-  "https://beautiful-choux-53998e.netlify.app/",
+  "https://jovial-trifle-8f0cce.netlify.app",
+  "https://66bd94850d0bf56a0154d8ce--jovial-trifle-8f0cce.netlify.app",
   "http://localhost:5173",
 ];
 
@@ -104,12 +105,16 @@ const corsOptions = {
   preflightContinue: false,
 };
 
+app.use(cors(corsOptions, (req, res, next) => {
+  console.log(`CORS request from ${req.headers.origin}`);
+  next();
+}));
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
 // Handle preflight requests
-app.options("*", cors(corsOptions));
+//app.options("*", cors(corsOptions));
 
 // Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
@@ -172,19 +177,6 @@ app.use(
     },
   })
 );
-
-
-const authenticateSession = (req, res, next) => {
-  if (req.session.user) {
-    req.user = req.session.user;
-    next();
-  } else {
-    res.status(401).json({ error: "Unauthorized" });
-  }
-};
-
-
-app.use(authenticateSession);
 
 const logActivity = async (req, res, next) => {
   const { method, path, body } = req;
@@ -445,7 +437,7 @@ app.post("/logout", logActivity, async (req, res) => {
 // Check auth route
 app.get("/check-auth", (req, res) => {
   // Debugging line
-  console.log('Session data:', req.session.user);
+  //console.log('Session data:', req.session.user);
 
   if (req.session.user) {
     res.json({
@@ -460,6 +452,26 @@ app.get("/check-auth", (req, res) => {
     res.status(401).send({ message: "User not authenticated" });
   }
 });
+
+
+
+
+
+
+
+
+
+
+const authenticateSession = (req, res, next) => {
+  if (req.session.user) {
+    req.user = req.session.user;
+    next();
+  } else {
+    res.status(401).json({ error: "Unauthorized" });
+  }
+};
+
+app.use(authenticateSession);
 
 // POST /api/newusers - Create a new user with password encryption
 app.post("/api/newusers", async (req, res) => {

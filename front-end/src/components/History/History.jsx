@@ -231,13 +231,17 @@ const Summary = () => {
   };
   
   
-  
   const formatActionLabel = (label) => {
     try {
-      // Clean up the label string and parse JSON
-      const cleanedLabel = label.replace(/^Added data: /, "").replace(/^Updated fields: /, "");
-      const parsed = JSON.parse(cleanedLabel);
+      // Clean up the label string by removing known prefixes
+      const cleanedLabel = label
+        .replace(/^Added data: /, "") // Remove "Added data: " prefix if present
+        .replace(/^Updated fields: /, "") // Remove "Updated fields: " prefix if present
+        .trim(); // Remove any leading or trailing whitespace
   
+      // Attempt to parse the cleaned label as JSON
+      const parsed = JSON.parse(cleanedLabel);
+      
       // Format each key-value pair
       return Object.entries(parsed)
         .map(([field, value]) => {
@@ -252,9 +256,11 @@ const Summary = () => {
     } catch (e) {
       // Handle JSON parsing errors
       console.error("Error parsing actionLabel:", e);
-      return label;
+      console.error("Action Label Content:", label); // Log the problematic label
+      return label; // Return the original label if parsing fails
     }
   };
+  
   
   
   

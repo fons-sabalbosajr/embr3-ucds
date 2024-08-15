@@ -238,13 +238,7 @@ const Universe = () => {
                   onVisibleChange={handleVisibleChange}
                 >
                   <div className="avatar-header">
-                    {avatar ? (
-                      <Avatar src={avatar} size={30} />
-                    ) : (
-                      <NiceAvatar
-                        style={{ width: 30, height: 30 }}
-                      />
-                    )}
+                   <AvatarWithName avatar={avatar} />
                   </div>
                 </Popover>
 
