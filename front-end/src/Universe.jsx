@@ -99,14 +99,14 @@ const Universe = () => {
       const res = await axios.get("https://embr3-ucds.onrender.com/check-auth", {
         withCredentials: true,
       });
-
-      if (res.data.status === "Success") {
+  
+      if (res.status === 200 && res.data.status === "Success") {
         setAuth(true);
-
+  
         // Ensure `division` is defined before splitting
         const divisionParts = (res.data.division || "").split("/");
         const formattedName = `${divisionParts[0]} | ${res.data.name}`;
-
+  
         setName(formattedName);
         setUserHandle(res.data.username || "Unknown User");
         setNotifications(res.data.notifications || []);
@@ -115,7 +115,7 @@ const Universe = () => {
           "permissions",
           JSON.stringify(res.data.permissions || [])
         );
-
+  
         // Fetch user avatar
         try {
           const avatarRes = await axios.get(
@@ -124,7 +124,7 @@ const Universe = () => {
               params: { name: res.data.username }, // Ensure you are sending the correct name
             }
           );
-
+  
           if (avatarRes.data.avatar) {
             setAvatar(avatarRes.data.avatar);
           } else {
@@ -136,8 +136,18 @@ const Universe = () => {
           setAvatar(null); // Set to null to trigger default avatar
         }
       } else {
-        setAuth(false);
-        navigate("/login", { replace: true });
+        // Handle 401 error and other errors
+        if (res.status === 401) {
+          console.log("User is not authenticated");
+          setAuth(false);
+          navigate("/login", { replace: true });
+        } else {
+          console.error("Error fetching auth status:", res.statusText);
+          setErrorMessage(
+            "Error fetching authentication status. Please try again."
+          );
+          setAuth(false);
+        }
       }
     } catch (err) {
       console.error("Error fetching auth status:", err.message);

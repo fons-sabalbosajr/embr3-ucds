@@ -40,8 +40,8 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const allowedOrigins = [
-  "https://jovial-trifle-8f0cce.netlify.app",
-  "https://66bd94850d0bf56a0154d8ce--jovial-trifle-8f0cce.netlify.app",
+  "https://boisterous-chimera-b199a3.netlify.app",
+  "https://66bda4cdbc4795798b71b37f--boisterous-chimera-b199a3.netlify.app/",
   "http://localhost:5173",
 ];
 
@@ -119,7 +119,6 @@ app.options("*", cors(corsOptions));
 // Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
 app.use(express.json());
-
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -369,6 +368,14 @@ app.post("/login", async (req, res) => {
       division: user.division,
     };
 
+    res.cookie("sessionId", req.sessionID, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      domain: ".onrender.com",
+      path: "/",
+    });
+
     // Save login status
     const loginStatus = {
       userId: user._id,
@@ -434,33 +441,46 @@ app.post("/logout", logActivity, async (req, res) => {
   }
 });
 
-// Check auth route
-app.get("/check-auth", (req, res) => {
-  // Debugging line
-  //console.log('Session data:', req.session.user);
+app.get("/check-auth", async (req, res) => {
+  if (!req.session) {
+    console.log("Session is not set");
+  } else if (!req.session.user) {
+    console.log("User data is not set in session");
+  }
 
+  if (!req.session || !req.session.user) {
+    console.log("Session or user data is missing");
+    return res.status(401).send({ message: "User not authenticated" });
+  }
+
+  
   if (req.session.user) {
-    res.json({
-      status: "Success",
-      name: req.session.user.name || "Name not set",
-      username: req.session.user.username || "Username not set",
-      division: req.session.user.division || "Division not set",
-      notifications: [], // Fetch or add your notifications logic here
-      permissions: req.session.user.permission || [],
-    });
-  } else {
-    res.status(401).send({ message: "User not authenticated" });
+    console.log("User is authenticated");
+    try {
+      // Verify the user's details
+      const user = await userCollection.findOne({ _id: req.session.user.userId });
+      if (!user) {
+        console.log("User not found in database");
+        // Remove the session user data to prevent further unauthorized access
+        delete req.session.user;
+        return res.status(401).send({ message: "User not authenticated" });
+      }
+
+      // Return the user's details
+      res.json({
+        status: "Success",
+        name: req.session.user.name || "Name not set",
+        username: req.session.user.username || "Username not set",
+        division: req.session.user.division || "Division not set",
+        notifications: [], // Fetch or add your notifications logic here
+        permissions: req.session.user.permission || [],
+      });
+    } catch (error) {
+      console.error("Error verifying user:", error);
+      res.status(500).send({ message: "Internal Server Error" });
+    }
   }
 });
-
-
-
-
-
-
-
-
-
 
 const authenticateSession = (req, res, next) => {
   if (req.session.user) {
