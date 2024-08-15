@@ -41,6 +41,7 @@ function generateRandomPassword(length) {
 
 const allowedOrigins = [
   "https://66bd54886e53bb3309b85302--beautiful-choux-53998e.netlify.app",
+  "https://beautiful-choux-53998e.netlify.app/",
   "http://localhost:5173",
 ];
 
@@ -126,24 +127,20 @@ app.use(
 );
 
 
-connectToMongo().catch(console.error);
-
-app.options("*", cors());
-app.options("*", (req, res) => {
-  res.set("Access-Control-Allow-Origin", req.headers.origin);
-  res.set(
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header(
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, DELETE, PATCH, OPTIONS"
   );
-  res.set(
+  res.header(
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization, Origin, Accept, Cookie, Set-Cookie"
   );
-  res.set("Access-Control-Allow-Credentials", "true");
-  res.set("Access-Control-Expose-Headers", "Set-Cookie");
-  res.sendStatus(204);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Expose-Headers", "Set-Cookie");
+  next();
 });
-
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -201,6 +198,11 @@ app.use(
     },
   })
 );
+
+connectToMongo().catch((error) => {
+  console.error("Error during MongoDB connection:", error);
+  process.exit(1); // Exit the process on failure
+});
 
 const logActivity = async (req, res, next) => {
   const { method, path, body } = req;
