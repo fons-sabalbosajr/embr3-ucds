@@ -16,7 +16,6 @@ const MongoStore = require("connect-mongo");
 const app = express();
 const PORT = process.env.PORT || 8081;
 
-
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
   return input
@@ -44,7 +43,6 @@ const allowedOrigins = [
   "https://beautiful-choux-53998e.netlify.app/",
   "http://localhost:5173",
 ];
-
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -119,8 +117,6 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 
-
-
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
   const { name, division, position, email } = req.body;
@@ -163,7 +159,6 @@ const sessionStore = MongoStore.create({
   collectionName: "sessions",
 });
 
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -178,7 +173,6 @@ app.use(
     },
   })
 );
-
 
 const logActivity = async (req, res, next) => {
   const { method, path, body } = req;
@@ -346,6 +340,16 @@ const logActivity = async (req, res, next) => {
 
 module.exports = logActivity;
 
+app.use((req, res, next) => {
+  res.header(
+    "Access-Control-Allow-Origin",
+    "https://beautiful-choux-53998e.netlify.app"
+  );
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
+
 //////////////////////////////////////////////////////////////////////////////////////////
 
 app.post("/login", async (req, res) => {
@@ -439,7 +443,7 @@ app.post("/logout", logActivity, async (req, res) => {
 // Check auth route
 app.get("/check-auth", (req, res) => {
   // Debugging line
-  // console.log('Session data:', req.session.user); 
+  // console.log('Session data:', req.session.user);
 
   if (req.session.user) {
     res.json({
@@ -455,7 +459,6 @@ app.get("/check-auth", (req, res) => {
   }
 });
 
-
 const authenticateSession = (req, res, next) => {
   if (req.session.user) {
     req.user = req.session.user;
@@ -468,16 +471,17 @@ const authenticateSession = (req, res, next) => {
 app.use(authenticateSession);
 
 // POST /api/newusers - Create a new user with password encryption
-app.post('/api/newusers', async (req, res) => {
-  console.log('Received request:', req.body);
+app.post("/api/newusers", async (req, res) => {
+  console.log("Received request:", req.body);
 
   const { name, email, division, status, password, username } = req.body;
 
   // Input validation
   if (!name || !email || !division || !status || !password || !username) {
-    console.log('Validation error: Missing required fields');
+    console.log("Validation error: Missing required fields");
     return res.status(400).json({
-      error: 'Required fields: name, email, division, status, password, username',
+      error:
+        "Required fields: name, email, division, status, password, username",
     });
   }
 
@@ -485,15 +489,15 @@ app.post('/api/newusers', async (req, res) => {
     // Check for existing email
     const existingUser = await userCollection.findOne({ email });
     if (existingUser) {
-      console.log('Validation error: Email already exists');
-      return res.status(400).json({ error: 'Email already exists' });
+      console.log("Validation error: Email already exists");
+      return res.status(400).json({ error: "Email already exists" });
     }
 
     // Check for existing username
     const existingUsername = await userCollection.findOne({ username });
     if (existingUsername) {
-      console.log('Validation error: Username already exists');
-      return res.status(400).json({ error: 'Username already exists' });
+      console.log("Validation error: Username already exists");
+      return res.status(400).json({ error: "Username already exists" });
     }
 
     // Hash password securely
@@ -506,7 +510,7 @@ app.post('/api/newusers', async (req, res) => {
       email,
       password: hashedPassword,
       division,
-      permission: 'viewer', // Default permission
+      permission: "viewer", // Default permission
       status,
     };
 
@@ -514,33 +518,31 @@ app.post('/api/newusers', async (req, res) => {
     const insertResult = await userCollection.insertOne(newUser);
 
     if (insertResult.acknowledged && insertResult.insertedId) {
-      console.log('User created successfully:', newUser);
+      console.log("User created successfully:", newUser);
       return res.status(201).json({
-        message: 'User created successfully',
+        message: "User created successfully",
         user: newUser,
       });
     } else {
-      console.error('Error inserting user:', insertResult);
-      return res.status(500).json({ error: 'Failed to create user' });
+      console.error("Error inserting user:", insertResult);
+      return res.status(500).json({ error: "Failed to create user" });
     }
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error("Error creating user:", error);
 
     // Provide more informative error message based on the error type
-    let errorMessage = 'Failed to create user';
-    if (error.name === 'MongoError') {
-      errorMessage = 'Database error occurred';
-    } else if (error.name === 'BcryptError') {
-      errorMessage = 'Error during password hashing';
-    } else if (error.message.includes('duplicate key error')) {
-      errorMessage = 'Duplicate key error occurred';
+    let errorMessage = "Failed to create user";
+    if (error.name === "MongoError") {
+      errorMessage = "Database error occurred";
+    } else if (error.name === "BcryptError") {
+      errorMessage = "Error during password hashing";
+    } else if (error.message.includes("duplicate key error")) {
+      errorMessage = "Duplicate key error occurred";
     }
 
     return res.status(500).json({ error: errorMessage });
   }
 });
-
-
 
 app.post("/api/posting", logActivity, async (req, res) => {
   try {
