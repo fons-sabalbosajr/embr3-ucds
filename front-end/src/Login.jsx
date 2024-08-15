@@ -25,7 +25,7 @@ const Login = () => {
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
-  
+
     try {
       const response = await axios.post(
         `${backendUrl}/login`,
@@ -40,11 +40,13 @@ const Login = () => {
           withCredentials: true, // Ensure cookies are sent with the request
         }
       );
-  
+
+      console.log("Login response:", response);
+
       if (response.data?.status === "success") {
         const { permission } = response.data;
         localStorage.setItem("permission", JSON.stringify(permission)); // Store permissions in localStorage
-  
+
         message.success("Login successful!");
         navigate("/universe"); // Navigate to a protected route
       } else {
@@ -57,8 +59,6 @@ const Login = () => {
       setIsLoading(false);
     }
   };
-  
-  
 
   return (
     <div className="background-login">

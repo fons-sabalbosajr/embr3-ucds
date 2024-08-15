@@ -347,15 +347,30 @@ module.exports = logActivity;
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
+  
+  console.log("Login attempt:", { username, password });
+
   if (!username || !password) {
-    return res
-      .status(400)
-      .json({ error: "Username and password are required." });
+    console.log("Error: Username or password is missing");
+    return res.status(400).json({ error: "Username and password are required." });
   }
 
   try {
+    // Fetch user from the database
     const user = await userCollection.findOne({ username });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    console.log("User fetched from database:", user);
+
+    if (!user) {
+      console.log("Error: User not found");
+      return res.status(401).json({ error: "Invalid username or password." });
+    }
+
+    // Check password
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    console.log("Password match:", passwordMatch);
+
+    if (!passwordMatch) {
+      console.log("Error: Invalid password");
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
@@ -367,7 +382,9 @@ app.post("/login", async (req, res) => {
       name: user.name,
       division: user.division,
     };
+    console.log("Session user set:", req.session.user);
 
+    // Set session cookie
     res.cookie("sessionId", req.sessionID, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -375,6 +392,7 @@ app.post("/login", async (req, res) => {
       domain: ".onrender.com",
       path: "/",
     });
+    console.log("Session cookie set:", req.sessionID);
 
     // Save login status
     const loginStatus = {
@@ -391,15 +409,16 @@ app.post("/login", async (req, res) => {
       { $set: loginStatus },
       { upsert: true }
     );
+    console.log("Login status updated");
 
-    return res
-      .status(200)
-      .json({ status: "success", permission: user.permission });
+    // Send success response
+    return res.status(200).json({ status: "success", permission: user.permission });
   } catch (error) {
     console.error("Error during login:", error);
     return res.status(500).json({ error: "An unexpected error occurred." });
   }
 });
+
 
 // Logout route
 app.post("/logout", logActivity, async (req, res) => {
