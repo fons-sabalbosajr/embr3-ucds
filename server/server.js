@@ -90,7 +90,6 @@ connectToMongo().catch((error) => {
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -108,10 +107,14 @@ const corsOptions = {
   ],
   credentials: true,
   exposedHeaders: ["Set-Cookie"],
+  preflightContinue: false,
 };
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options("*", cors(corsOptions));
 
 // Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
