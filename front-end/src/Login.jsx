@@ -27,38 +27,39 @@ const Login = () => {
     setError(null);
 
     try {
-      const response = await axios.post(
-        `${backendUrl}/login`,
-        {
-          username: values.username,
-          password: values.password,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          withCredentials: true, // Ensure cookies are sent with the request
+        const response = await axios.post(
+            `${backendUrl}/login`,
+            {
+                username: values.username,
+                password: values.password,
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                withCredentials: true,
+            }
+        );
+
+        if (response.data?.token) {
+            // Store the token in localStorage
+            localStorage.setItem('jwtToken', response.data.token);
+            message.success("Login successful!");
+            navigate("/universe"); // Redirect to /universe
+        } else if (response.data?.status === "success") {
+            message.success("Login successful!");
+            navigate("/universe"); // Redirect to /universe
+        } else {
+            setError("Login failed. Please try again.");
         }
-      );
-
-      console.log("Login response:", response);
-
-      if (response.data?.status === "success") {
-        const { permission } = response.data;
-        localStorage.setItem("permission", JSON.stringify(permission)); // Store permissions in localStorage
-
-        message.success("Login successful!");
-        navigate("/universe"); // Navigate to a protected route
-      } else {
-        setError("Login failed. Please try again.");
-      }
     } catch (error) {
-      console.error("Error during login:", error);
-      setError("An unexpected error occurred. Please try again.");
+        console.error("Error during login:", error);
+        setError("An unexpected error occurred. Please try again.");
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
-  };
+};
+
 
   return (
     <div className="background-login">

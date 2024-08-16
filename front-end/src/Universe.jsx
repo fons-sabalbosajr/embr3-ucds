@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import NiceAvatar from "react-nice-avatar"; 
+import NiceAvatar from "react-nice-avatar";
 import { Layout, Button, Avatar, Spin, Popover, List, message } from "antd";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
@@ -35,16 +35,104 @@ const Universe = () => {
   const [userHandle, setUserHandle] = useState("");
   const [selection, setSelection] = useState("");
   const [permissions, setPermissions] = useState([]);
-  const [avatar, setAvatar] = useState("default-avatar-url");
+  const [avatar, setAvatar] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  axios.defaults.withCredentials = true;
+  const [user, setUser] = useState(null);
+  const backendUrl = "https://embr3-ucds.onrender.com";
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const getInitials = (name) => {
     const splitName = name.split(" ");
     const initials = splitName.map((part) => part[0].toUpperCase());
     return initials.join("");
   };
+
+  axios.defaults.withCredentials = true;
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem("jwtToken");
+
+        if (!token) {
+          console.log("No token found, redirecting to login.");
+          navigate("/login");
+          return;
+        }
+
+        const response = await axios.get(`${backendUrl}/check-auth`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.data.status === "Success") {
+          setUser(response.data);
+          setName(response.data.name);
+          setAvatar(response.data.avatar);
+          setPermissions(response.data.permissions);
+          setAuth(true);
+        } else {
+          throw new Error("Authentication failed");
+        }
+      } catch (error) {
+        console.error("Error during authentication check:", error);
+        message.error("Authentication failed. Please log in again.");
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  useEffect(() => {
+    const storedPermissions = JSON.parse(localStorage.getItem("permissions"));
+    if (storedPermissions) {
+      setPermissions(storedPermissions);
+    }
+  }, []);
+
+
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    setErrorMessage("");
+
+    try {
+      const response = await axios.get(`${backendUrl}/check-auth`, {
+        withCredentials: true,
+      });
+
+      console.log("Full response object:", response);
+      console.log("Authenticated successfully:", response.data);
+
+      if (response.data?.status === "Success") {
+        setUser(response.data);
+        setName(response.data.name);
+        setAvatar(response.data.avatar || "default-avatar-url");
+        setPermissions(response.data.permissions);
+        setAuth(true);
+        navigate("/universe");
+      } else {
+        setErrorMessage("Authentication failed. Please log in again.");
+      }
+    } catch (error) {
+      console.error("Error during authentication check:", error);
+      setErrorMessage("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  if (loading) {
+    return <Z_CustomSpinner />;
+  }
+
+  if (!auth) {
+    return <Navigate to="/login" />;
+  }
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -64,122 +152,26 @@ const Universe = () => {
   const handleLogout = async () => {
     try {
       const response = await axios.post(
-        "https://embr3-ucds.onrender.com/logout",
+        `${backendUrl}/logout`,
         {},
         { withCredentials: true }
       );
       if (response.status === 200) {
-        localStorage.removeItem("permission");
-        navigate("/login"); // Redirect to login page after logout
+        localStorage.removeItem("jwtToken");
+        navigate("/login");
       } else {
         console.error("Unexpected response status:", response.status);
         message.error("Logout failed. Please try again.");
       }
     } catch (error) {
-      console.error(
-        "Error during logout:",
-        error.response ? error.response.data : error.message
-      );
+      console.error("Error during logout:", error);
       message.error("Logout failed. Please try again.");
     }
-  };
-
-  const handleRetry = () => {
-    setLoading(true);
-    setErrorMessage("");
-    fetchAuthStatus();
   };
 
   const handleHelp = () => {
     alert("Help requested!");
   };
-
-  const fetchAuthStatus = async () => {
-    try {
-      const res = await axios.get("https://embr3-ucds.onrender.com/check-auth", {
-        withCredentials: true,
-      });
-  
-      if (res.status === 200 && res.data.status === "Success") {
-        setAuth(true);
-  
-        // Ensure `division` is defined before splitting
-        const divisionParts = (res.data.division || "").split("/");
-        const formattedName = `${divisionParts[0]} | ${res.data.name}`;
-  
-        setName(formattedName);
-        setUserHandle(res.data.username || "Unknown User");
-        setNotifications(res.data.notifications || []);
-        setPermissions(res.data.permissions || []);
-        localStorage.setItem(
-          "permissions",
-          JSON.stringify(res.data.permissions || [])
-        );
-  
-        // Fetch user avatar
-        try {
-          const avatarRes = await axios.get(
-            "https://embr3-ucds.onrender.com/api/user/avatar",
-            {
-              params: { name: res.data.username }, // Ensure you are sending the correct name
-            }
-          );
-  
-          if (avatarRes.data.avatar) {
-            setAvatar(avatarRes.data.avatar);
-          } else {
-            console.warn("Avatar not found, setting default avatar.");
-            setAvatar(null); // Set to null to trigger default avatar
-          }
-        } catch (avatarError) {
-          console.error("Error fetching avatar:", avatarError.message);
-          setAvatar(null); // Set to null to trigger default avatar
-        }
-      } else {
-        // Handle 401 error and other errors
-        if (res.status === 401) {
-          console.log("User is not authenticated");
-          setAuth(false);
-          navigate("/login", { replace: true });
-        } else {
-          console.error("Error fetching auth status:", res.statusText);
-          setErrorMessage(
-            "Error fetching authentication status. Please try again."
-          );
-          setAuth(false);
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching auth status:", err.message);
-      setErrorMessage(
-        "Error fetching authentication status. Please try again."
-      );
-      setAuth(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAuthStatus();
-  }, [navigate]);
-
-  useEffect(() => {
-    const storedPermissions = JSON.parse(localStorage.getItem("permissions"));
-    if (storedPermissions) {
-      setPermissions(storedPermissions);
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event) => {};
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, []);
 
   const popoverContent = (
     <List
@@ -187,16 +179,6 @@ const Universe = () => {
       renderItem={(item) => <List.Item>{item.message}</List.Item>}
     />
   );
-
-  if (loading || errorMessage) {
-    return (
-      <Z_CustomSpinner
-        errorMessage={errorMessage}
-        onRetry={handleRetry}
-        onHelp={handleHelp}
-      />
-    );
-  }
 
   return (
     <Layout className="layout-container">
@@ -248,7 +230,7 @@ const Universe = () => {
                   onVisibleChange={handleVisibleChange}
                 >
                   <div className="avatar-header">
-                   <AvatarWithName avatar={avatar} />
+                  <AvatarWithName name={name} avatar={avatar} />
                   </div>
                 </Popover>
 

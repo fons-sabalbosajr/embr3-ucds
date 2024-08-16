@@ -1,27 +1,44 @@
-import React from "react";
-import { Avatar } from "antd";
-import { UserOutlined } from "@ant-design/icons";
-import NiceAvatar from "react-nice-avatar"; // Ensure this is the correct import for your avatar library
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import NiceAvatar from "react-nice-avatar";
 
-const AvatarWithName = ({ avatar, name, size = 30 }) => {
-  const renderNiceAvatar = () => (
-    <NiceAvatar
-      style={{ width: size, height: size }} // Use size prop
-      {...avatar} // Pass avatar properties directly
-    />
-  );
+const AvatarWithName = () => {
+  const [avatar, setAvatar] = useState(null);
+  const [name, setName] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const renderDefaultAvatar = () => (
-    <Avatar
-      icon={<UserOutlined />}
-      style={{ backgroundColor: "#87d068", width: size, height: size }} // Use size prop
-    />
-  );
+  useEffect(() => {
+    const fetchAvatar = async () => {
+      try {
+        const token = localStorage.getItem("jwtToken");
+        const response = await axios.get(`https://embr3-ucds.onrender.com/api/current-user/avatar`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setAvatar(response.data.avatar);
+        setName(response.data.name);
+      } catch (error) {
+        console.error("Error fetching avatar:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAvatar();
+  }, []);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
 
   return (
-    <div style={{ display: "flex", alignItems: "center" }}>
-      {avatar ? renderNiceAvatar() : renderDefaultAvatar()}
-      <span style={{ marginLeft: 8 }}>{name}</span> {/* Display the name */}
+   <div>
+      <NiceAvatar
+        style={{ width: "30px", height: "30px" }}
+        {...avatar}
+      />
     </div>
   );
 };

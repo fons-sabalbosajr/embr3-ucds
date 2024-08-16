@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const session = require("express-session");
+const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const { MongoClient, ObjectId, GridFSBucket } = require("mongodb");
 const fs = require("fs");
@@ -40,9 +40,9 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const allowedOrigins = [
-  "https://boisterous-chimera-b199a3.netlify.app",
-  "https://66bda4cdbc4795798b71b37f--boisterous-chimera-b199a3.netlify.app/",
   "http://localhost:5173",
+  "https://66bef1151f6ae6c2f698d731--cool-sawine-fbd6fe.netlify.app/",
+  "https://cool-sawine-fbd6fe.netlify.app",
 ];
 
 // MongoDB connection setup
@@ -148,50 +148,40 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// Session setup
-const sessionStore = MongoStore.create({
-  mongoUrl: mongoUri,
-  collectionName: "sessions",
-});
-
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: sessionStore,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    },
-  })
-);
-
-// CORS setup with logging
-app.use(
-  cors(corsOptions, (req, res, next) => {
-    console.log(`CORS request from ${req.headers.origin}`);
-    next();
-  })
-);
+const generateToken = (user) => {
+  return jwt.sign(
+    { userId: user._id, username: user.username, permission: user.permission },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+};
 
 const logActivity = async (req, res, next) => {
-  const { method, path, body } = req;
+  const { method, path, body, headers } = req;
 
   // Only log POST (add), PUT (update), PATCH (partial update), and GET (view) requests
   if (!["POST", "PUT", "PATCH", "GET"].includes(method)) {
     return next();
   }
 
-  // Authentication check
-  if (!req.session.user) {
-    return res.status(401).send("Unauthorized: No session found");
+  // Extract JWT from Authorization header
+  const token = headers.authorization && headers.authorization.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).send("Unauthorized: No token provided");
   }
 
-  const userId = req.session.user.userId;
-  const username = req.session.user.username;
+  let user;
+  try {
+    // Verify JWT and extract user information
+    user = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    console.error("Invalid token:", error);
+    return res.status(401).send("Unauthorized: Invalid token");
+  }
+
+  const userId = user.userId; // Extracted from the token
+  const username = user.username;
 
   // Determine action type and label
   let actionType;
@@ -345,171 +335,134 @@ module.exports = logActivity;
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+// Middleware to verify JWT
+const authenticateToken = (req, res, next) => {
+  const token = req.cookies.authToken;
+
+  if (!token) {
+    return res.status(401).send({ message: "User not authenticated" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).send({ message: "Token is not valid" });
+    }
+
+    req.user = user;
+    next();
+  });
+};
+
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
-  
-  console.log("Login attempt:", { username, password });
 
   if (!username || !password) {
-    console.log("Error: Username or password is missing");
-    return res.status(400).json({ error: "Username and password are required." });
+    return res
+      .status(400)
+      .json({ error: "Username and password are required." });
   }
 
   try {
-    // Fetch user from the database
     const user = await userCollection.findOne({ username });
-    console.log("User fetched from database:", user);
 
     if (!user) {
-      console.log("Error: User not found");
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    // Check password
     const passwordMatch = await bcrypt.compare(password, user.password);
-    console.log("Password match:", passwordMatch);
 
     if (!passwordMatch) {
-      console.log("Error: Invalid password");
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    // Set session user details
-    req.session.user = {
-      userId: user._id,
-      username: user.username,
-      permission: user.permission,
-      name: user.name,
-      division: user.division,
-    };
-    console.log("Session user set:", req.session.user);
+    const token = generateToken(user);
 
-    // Set session cookie
-    res.cookie("sessionId", req.sessionID, {
+    // Send the token in the response
+    res.cookie("authToken", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      domain: ".onrender.com",
-      path: "/",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
     });
-    console.log("Session cookie set:", req.sessionID);
 
-    // Save login status
     const loginStatus = {
       userId: user._id,
       name: user.name,
-      userName: user.username,
+      username: user.username,
       isLoggedIn: true,
       loginTime: new Date(),
       division: user.division,
       permission: user.permission,
     };
+
     await loginStatusCollection.updateOne(
       { userId: user._id },
       { $set: loginStatus },
       { upsert: true }
     );
-    console.log("Login status updated");
 
-    // Send success response
-    return res.status(200).json({ status: "success", permission: user.permission });
+    return res.status(200).json({ status: "success", token });
   } catch (error) {
     console.error("Error during login:", error);
     return res.status(500).json({ error: "An unexpected error occurred." });
   }
 });
 
-
 // Logout route
-app.post("/logout", logActivity, async (req, res) => {
-  //console.log('Session before logout:', req.session); // Check if session.user exists
+app.post("/logout", logActivity, (req, res) => {
+  res.clearCookie("authToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  });
+  res.status(200).send({ message: "Logout successful" });
+});
+
+app.get("/api/current-user/avatar", authenticateToken, async (req, res) => {
   try {
-    if (!req.session || !req.session.user || !req.session.user.userId) {
-      return res.status(400).json({ error: "No user session found." });
+    const user = await userCollection.findById(req.user.id);
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+    res.json({ avatar: user.avatar, name: user.name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
+app.get("/check-auth", authenticateToken, async (req, res) => {
+  try {
+    const userId = new ObjectId(req.user.userId);
+
+    const user = await userCollection.findOne({
+      _id: userId,
+    });
+
+    if (!user) {
+      return res.status(401).send({ message: "User not authenticated" });
     }
 
-    // Update login status in the database
-    const userId = new ObjectId(req.session.user.userId); // Convert userId to ObjectId
-    //console.log('User ID for logout:', userId);
+    // Log the response data
+    console.log("User data:", {
+      name: user.name,
+      username: user.username,
+      division: user.division,
+      permissions: user.permission,
+    });
 
-    // Log the documents in loginStatusCollection
-    const docs = await loginStatusCollection.find().toArray();
-    //console.log('Documents in loginStatusCollection:', docs);
-
-    const result = await loginStatusCollection.updateOne(
-      { userId: userId },
-      { $set: { isLoggedIn: false, logoutTime: new Date() } }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "Login status not found." });
-    }
-
-    req.session.destroy((err) => {
-      if (err) {
-        console.error("Error during logout:", err);
-        return res.status(500).json({ error: "Error destroying session." });
-      }
-
-      res.clearCookie("connect.sid");
-      res.status(200).json({ status: "success" });
+    res.json({
+      status: "Success",
+      name: user.name,
+      username: user.username,
+      division: user.division,
+      permissions: user.permission,
     });
   } catch (error) {
-    console.error("Error during logout:", error);
-    res.status(500).json({ error: "An unexpected error occurred." });
+    console.error("Error verifying user:", error);
+    res.status(500).send({ message: "Internal Server Error" });
   }
 });
-
-app.get("/check-auth", async (req, res) => {
-  if (!req.session) {
-    console.log("Session is not set");
-  } else if (!req.session.user) {
-    console.log("User data is not set in session");
-  }
-
-  if (!req.session || !req.session.user) {
-    console.log("Session or user data is missing");
-    return res.status(401).send({ message: "User not authenticated" });
-  }
-
-  if (req.session.user) {
-    console.log("User is authenticated");
-    try {
-      // Verify the user's details
-      const user = await userCollection.findOne({
-        _id: req.session.user.userId,
-      });
-      if (!user) {
-        console.log("User not found in database");
-        // Remove the session user data to prevent further unauthorized access
-        delete req.session.user;
-        return res.status(401).send({ message: "User not authenticated" });
-      }
-
-      // Return the user's details
-      res.json({
-        status: "Success",
-        name: req.session.user.name || "Name not set",
-        username: req.session.user.username || "Username not set",
-        division: req.session.user.division || "Division not set",
-        notifications: [], // Fetch or add your notifications logic here
-        permissions: req.session.user.permission || [],
-      });
-    } catch (error) {
-      console.error("Error verifying user:", error);
-      res.status(500).send({ message: "Internal Server Error" });
-    }
-  }
-});
-
-const authenticateSession = (req, res, next) => {
-  if (req.session && req.session.user) {
-    return next();
-  }
-  return res.status(401).json({ error: "Unauthorized" });
-};
-
-app.use(authenticateSession);
 
 // POST /api/newusers - Create a new user with password encryption
 app.post("/api/newusers", async (req, res) => {
@@ -1022,7 +975,7 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
 });
 
 // Check the online users and load
-app.get("/api/online_users", authenticateSession, async (req, res) => {
+app.get("/api/online_users", authenticateToken, async (req, res) => {
   if (!loginStatusCollection || !userCollection) {
     console.error("Collections are not initialized.");
     return res.status(500).json({ error: "Collections are not initialized." });
@@ -1387,7 +1340,7 @@ app.get("/api/logs-users", async (req, res) => {
 });
 
 // API endpoint to get the encoded and updated firms count for the current user
-app.get("/api/firm-count", authenticateSession, async (req, res) => {
+app.get("/api/firm-count", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const encodedCount = await ucdsCollection.countDocuments({
@@ -1408,7 +1361,7 @@ app.get("/api/firm-count", authenticateSession, async (req, res) => {
 });
 
 // API endpoint to get recent activity data for the current user
-app.get("/api/recent-activity", authenticateSession, async (req, res) => {
+app.get("/api/recent-activity", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const recentActivity = await ucdsCollection
@@ -1633,7 +1586,7 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
   }
 });
 
-app.put("/api/postings/:id", authenticateSession, async (req, res) => {
+app.put("/api/postings/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, message, acknowledgement, iconType, date } = req.body;
