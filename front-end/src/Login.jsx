@@ -22,44 +22,48 @@ const Login = () => {
   // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
   const backendUrl = "https://embr3-ucds.onrender.com";
 
+  const api = axios.create({
+    baseURL: backendUrl,
+  });
+
+  api.interceptors.push({
+    request: (config) => {
+      const token = localStorage.getItem("jwtToken");
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+  });
+
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
 
     try {
-        const response = await axios.post(
-            `${backendUrl}/login`,
-            {
-                username: values.username,
-                password: values.password,
-            },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                withCredentials: true,
-            }
-        );
+      const response = await api.post("/login", {
+        username: values.username,
+        password: values.password,
+      });
 
-        if (response.data?.token) {
-            // Store the token in localStorage
-            localStorage.setItem('jwtToken', response.data.token);
-            message.success("Login successful!");
-            navigate("/universe"); // Redirect to /universe
-        } else if (response.data?.status === "success") {
-            message.success("Login successful!");
-            navigate("/universe"); // Redirect to /universe
-        } else {
-            setError("Login failed. Please try again.");
-        }
+      if (response.data?.token) {
+        // Store the token in localStorage
+        localStorage.setItem("jwtToken", response.data.token);
+        message.success("Login successful!");
+        navigate("/universe"); // Redirect to /universe
+      } else if (response.data?.status === "success") {
+        message.success("Login successful!");
+        navigate("/universe"); // Redirect to /universe
+      } else {
+        setError("Login failed. Please try again.");
+      }
     } catch (error) {
-        console.error("Error during login:", error);
-        setError("An unexpected error occurred. Please try again.");
+      console.error("Error during login:", error);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-};
-
+  };
 
   return (
     <div className="background-login">

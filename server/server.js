@@ -41,8 +41,8 @@ function generateRandomPassword(length) {
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://66bef1151f6ae6c2f698d731--cool-sawine-fbd6fe.netlify.app/",
-  "https://cool-sawine-fbd6fe.netlify.app",
+  "https://66bef77df1bcf7c8250d6296--lucent-marigold-2895ad.netlify.app/",
+  "https://lucent-marigold-2895ad.netlify.app/",
 ];
 
 // MongoDB connection setup
@@ -337,7 +337,7 @@ module.exports = logActivity;
 
 // Middleware to verify JWT
 const authenticateToken = (req, res, next) => {
-  const token = req.cookies.authToken;
+  const token = localStorage.getItem('jwtToken');
 
   if (!token) {
     return res.status(401).send({ message: "User not authenticated" });
