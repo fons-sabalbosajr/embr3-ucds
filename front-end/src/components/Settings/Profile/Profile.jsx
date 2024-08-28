@@ -10,7 +10,8 @@ import {
   Col,
   Divider,
   Form,
-  Modal, Upload
+  Modal,
+  Upload,
 } from "antd";
 import { SaveOutlined, CameraOutlined } from "@ant-design/icons";
 import axios from "axios";
@@ -25,11 +26,10 @@ const Profile = () => {
   const [form] = Form.useForm();
   const [avatarFile, setAvatarFile] = useState(null);
 
-  
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await axios.get("https://embr3-ucds.onrender.com/current-user");
+        const response = await axios.get("http://localhost:8081/current-user");
         setUser(response.data);
         form.setFieldsValue(response.data);
       } catch (error) {
@@ -46,7 +46,7 @@ const Profile = () => {
   const handleProfileUpdate = async (values) => {
     try {
       await axios.put(
-        `https://embr3-ucds.onrender.com/api/profile/update/${user._id}`,
+        `http://localhost:8081/api/profile/update/${user._id}`,
         values
       );
       message.success("Profile updated successfully");
@@ -71,7 +71,6 @@ const Profile = () => {
     });
   };
 
-
   const handleFileChange = (info) => {
     if (info.file.status === "done") {
       message.success("Avatar updated successfully");
@@ -87,11 +86,15 @@ const Profile = () => {
     formData.append("avatar", file);
 
     try {
-      await axios.post(`https://embr3-ucds.onrender.com/api/profile/upload-avatar/${user._id}`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      await axios.post(
+        `http://localhost:8081/api/profile/upload-avatar/${user._id}`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
       message.success("Avatar uploaded successfully");
       fetchUser(); // Reload user data to reflect the new avatar
     } catch (error) {
@@ -100,11 +103,10 @@ const Profile = () => {
     }
   };
 
-
   // Fetch user function (for reloading updated data)
   const fetchUser = async () => {
     try {
-      const response = await axios.get("https://embr3-ucds.onrender.com/current-user");
+      const response = await axios.get("http://localhost:8081/current-user");
       setUser(response.data);
       form.setFieldsValue(response.data);
     } catch (error) {
@@ -117,7 +119,7 @@ const Profile = () => {
     return <Spin tip="Loading..." />;
   }
 
-  const [division, designation] = user.division
+  const [division, designation] = user?.division
     ? user.division.split("/").map((item) => item.trim())
     : ["", ""];
 
@@ -134,7 +136,7 @@ const Profile = () => {
             <Col span={24} md={8} className="profile-avatar-col">
               <div className="avatar-container">
                 <div className="avatar-wrapper">
-                  <AvatarWithName avatar={user.avatar} size={150} />
+                  {user && <AvatarWithName avatar={user.avatar} size={150} />}
                   <div className="change-avatar-btn">
                     <Upload
                       showUploadList={false}
@@ -155,9 +157,13 @@ const Profile = () => {
                   onChange={handleFileChange}
                 />
                 <p className="avatar-details">
-                  {user.name} <br />@{user.username} <br />
-                  {division} <br />
-                  {designation}
+                  {user && (
+                    <>
+                      <h2>{user.name}</h2>
+                      <p>{user.designation}</p>
+                      <p>{user.division}</p>
+                    </>
+                  )}
                 </p>
               </div>
             </Col>

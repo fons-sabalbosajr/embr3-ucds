@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
-  Table,
   Input,
-  Tooltip,
-  Button,
-  Modal,
-  Progress,
   Select,
-  Pagination,
   Tabs,
   Row,
   Col,
@@ -15,11 +9,7 @@ import {
   Typography,
   Card,
   DatePicker,
-  Space,
-  Spin,
-  TimePicker,
-  notification,
-  Tag,
+  ConfigProvider,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
@@ -74,6 +64,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("emp_no_total", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>
@@ -83,6 +74,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("bod", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
 
@@ -100,7 +92,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           </Col>
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
-              <strong>Other Section/Unit-In-Charged</strong>
+              <strong>Other Section/Unit-In-Charge</strong>
               <SectionInCharged
                 value={editedRecord ? editedRecord.fmr_section_incharged : ""}
                 onChange={(value) =>
@@ -142,9 +134,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("iis_no", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
-        <Row gutter={[16, 16]} className="row-auto">
+        <Row gutter={[16, 16]} className="row-auto-date">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
               <strong>Type of Inspection</strong>
@@ -172,48 +165,84 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Monitored</strong>
-              <DatePicker
-                value={
-                  editedRecord ? moment(editedRecord.date_monitored) : null
-                }
-                format="MM/DD/YYYY"
-                disabled={!isEditing}
-                onChange={(date, dateString) =>
-                  handleChange("date_monitored", dateString)
-                }
-                placeholder="Select date"
-                style={{ width: "100%" }}
-              />
+              <ConfigProvider
+                theme={{
+                  components: {
+                    DatePicker: {
+                      inputFontSize: 11, // Set the font size for small DatePicker
+                    },
+                  },
+                }}
+              >
+                <DatePicker
+                  value={
+                    editedRecord ? moment(editedRecord.date_monitored) : null
+                  }
+                  format="MM/DD/YYYY"
+                  disabled={!isEditing}
+                  onChange={(date, dateString) =>
+                    handleChange("date_monitored", dateString)
+                  }
+                  placeholder="Select date"
+                  style={{ width: "100%" }}
+                  className="custom-datepicker"
+                  size="small"
+                />
+              </ConfigProvider>
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Routed (IIS)</strong>
-              <DatePicker
-                value={editedRecord ? moment(editedRecord.date_routed) : null}
-                format="MM/DD/YYYY"
-                disabled={!isEditing}
-                onChange={(date, dateString) =>
-                  handleChange("date_routed", dateString)
-                }
-                placeholder="Select date"
-                style={{ width: "100%" }}
-              />
+              <ConfigProvider
+                theme={{
+                  components: {
+                    DatePicker: {
+                      inputFontSize: 11, // Set the font size for small DatePicker
+                    },
+                  },
+                }}
+              >
+                <DatePicker
+                  value={editedRecord ? moment(editedRecord.date_routed) : null}
+                  format="MM/DD/YYYY"
+                  disabled={!isEditing}
+                  onChange={(date, dateString) =>
+                    handleChange("date_routed", dateString)
+                  }
+                  placeholder="Select date"
+                  style={{ width: "100%" }}
+                  className="custom-datepicker"
+                  size="small"
+                />
+              </ConfigProvider>
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Signed</strong>
-              <DatePicker
-                value={editedRecord ? moment(editedRecord.date_signed) : null}
-                format="MM/DD/YYYY"
-                disabled={!isEditing}
-                onChange={(date, dateString) =>
-                  handleChange("date_signed", dateString)
-                }
-                placeholder="Select date"
-                style={{ width: "100%" }}
-              />
+              <ConfigProvider
+                theme={{
+                  components: {
+                    DatePicker: {
+                      inputFontSize: 11, // Set the font size for small DatePicker
+                    },
+                  },
+                }}
+              >
+                <DatePicker
+                  value={editedRecord ? moment(editedRecord.date_signed) : null}
+                  format="MM/DD/YYYY"
+                  disabled={!isEditing}
+                  onChange={(date, dateString) =>
+                    handleChange("date_signed", dateString)
+                  }
+                  placeholder="Select date"
+                  style={{ width: "100%" }}
+                  className="custom-datepicker"
+                  size="small"
+                />
+              </ConfigProvider>
             </Paragraph>
           </Col>
         </Row>
@@ -244,6 +273,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       onChange={(value) => handleChange("days_dmds", value)}
                       disabled={!isEditing}
                       placeholder="No data"
+                      className="textbox-label"
                     />
                   </Paragraph>
                 </Col>
@@ -260,6 +290,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       onChange={(value) => handleChange("days_dsdrs", value)}
                       disabled={!isEditing}
                       placeholder="No data"
+                      className="textbox-label"
                     />
                   </Paragraph>
                 </Col>
@@ -273,23 +304,24 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   onChange={(e) => handleChange("street", e.target.value)}
                   disabled={!isEditing}
                   placeholder="No data"
+                  rows={3}
+                  className="text-area"
                 />
               </Paragraph>
               <Paragraph>
-                <strong>
-                  Tracking of Reports (Received by Planning Unit):{" "}
-                </strong>{" "}
-                <br />
                 <Checkbox
                   checked={editedRecord?.pismu_tracking === "✔"}
                   disabled={!isEditing}
                   onChange={(e) =>
                     handleChange("pismu_tracking", e.target.checked ? "✔" : "")
                   }
-                  style={{ fontSize: "15px" }}
+                  style={{ fontSize: "12px" }}
                 >
-                  {editedRecord?.pismu_tracking === "✔" ? "Yes" : "No"}
+                  {editedRecord?.pismu_tracking === "✔" ? "" : ""}
                 </Checkbox>
+                <strong>
+                  Tracking of Reports (Received by Planning Unit)
+                </strong>
               </Paragraph>
             </Card>
           </Col>

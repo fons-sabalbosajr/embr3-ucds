@@ -1,5 +1,6 @@
 import React from 'react'
-import { AutoComplete } from 'antd';
+import { ConfigProvider, AutoComplete, Input } from "antd";
+import './sectionincharge.css';
 
 
 // Define the list of predefined industry types for autocomplete
@@ -19,16 +20,47 @@ const UnitOptions = [
   
 const SectionInCharged = ({ value, disabled, onChange }) => {
   return (
+    <ConfigProvider
+    theme={{
+      components: {
+        AutoComplete: {
+          optionFontSize: 10,
+          colorTextPlaceholder: "#555",
+          fontSize: "11px",
+          boxShadow: "none",
+        },
+      },
+    }}
+  >
     <AutoComplete
-    options={UnitOptions} // Use predefined suggestions
-    value={value}
-    disabled={disabled} // Control if it should be editable
-    onChange={onChange} // Event handler for when value changes
-    placeholder="Select section/unit"
-    style={{width: '100%'}}
-    filterOption={(inputValue, option) => option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1}
-    allowClear={true}
-  />
+      style={{
+        width: "100%",
+        fontSize: "11px",
+
+      }}
+      dropdownStyle={{
+        boxShadow: "none",
+      }}
+      options={UnitOptions}
+      dropdownClassName="custom-autocomplete-dropdown"
+      value={value}
+      disabled={disabled}
+      onChange={onChange}
+      placeholder="Select section/unit"
+      filterOption={(inputValue, option) =>
+        option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+      }
+      allowClear={true}
+    >
+      <Input
+        style={{
+          fontSize: "11px", // Set the font size for input field
+          height: "30px",
+          padding: "4px 8px",
+        }}
+      />
+    </AutoComplete>
+  </ConfigProvider>
   )
 }
 

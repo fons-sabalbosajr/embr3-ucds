@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import NiceAvatar from "react-nice-avatar";
 import { Layout, Button, Avatar, Spin, Popover, List, message } from "antd";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
@@ -29,75 +28,55 @@ const Universe = () => {
   const [auth, setAuth] = useState(false);
   const [name, setName] = useState("");
   const [notifications, setNotifications] = useState([]);
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("dark");
-  const [userHandle, setUserHandle] = useState("");
-  const [selection, setSelection] = useState("");
-  const [permissions, setPermissions] = useState([]);
-  const [avatar, setAvatar] = useState("");
+  const [permissions, setPermissions] = useState([]); 
+  const [avatar, setAvatar] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
-
   const [user, setUser] = useState(null);
-  const backendUrl = "https://embr3-ucds.onrender.com";
-  const [isRetrying, setIsRetrying] = useState(false);
+  const [token, setToken] = useState(null);
+  const [retrying, setRetrying] = useState(false);
+  const [userHandle, setUserHandle] = useState(null);
+  const [division, setDivision] = useState("");
 
-  const getInitials = (name) => {
-    const splitName = name.split(" ");
-    const initials = splitName.map((part) => part[0].toUpperCase());
-    return initials.join("");
-  };
-
-  axios.defaults.withCredentials = true;
+  const backendUrl = "http://localhost:8081";
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem("jwtToken");
-
-        if (!token) {
-          console.log("No token found, redirecting to login.");
-          navigate("/login");
-          return;
-        }
-
         const response = await axios.get(`${backendUrl}/check-auth`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          withCredentials: true,
         });
-
-        if (response.data.status === "Success") {
-          setUser(response.data);
-          setName(response.data.name);
-          setAvatar(response.data.avatar);
-          setPermissions(response.data.permissions);
+        console.log("Auth Response:", response.data);  // Add this for debugging
+  
+        if (response.data.status === "Success") {  // Ensure this matches the exact expected value
+          const { name, avatar, permissions, username, division } = response.data;
+          setName(name);
+          setAvatar(avatar || "default-avatar-url");
+          setPermissions(permissions || []);
+          setUserHandle(username);
+          setDivision(division || "");
           setAuth(true);
+          setErrorMessage(""); 
         } else {
           throw new Error("Authentication failed");
         }
       } catch (error) {
         console.error("Error during authentication check:", error);
-        message.error("Authentication failed. Please log in again.");
-        navigate("/login");
+        setErrorMessage("Authentication failed. Please check your credentials and try again.");
+        setAuth(false);
       } finally {
         setLoading(false);
       }
     };
-
+  
     checkAuth();
   }, [navigate]);
-
-  useEffect(() => {
-    const storedPermissions = JSON.parse(localStorage.getItem("permissions"));
-    if (storedPermissions) {
-      setPermissions(storedPermissions);
-    }
-  }, []);
-
+  
 
   const handleRetry = async () => {
-    setIsRetrying(true);
+    setRetrying(true);
     setErrorMessage("");
 
     try {
@@ -105,24 +84,23 @@ const Universe = () => {
         withCredentials: true,
       });
 
-      console.log("Full response object:", response);
-      console.log("Authenticated successfully:", response.data);
-
-      if (response.data?.status === "Success") {
-        setUser(response.data);
-        setName(response.data.name);
-        setAvatar(response.data.avatar || "default-avatar-url");
-        setPermissions(response.data.permissions);
+      if (response.data.status === "Success") {
+        const { name, avatar, permissions, userHandle, username, division } = response.data;
+        setName(name);
+        setAvatar(avatar || "default-avatar-url");
+        setPermissions(permissions || []);
+        setUserHandle(username);
+        setDivision(division || "");
         setAuth(true);
-        navigate("/universe");
+        setErrorMessage("");
       } else {
-        setErrorMessage("Authentication failed. Please log in again.");
+        setErrorMessage("Authentication failed. Please check your credentials and try again.");
       }
     } catch (error) {
-      console.error("Error during authentication check:", error);
-      setErrorMessage("An unexpected error occurred. Please try again.");
+      console.error("Error during authentication retry:", error);
+      setErrorMessage("An unexpected error occurred. Please try again later.");
     } finally {
-      setIsRetrying(false);
+      setRetrying(false);
     }
   };
 
@@ -131,22 +109,19 @@ const Universe = () => {
   }
 
   if (!auth) {
-    return <Navigate to="/login" />;
+    return (
+      <div className="error-container">
+        <h2>{errorMessage}</h2>
+        <Button onClick={handleRetry} loading={retrying}>
+          Retry
+        </Button>
+        <Navigate to="/login" />
+      </div>
+    );
   }
 
   const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-  };
-
-  const handleVisibleChange = (visible) => {
-    if (!visible) {
-      setSelection("");
-    }
-  };
-
-  const handleMenuItemClick = (key) => {
-    setSelection(key);
+    setTheme((prevTheme) => (prevTheme === "light" ? "dark" : "light"));
   };
 
   const handleLogout = async () => {
@@ -156,21 +131,16 @@ const Universe = () => {
         {},
         { withCredentials: true }
       );
+  
       if (response.status === 200) {
-        localStorage.removeItem("jwtToken");
         navigate("/login");
       } else {
-        console.error("Unexpected response status:", response.status);
         message.error("Logout failed. Please try again.");
       }
     } catch (error) {
       console.error("Error during logout:", error);
       message.error("Logout failed. Please try again.");
     }
-  };
-
-  const handleHelp = () => {
-    alert("Help requested!");
   };
 
   const popoverContent = (
@@ -203,7 +173,7 @@ const Universe = () => {
                     theme === "dark" ? "dark-theme" : "light-theme"
                   }`}
                 >
-                  {name}
+                  {name} | {division}
                 </span>
                 <NotificationsPopover
                   popoverContent={popoverContent}
@@ -214,23 +184,16 @@ const Universe = () => {
                   content={
                     <UserPopover
                       name={name}
-                      userHandle={userHandle}
-                      handleMenuItemClick={handleMenuItemClick}
-                      navigate={navigate}
                       handleLogout={handleLogout}
-                      getInitials={getInitials}
                       toggleTheme={toggleTheme}
-                      selection={selection}
-                      handleVisibleChange={handleVisibleChange}
+                      userHandle={userHandle}
                     />
                   }
                   trigger="click"
                   placement="bottomRight"
-                  theme={theme === "dark" ? "dark-theme" : "light-theme"}
-                  onVisibleChange={handleVisibleChange}
                 >
-                  <div className="avatar-header">
-                  <AvatarWithName name={name} avatar={avatar} />
+                 <div className="avatar-header">
+                    <AvatarWithName avatar={avatar} />
                   </div>
                 </Popover>
 
@@ -254,32 +217,24 @@ const Universe = () => {
         <DataProvider>
           {auth && (
             <Content className="content-container">
-              <Spin spinning={!auth}>
-                <Routes>
-                  <Route
-                    path="/"
-                    element={<Navigate to="dashboard" replace />}
-                  />
-                  <Route
-                    path="dashboard"
-                    element={<Dashboard avatar={avatar} name={name} />}
-                  />
-                  <Route
-                    path="/province/:provinceName"
-                    element={<Province />}
-                  />
-                  <Route path="survey" element={<Survey />} />
-                  <Route path="mbu" element={<MBU />} />
-                  {permissions.includes("admin") && (
-                    <Route path="admin" element={<Admin />} />
-                  )}
-                  <Route path="accounts" element={<Accounts />} />
-                  <Route path="extract/*" element={<Extract />} />
-                  <Route path="admin-report" element={<Report />} />
-                  <Route path="posting" element={<Posting />} />
-                  <Route path="activitylog" element={<ActivityLog />} />
-                </Routes>
-              </Spin>
+              <Routes>
+                <Route path="/" element={<Navigate to="dashboard" replace />} />
+                <Route
+                  path="dashboard"
+                  element={<Dashboard avatar={avatar} name={name} />}
+                />
+                <Route path="/province/:provinceName" element={<Province />} />
+                <Route path="survey" element={<Survey />} />
+                <Route path="mbu" element={<MBU />} />
+                {permissions.includes("admin") && (
+                  <Route path="admin" element={<Admin />} />
+                )}
+                <Route path="accounts" element={<Accounts />} />
+                <Route path="extract/*" element={<Extract />} />
+                <Route path="admin-report" element={<Report />} />
+                <Route path="posting" element={<Posting />} />
+                <Route path="activitylog" element={<ActivityLog />} />
+              </Routes>
             </Content>
           )}
         </DataProvider>

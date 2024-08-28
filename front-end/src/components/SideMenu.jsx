@@ -32,6 +32,8 @@ const SideMenu = ({ theme, permissions }) => {
     navigate("/universe/exportdata"); // Navigate to Export Data
   };
 
+  
+
   const storedPermissions =
     JSON.parse(localStorage.getItem("permission")) || [];
   const showAdminMenu =
@@ -119,7 +121,7 @@ const SideMenu = ({ theme, permissions }) => {
                   isMenuSelected("mbu") ? "selected" : ""
                 }`}
               >
-                Manila Bay Unit
+                Manila Bay Unit (DEV)
               </Link>
             </Menu.Item>
             <Menu.Item key="/universe/extract">
@@ -129,7 +131,7 @@ const SideMenu = ({ theme, permissions }) => {
                   isMenuSelected("extract") ? "selected" : ""
                 }`}
               >
-                Extract Data
+                Extract Data (DEV)
               </Link>
             </Menu.Item>
             <Menu.Item key="/universe/report">
@@ -139,7 +141,7 @@ const SideMenu = ({ theme, permissions }) => {
                   isMenuSelected("report") ? "selected" : ""
                 }`}
               >
-                Generate Report
+                Generate Report (DEV)
               </Link>
             </Menu.Item>
           </SubMenu>

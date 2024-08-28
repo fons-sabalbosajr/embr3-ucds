@@ -19,7 +19,7 @@ const Activity = () => {
 
         // Fetch recent activity data
         const recentActivityResponse = await axios.get(
-          "https://embr3-ucds.onrender.com/api/recent-activity"
+          "http://localhost:8081/api/recent-activity"
         );
         setRecentActivity(recentActivityResponse.data);
       } catch (error) {

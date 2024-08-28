@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AutoComplete } from 'antd';
+import { ConfigProvider, AutoComplete, Input } from "antd";
+import './month.css';
 
 // Define the list of predefined industry types for autocomplete
 const MonthOptions = [
@@ -39,18 +40,44 @@ const Month = ({ value, disabled, onChange }) => {
   };
 
   return (
+    <ConfigProvider
+    theme={{
+      components: {
+        AutoComplete: {
+          optionFontSize: 10,
+          colorTextPlaceholder: "#555",
+          fontSize: "11px",
+          boxShadow: "none",
+        },
+      },
+    }}
+  >
     <AutoComplete
-      options={MonthOptions} // Use predefined suggestions
+      style={{
+        width: "100%",
+        fontSize: "11px",
+
+      }}
+      dropdownStyle={{
+        boxShadow: "none",
+      }}
+      options={MonthOptions}
+      dropdownClassName="custom-autocomplete-dropdown"
       value={autoCompleteValue}
-      disabled={disabled} // Control if it should be editable
-      onChange={handleChange} // Event handler for when value changes
+      disabled={disabled}
+      onChange={onChange}
       placeholder="Select month and year"
-      style={{ width: '100%' }}
-    //   filterOption={(inputValue, option) =>
-    //     option.value.toUpperCase().includes(inputValue.toUpperCase())
-    //   }
       allowClear={true}
-    />
+    >
+      <Input
+        style={{
+          fontSize: "11px", // Set the font size for input field
+          height: "30px",
+          padding: "4px 8px",
+        }}
+      />
+    </AutoComplete>
+  </ConfigProvider>
   );
 };
 

@@ -1,5 +1,6 @@
 import React from 'react';
-import { AutoComplete } from 'antd';
+import { ConfigProvider, AutoComplete, Input } from 'antd';
+import './industrytype.css';
 
 // Define the list of predefined industry types for autocomplete
 const industryTypeOptions = [
@@ -11,16 +12,46 @@ const industryTypeOptions = [
 
 const IndustryTypeAutoComplete = ({ value, disabled, onChange }) => {
   return (
-    <AutoComplete
-      options={industryTypeOptions} // Use predefined suggestions
-      value={value}
-      disabled={disabled} // Control if it should be editable
-      onChange={onChange} // Event handler for when value changes
-      placeholder="Select or type industry type"
-      style={{width: '100%', color: '#aaa'}}
-      filterOption={(inputValue, option) => option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1}
-      allowClear={true}
-    />
+    <ConfigProvider
+      theme={{
+        components: {
+          AutoComplete: {
+            optionFontSize: 10,
+            colorTextPlaceholder: "#555",
+            fontSize: "11px",
+            boxShadow: "none",
+          },
+        },
+      }}
+    >
+      <AutoComplete
+        style={{
+          width: "100%",
+          fontSize: "11px",
+        }}
+        dropdownStyle={{
+          boxShadow: "none",
+        }}
+        options={industryTypeOptions}
+        dropdownClassName="custom-autocomplete-dropdown"
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+        placeholder="Select or type industry subtype"
+        filterOption={(inputValue, option) =>
+          option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+        }
+        allowClear={true}
+      >
+        <Input
+          style={{
+            fontSize: "11px", // Set the font size for input field
+            height: "30px",
+            padding: "4px 8px",
+          }}
+        />
+      </AutoComplete>
+    </ConfigProvider>
   );
 };
 

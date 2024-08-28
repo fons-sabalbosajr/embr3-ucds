@@ -112,7 +112,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
 
   useEffect(() => {
     axios
-      .get(`https://embr3-ucds.onrender.com/api/ucds-data/${editedRecord.id_no}`)
+      .get(`http://localhost:8081/api/ucds-data/${editedRecord.id_no}`)
       .then((response) => {
         setUcdsData(response.data);
       })
@@ -212,7 +212,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
 
       // Call the API to generate PDF
       const response = await axios.get(
-        `https://embr3-ucds.onrender.com/generate-custom-icir/${editedRecord.id_no}`,
+        `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -265,7 +265,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       document.body.style.cursor = "wait";
   
       // Fetch current user with credentials
-      const userResponse = await axios.get("https://embr3-ucds.onrender.com/current-user", {
+      const userResponse = await axios.get("http://localhost:8081/current-user", {
         withCredentials: true,
       });
       const currentUser = userResponse.data;
@@ -293,7 +293,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   
       // Call the API to generate PDF
       const response = await axios.get(
-        `https://embr3-ucds.onrender.com/generate-custom-icir/${editedRecord.id_no}`,
+        `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -323,7 +323,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       formData.append("pdfFile", blob, fileName); // Attach file with filename
   
       // Save draft report to MongoDB
-      await axios.post("https://embr3-ucds.onrender.com/save-draft-report", formData, {
+      await axios.post("http://localhost:8081/save-draft-report", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           withCredentials: true, 

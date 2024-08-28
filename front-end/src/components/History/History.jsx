@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Table, Button, Modal } from "antd";
+import { Table, Button, Modal, Input } from "antd";
 import axios from "axios";
 import {
   EyeFilled,
@@ -7,53 +7,72 @@ import {
   EditFilled,
   ToTopOutlined,
   QuestionCircleOutlined,
+  DatabaseFilled,
 } from "@ant-design/icons";
 import { format } from "date-fns";
 import "./history.css";
 
-const Summary = () => {
+const History = () => {
   const [logs, setLogs] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalData, setModalData] = useState(null);
+  const [usernames, setUsernames] = useState({});
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const response = await axios.get("https://embr3-ucds.onrender.com/api/logs", {
-          withCredentials: true,
-        });
-        // Filter out logs where the username is "Anonymous"
-        const filteredLogs = response.data.filter(
-          (log) =>
-            log.username !== "Anonymous" &&
-            ["View Data", "Update Data"].includes(log.actionType)
-        );
-        setLogs(filteredLogs);
-      } catch (error) {
-        console.error("Error fetching logs:", error);
-      }
-    };
+    const permission = localStorage.getItem("permission").replace(/"/g, "");
+    const username = localStorage.getItem("username").replace(/"/g, "");
+    //console.log("Current user permission:", permission);
+    //console.log("Current username:", username);
 
-    fetchLogs();
+    if (permission === "admin" || permission === "developer") {
+      const fetchLogs = async () => {
+        try {
+          //console.log("Fetching all logs");
+
+          const logsResponse = await axios.get(
+            "http://localhost:8081/api/logs?all=true",
+            {
+              withCredentials: true,
+            }
+          );
+
+          setLogs(logsResponse.data);
+        } catch (error) {
+          console.error("Error fetching logs:", error);
+          throw error; // re-throw the error to propagate it up the call stack
+        }
+      };
+
+      fetchLogs();
+    } else if (permission === "viewer" || permission === "contributor") {
+      const fetchLogs = async () => {
+        try {
+          //console.log(`Fetching logs for ${username}`);
+
+          const logsResponse = await axios.get(
+            `http://localhost:8081/api/logs?username=${username}`,
+            {
+              withCredentials: true,
+            }
+          );
+
+          setLogs(logsResponse.data);
+        } catch (error) {
+          console.error("Error fetching logs:", error);
+          throw error; // re-throw the error to propagate it up the call stack
+        }
+      };
+
+      fetchLogs();
+    } else {
+      console.log("You do not have permission to view logs");
+      setLogs([]);
+    }
   }, []);
 
-  // Function to fetch user details based on username
-  const fetchUserName = async (username) => {
-    try {
-      const response = await axios.get(
-        `https://embr3-ucds.onrender.com/api/logs-users?username=${username}`
-      );
-      return response.data.name; // Adjust based on your API response structure
-    } catch (error) {
-      console.error("Error fetching user name:", error);
-      return username; // Return the username if the fetch fails
-    }
-  };
-
-  const showModal = async (record) => {
-    const userName = await fetchUserName(record.username);
-    const dataWithUserName = { ...record, username: userName };
-    setModalData(dataWithUserName);
+  const showModal = (record) => {
+    setModalData(record);
     setIsModalVisible(true);
   };
 
@@ -62,7 +81,16 @@ const Summary = () => {
     setModalData(null);
   };
 
-  // Function to get the icon with the appropriate color based on action type
+  const handleSearch = (e) => {
+    setSearchText(e.target.value);
+  };
+
+  const filteredLogs = logs.filter((log) => {
+    return Object.values(log).some((value) =>
+      value.toString().toLowerCase().includes(searchText.toLowerCase())
+    );
+  });
+
   const getIcon = (actionType) => {
     switch (actionType) {
       case "Update Data":
@@ -95,22 +123,24 @@ const Summary = () => {
             style={{ color: "blue", fontSize: "20px", marginLeft: "-10px" }}
           />
         );
+      case "Generic Action":
+        return (
+          <DatabaseFilled
+            style={{ color: "gray", fontSize: "20px", marginLeft: "-10px" }}
+          />
+        );
       default:
         return null;
     }
   };
 
-  const formatTimestamp = (timestamp) => {
-    return format(new Date(timestamp), "MMMM-dd-yyyy hh:mm a"); // Use date-fns format function
-  };
-
   const columns = [
     {
-      title: null, // Hide the header
+      title: null,
       dataIndex: "message",
       key: "message",
       align: "left",
-      width: 200,
+      width: 230,
       render: (text, record) => (
         <div className="card-container">
           <div className="card-header">
@@ -132,7 +162,7 @@ const Summary = () => {
             <div className="card-subtext">
               {record.username && (
                 <div>
-                  {record.username} •{" "}
+                  {usernames[record.username] || record.username} •{" "}
                   {record.actionType === "Update"
                     ? record.requestData.project_title
                     : formatActionLabel(record.actionLabel)}
@@ -146,7 +176,7 @@ const Summary = () => {
     {
       title: "Actions",
       key: "actions",
-      width: 100,
+      width: 50,
       render: (text, record) => (
         <div className="actions-container">
           <Button type="link" onClick={() => showModal(record)}>
@@ -163,7 +193,7 @@ const Summary = () => {
       dataIndex: "key",
       key: "key",
       align: "left",
-      width: 150
+      width: 150,
     },
     {
       title: "Description",
@@ -175,52 +205,49 @@ const Summary = () => {
 
   const getModalData = (data) => {
     if (!data) return [];
-  
-    // Define fields to exclude
-    const fieldsToExclude = ["_id", "userId", "method", "path" ,"actionLabel"];
-  
-    // Define field name mappings
+
+    const fieldsToExclude = ["_id", "userId", "method", "path", "actionLabel"];
+
     const fieldMappings = {
       timestamp: "Date Modified",
       username: "Name",
       actionType: "Action Type",
       requestData: "Update Details",
-      // Add other field mappings as needed
     };
-  
-    // Function to remove curly braces from a JSON string
+
     const removeCurlyBraces = (str) => {
-      // Parse the string to a JSON object
       let obj;
       try {
         obj = JSON.parse(str);
       } catch {
-        return str; // If parsing fails, return the original string
+        return str;
       }
-  
-      // Convert object to a string without curly braces
+
       return Object.entries(obj)
         .map(([key, value]) => `${key}: ${value}`)
         .join("\n");
     };
-  
-    // Convert the data object into an array of key-value pairs
+
     const entries = Object.entries(data)
       .filter(([key]) => !fieldsToExclude.includes(key))
       .map(([key, value]) => {
         let displayValue = value;
-  
+
         if (key === "actionLabel") {
           displayValue = formatActionLabel(value);
         } else if (key === "timestamp") {
           displayValue = format(new Date(value), "MMMM dd, yyyy hh:mm a");
         } else if (key === "requestData" && typeof value === "object") {
-          // Remove curly braces from requestData
           displayValue = removeCurlyBraces(JSON.stringify(value));
         } else if (typeof value === "object") {
-          displayValue = removeCurlyBraces(JSON.stringify(value));
+          try {
+            displayValue = removeCurlyBraces(JSON.stringify(value));
+          } catch (error) {
+            console.error("Error parsing value as JSON:", error);
+            displayValue = value;
+          }
         }
-  
+
         return {
           key: fieldMappings[key] || key,
           value: displayValue,
@@ -229,55 +256,48 @@ const Summary = () => {
 
     return entries;
   };
-  
-  
+
   const formatActionLabel = (label) => {
     try {
-      // Clean up the label string by removing known prefixes
       const cleanedLabel = label
-        .replace(/^Added data: /, "") // Remove "Added data: " prefix if present
-        .replace(/^Updated fields: /, "") // Remove "Updated fields: " prefix if present
-        .trim(); // Remove any leading or trailing whitespace
-  
-      // Attempt to parse the cleaned label as JSON
+        .replace(/^Added data: /, "")
+        .replace(/^Updated fields: /, "")
+        .trim();
+
       const parsed = JSON.parse(cleanedLabel);
-      
-      // Format each key-value pair
+
       return Object.entries(parsed)
         .map(([field, value]) => {
-          // Check if the value is an object and format accordingly
-          if (typeof value === 'object' && value !== null) {
-            return `${field}: \n${JSON.stringify(value, null, 2)}`; // Indented JSON string
-          } else {
-            return `${field}: ${value}`;
-          }
+          return `${field}: ${value}`;
         })
-        .join("\n"); // Join entries with new lines
-    } catch (e) {
-      // Handle JSON parsing errors
-      console.error("Error parsing actionLabel:", e);
-      console.error("Action Label Content:", label); // Log the problematic label
-      return label; // Return the original label if parsing fails
+        .join(", ");
+    } catch {
+      return label;
     }
   };
-  
-  
-  
-  
 
   return (
-    <>
-      <h3 className="summary-title">Recent Changes</h3>
+    <div>
+      <h3 className="summary-title">
+        System Changes
+        <Input
+          placeholder="Search"
+          value={searchText}
+          onChange={handleSearch}
+          style={{ width: 170, marginLeft: 10 }}
+          size="small"
+        />
+      </h3>
       <div className="summary-container">
         <Table
           columns={columns}
-          dataSource={logs}
+          dataSource={filteredLogs}
           rowKey={(record) => record._id}
           pagination={false}
-          className="log-table"
+          className="log-table custom-pagination"
           showHeader={false}
           style={{ width: "100%" }}
-          scroll={{ y: 400 }} // Enable vertical scrolling with fixed height
+          scroll={{ y: 520 }}
         />
         {modalData && (
           <Modal
@@ -296,8 +316,8 @@ const Summary = () => {
           </Modal>
         )}
       </div>
-    </>
+    </div>
   );
 };
 
-export default Summary;
+export default History;

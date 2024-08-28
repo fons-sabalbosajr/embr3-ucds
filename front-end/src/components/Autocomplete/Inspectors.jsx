@@ -1,5 +1,6 @@
 import React from "react";
-import { AutoComplete } from "antd";
+import { ConfigProvider, AutoComplete, Input } from "antd";
+import "./inspectors.css"
 
 // Define the list of predefined industry types for autocomplete
 const InspectorOptions = [
@@ -87,18 +88,47 @@ const InspectorOptions = [
 
 const Inspectors = ({ value, disabled, onChange }) => {
   return (
+    <ConfigProvider
+    theme={{
+      components: {
+        AutoComplete: {
+          optionFontSize: 10,
+          colorTextPlaceholder: "#555",
+          fontSize: "11px",
+          boxShadow: "none",
+        },
+      },
+    }}
+  >
     <AutoComplete
-      options={InspectorOptions} // Use predefined suggestions
+      style={{
+        width: "100%",
+        fontSize: "11px",
+
+      }}
+      dropdownStyle={{
+        boxShadow: "none",
+      }}
+      options={InspectorOptions}
+      dropdownClassName="custom-autocomplete-dropdown"
       value={value}
-      disabled={disabled} // Control if it should be editable
-      onChange={onChange} // Event handler for when value changes
+      disabled={disabled}
+      onChange={onChange}
       placeholder="Select inspector/handler"
-      style={{ width: "100%" }}
       filterOption={(inputValue, option) =>
         option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
       }
       allowClear={true}
-    />
+    >
+      <Input
+        style={{
+          fontSize: "11px", // Set the font size for input field
+          height: "30px",
+          padding: "4px 8px",
+        }}
+      />
+    </AutoComplete>
+  </ConfigProvider>
   );
 };
 

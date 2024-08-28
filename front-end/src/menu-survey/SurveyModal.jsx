@@ -58,7 +58,7 @@ const SurveyModal = ({ record, onUpdate, onClose, handleReload }) => {
           const { _id, ...updatedFields } = editedRecord;
   
           const response = await axios.put(
-            `https://embr3-ucds.onrender.com/api/update-survey-data/${editedRecord.id_no}`, // Ensure this matches your API
+            `http://localhost:8081/api/update-survey-data/${editedRecord.id_no}`, // Ensure this matches your API
             updatedFields // Send only the fields to be updated
           );
   

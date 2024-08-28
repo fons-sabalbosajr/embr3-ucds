@@ -59,7 +59,7 @@ const Survey = ({ theme }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await fetch("https://embr3-ucds.onrender.com/api/surveys", {
+      const response = await fetch("http://localhost:8081/api/surveys", {
         method: 'GET',
         credentials: 'include' 
       });
@@ -172,7 +172,7 @@ const Survey = ({ theme }) => {
     });
 
     try {
-      await fetch("https://embr3-ucds.onrender.com/api/update-color", {
+      await fetch("http://localhost:8081/api/update-color", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -264,7 +264,7 @@ const Survey = ({ theme }) => {
   const handleUpdate = async (record) => {
     try {
       // Update the record
-      await axios.put(`https://embr3-ucds.onrender.com/api/survey/${record._id}`, {
+      await axios.put(`http://localhost:8081/api/survey/${record._id}`, {
         survey_eia: record.survey_eia,
         survey_air: record.survey_air,
         survey_water: record.survey_water,

@@ -1,41 +1,39 @@
 import React, { useState, useEffect } from "react";
 import {
   Table,
-  Input,
-  Tooltip,
   Button,
   Modal,
-  Progress,
-  Select,
-  Pagination,
-  Tabs,
   Row,
   Col,
   Checkbox,
   Typography,
   Card,
-  DatePicker,
-  Space,
-  Spin,
-  TimePicker,
+  Input,
   notification,
-  Tag,
 } from "antd";
 import "./permits.css";
-import moment from "moment";
 import TextArea from "antd/es/input/TextArea";
-import styled from "styled-components";
 
-const { Option } = Select;
-const { TabPane } = Tabs;
 const { Paragraph } = Typography;
-const BoldTab = styled.span`
-  font-weight: 600;
-  font-size: 16px;
-`;
+const { confirm } = Modal;
 
-const Permits = ({ editedRecord, handleChange, isEditing }) => {
+const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
+  const [dataSource, setDataSource] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (editedRecord) {
+      setDataSource([
+        {
+          key: "1",
+          permitNo: editedRecord?.chemical_permit || "",
+          permitIssued: editedRecord?.chem_permit_issued || "",
+          permitExpiration: editedRecord?.chem_permit_exp || "",
+        },
+      ]);
+    }
+  }, [editedRecord]);
+
   const showModal = () => {
     setIsModalVisible(true);
   };
@@ -44,9 +42,92 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
     setIsModalVisible(false);
   };
 
-  const handleCancel = () => {
+  const handleCancelPermit = () => {
     setIsModalVisible(false);
   };
+
+  const handleSavePermit = () => {
+    confirm({
+      title: "Save Changes",
+      content: "Are you sure you want to save the changes?",
+      okText: "Save",
+      cancelText: "Cancel",
+      onOk() {
+        console.log("onOk triggered");
+  
+        // Update the editedRecord with the current dataSource values
+        const updatedRecord = { ...editedRecord };
+        updatedRecord.chemical_permit = dataSource[0].permitNo;
+        updatedRecord.chem_permit_issued = dataSource[0].permitIssued;
+        updatedRecord.chem_permit_exp = dataSource[0].permitExpiration;
+  
+        // Update the dataSource state with the new values
+        setDataSource([
+          {
+            key: "1",
+            permitNo: updatedRecord.chemical_permit,
+            permitIssued: updatedRecord.chem_permit_issued,
+            permitExpiration: updatedRecord.chem_permit_exp,
+          },
+        ]);
+  
+        // Trigger the parent component's save function
+        onSaveChanges(updatedRecord, false);
+  
+        notification.success({
+          message: "Success",
+          description: "Your changes have been saved successfully.",
+        });
+      },
+      onCancel() {
+        console.log("Changes discarded");
+      },
+    });
+  };
+
+  const renderTextArea = (text, record, dataIndex) => (
+    <TextArea
+      value={record[dataIndex]}
+      onChange={(e) => {
+        const newDataSource = [...dataSource];
+        const index = newDataSource.findIndex(
+          (item) => item.key === record.key
+        );
+        newDataSource[index][dataIndex] = e.target.value;
+        setDataSource(newDataSource);
+      }}
+      autoSize={{ minRows: 1 }}
+      bordered={false}
+      style={{ borderColor: "transparent" }}
+      size="small"
+    />
+  );
+
+  const columns = [
+    {
+      title: "Permit No.",
+      dataIndex: "permitNo",
+      key: "permitNo",
+      width: "300px",
+      align: "left",
+      render: (text, record) => renderTextArea(text, record, "permitNo"),
+    },
+    {
+      title: "Permit Issued",
+      dataIndex: "permitIssued",
+      key: "permitIssued",
+      align: "left",
+      render: (text, record) => renderTextArea(text, record, "permitIssued"),
+    },
+    {
+      title: "Permit Expiration",
+      dataIndex: "permitExpiration",
+      key: "permitExpiration",
+      align: "left",
+      render: (text, record) =>
+        renderTextArea(text, record, "permitExpiration"),
+    },
+  ];
 
   return (
     <div>
@@ -55,8 +136,7 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
           <Card
             style={{
               width: 600,
-              marginBottom: 20,
-              padding: 5,
+              marginBottom: 10,
             }}
             size="small"
             title={
@@ -78,26 +158,6 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                   {editedRecord?.pd1586 === "REQUIRED" ? "" : ""}
                   <span className="permit-label">PD1586</span>
                 </Checkbox>
-                {/* <div className="add-remove-container">
-                <Tooltip title="Add New Permit">
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={handleAddRowECC}
-                    disabled={rowsECC.length >= maxRowsECC}
-                    style={{ marginRight: 8 }}
-                  />
-                </Tooltip>
-                <Tooltip title="Remove">
-                  <Button
-                    type="primary"
-                    danger
-                    icon={<MinusOutlined />}
-                    onClick={handleRemoveRowECC}
-                    disabled={rowsECC.length <= 1}
-                  />
-                </Tooltip>
-              </div> */}
               </div>
             }
           >
@@ -110,7 +170,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("ecc_cnc", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -124,11 +185,12 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={12} lg={12} className="row-bot">
                 <Paragraph>
                   <strong>Date Approved</strong>
                   <TextArea
@@ -138,11 +200,12 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={12} lg={12} className="row-bot">
                 <Paragraph>
                   <strong>Date Amended</strong>
                   <TextArea
@@ -152,7 +215,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -162,8 +226,7 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
           <Card
             style={{
               width: 600,
-              marginBottom: 20,
-              padding: 5,
+              marginBottom: 10,
             }}
             size="small"
             title={
@@ -183,40 +246,42 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                   style={{ fontSize: "15px" }}
                 >
                   {editedRecord?.ra8749 === "REQUIRED" ? "" : ""}
-                  <span className="permit-label">RA9275</span>
+                  <span className="permit-label">RA8749</span>
                 </Checkbox>
               </div>
             }
           >
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={8} lg={8}>
                 <Paragraph>
-                  <strong>WWDP Code</strong>
+                  <strong>PTO Code</strong>
                   <TextArea
                     value={editedRecord ? editedRecord.pto_code : ""}
                     onChange={(e) => handleChange("pto_code", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-              <Col xs={24} sm={24} md={12} lg={12}></Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
+
+              <Col xs={24} sm={24} md={8} lg={8}>
                 <Paragraph>
-                  <strong>WWDP Date Issued</strong>
+                  <strong>PTO Date Issued</strong>
                   <TextArea
                     value={editedRecord ? editedRecord.pto_issued : ""}
                     onChange={(e) => handleChange("pto_issued", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={8} lg={8}>
                 <Paragraph>
-                  <strong>WWDP Date of Expiration</strong>
+                  <strong>PTO Date of Expiration</strong>
                   <TextArea
                     value={editedRecord ? editedRecord.pto_expiration : ""}
                     onChange={(e) =>
@@ -224,7 +289,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -234,8 +300,7 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
           <Card
             style={{
               width: 600,
-              marginBottom: 20,
-              padding: 5,
+              marginBottom: 10,
             }}
             size="small"
             title={
@@ -261,7 +326,7 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
             }
           >
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={8} lg={8}>
                 <Paragraph>
                   <strong>WWDP Code</strong>
                   <TextArea
@@ -269,12 +334,12 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("wwdp_code", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-              <Col xs={24} sm={24} md={12} lg={12}></Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={8} lg={8}>
                 <Paragraph>
                   <strong>WWDP Date Issued</strong>
                   <TextArea
@@ -284,11 +349,12 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
+              <Col xs={24} sm={24} md={8} lg={8}>
                 <Paragraph>
                   <strong>WWDP Date of Expiration</strong>
                   <TextArea
@@ -298,7 +364,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -309,7 +376,6 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
             style={{
               width: 600,
               marginBottom: 10,
-              padding: 5,
             }}
             size="small"
             title={
@@ -343,7 +409,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("haz_id", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -355,7 +422,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("haz_issued", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -367,8 +435,7 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
           <Card
             style={{
               width: 600,
-              marginBottom: 20,
-              padding: 5,
+              marginBottom: 10,
             }}
             size="small"
             title={
@@ -380,14 +447,17 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.tsd === "REQUIRED"}
+                  checked={editedRecord?.tsd_required === "REQUIRED"}
                   disabled={!isEditing}
                   onChange={(e) =>
-                    handleChange("tsd", e.target.checked ? "REQUIRED" : "")
+                    handleChange(
+                      "tsd_required",
+                      e.target.checked ? "REQUIRED" : ""
+                    )
                   }
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.tsd === "REQUIRED" ? "" : ""}
+                  {editedRecord?.tsd_required === "REQUIRED" ? "" : ""}
                   <span className="permit-label">TSD Permit</span>
                 </Checkbox>
               </div>
@@ -396,13 +466,29 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
-                  <strong>TSD Date of Expiration</strong>
+                  <strong>TSD Reference No.</strong>
                   <TextArea
-                    value={editedRecord ? editedRecord.tsd_ref_no : ""}
-                    onChange={(e) => handleChange("tsd_ref_no", e.target.value)}
+                    value={editedRecord ? editedRecord.tsd : ""}
+                    onChange={(e) => handleChange("tsd", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
                     rows={1}
+                    className="text-area-permit"
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph>
+                  <strong>TSD Date of Expiration</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.tsd_expiration : ""}
+                    onChange={(e) =>
+                      handleChange("tsd_expiration", e.target.value)
+                    }
+                    disabled={!isEditing}
+                    placeholder="No data"
+                    rows={1}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -412,8 +498,7 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
           <Card
             style={{
               width: 600,
-              marginBottom: 20,
-              padding: 5,
+              marginBottom: 10,
             }}
             size="small"
             title={
@@ -425,14 +510,17 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.tp_trc === "REQUIRED"}
+                  checked={editedRecord?.tp_trc_required === "REQUIRED"}
                   disabled={!isEditing}
                   onChange={(e) =>
-                    handleChange("tp_trc", e.target.checked ? "REQUIRED" : "")
+                    handleChange(
+                      "tp_trc_required",
+                      e.target.checked ? "REQUIRED" : ""
+                    )
                   }
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.tp_trc === "REQUIRED" ? "" : ""}
+                  {editedRecord?.tp_trc_required === "REQUIRED" ? "" : ""}
                   <span className="permit-label">TP/TRC Permit</span>
                 </Checkbox>
               </div>
@@ -441,115 +529,39 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
-                  <strong>TP/TRC Date of Expiration</strong>
+                  <strong>TP/TRC Reference No. </strong>
                   <TextArea
-                    value={editedRecord ? editedRecord.tsd_ref_no : ""}
-                    onChange={(e) => handleChange("tsd_ref_no", e.target.value)}
+                    value={editedRecord ? editedRecord.tp_trc : ""}
+                    onChange={(e) => handleChange("tp_trc", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card
-            style={{
-              width: 600,
-              marginBottom: 20,
-              padding: 5,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={editedRecord?.chemical_permit === "REQUIRED"}
-                  disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange(
-                      "chemical_permit",
-                      e.target.checked ? "REQUIRED" : ""
-                    )
-                  }
-                  style={{ fontSize: "15px" }}
-                >
-                  {editedRecord?.chemical_permit === "REQUIRED" ? "" : ""}
-                  <span className="permit-label">Chemical Permits</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={6} lg={6}>
-                <Paragraph>
-                  <strong>Permit Type:</strong>
-                  <Input
-                    value={
-                      editedRecord ? editedRecord.chemical_permit_type : ""
-                    }
-                    onChange={(e) =>
-                      handleChange("chemical_permit_type", e.target.value)
-                    }
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={1}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={6} lg={6}>
-                <Paragraph>
-                  <strong>Sub-Type:</strong>
-                  <Input
-                    value={
-                      editedRecord ? editedRecord.chemical_permit_sub_type : ""
-                    }
-                    onChange={(e) =>
-                      handleChange("chemical_permit_sub_type", e.target.value)
-                    }
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
-                  <strong>Chemical Code:</strong>
-                  <Input
-                    value={editedRecord ? editedRecord.chemical_code : ""}
+                  <strong>TP/TRC Date of Expiration </strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.tp_trc_expiration : ""}
                     onChange={(e) =>
-                      handleChange("chemical_code", e.target.value)
+                      handleChange("tp_trc_expiration", e.target.value)
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
             </Row>
-            <Button
-              type="default"
-              size="small"
-              className="btn-chemical-viewmore"
-              onClick={showModal}
-              disabled={!isEditing}
-            >
-              View More Information...
-            </Button>
           </Card>
 
           <Card
             style={{
               width: 600,
               marginBottom: 10,
-              padding: 5,
             }}
             size="small"
             title={
@@ -583,7 +595,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("pco_no", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -597,7 +610,8 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     }
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -611,12 +625,11 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("pco_name", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
-            </Row>
-            <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>PCO Contact No.:</strong>
@@ -625,33 +638,94 @@ const Permits = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) => handleChange("pco_tel_no", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
-                    rows={1}
+                    rows={2}
+                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
             </Row>
           </Card>
+
+          <Card
+            style={{
+              width: 600,
+              marginBottom: 10,
+            }}
+            size="small"
+            title={
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Checkbox
+                  checked={
+                    editedRecord?.chemical_permit_required === "REQUIRED"
+                  }
+                  disabled={!isEditing}
+                  onChange={(e) =>
+                    handleChange(
+                      "chemical_permit_required",
+                      e.target.checked ? "REQUIRED" : ""
+                    )
+                  }
+                  style={{ fontSize: "15px" }}
+                >
+                  {editedRecord?.chemical_permit_required === "REQUIRED"
+                    ? ""
+                    : ""}
+                  <span className="permit-label">Chemical Permits</span>
+                </Checkbox>
+              </div>
+            }
+          >
+            <Button
+              type="default"
+              size="small"
+              className="btn-chemical-viewmore"
+              onClick={showModal}
+              disabled={!isEditing}
+            >
+              View Chemical Permits...
+            </Button>
+          </Card>
         </Col>
 
         <Modal
-          title="Full Information"
+          title={
+            <div className="modal-title-container">
+              <span className="modal-title">
+                Record ID: {editedRecord ? editedRecord.id_no : ""}
+              </span>
+              <span className="modal-title">
+                {editedRecord ? editedRecord.title : ""}
+              </span>
+              <span className="modal-title">
+                {editedRecord ? editedRecord.ecc_cnc : ""}
+              </span>
+            </div>
+          }
           visible={isModalVisible}
-          onOk={handleOk}
-          onCancel={handleCancel}
+          onCancel={handleCancelPermit}
+          footer={[
+            <Button key="cancel" onClick={handleCancelPermit}>
+              Cancel
+            </Button>,
+            <Button key="save" type="primary" onClick={handleSavePermit}>
+              Save
+            </Button>,
+          ]}
+          width={1000}
         >
-          <p>
-            <strong>Permit Type:</strong>{" "}
-            {editedRecord ? editedRecord.chemical_permit_type : "No data"}
-          </p>
-          <p>
-            <strong>Sub-Type:</strong>{" "}
-            {editedRecord ? editedRecord.chemical_permit_sub_type : "No data"}
-          </p>
-          <p>
-            <strong>Chemical Code:</strong>{" "}
-            {editedRecord ? editedRecord.chemical_code : "No data"}
-          </p>
-          {/* Add more fields here if needed */}
+          <Table
+            dataSource={dataSource}
+            columns={columns}
+            pagination={false}
+            bordered
+            className="custom-table"
+          />
         </Modal>
       </Row>
     </div>

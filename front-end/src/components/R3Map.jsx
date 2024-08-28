@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
-import { Card, Row, Col, Button, Alert, Spin } from 'antd';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  InfoWindow,
+} from "@react-google-maps/api";
+import { Card, Row, Col, Button, Alert, Spin } from "antd";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const mapContainerStyle = {
-  width: '100%',
-  height: '550px',
+  width: "100%",
+  height: "550px",
 };
 
 const R3Map = ({ latitude, longitude }) => {
@@ -27,7 +32,9 @@ const R3Map = ({ latitude, longitude }) => {
       setCenter({ lat, lng });
       setLoading(false);
     } else {
-      setError("Please check your coordinates encoded. Close this window and try again.");
+      setError(
+        "Please check your coordinates encoded. Close this window and try again."
+      );
       setLoading(false);
     }
   };
@@ -36,12 +43,12 @@ const R3Map = ({ latitude, longitude }) => {
     handleRefresh();
   }, [latitude, longitude]);
 
-  const onLoad = map => {
+  const onLoad = (map) => {
     mapRef.current = map;
-    console.log('Map loaded:', map);
+    //console.log("Map loaded:", map);
   };
 
-  const handleMarkerClick = place => {
+  const handleMarkerClick = (place) => {
     setSelectedPlace(place);
     setShowInfoWindow(true);
   };
@@ -54,15 +61,31 @@ const R3Map = ({ latitude, longitude }) => {
     <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
       <Card
         title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <span>Industry Map</span>
-            <Button type='primary' onClick={handleRefresh}>Refresh</Button>
+            <Button type="primary" onClick={handleRefresh}>
+              Refresh
+            </Button>
           </div>
         }
       >
         {loading ? (
           <Spin tip="Loading Map..." size="large">
-            <div style={{ width: '100%', height: '550px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}></div>
+            <div
+              style={{
+                width: "100%",
+                height: "550px",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            ></div>
           </Spin>
         ) : error ? (
           <Alert
@@ -74,7 +97,7 @@ const R3Map = ({ latitude, longitude }) => {
           <Row gutter={[16, 16]}>
             <Col span={24}>
               <GoogleMap
-                mapTypeId={'satellite'} 
+                mapTypeId={"satellite"}
                 mapContainerStyle={mapContainerStyle}
                 center={center}
                 zoom={25} // Adjust zoom level as needed
@@ -86,13 +109,18 @@ const R3Map = ({ latitude, longitude }) => {
                   fullscreenControl: true,
                   scaleControl: true,
                   zoomControl: true,
-                  rotateControl: true
+                  rotateControl: true,
                 }}
               >
                 {center && (
                   <Marker
                     position={center}
-                    onClick={() => handleMarkerClick({ name: 'Marker Name', details: 'Marker Details' })}
+                    onClick={() =>
+                      handleMarkerClick({
+                        name: "Marker Name",
+                        details: "Marker Details",
+                      })
+                    }
                   />
                 )}
                 {showInfoWindow && selectedPlace && (

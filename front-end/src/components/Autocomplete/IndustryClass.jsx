@@ -1,5 +1,5 @@
 import React from "react";
-import { AutoComplete, ConfigProvider } from "antd";
+import { AutoComplete, ConfigProvider, Input } from "antd";
 import "./industryclass.css";
 
 // Define the list of predefined industry types for autocomplete
@@ -216,7 +216,7 @@ const IndustryClass = ({ value, disabled, onChange }) => {
       theme={{
         components: {
           AutoComplete: {
-            borderColor: "#ccc",
+            optionFontSize: 10,
             colorTextPlaceholder: "#555",
             fontSize: "11px",
             boxShadow: "none",
@@ -225,25 +225,32 @@ const IndustryClass = ({ value, disabled, onChange }) => {
       }}
     >
       <AutoComplete
-        className="custom-autocomplete"
-        dropdownClassName="custom-autocomplete-dropdown"
-        options={industryClassOptions}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        placeholder="Select or type industry classification"
         style={{
           width: "100%",
-          fontSize: "11px"
+          fontSize: "11px",
         }}
         dropdownStyle={{
           boxShadow: "none",
         }}
+        options={industryClassOptions}
+        dropdownClassName="custom-autocomplete-dropdown"
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+        placeholder="Select or type industry subtype"
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
-        allowClear
-      />
+        allowClear={true}
+      >
+        <Input
+          style={{
+            fontSize: "11px", // Set the font size for input field
+            height: "30px",
+            padding: "4px 8px",
+          }}
+        />
+      </AutoComplete>
     </ConfigProvider>
   );
 };

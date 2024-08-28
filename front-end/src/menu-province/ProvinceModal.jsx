@@ -34,9 +34,9 @@ const ProvinceModal = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
   const [loadingPDF, setLoadingPDF] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false); // State for modal visibility
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [loadingICIR, setLoadingICIR] = useState(false);
-  const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now()); // Change to reset checkboxes
+  const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now());
 
   useEffect(() => {
     setEditedRecord(record);
@@ -49,15 +49,17 @@ const ProvinceModal = ({
     });
   };
 
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = async (showNotification = true) => {
     try {
       const response = await axios.put(
-        `https://embr3-ucds.onrender.com/api/update-data/${record.id_no}`,
+        `http://localhost:8081/api/update-data/${record.id_no}`,
         editedRecord
       );
 
       if (response.status === 200) {
-        Swal.fire("Success", "Changes saved successfully!", "success");
+        if (showNotification) {
+          Swal.fire("Success", "Changes saved successfully!", "success");
+        }
         if (setShouldRefreshTable) {
           setShouldRefreshTable(true);
         }
@@ -104,38 +106,63 @@ const ProvinceModal = ({
     setResetCheckboxesKey(Date.now()); // Trigger checkbox reset
   };
 
+  const onSaveChanges = (updatedRecord, showNotification) => {
+    handleSaveChanges(showNotification);
+  };
+
   return (
     <div className="modal-container">
       <Tabs defaultActiveKey="1">
-        <TabPane tab={<BoldTab>General Information</BoldTab>} key="1">
+        <TabPane
+          tab="General Information"
+          key="1"
+          className="tabpane-container"
+        >
           <GenInfo
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Concerned Unit/Focal Person</BoldTab>} key="2">
+        <TabPane
+          tab="Concerned Unit/Focal"
+          Person
+          key="2"
+          className="tabpane-container"
+        >
           <FocalPerson
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Clearances and Permits</BoldTab>} key="3">
+        <TabPane
+          tab="Clearances and Permits"
+          key="3"
+          className="tabpane-container"
+        >
           <Permit
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
+            onSaveChanges={(updatedRecord, showNotification) => {
+              setEditedRecord(updatedRecord);
+              handleSaveChanges(showNotification);
+            }}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Legal Services Unit</BoldTab>} key="4">
+        <TabPane
+          tab="Legal Services Unit"
+          key="4"
+          className="tabpane-container"
+        >
           <Legal
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Manila Bay Unit</BoldTab>} key="5">
+        <TabPane tab="Manila Bay Unit" key="5" className="tabpane-container">
           <MBU
             editedRecord={editedRecord}
             handleChange={handleChange}
@@ -201,6 +228,7 @@ const ProvinceModal = ({
               onClick={() => setIsEditing(true)}
               type="primary"
               icon={<EditOutlined />}
+              className="button-right"
             >
               Edit
             </Button>

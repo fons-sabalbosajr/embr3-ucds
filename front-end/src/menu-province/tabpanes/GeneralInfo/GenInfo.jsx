@@ -39,7 +39,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
         </Paragraph>
 
         <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+          <Col xs={24} sm={24} md={12} lg={12}>
             <Paragraph>
               <strong>Industry Classification</strong>
               <IndustryClass
@@ -58,6 +58,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("psic_code", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="textbox-label"
               />
             </Paragraph>
           </Col>
@@ -71,7 +72,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             placeholder="No data"
           />
         </Paragraph>
-        <Paragraph>
+        <Paragraph className="label-industry-type">
           <strong>Industry Sub-Type</strong>
           <IndustrySubType
             value={editedRecord ? editedRecord.industry_subtype : ""}
@@ -82,8 +83,8 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
         </Paragraph>
 
         <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
+          <Col xs={24} sm={24} md={12} lg={12} >
+            <Paragraph className="label-industry-type">
               <strong>Latitude</strong>
               <Input
                 value={editedRecord ? editedRecord.lat : ""}
@@ -95,7 +96,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
+            <Paragraph className="label-industry-type">
               <strong>Longitude</strong>
               <Input
                 value={editedRecord ? editedRecord.long : ""}

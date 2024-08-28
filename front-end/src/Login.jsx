@@ -1,59 +1,44 @@
 import React, { useState } from "react";
-import { Form, Input, Button, Spin, message } from "antd";
+import { Form, Input, Button } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./login.css";
 import homelogo from "./assets/emblogomenu.png";
 
-const antIcon = <LoadingOutlined style={{ fontSize: 24 }} spin />;
 
 const Login = () => {
-  const [values, setValues] = useState({ username: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setValues((prevValues) => ({ ...prevValues, [name]: value }));
-  };
-
-  // Use process.env.REACT_APP_BACKEND_URL to access the environment variable
-  const backendUrl = "https://embr3-ucds.onrender.com";
-
-  const api = axios.create({
-    baseURL: backendUrl,
-  });
-
-  api.interceptors.push({
-    request: (config) => {
-      const token = localStorage.getItem("jwtToken");
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-  });
-
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
-
+  
     try {
-      const response = await api.post("/login", {
-        username: values.username,
-        password: values.password,
-      });
+      const response = await axios.post(
+        "http://localhost:8081/login",
+        {
+          username: values.username,
+          password: values.password,
+        },
+        {
+          withCredentials: true,
+        }
+      );
 
-      if (response.data?.token) {
-        // Store the token in localStorage
-        localStorage.setItem("jwtToken", response.data.token);
-        message.success("Login successful!");
-        navigate("/universe"); // Redirect to /universe
-      } else if (response.data?.status === "success") {
-        message.success("Login successful!");
-        navigate("/universe"); // Redirect to /universe
+      console.log("API Response:", response.data); 
+  
+      if (response.data.status === "success") {
+        console.log("Navigation to /universe triggered"); // Debugging output
+        localStorage.setItem("username", response.data.username);
+        localStorage.setItem("permission", JSON.stringify(response.data.permission));
+  
+        // Optional delay to ensure session is established
+        setTimeout(() => {
+          navigate("/universe");
+        }, 500); 
       } else {
         setError("Login failed. Please try again.");
       }
@@ -64,7 +49,9 @@ const Login = () => {
       setIsLoading(false);
     }
   };
+  
 
+  
   return (
     <div className="background-login">
       <div className="background-form">
@@ -84,20 +71,14 @@ const Login = () => {
             <br />
             Universe Centralized Database System
           </p>
-          {error && <p style={{ color: "red" }}>{error}</p>}{" "}
-          {/* Display error message */}
+          {error && <p style={{ color: "red" }}>{error}</p>}
           <Form onFinish={handleSubmit} layout="vertical">
             <Form.Item
               name="username"
               label="Username"
               rules={[{ required: true, message: "Username is required" }]}
             >
-              <Input
-                name="username" // Add this line
-                placeholder="Enter Username"
-                size="large"
-                onChange={handleChange} // Ensure this line is present
-              />
+              <Input placeholder="Enter Username" size="large" />
             </Form.Item>
 
             <Form.Item
@@ -105,12 +86,7 @@ const Login = () => {
               label="Password"
               rules={[{ required: true, message: "Password is required" }]}
             >
-              <Input.Password
-                name="password" // Add this line
-                placeholder="Enter Password"
-                size="large"
-                onChange={handleChange} // Ensure this line is present
-              />
+              <Input.Password placeholder="Enter Password" size="large" />
             </Form.Item>
 
             <Form.Item>
@@ -118,7 +94,7 @@ const Login = () => {
                 type="primary"
                 htmlType="submit"
                 block
-                size="large" // Adjust size here
+                size="large"
                 disabled={isLoading}
                 icon={isLoading ? <LoadingOutlined spin /> : null}
               >
@@ -128,8 +104,7 @@ const Login = () => {
             <Link to="/register">
               <Button block size="large">
                 Create Account
-              </Button>{" "}
-              {/* Adjust size here */}
+              </Button>
             </Link>
           </Form>
         </div>

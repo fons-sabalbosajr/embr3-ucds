@@ -14,17 +14,14 @@ const { Text } = Typography;
 const UserPopover = ({
   name,
   userHandle,
-  theme,
-  handleMenuItemClick,
-  navigate,
   handleLogout,
-  getInitials,
-  toggleTheme,
   selection,
-  handleVisibleChange,
 }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalContent, setModalContent] = useState("");
+
+
+  //console.log('userHandle:', userHandle);
 
   const showModal = (content) => {
     setModalContent(content);

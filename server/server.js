@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const session = require("express-session");
 const { MongoClient, ObjectId, GridFSBucket } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
@@ -39,11 +39,7 @@ function generateRandomPassword(length) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://66bef77df1bcf7c8250d6296--lucent-marigold-2895ad.netlify.app/",
-  "https://lucent-marigold-2895ad.netlify.app/",
-];
+const allowedOrigins = ["http://localhost:5173"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -61,6 +57,24 @@ let postingCollection;
 let reportdraftCollection;
 let surveyCollection;
 let activityLogsCollection;
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false, // Only create sessions when necessary
+    cookie: {
+      secure: process.env.NODE_ENV === "production", // Serve secure cookies in production
+      httpOnly: true, // Prevent client-side JS from accessing the cookie
+      maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    },
+    store: MongoStore.create({
+      mongoUrl: mongoUri,
+      collectionName: "sessions",
+      ttl: 14 * 24 * 60 * 60, // 14 days
+    }),
+  })
+);
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -105,10 +119,8 @@ const corsOptions = {
 };
 
 // Apply CORS middleware
-app.use(cors(corsOptions));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
-
-// Apply middleware for cookies and JSON parsing
 app.use(cookieParser());
 app.use(express.json());
 
@@ -148,40 +160,22 @@ app.post("/register", async (req, res) => {
   }
 });
 
-const generateToken = (user) => {
-  return jwt.sign(
-    { userId: user._id, username: user.username, permission: user.permission },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
-};
-
 const logActivity = async (req, res, next) => {
-  const { method, path, body, headers } = req;
+  const { method, path, body } = req;
 
   // Only log POST (add), PUT (update), PATCH (partial update), and GET (view) requests
   if (!["POST", "PUT", "PATCH", "GET"].includes(method)) {
     return next();
   }
 
-  // Extract JWT from Authorization header
-  const token = headers.authorization && headers.authorization.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).send("Unauthorized: No token provided");
+  // Ensure the user is authenticated via session
+  if (!req.session || !req.session.user) {
+    return res.status(401).send("Unauthorized: No session found");
   }
 
-  let user;
-  try {
-    // Verify JWT and extract user information
-    user = jwt.verify(token, process.env.JWT_SECRET);
-  } catch (error) {
-    console.error("Invalid token:", error);
-    return res.status(401).send("Unauthorized: Invalid token");
-  }
-
-  const userId = user.userId; // Extracted from the token
-  const username = user.username;
+  // Extract user information from the session
+  const userId = req.session.user.userId;
+  const username = req.session.user.username;
 
   // Determine action type and label
   let actionType;
@@ -192,7 +186,7 @@ const logActivity = async (req, res, next) => {
   let collectionName = "";
   if (path.includes("/survey/")) {
     collectionName = "survey-data";
-  } else if (path.includes("/ucds/")) {
+  } else if (path.includes("/update-data/")) {
     collectionName = "ucds-data";
   } else if (path.includes("/postings/")) {
     collectionName = "postings";
@@ -207,7 +201,6 @@ const logActivity = async (req, res, next) => {
   } else if (path.includes("/sign-up/")) {
     collectionName = "sign-up";
   } else {
-    //console.warn("Unknown collection path:", path);
     collectionName = null;
   }
 
@@ -335,22 +328,13 @@ module.exports = logActivity;
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-// Middleware to verify JWT
-const authenticateToken = (req, res, next) => {
-  const token = localStorage.getItem('jwtToken');
-
-  if (!token) {
-    return res.status(401).send({ message: "User not authenticated" });
+const authenticateSession = (req, res, next) => {
+  if (req.session && req.session.user) {
+    console.log("Session authenticated:", req.session.user);
+    return next();
   }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).send({ message: "Token is not valid" });
-    }
-
-    req.user = user;
-    next();
-  });
+  console.log("User not authenticated:", req.session);
+  res.status(401).json({ message: "User not authenticated" });
 };
 
 app.post("/login", async (req, res) => {
@@ -375,50 +359,77 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    const token = generateToken(user);
-
-    // Send the token in the response
-    res.cookie("authToken", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    });
-
-    const loginStatus = {
-      userId: user._id,
+    req.session.user = {
+      userId: user._id.toString(),
       name: user.name,
       username: user.username,
-      isLoggedIn: true,
-      loginTime: new Date(),
       division: user.division,
       permission: user.permission,
+      avatar: user.avatar,
     };
 
     await loginStatusCollection.updateOne(
       { userId: user._id },
-      { $set: loginStatus },
+      {
+        $set: {
+          isLoggedIn: true,
+          loginTime: new Date(),
+          userId: user._id,
+          name: user.name,
+          username: user.username,
+          division: user.division,
+          permission: user.permission,
+        },
+      },
       { upsert: true }
     );
 
-    return res.status(200).json({ status: "success", token });
+    // Send username and permissions in the response
+    res.status(200).json({
+      status: "success",
+      username: user.username,
+      permission: user.permission,
+    });
   } catch (error) {
     console.error("Error during login:", error);
     return res.status(500).json({ error: "An unexpected error occurred." });
   }
 });
 
-// Logout route
-app.post("/logout", logActivity, (req, res) => {
-  res.clearCookie("authToken", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  });
-  res.status(200).send({ message: "Logout successful" });
+app.post("/logout", async (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ message: "You are not logged in" });
+  }
+
+  const userId = req.session.user.userId;
+  //console.log(`Logging out user ${userId}`);
+
+  try {
+    await loginStatusCollection.updateOne(
+      { userId: new ObjectId(userId) },
+      { $set: { isLoggedIn: false, logoutTime: new Date() } }
+    );
+
+    // Clear the session and cookies
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Error destroying session:", err);
+        return res.status(500).json({ message: "Logout failed" });
+      }
+
+      res.clearCookie("connect.sid");
+      res.clearCookie("authToken");
+
+      // Send the final response
+      res.status(200).json({ message: "Logout successful" });
+    });
+  } catch (error) {
+    console.error("Error during logout:", error);
+    res.status(500).json({ message: "An unexpected error occurred." });
+  }
 });
 
-app.get("/api/current-user/avatar", authenticateToken, async (req, res) => {
+app.get("/api/current-user/avatar", authenticateSession, async (req, res) => {
   try {
     const user = await userCollection.findById(req.user.id);
     if (!user) {
@@ -431,37 +442,16 @@ app.get("/api/current-user/avatar", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/check-auth", authenticateToken, async (req, res) => {
-  try {
-    const userId = new ObjectId(req.user.userId);
-
-    const user = await userCollection.findOne({
-      _id: userId,
-    });
-
-    if (!user) {
-      return res.status(401).send({ message: "User not authenticated" });
-    }
-
-    // Log the response data
-    console.log("User data:", {
-      name: user.name,
-      username: user.username,
-      division: user.division,
-      permissions: user.permission,
-    });
-
-    res.json({
-      status: "Success",
-      name: user.name,
-      username: user.username,
-      division: user.division,
-      permissions: user.permission,
-    });
-  } catch (error) {
-    console.error("Error verifying user:", error);
-    res.status(500).send({ message: "Internal Server Error" });
-  }
+app.get("/check-auth", authenticateSession, (req, res) => {
+  res.status(200).json({
+    status: "Success",
+    userId: req.session.user.userId,
+    name: req.session.user.name,
+    username: req.session.user.username,
+    division: req.session.user.division,
+    permission: req.session.user.permission,
+    avatar: req.session.user.avatar,
+  });
 });
 
 // POST /api/newusers - Create a new user with password encryption
@@ -538,7 +528,7 @@ app.post("/api/newusers", async (req, res) => {
   }
 });
 
-app.post("/api/posting", logActivity, async (req, res) => {
+app.post("/api/posting", async (req, res) => {
   try {
     const { title, message, date, acknowledgement, iconType } = req.body;
 
@@ -619,7 +609,7 @@ app.post(
 );
 
 // Update color for a specific survey record
-app.post("/api/update-color", logActivity, async (req, res) => {
+app.post("/api/update-color", async (req, res) => {
   const { id_no, color } = req.body;
 
   if (!id_no || !color) {
@@ -644,7 +634,7 @@ app.post("/api/update-color", logActivity, async (req, res) => {
 });
 
 // Update color for a specific survey record
-app.post("/api/update-color-universe", logActivity, async (req, res) => {
+app.post("/api/update-color-universe", async (req, res) => {
   const { id_no, color } = req.body;
 
   if (!id_no || !color) {
@@ -975,7 +965,7 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
 });
 
 // Check the online users and load
-app.get("/api/online_users", authenticateToken, async (req, res) => {
+app.get("/api/online_users", authenticateSession, async (req, res) => {
   if (!loginStatusCollection || !userCollection) {
     console.error("Collections are not initialized.");
     return res.status(500).json({ error: "Collections are not initialized." });
@@ -1101,12 +1091,173 @@ app.get("/api/get-province-data", async (req, res) => {
       ra6969: doc.ra6969 || "",
       haz_id: doc.haz_id || "",
       haz_issued: doc.haz_issued || "",
+      tsd_required: doc.tsd_required || "",
       tsd: doc.tsd || "",
+      tp_trc_required: doc.tp_trc_required || "",
       tsd_ref_no: doc.tsd_ref_no || "",
       tsd_expiration: doc.tsd_expiration || "",
       tp_trc: doc.tp_trc || "",
       tp_trc_ref_no: doc.tp_trc_ref_no || "",
       tp_trc_expiration: doc.tp_trc_expiration || "",
+      chemical_permit_required: doc.chemical_permit_required || "",
+      chemical_permit: doc.chemical_permit || "",
+      chemical_permit_type: doc.chemical_permit_type || "",
+      chemical_permit_sub_type: doc.chemical_permit_sub_type || "",
+      chem_permit_issued: doc.chem_permit_issued || "",
+      chem_permit_exp: doc.chem_permit_exp || "",
+      pco: doc.pco || "",
+      pco_no: doc.pco_no || "",
+      pco_name: doc.pco_name || "",
+      pco_tel_no: doc.pco_tel_no || "",
+      pco_validity: doc.pco_validity || "",
+      docket_no: doc.docket_no || "",
+      denr_pab_case_no: doc.denr_pab_case_no || "",
+      date_forwarded: doc.date_forwarded || "",
+      date_approved_clegal: doc.date_approved_clegal || "",
+      days_dfda: doc.days_dfda || "",
+      service_mode: doc.service_mode || "",
+      nov_released: doc.nov_released || "",
+      v_pd1586: doc.v_pd1586 || "",
+      v_ra9275: doc.v_ra9275 || "",
+      v_ra8749: doc.v_ra8749 || "",
+      v_haz: doc.v_haz || "",
+      v_tchem: doc.v_tchem || "",
+      tc_date_sched: doc.tc_date_sched || "",
+      tc_date_actual: doc.tc_date_actual || "",
+      time: doc.time || "",
+      legal_officer: doc.legal_officer || "",
+      tc_commitment: doc.tc_commitment || "",
+      pos_paper: doc.pos_paper || "",
+      penalty: doc.penalty || "",
+      amount: doc.amount || "",
+      or_number: doc.or_number || "",
+      tc_order_compliance: doc.tc_order_compliance || "",
+      remarks: doc.remarks || "",
+      resolution: doc.resolution || "",
+      order: doc.order || "",
+      order_status: doc.order_status || "",
+      mbu_priority: doc.mbu_priority || "",
+      mbu_survey: doc.mbu_survey || "",
+      mbu_survey_request: doc.mbu_survey_request || "",
+      dp_universe: doc.dp_universe || "",
+    }));
+
+    return res.status(200).json(formattedData);
+  } catch (error) {
+    console.error("Error retrieving data:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to retrieve data. Please try again later." });
+  }
+});
+
+//get the data per provinces from the server
+app.get("/api/extract-province-data", async (req, res) => {
+  try {
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data");
+
+    await collection.createIndex({ description: "text" });
+    const { province, keyword, startDate, endDate } = req.query;
+
+    let query = {};
+
+    if (keyword) {
+      query.$text = { $search: keyword };
+    }
+
+    if (startDate && endDate) {
+      query.date_approved = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    if (province && province !== "All") {
+      const provinceCapitalized = capitalizeFirstLetter(province);
+      query.province = new RegExp(`^${provinceCapitalized}$`, "i");
+    }
+
+    // Fetch data for the specified province
+    const provinceData = await collection.find(query).toArray();
+
+    if (provinceData.length === 0) {
+      return res
+        .status(404)
+        .json({ message: `No data found for ${province}.` });
+    }
+
+    // Sort the data by Serial_No
+    provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
+
+    // Format the fetched data for the response
+    const formattedData = provinceData.map((doc) => ({
+      id_no: doc.id_no,
+      title: doc.title,
+      name: doc.name,
+      address: doc.address,
+      ecc_cnc: doc.ecc_cnc,
+      industry_class: doc.industry_class,
+      remarks_recommendations: doc.remarks_recommendations,
+      industry_class: doc.industry_class || "",
+      remarks_recommendations: doc.remarks_recommendations || "",
+      industry_type: doc.industry_type || "",
+      industry_subtype: doc.industry_subtype || "",
+      psic_code: doc.psic_code || "",
+      proj_type: doc.proj_type || "",
+      mbu_area: doc.mbu_area || "",
+      waterbody: doc.waterbody || "",
+      long: doc.long || "",
+      lat: doc.lat || "",
+      cong_district: doc.cong_district || "",
+      street: doc.street || "",
+      brgy: doc.brgy || "",
+      city: doc.city || "",
+      province: doc.province || "",
+      emp_no_total: doc.emp_no_total || "",
+      bod: doc.bod || "",
+      fmr_section_incharged: doc.fmr_section_incharged || "",
+      section_incharge: doc.section_incharge || "",
+      handler: doc.handler || "",
+      monitoring_sched: doc.monitoring_sched || "",
+      iis_no: doc.iis_no || "",
+      insp_type: doc.insp_type || "",
+      report_type: doc.report_type || "",
+      date_monitored: doc.date_monitored || "",
+      date_routed: doc.date_routed || "",
+      date_signed: doc.date_signed || "",
+      days_dmds: doc.days_dmds || "",
+      days_dsdrs: doc.days_dsdrs || "",
+      pismu_tracking: doc.pismu_tracking || "",
+      pd1586: doc.pd1586 || "",
+      permit_process: doc.permit_process || "",
+      date_amend: doc.date_amend || "",
+      date_approved: doc.date_approved || "",
+      ra8749: doc.ra8749 || "",
+      pto_code: doc.pto_code || "",
+      pto_issued: doc.pto_issued || "",
+      pto_expiration: doc.pto_expiration || "",
+      ra9275: doc.ra9275 || "",
+      wwdp_code: doc.wwdp_code || "",
+      wwdp_issued: doc.wwdp_issued || "",
+      wwdp_expiration: doc.wwdp_expiration || "",
+      ra6969: doc.ra6969 || "",
+      haz_id: doc.haz_id || "",
+      haz_issued: doc.haz_issued || "",
+      tsd_required: doc.tsd_required || "",
+      tsd: doc.tsd || "",
+      tp_trc_required: doc.tp_trc_required || "",
+      tsd_ref_no: doc.tsd_ref_no || "",
+      tsd_expiration: doc.tsd_expiration || "",
+      tp_trc: doc.tp_trc || "",
+      tp_trc_ref_no: doc.tp_trc_ref_no || "",
+      tp_trc_expiration: doc.tp_trc_expiration || "",
+      chemical_permit_required: doc.chemical_permit_required || "",
       chemical_permit: doc.chemical_permit || "",
       chemical_permit_type: doc.chemical_permit_type || "",
       chemical_permit_sub_type: doc.chemical_permit_sub_type || "",
@@ -1304,11 +1455,29 @@ app.get("/api/ucds-data/:id", async (req, res) => {
 
 app.get("/api/logs", async (req, res) => {
   try {
-    // Assuming the timestamp field is named 'timestamp'
-    const logs = await activityLogsCollection
-      .find()
-      .sort({ timestamp: -1 }) // Sort in descending order
-      .toArray();
+    const username = req.query.username;
+    const permission = req.query.permission;
+    let filter = {};
+
+    if (username) {
+      filter.username = username;
+    }
+
+    if (permission === "admin" || permission === "developer") {
+      // No filter for admin and developer users
+    } else {
+      filter.actionType = { $nin: ["Generic Action", "Patch"] };
+    }
+
+    // Count the total number of logs
+    const totalLogs = await activityLogsCollection.countDocuments(filter);
+
+    //console.log(`Total logs: ${totalLogs}`);
+
+    // Fetch all logs from the collection that match the filter
+    const cursor = activityLogsCollection.find(filter).batchSize(1000);
+    const logs = await cursor.toArray();
+
     res.status(200).json(logs);
   } catch (error) {
     console.error("Error fetching logs:", error);
@@ -1316,31 +1485,8 @@ app.get("/api/logs", async (req, res) => {
   }
 });
 
-app.get("/api/logs-users", async (req, res) => {
-  const username = req.query.username;
-
-  if (!username) {
-    return res
-      .status(400)
-      .json({ error: "Username query parameter is required." });
-  }
-
-  try {
-    const user = await userCollection.findOne({ username });
-    if (user) {
-      // Assuming 'name' is the field you want to return
-      res.status(200).json({ name: user.name });
-    } else {
-      res.status(404).json({ error: "User not found." });
-    }
-  } catch (error) {
-    console.error("Error fetching user:", error);
-    res.status(500).json({ error: "An unexpected error occurred." });
-  }
-});
-
 // API endpoint to get the encoded and updated firms count for the current user
-app.get("/api/firm-count", authenticateToken, async (req, res) => {
+app.get("/api/firm-count", authenticateSession, async (req, res) => {
   try {
     const userId = req.user.id;
     const encodedCount = await ucdsCollection.countDocuments({
@@ -1361,9 +1507,13 @@ app.get("/api/firm-count", authenticateToken, async (req, res) => {
 });
 
 // API endpoint to get recent activity data for the current user
-app.get("/api/recent-activity", authenticateToken, async (req, res) => {
+app.get("/api/recent-activity", authenticateSession, async (req, res) => {
   try {
-    const userId = req.user.id;
+    if (!req.session.user || !req.session.user.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const userId = req.session.user.userId;
     const recentActivity = await ucdsCollection
       .find({ userId: new ObjectId(userId) })
       .sort({ timestamp: -1 })
@@ -1385,8 +1535,6 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     const { id } = req.params;
     const newData = req.body;
 
-    //console.log(`Received update request for id ${id} with data:`, newData);
-
     // Ensure connection to the database
     if (!client.topology.isConnected()) {
       await client.connect();
@@ -1395,7 +1543,11 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     const database = client.db("universe-db");
     const collection = database.collection("ucds-data");
 
-    // console.log("Connected to MongoDB database");
+    // Fetch the existing document before updating
+    const existingData = await collection.findOne({ id_no: parseInt(id) });
+
+    //console.log("Existing Data:", existingData);
+    //console.log("New Data:", newData);
 
     // Perform the update operation
     const result = await collection.updateOne(
@@ -1407,6 +1559,8 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
 
     if (result.modifiedCount === 1) {
       res.status(200).json({ message: "Data updated successfully" });
+    } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
+      res.status(200).json({ message: "No changes were made to the data" });
     } else {
       res.status(404).json({ error: "Data not found or no changes were made" });
     }
@@ -1586,33 +1740,38 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
   }
 });
 
-app.put("/api/postings/:id", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, message, acknowledgement, iconType, date } = req.body;
-    const updateResult = await postingCollection.updateOne(
-      { _id: new ObjectId(id) },
-      {
-        $set: {
-          title,
-          message,
-          acknowledgement,
-          iconType,
-          createdDate: new Date(date), // Ensure date is handled correctly
-        },
+app.put(
+  "/api/postings/:id",
+  logActivity,
+  authenticateSession,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, message, acknowledgement, iconType, date } = req.body;
+      const updateResult = await postingCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            title,
+            message,
+            acknowledgement,
+            iconType,
+            createdDate: new Date(date), // Ensure date is handled correctly
+          },
+        }
+      );
+
+      if (updateResult.matchedCount === 0) {
+        return res.status(404).json({ error: "Posting not found" });
       }
-    );
 
-    if (updateResult.matchedCount === 0) {
-      return res.status(404).json({ error: "Posting not found" });
+      res.json({ message: "Posting updated successfully" });
+    } catch (error) {
+      console.error("Error updating posting:", error);
+      res.status(500).json({ error: "Internal Server Error" });
     }
-
-    res.json({ message: "Posting updated successfully" });
-  } catch (error) {
-    console.error("Error updating posting:", error);
-    res.status(500).json({ error: "Internal Server Error" });
   }
-});
+);
 
 app.patch("/api/postings/:id", logActivity, async (req, res) => {
   try {

@@ -20,12 +20,14 @@ import {
   EyeOutlined,
   ReloadOutlined,
   BgColorsOutlined,
+  ExportOutlined,
 } from "@ant-design/icons";
 import "./province.css";
 import ProvinceModal from "./ProvinceModal";
 import { DataContext } from "./DataContext";
 import Swal from "sweetalert2";
-import { darken } from "polished";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 const capitalizeFirstLetter = (str) => {
   if (!str) return "";
@@ -54,9 +56,7 @@ const Province = ({ theme }) => {
   const [selectedRow, setSelectedRow] = useState(null);
   const [selectedColor, setSelectedColor] = useState({});
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [hoveredRow, setHoveredRow] = useState(null);
-
-  const getDarkerColor = (color) => darken(0.1, color);
+  const [selectedProvince, setSelectedProvince] = useState("");
 
   useEffect(() => {
     if (provinceName) {
@@ -172,7 +172,7 @@ const Province = ({ theme }) => {
     });
 
     try {
-      await fetch("https://embr3-ucds.onrender.com/api/update-color-universe", {
+      await fetch("http://localhost:8081/api/update-color-universe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -623,6 +623,196 @@ const Province = ({ theme }) => {
     },
   ];
 
+  const formatIndustryDetails = (record) => {
+    return `
+      ${record.title || ""}
+      Proponent Name: ${record.name || ""}, 
+      Address: ${record.address || ""}
+    `.trim();
+  };
+
+  const formatPermitsClearances = (record) => {
+    const permits = [];
+
+    if (record.ecc_cnc) {
+      permits.push(`ECC/CNC Ref. No.: ${record.ecc_cnc}`);
+    }
+
+    if (record.pto_code) {
+      permits.push(`PTO Code: ${record.pto_code}`);
+    }
+
+    if (record.wwdp_code) {
+      permits.push(`WWDP Code: ${record.wwdp_code}`);
+    }
+
+    if (record.haz_id) {
+      permits.push(`HWG ID Code: ${record.haz_id}`);
+    }
+
+    if (record.tsd_ref_no) {
+      permits.push(`TSD ID Code: ${record.tsd_ref_no}`);
+    }
+
+    if (record.tp_trc_ref_no) {
+      permits.push(`TP/TRC ID Code: ${record.tp_trc_ref_no}`);
+    }
+
+    if (record.chemical_code) {
+      permits.push(`Chemical Code: ${record.chemical_code}`);
+    }
+
+    if (record.pco_no) {
+      permits.push(`PCO Code: ${record.pco_no}`);
+    }
+
+    return permits.join("\n");
+  };
+
+  // Utility function to extract text content from React elements
+  const extractTextContent = (element) => {
+    if (typeof element === "string") {
+      return element;
+    }
+
+    if (React.isValidElement(element)) {
+      return React.Children.toArray(element.props.children)
+        .map((child) =>
+          typeof child === "string" ? child : extractTextContent(child)
+        )
+        .join("");
+    }
+
+    return "";
+  };
+
+
+  const handleExportPDF = (province) => {
+    console.log("Selected province:", province); // Debugging line
+    const provinceName =
+      typeof province === "object"
+        ? province.name || "Unknown Province"
+        : province;
+
+    console.log("Extracted province name:", provinceName); // Debugging line
+
+    // Check if any checkboxes are selected
+    if (selectedRowKeys.length === 0) {
+      Swal.fire({
+        title: "No Selections Made",
+        text: "No data is selected. Do you want to export all data?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, Export All",
+        cancelButtonText: "Cancel",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          exportAllData(provinceName);
+        }
+      });
+      return;
+    }
+
+    exportSelectedData(provinceName);
+  };
+
+  // Function to export all data
+  const exportAllData = (provinceName) => {
+    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+
+    // Customize title with province name
+    doc.setFontSize(15);
+    doc.text(`Province Data (${provinceName})`, 20, 20);
+
+    // Define columns and data for the PDF
+    const columns = [
+      { title: "ID No.", dataKey: "id_no" },
+      { title: "Industry Details", dataKey: "industryDetails" },
+      { title: "Industry Classification", dataKey: "industry_class" },
+      { title: "Permits/Clearances", dataKey: "permits_clearances" },
+      { title: "Section/Unit Incharged", dataKey: "section_incharge" },
+      { title: "Remarks/Recommendations", dataKey: "remarks_recommendations" },
+    ];
+
+    const data = filteredData.map((record) => ({
+      id_no: record.id_no || "",
+      industryDetails: formatIndustryDetails(record),
+      industry_class: record.industry_class || "",
+      permits_clearances: formatPermitsClearances(record),
+      section_incharge: record.section_incharge || "",
+      remarks_recommendations: record.remarks_recommendations || "",
+    }));
+
+    // Add autoTable to PDF
+    doc.autoTable({
+      startY: 30,
+      columns: columns,
+      body: data,
+      theme: "striped",
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        id_no: { cellWidth: 15 },
+        industryDetails: { cellWidth: 80 },
+        industry_class: { cellWidth: 30 },
+        permits_clearances: { cellWidth: 80 },
+        section_incharge: { cellWidth: 30 },
+      },
+    });
+
+    // Save the PDF
+    doc.save(`Province Data (${provinceName}).pdf`);
+  };
+
+  // Function to export selected data
+  const exportSelectedData = (provinceName) => {
+    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+
+    // Customize title with province name
+    doc.setFontSize(15);
+    doc.text(`Province Data (${provinceName})`, 20, 20);
+
+    // Define columns and data for the PDF
+    const columns = [
+      { title: "ID No.", dataKey: "id_no" },
+      { title: "Industry Details", dataKey: "industryDetails" },
+      { title: "Industry Classification", dataKey: "industry_class" },
+      { title: "Permits/Clearances", dataKey: "permits_clearances" },
+      { title: "Section/Unit Incharged", dataKey: "section_incharge" },
+      { title: "Remarks/Recommendations", dataKey: "remarks_recommendations" },
+    ];
+
+    // Filter data based on selected checkboxes
+    const data = filteredData
+      .filter((record) => selectedRowKeys.includes(record.id_no))
+      .map((record) => ({
+        id_no: record.id_no || "",
+        industryDetails: formatIndustryDetails(record),
+        industry_class: record.industry_class || "",
+        permits_clearances: formatPermitsClearances(record),
+        section_incharge: record.section_incharge || "",
+        remarks_recommendations: record.remarks_recommendations || "",
+      }));
+
+    // Add autoTable to PDF
+    doc.autoTable({
+      startY: 30,
+      columns: columns,
+      body: data,
+      theme: "striped",
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        id_no: { cellWidth: 15 },
+        industryDetails: { cellWidth: 80 },
+        industry_class: { cellWidth: 30 },
+        permits_clearances: { cellWidth: 80 },
+        section_incharge: { cellWidth: 30 },
+      },
+    });
+
+    // Save the PDF
+    doc.save(`Province Data (${provinceName}).pdf`);
+  };
+
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
@@ -631,6 +821,12 @@ const Province = ({ theme }) => {
           className="refresh-button"
           icon={<ReloadOutlined />}
           onClick={handleReload}
+          loading={loading}
+        ></Button>
+        <Button
+          className="refresh-button"
+          icon={<ExportOutlined />}
+          onClick={() => handleExportPDF(selectedProvince)}
           loading={loading}
         ></Button>
         <Button type="primary" className="add-industry-button">
