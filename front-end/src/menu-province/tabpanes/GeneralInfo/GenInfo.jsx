@@ -24,7 +24,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             onChange={(e) => handleChange("title", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
-            className="textbox-label"
+            className="textbox-label disabled-input"
           />
         </Paragraph>
         <Paragraph>

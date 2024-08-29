@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Input,
-  Select,
-  Tabs,
   Row,
   Col,
   Checkbox,
@@ -12,71 +10,203 @@ import {
   ConfigProvider,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import styled from "styled-components";
-import moment from "moment";
+import dayjs from "dayjs";
 import "./focalperson.css";
 import SectionInCharged from "../../../components/Autocomplete/SectionInCharge";
 import Inspector from "../../../components/Autocomplete/Inspectors";
 import Month from "../../../components/Autocomplete/Month";
 import ReportType from "../../../components/Autocomplete/ReportType";
 import InspectionType from "../../../components/Autocomplete/InspectionType";
-import Inspectors from "../../../components/Autocomplete/Inspectors";
+import WWTFType from "../../../components/Autocomplete/WWTFType";
 
-const { Option } = Select;
-const { TabPane } = Tabs;
 const { Paragraph } = Typography;
-const BoldTab = styled.span`
-  font-weight: 600;
-  font-size: 16px;
-`;
 
-const capitalizeFirstLetter = (str) => {
-  if (!str) return "";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-};
+function calculateWeekdayDiff(startDate, endDate) {
+  const startDayjs = dayjs(startDate);
+  const endDayjs = dayjs(endDate);
+  const totalDays = endDayjs.diff(startDayjs, "day");
+  let weekendDays = 0;
 
-const normalizeAndSplit = (str) => {
-  return str
-    .replace(/_/g, " ") // Replace underscores with spaces
-    .replace(/\s+/g, " ") // Replace multiple spaces with a single space
-    .split(/(?<!,\s)[\n,]/) // Split by new lines and commas
-    .map((s, i, arr) => {
-      if (
-        i < arr.length - 1 &&
-        arr[i + 1] &&
-        arr[i + 1].trim().startsWith(",")
-      ) {
-        return s.trim() + ", ";
-      }
-      return s.trim();
-    }) // Trim each string and add ", " if the next element starts with a comma
-    .filter((s) => s); // Remove empty strings
-};
+  for (let i = 0; i < totalDays; i++) {
+    const day = startDayjs.add(i, "day");
+    const dayOfWeek = day.day(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      // Sunday or Saturday
+      weekendDays++;
+    }
+  }
+
+  const weekdayDiff = Math.max(1, totalDays - weekendDays);
+  const dayString = weekdayDiff === 1 ? " day" : " days";
+  return `${weekdayDiff}${dayString}`;
+}
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
+  const convertToMMDDYYYY = (dateString) => {
+    if (typeof dateString === "number") {
+      // Handle Excel date numeric value
+      const date = new Date(Math.round((dateString - 25569) * 86400 * 1000));
+      return `${padZero(date.getMonth() + 1)}/${padZero(
+        date.getDate()
+      )}/${date.getFullYear()}`;
+    } else {
+      // Handle string date formats
+      const date = dayjs(
+        dateString,
+        [
+          "MM/DD/YYYY",
+          "M/D/YYYY",
+          "YYYY-MM-DD",
+          "YYYY/MM/DD",
+          "@",
+          "MMM D, YYYY",
+          "MMMM DD, YYYY",
+        ],
+        true
+      );
+      return date.isValid() ? date.format("MM/DD/YYYY") : null;
+    }
+  };
+
+  const padZero = (num) => {
+    return (num < 10 ? "0" : "") + num;
+  };
+
+  // Convert the date before loading it into the DatePicker
+  const formattedDateMonitored = convertToMMDDYYYY(editedRecord.date_monitored);
+  const formattedDateRouted = convertToMMDDYYYY(editedRecord.date_routed);
+  const formattedDateSigned = convertToMMDDYYYY(editedRecord.date_signed);
+
+  const [daysDmds, setDaysDmds] = useState(
+    editedRecord ? editedRecord.days_dmds : 0
+  );
+  const [daysDsdrs, setDaysDsdrs] = useState(
+    editedRecord ? editedRecord.days_dsdrs : 0
+  );
+
+  useEffect(() => {
+    if (formattedDateMonitored && formattedDateRouted) {
+      const newDaysDmds = calculateWeekdayDiff(
+        formattedDateMonitored,
+        formattedDateRouted
+      );
+      setDaysDmds(newDaysDmds);
+      handleChange("days_dmds", newDaysDmds); // Add this line
+    }
+  }, [formattedDateMonitored, formattedDateRouted]);
+
+  useEffect(() => {
+    if (formattedDateRouted && formattedDateSigned) {
+      const newDaysDsdrs = calculateWeekdayDiff(
+        formattedDateRouted,
+        formattedDateSigned
+      );
+      setDaysDsdrs(newDaysDsdrs);
+      handleChange("days_dsdrs", newDaysDsdrs); // Add this line
+    }
+  }, [formattedDateRouted, formattedDateSigned]);
+
+  const calculateBOD = (empNoTotal, wwtfType) => {
+    let bod = 0;
+  
+    const wwtfTypeValues = {
+      "WWTF": 0.6,
+      "SEPTIC TANK": 0.25,
+      "DIRECT DISCHARGE": 1,
+      "N/A": 0, // assuming N/A means 0
+    };
+  
+    const v1 = wwtfTypeValues[wwtfType.toUpperCase()];
+    const v2 = Number(empNoTotal);
+  
+    if (v2 === 0) {
+      bod = "";
+    } else if (wwtfType.toUpperCase() === "DIRECT DISCHARGE") {
+      bod = (v2 * 0.0378).toFixed(4); // round to 4 decimal points
+    } else {
+      bod = (v2 * 0.0378 * (1 - v1)).toFixed(4); // round to 4 decimal points
+    }
+  
+    return bod + " kg/day"; // add " kg/day" to the result
+  };
+
+  const [empNoTotal, setEmpNoTotal] = useState(
+    editedRecord ? editedRecord.emp_no_total : ""
+  );
+  const [wwtftype, setWwtftype] = useState(
+    editedRecord ? editedRecord.wwtftype : ""
+  );
+  const [bod, setBod] = useState(editedRecord ? editedRecord.bod : "");
+
+  const handleEmpNoTotalChange = (e) => {
+    const value = e.target.value;
+    setEmpNoTotal(value);
+    handleChange("emp_no_total", value);
+    if (wwtftype) {
+      const bodValue = calculateBOD(value, wwtftype);
+      setBod(bodValue);
+      handleChange("bod", bodValue);
+    }
+  };
+
+  const handleWwtftypeChange = (value) => {
+    setWwtftype(value);
+    handleChange("wwtftype", value);
+    if (empNoTotal) {
+      if (value) {
+        const bodValue = calculateBOD(empNoTotal, value);
+        setBod(bodValue);
+        handleChange("bod", bodValue);
+      } else {
+        setBod(0);
+        handleChange("bod", 0);
+      }
+    }
+  };
+
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
-        <Paragraph>
-          <strong>Number of Employees</strong>
-          <Input
-            value={editedRecord ? editedRecord.emp_no_total : ""}
-            onChange={(e) => handleChange("emp_no_total", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
-        <Paragraph>
-          <strong>Bio-Oxygen Demand (kg/day)</strong>
-          <Input
-            value={editedRecord ? editedRecord.bod : ""}
-            onChange={(e) => handleChange("bod", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
+        <Row gutter={[16, 16]} className="row-auto">
+          <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
+            <Paragraph>
+              <strong>Number of Employees</strong>
+              <Input
+                type="number"
+                min="0"
+                name="emp_no_total"
+                value={empNoTotal}
+                onChange={handleEmpNoTotalChange}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="textbox-label"
+              />
+            </Paragraph>
+          </Col>
+          <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
+            <Paragraph>
+              <strong>Type of WWTF</strong>
+              <WWTFType
+                value={wwtftype}
+                onChange={handleWwtftypeChange}
+                disabled={!isEditing}
+                placeholder="No data"
+              />
+            </Paragraph>
+          </Col>
+          <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
+            <Paragraph>
+              <strong>Bio-Oxygen Demand (kg/day)</strong>
+              <Input
+                value={bod}
+                onChange={(e) => handleChange("bod", e.target.value)}
+                disabled
+                placeholder="No data"
+                className="textbox-label"
+              />
+            </Paragraph>
+          </Col>
+        </Row>
 
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
@@ -105,25 +235,29 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           </Col>
         </Row>
 
-        <Paragraph>
-          <strong>Inspector/Handler</strong>
-          <Inspector
-            value={editedRecord ? editedRecord.handler : ""}
-            onChange={(value) => handleChange("handler", value)}
-            disabled={!isEditing}
-            placeholder="No data"
-          />
-        </Paragraph>
+        <Row gutter={[16, 16]} className="row-auto">
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+            <Paragraph>
+              <strong>Inspector/Handler</strong>
+              <Inspector
+                value={editedRecord ? editedRecord.handler : ""}
+                onChange={(value) => handleChange("handler", value)}
+                disabled={!isEditing}
+                placeholder="No data"
+              />
+            </Paragraph>
 
-        <Paragraph>
-          <strong>Schedule of Monitoring</strong>
-          <Month
-            value={editedRecord ? editedRecord.monitoring_sched : ""}
-            onChange={(e) => handleChange("monitoring_sched", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-          />
-        </Paragraph>
+            <Paragraph>
+              <strong>Schedule of Monitoring</strong>
+              <Month
+                value={editedRecord ? editedRecord.monitoring_sched : ""}
+                onChange={(value) => handleChange("monitoring_sched", value)}
+                disabled={!isEditing}
+                placeholder="No data"
+              />
+            </Paragraph>
+          </Col>
+        </Row>
       </Col>
 
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
@@ -137,6 +271,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             className="textbox-label"
           />
         </Paragraph>
+
         <Row gutter={[16, 16]} className="row-auto-date">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
@@ -149,6 +284,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               />
             </Paragraph>
           </Col>
+
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
               <strong>Type of Report Submitted</strong>
@@ -165,84 +301,64 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Monitored</strong>
-              <ConfigProvider
-                theme={{
-                  components: {
-                    DatePicker: {
-                      inputFontSize: 11, // Set the font size for small DatePicker
-                    },
-                  },
+              <DatePicker
+                value={
+                  formattedDateMonitored
+                    ? dayjs(formattedDateMonitored, "MM/DD/YYYY")
+                    : null
+                }
+                onChange={(date) => {
+                  const newDate = date ? date.format("MM/DD/YYYY") : "";
+                  handleChange("date_monitored", newDate);
                 }}
-              >
-                <DatePicker
-                  value={
-                    editedRecord ? moment(editedRecord.date_monitored) : null
-                  }
-                  format="MM/DD/YYYY"
-                  disabled={!isEditing}
-                  onChange={(date, dateString) =>
-                    handleChange("date_monitored", dateString)
-                  }
-                  placeholder="Select date"
-                  style={{ width: "100%" }}
-                  className="custom-datepicker"
-                  size="small"
-                />
-              </ConfigProvider>
+                disabled={!isEditing}
+                format="MM/DD/YYYY"
+                placeholder="MM/DD/YYYY"
+                className="custom-date-picker"
+                style={{ width: "100%" }}
+              />
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Routed (IIS)</strong>
-              <ConfigProvider
-                theme={{
-                  components: {
-                    DatePicker: {
-                      inputFontSize: 11, // Set the font size for small DatePicker
-                    },
-                  },
+              <DatePicker
+                value={
+                  formattedDateRouted
+                    ? dayjs(formattedDateRouted, "MM/DD/YYYY")
+                    : null
+                }
+                onChange={(date) => {
+                  const newDate = date ? date.format("MM/DD/YYYY") : "";
+                  handleChange("date_routed", newDate);
                 }}
-              >
-                <DatePicker
-                  value={editedRecord ? moment(editedRecord.date_routed) : null}
-                  format="MM/DD/YYYY"
-                  disabled={!isEditing}
-                  onChange={(date, dateString) =>
-                    handleChange("date_routed", dateString)
-                  }
-                  placeholder="Select date"
-                  style={{ width: "100%" }}
-                  className="custom-datepicker"
-                  size="small"
-                />
-              </ConfigProvider>
+                disabled={!isEditing}
+                format="MM/DD/YYYY"
+                placeholder="MM/DD/YYYY"
+                className="custom-date-picker"
+                style={{ width: "100%" }}
+              />
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Signed</strong>
-              <ConfigProvider
-                theme={{
-                  components: {
-                    DatePicker: {
-                      inputFontSize: 11, // Set the font size for small DatePicker
-                    },
-                  },
+              <DatePicker
+                value={
+                  formattedDateSigned
+                    ? dayjs(formattedDateSigned, "MM/DD/YYYY")
+                    : null
+                }
+                onChange={(date) => {
+                  const newDate = date ? date.format("MM/DD/YYYY") : "";
+                  handleChange("date_signed", newDate);
                 }}
-              >
-                <DatePicker
-                  value={editedRecord ? moment(editedRecord.date_signed) : null}
-                  format="MM/DD/YYYY"
-                  disabled={!isEditing}
-                  onChange={(date, dateString) =>
-                    handleChange("date_signed", dateString)
-                  }
-                  placeholder="Select date"
-                  style={{ width: "100%" }}
-                  className="custom-datepicker"
-                  size="small"
-                />
-              </ConfigProvider>
+                disabled={!isEditing}
+                format="MM/DD/YYYY"
+                placeholder="MM/DD/YYYY"
+                className="custom-date-picker"
+                style={{ width: "100%" }}
+              />
             </Paragraph>
           </Col>
         </Row>
@@ -269,9 +385,11 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       </p>
                     </span>
                     <Input
-                      value={editedRecord ? editedRecord.days_dmds : ""}
-                      onChange={(value) => handleChange("days_dmds", value)}
-                      disabled={!isEditing}
+                      value={daysDmds}
+                      onChange={(e) =>
+                        handleChange("days_dmds", e.target.value)
+                      }
+                      disabled
                       placeholder="No data"
                       className="textbox-label"
                     />
@@ -286,9 +404,11 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       <p className="label">(Date Submitted VS Date Signed)</p>
                     </span>
                     <Input
-                      value={editedRecord ? editedRecord.days_dsdrs : ""}
-                      onChange={(value) => handleChange("days_dsdrs", value)}
-                      disabled={!isEditing}
+                      value={daysDsdrs}
+                      onChange={(e) =>
+                        handleChange("days_dsdrs", e.target.value)
+                      }
+                      disabled
                       placeholder="No data"
                       className="textbox-label"
                     />
@@ -319,9 +439,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                 >
                   {editedRecord?.pismu_tracking === "✔" ? "" : ""}
                 </Checkbox>
-                <strong>
-                  Tracking of Reports (Received by Planning Unit)
-                </strong>
+                <strong>Tracking of Reports (Received by Planning Unit)</strong>
               </Paragraph>
             </Card>
           </Col>

@@ -40,25 +40,29 @@ const SectionInCharged = ({ value, disabled, onChange }) => {
       }}
       dropdownStyle={{
         boxShadow: "none",
+        backgroundColor: "#f1f1f1",
       }}
       options={UnitOptions}
       dropdownClassName="custom-autocomplete-dropdown"
       value={value}
       disabled={disabled}
       onChange={onChange}
-      placeholder="Select section/unit"
       filterOption={(inputValue, option) =>
         option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
       }
       allowClear={true}
     >
       <Input
-        style={{
-          fontSize: "11px", // Set the font size for input field
-          height: "30px",
-          padding: "4px 8px",
-        }}
-      />
+          style={{
+            fontSize: "11px",
+            height: "29px",
+            padding: "4px 8px",
+          }}
+          placeholder="select section/unit"
+          placeholderStyle={{
+            fontSize: "9px",
+          }}
+        />
     </AutoComplete>
   </ConfigProvider>
   )

@@ -71,6 +71,45 @@
   background-color: green;
 }
 
+.table-rows thead th {
+  height: 20px; /* reduce the height of the header cells */
+  font-size: 12px; /* reduce the font size of the header text */
+  padding: 4px; /* adjust the padding to your liking */
+}
+
+.table-rows td {
+  font-size: 11px; 
+  padding: 3px;
+  height: 20px;
+}
+
+.table-rows tr {
+  height: 20px; /* set a fixed height for each row */
+}
+
+.info-icon{
+  margin-right: 10px;
+}
+
+.data-container{
+  display: flex;
+  flex-wrap: wrap;
+  background-color: #ededed;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+.data-ul{
+  flex: 1;
+  margin-right: 20px;
+  font-size: 10px;
+}
+
+.data-p{
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 @media (max-width: 1098px) {
 
   .button-gen-draft{

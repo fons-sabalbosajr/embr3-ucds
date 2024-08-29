@@ -231,23 +231,27 @@ const IndustryClass = ({ value, disabled, onChange }) => {
         }}
         dropdownStyle={{
           boxShadow: "none",
+          backgroundColor: "#f1f1f1",
         }}
         options={industryClassOptions}
         dropdownClassName="custom-autocomplete-dropdown"
         value={value}
         disabled={disabled}
         onChange={onChange}
-        placeholder="Select or type industry subtype"
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
         allowClear={true}
       >
-        <Input
+       <Input
           style={{
-            fontSize: "11px", // Set the font size for input field
-            height: "30px",
+            fontSize: "11px",
+            height: "29px",
             padding: "4px 8px",
+          }}
+          placeholder="Select industry classification"
+          placeholderStyle={{
+            fontSize: "9px",
           }}
         />
       </AutoComplete>

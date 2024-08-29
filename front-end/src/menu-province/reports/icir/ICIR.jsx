@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Table, Checkbox, Button, Modal, Spin, Menu, Dropdown } from "antd";
+import {
+  Table,
+  Checkbox,
+  Button,
+  Modal,
+  Spin,
+  Menu,
+  Dropdown,
+  Tour,
+} from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
 import "./icir.css";
 
@@ -100,7 +110,6 @@ const fieldTitles = {
   mbu_survey: "MBU Survey",
   mbu_survey_request: "MBU Survey Request",
   dp_universe: "DP Universe",
-  // Add more field titles as needed
 };
 
 const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
@@ -109,6 +118,26 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   const [selectedData, setSelectedData] = useState({});
   const [loadingPDF, setLoadingPDF] = useState(false);
   const [selectAllChecked, setSelectAllChecked] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [tourVisible, setTourVisible] = useState(false); // Initialize tourVisible to true
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+
+  useEffect(() => {
+    if (!dontShowAgain) {
+      setTimeout(() => {
+        setTourVisible(true);
+      }, 1000);
+    }
+  }, [dontShowAgain]);
+
+  const handleDontShowAgain = () => {
+    setDontShowAgain(true);
+    setTourVisible(false);
+  };
+
+  const handleTourClick = () => {
+    setTourVisible(true);
+  };
 
   useEffect(() => {
     axios
@@ -260,16 +289,36 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   };
 
   const handleGeneratePDFDraft = async () => {
+    let response;
+
     try {
       setLoadingPDF(true);
       document.body.style.cursor = "wait";
-  
-      // Fetch current user with credentials
-      const userResponse = await axios.get("http://localhost:8081/current-user", {
+
+      // Fetch current user with credentials using /check-auth
+      const userResponse = await axios.get("http://localhost:8081/check-auth", {
         withCredentials: true,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
       });
-      const currentUser = userResponse.data;
-  
+
+      //console.log("User Response:", userResponse.data);
+
+      if (
+        userResponse.status === 200 &&
+        userResponse.data.status === "Success"
+      ) {
+        const currentUser = userResponse.data;
+        //console.log("Current User:", currentUser);
+
+        // Update your state with the full user object
+        setCurrentUser(currentUser);
+      } else {
+        throw new Error("Failed to fetch current user");
+      }
+
       // Show processing modal
       const processingModal = Modal.info({
         title: "Generating PDF...",
@@ -280,9 +329,9 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
         ),
         maskClosable: false,
         okButtonProps: { disabled: true },
-        zIndex: 10000, // Ensure this modal is on top
+        zIndex: 10000,
       });
-  
+
       // Filter and sort selected fields based on your field order
       const selectedFields = Object.keys(selectedData)
         .filter((key) => includedFields[key])
@@ -290,51 +339,46 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
           obj[key] = selectedData[key];
           return obj;
         }, {});
-  
+
       // Call the API to generate PDF
-      const response = await axios.get(
+      response = await axios.get(
         `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
-          withCredentials: true, 
+          withCredentials: true,
         }
       );
-  
+
       // Close processing modal
       processingModal.destroy();
-  
+
       // Create a Blob from the PDF data
       const blob = new Blob([response.data], { type: "application/pdf" });
-  
+
       // Determine the filename
       const fileName = selectedFields.establishment_name
         ? `ICIR_Draft-${selectedFields.establishment_name}.pdf`
         : editedRecord.title
         ? `ICIR_Draft-${editedRecord.title}.pdf`
         : `ICIR_Draft-${editedRecord.id_no}.pdf`;
-  
+
       // Create a new FormData object
       const formData = new FormData();
       formData.append("reportInfo", JSON.stringify(selectedFields));
-      formData.append("user", JSON.stringify(currentUser));
+      formData.append("user", JSON.stringify({ name: currentUser.name })); // Pass the user name only
       formData.append("date", new Date().toISOString());
       formData.append("fileName", fileName);
       formData.append("pdfFile", blob, fileName); // Attach file with filename
-  
+
       // Save draft report to MongoDB
-      await axios.post("http://localhost:8081/save-draft-report", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          withCredentials: true, 
-        },
-      });
-  
+      await axios.post("http://localhost:8081/save-draft-report", formData);
+
       Modal.success({
         title: "Success",
         content: "Draft report has been saved successfully.",
       });
-  
+
       // Create a temporary link element and trigger the download
       const downloadLink = document.createElement("a");
       downloadLink.href = URL.createObjectURL(blob);
@@ -343,8 +387,6 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       downloadLink.click();
       document.body.removeChild(downloadLink);
     } catch (error) {
-      setLoadingPDF(false);
-      document.body.style.cursor = "default";
       Modal.destroyAll();
       Modal.error({
         title: "Error",
@@ -352,12 +394,10 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       });
       console.error("Error generating PDF:", error);
     } finally {
-      document.body.style.cursor = "default";
       setLoadingPDF(false);
+      document.body.style.cursor = "default";
     }
   };
-  
-  
 
   const confirmGeneratePDF = () => {
     Modal.confirm({
@@ -382,6 +422,68 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       },
     });
   };
+
+  const steps = [
+    {
+      title: "",
+      description: (
+        <div style={{ fontSize: 11 }}>
+          {Object.keys(selectedData).map((field, index) => (
+            <div key={index}>
+              <strong>{field}:</strong> {selectedData[field]}
+            </div>
+          ))}
+          <hr />
+          <h4>About Select Initial Data:</h4>
+          <div className="data-p">
+            <p>
+              The Select Initial Data function allows users to quickly select a
+              set of initial data fields to be included in the report. When the
+              user clicks the Select Initial Data checkbox, the function
+              automatically selects a predefined set of fields that are commonly
+              required in the report.
+            </p>
+            <p>
+              This feature saves time, ensures consistency, and simplifies the
+              reporting process. By selecting the initial data fields with a
+              single click, users can quickly generate a report with the
+              essential information.
+            </p>
+          </div>
+
+          <h4>Initial Data Fields:</h4>
+          <div className="data-container">
+            <ul className="data-ul">
+              <li>Firm ID</li>
+              <li>Project Title</li>
+              <li>Proponent Name</li>
+              <li>Address</li>
+              <li>Industry Class</li>
+              <li>PSIC Code</li>
+              <li>Total Number of Employees</li>
+              <li>ECC/CNC Reference Code</li>
+              <li>Date Approved</li>
+              <li>Haz-Waste Generated ID</li>
+            </ul>
+            <ul className="data-ul">
+              <li>Haz-Waste ID Date Issued</li>
+              <li>PTO Code</li>
+              <li>PTO Date Issued</li>
+              <li>PTO Date of Expiration</li>
+              <li>WWDP Code</li>
+              <li>WWDP Date Issued</li>
+              <li>WWDP Date of Expiration</li>
+              <li>Longitude</li>
+              <li>Latitude</li>
+              <li>Handler</li>
+            </ul>
+          </div>
+        </div>
+      ),
+      placement: "bottom",
+      target: () => document.querySelector(".info-icon"),
+    },
+  ];
 
   const draftMenu = (
     <Menu>
@@ -467,6 +569,14 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
         </div>
 
         <div className="icir-header-center">
+          <Button
+            type="primary"
+            shape="circle"
+            size="small"
+            icon={<InfoCircleOutlined style={{ fontSize: 14 }} />}
+            onClick={handleTourClick}
+            className="info-icon"
+          />
           <Checkbox checked={selectAllChecked} onChange={handleSelectAllChange}>
             Select Initial Data
           </Checkbox>
@@ -494,14 +604,39 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               Save Draft
             </Button>
           </Dropdown>
+
+          {tourVisible && (
+            <Tour
+              steps={steps}
+              current={0}
+              //mask={false}
+              onClose={() => setTourVisible(false)}
+              onFinish={() => (
+                <div>
+                  <div>
+                    <Button type="primary" onClick={handleDontShowAgain}>Finish</Button>
+                  </div>
+                  <div>
+                    <Button type="primary" onClick={handleDontShowAgain}>
+                      Don't show this again
+                    </Button>
+                  </div>
+                </div>
+              )}
+            ></Tour>
+          )}
         </div>
       </div>
 
       <Table
         columns={columns}
         dataSource={data}
-        pagination={false}
-        scroll={{ y: 750 }} // adjust the height to your needs
+        pagination={{
+          pageSize: 20,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50", "100"],
+        }}
+        scroll={{ y: 750 }}
         rowClassName={(record) => {
           if (
             [
@@ -650,6 +785,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
           }
           return "";
         }}
+        className="table-rows"
       />
     </div>
   );

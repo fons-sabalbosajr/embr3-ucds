@@ -51,13 +51,13 @@ const IndustrySubTypeAutoComplete = ({ value, disabled, onChange }) => {
         }}
         dropdownStyle={{
           boxShadow: "none",
+          backgroundColor: "#f1f1f1",
         }}
         options={industrysubTypeOptions}
         dropdownClassName="custom-autocomplete-dropdown"
         value={value}
         disabled={disabled}
         onChange={onChange}
-        placeholder="Select or type industry type"
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
@@ -65,11 +65,16 @@ const IndustrySubTypeAutoComplete = ({ value, disabled, onChange }) => {
       >
         <Input
           style={{
-            fontSize: "11px", // Set the font size for input field
+            fontSize: "11px",
             height: "30px",
             padding: "4px 8px",
           }}
+          placeholder="Select industry sub-type"
+          placeholderStyle={{
+            fontSize: "9px",
+          }}
         />
+
       </AutoComplete>
     </ConfigProvider>
   );

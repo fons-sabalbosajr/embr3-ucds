@@ -10,10 +10,9 @@ const ReportDrafts = () => {
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null); // State for the current user
 
-
   const fetchCurrentUser = async () => {
     try {
-      const response = await axios.get("http://localhost:8081/current-user", {
+      const response = await axios.get("http://localhost:8081/check-auth", {
         withCredentials: true,
       });
       setCurrentUser(response.data);
@@ -21,8 +20,6 @@ const ReportDrafts = () => {
       setError("Error fetching user information: " + err.message);
     }
   };
-  
-
 
   const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
     try {
@@ -33,12 +30,10 @@ const ReportDrafts = () => {
         throw error;
       }
       // Wait for a specified delay before retrying
-      await new Promise(res => setTimeout(res, delay));
+      await new Promise((res) => setTimeout(res, delay));
       return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
     }
   };
-  
-
 
   const fetchDraftReports = async () => {
     try {
@@ -46,15 +41,15 @@ const ReportDrafts = () => {
         "http://localhost:8081/api/draft-report",
         { withCredentials: true }
       );
-
+  
       if (!Array.isArray(response.data)) {
         throw new Error("Unexpected response format");
       }
-
-      const filteredData = response.data.filter((draft) =>
-        currentUser ? draft.user.name === currentUser.name : true
+  
+      const filteredData = response.data.filter(
+        (draft) => draft.user && draft.user.name === currentUser.name
       );
-
+  
       const formattedData = filteredData.map((draft) => {
         return {
           reportId: draft._id,
@@ -71,7 +66,10 @@ const ReportDrafts = () => {
             : "No URL Available",
         };
       });
-
+  
+      // Sort the data from recent to old
+      formattedData.sort((a, b) => moment(b.dateCreated).unix() - moment(a.dateCreated).unix());
+  
       setDrafts(formattedData);
     } catch (err) {
       setError(err.message);
@@ -79,7 +77,6 @@ const ReportDrafts = () => {
       setLoading(false);
     }
   };
-
 
   useEffect(() => {
     fetchCurrentUser(); // Fetch the current user when the component mounts
@@ -91,16 +88,14 @@ const ReportDrafts = () => {
     }
   }, [currentUser]);
 
-
-    useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (currentUser) {
+  useEffect(() => {
+    if (currentUser) {
+      const intervalId = setInterval(() => {
         fetchDraftReports(); // Refresh reports every 15 seconds if user information is available
-      }
-    }, 15000);
-    return () => clearInterval(intervalId);
+      }, 15000);
+      return () => clearInterval(intervalId);
+    }
   }, [currentUser]);
-
 
   const columns = [
     {
@@ -135,7 +130,7 @@ const ReportDrafts = () => {
       render: (fileName, record) => {
         const handleClick = (event) => {
           event.preventDefault(); // Prevent default link behavior
-          
+
           // Show notification
           notification.info({
             message: "File Downloaded",
@@ -143,7 +138,7 @@ const ReportDrafts = () => {
             placement: "topRight",
           });
         };
-  
+
         return (
           <a
             href={record.pdfUrl}
@@ -155,9 +150,8 @@ const ReportDrafts = () => {
           </a>
         );
       },
-    }
+    },
   ];
-  
 
   if (loading) {
     return <Spin size="large" />;

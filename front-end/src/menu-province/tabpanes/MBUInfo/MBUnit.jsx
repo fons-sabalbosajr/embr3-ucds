@@ -45,6 +45,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("lat", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="text-area-mbu"
               />
             </Paragraph>
           </Col>
@@ -56,6 +57,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("long", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="text-area-mbu"
               />
             </Paragraph>
           </Col>
@@ -67,6 +69,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("address", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="text-area-mbu"
               />
             </Paragraph>
           </Col>
@@ -78,6 +81,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 onChange={(e) => handleChange("waterbody", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
+                className="text-area-mbu"
               />
             </Paragraph>
           </Col>

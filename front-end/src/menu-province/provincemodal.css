@@ -110,3 +110,19 @@
   font-size: 11px; /* Adjust font size for typography components */
 }
 
+.tabpane-title{
+  font-size: 11px;
+}
+
+
+.tab-pane-content {
+  background-color: #f0f0f0; /* or any other background color you prefer */
+  padding: 16px;
+}
+
+.tab-pane-content.active {
+  background-color: #fff; /* or any other active background color you prefer */
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 16px;
+}

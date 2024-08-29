@@ -31,13 +31,13 @@ const ReportType = ({ value, disabled, onChange }) => {
         }}
         dropdownStyle={{
           boxShadow: "none",
+          backgroundColor: "#f1f1f1",
         }}
         options={ReportTypeOptions}
         dropdownClassName="custom-autocomplete-dropdown"
         value={value}
         disabled={disabled}
         onChange={onChange}
-        placeholder="Select Report Type"
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
@@ -45,9 +45,13 @@ const ReportType = ({ value, disabled, onChange }) => {
       >
         <Input
           style={{
-            fontSize: "11px", // Set the font size for input field
-            height: "30px",
+            fontSize: "11px",
+            height: "29px",
             padding: "4px 8px",
+          }}
+          placeholder="select report type"
+          placeholderStyle={{
+            fontSize: "9px",
           }}
         />
       </AutoComplete>

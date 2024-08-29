@@ -37,6 +37,7 @@ const ProvinceModal = ({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loadingICIR, setLoadingICIR] = useState(false);
   const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now());
+  const [activeTab, setActiveTab] = useState('1');
 
   useEffect(() => {
     setEditedRecord(record);
@@ -98,16 +99,16 @@ const ProvinceModal = ({
 
   const handleModalOk = () => {
     setIsModalVisible(false);
-    setResetCheckboxesKey(Date.now()); // Trigger checkbox reset
+    setResetCheckboxesKey(Date.now());
   };
 
   const handleModalCancel = () => {
     setIsModalVisible(false);
-    setResetCheckboxesKey(Date.now()); // Trigger checkbox reset
+    setResetCheckboxesKey(Date.now());
   };
 
-  const onSaveChanges = (updatedRecord, showNotification) => {
-    handleSaveChanges(showNotification);
+  const handleTabChange = (key) => {
+    setActiveTab(key);
   };
 
   return (
@@ -180,21 +181,21 @@ const ProvinceModal = ({
         footer={null}
       >
         <div className="report-modal-container">
-          <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={20}>
-            <TabPane tab={<span>Generate ICIR</span>} key="1">
+          <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={5}>
+            <TabPane tab={<span className="tabpane-title">Generate ICIR</span>} key="1">
               <ICIR
                 editedRecord={editedRecord}
                 onIncludeChange={() => {}}
                 resetCheckboxesKey={resetCheckboxesKey} // Pass reset state as a key
               />
             </TabPane>
-            <TabPane tab={<span>Generate CIC</span>} key="2">
+            <TabPane tab={<span className="tabpane-title">Generate CIC</span>} key="2">
               <IC />
             </TabPane>
-            <TabPane tab={<span>Generate IC</span>} key="3">
+            <TabPane tab={<span className="tabpane-title">Generate IC</span>} key="3">
               <CIC />
             </TabPane>
-            <TabPane tab={<span>Reports Logs</span>} key="4">
+            <TabPane tab={<span className="tabpane-title">Reports Logs</span>} key="4">
               <Drafts />
             </TabPane>
           </Tabs>

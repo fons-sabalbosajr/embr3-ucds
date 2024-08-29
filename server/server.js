@@ -330,7 +330,7 @@ module.exports = logActivity;
 
 const authenticateSession = (req, res, next) => {
   if (req.session && req.session.user) {
-    console.log("Session authenticated:", req.session.user);
+    //console.log("Session authenticated:", req.session.user);
     return next();
   }
   console.log("User not authenticated:", req.session);
@@ -693,23 +693,40 @@ app.post(
   }
 );
 
+app.post("/save-draft-report", upload.single("pdfFile"), async (req, res) => {
+  try {
+    // Parse JSON data from req.body
+    const { reportInfo, user, date, fileName } = JSON.parse(req.body);
+
+    // Create a new draft report document
+    const newDraft = {
+      user: { name: user.name }, 
+      date: new Date(date),
+      reportInfo: JSON.parse(reportInfo),
+      fileName,
+      pdfUrl: `pdfFiles/${fileName}`, // Adjust as needed
+    };
+
+    // Save the draft report to the database
+    await reportdraftCollection.insertOne(newDraft);
+
+    res.status(200).send({ message: "Draft report saved successfully" });
+  } catch (error) {
+    console.error("Error saving draft report:", error);
+    res.status(500).send({ message: "Failed to save draft report" });
+  }
+});
+
 // app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
 
-// Route to get draft reports
-app.get("/api/draft-report", async (req, res) => {
-  if (!reportdraftCollection) {
-    return res.status(500).send("Database not initialized");
-  }
-
+app.get('/api/draft-report', async (req, res) => {
   try {
-    //console.log("Fetching draft reports...");
     const drafts = await reportdraftCollection.find().toArray();
-    //console.log("Draft reports fetched:", drafts);
     res.json(drafts);
   } catch (error) {
-    console.error("Error fetching draft reports:", error.message); // Log the error message
-    res.status(500).send("Internal Server Error");
+    console.error("Error fetching draft reports:", error);
+    res.status(500).send({ message: "Error fetching draft reports" });
   }
 });
 
@@ -743,9 +760,9 @@ app.get("/api/files/:filename", async (req, res) => {
 });
 
 app.get("/current-user", async (req, res) => {
+  console.log("req.user:", req.user);
   try {
     if (req.user) {
-      // Ensure user object contains the necessary fields
       const user = await userCollection.findOne({
         _id: new ObjectId(req.user.userId),
       });
@@ -1062,6 +1079,7 @@ app.get("/api/get-province-data", async (req, res) => {
       city: doc.city || "",
       province: doc.province || "",
       emp_no_total: doc.emp_no_total || "",
+      wwtftype: doc.wwtftype || "",
       bod: doc.bod || "",
       fmr_section_incharged: doc.fmr_section_incharged || "",
       section_incharge: doc.section_incharge || "",
@@ -1555,7 +1573,7 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
       { $set: newData }
     );
 
-    //console.log("Update result:", result);
+    console.log("Update result:", result);
 
     if (result.modifiedCount === 1) {
       res.status(200).json({ message: "Data updated successfully" });

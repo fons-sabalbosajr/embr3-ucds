@@ -48,7 +48,7 @@ const Universe = () => {
         const response = await axios.get(`${backendUrl}/check-auth`, {
           withCredentials: true,
         });
-        console.log("Auth Response:", response.data);  // Add this for debugging
+        //console.log("Auth Response:", response.data);  // Add this for debugging
   
         if (response.data.status === "Success") {  // Ensure this matches the exact expected value
           const { name, avatar, permissions, username, division } = response.data;

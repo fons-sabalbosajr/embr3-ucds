@@ -57,6 +57,8 @@ const Province = ({ theme }) => {
   const [selectedColor, setSelectedColor] = useState({});
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [selectedProvince, setSelectedProvince] = useState("");
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [selectedColors, setSelectedColors] = useState({});
 
   useEffect(() => {
     if (provinceName) {
@@ -193,14 +195,58 @@ const Province = ({ theme }) => {
     }
   };
 
-  // Handle row click with selection
-  const handleRowClick = (record) => {
-    const newSelectedRowKeys = selectedRowKeys.includes(record.id_no)
-      ? selectedRowKeys.filter((key) => key !== record.id_no)
-      : [...selectedRowKeys, record.id_no];
-
-    setSelectedRowKeys(newSelectedRowKeys);
-    setSelectedRow(record);
+  const handleRowClick = async (record) => {
+    if (!selectedRowKeys.includes(record.id_no)) {
+      // If the row is not already selected, add it to the selection
+      setSelectedRowKeys([...selectedRowKeys, record.id_no]);
+    } else {
+      // If the row is already selected, remove it from the selection
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== record.id_no));
+    }
+  
+    // Only update the API and display the notification message when multiple rows are selected
+    if (selectedRowKeys.length > 1) {
+      // Update the local state and API for all selected rows
+      const selectedRows = filteredData.filter((row) => selectedRowKeys.includes(row.id_no));
+      const colorsToUpdate = selectedRows.map((row) => ({ id_no: row.id_no, color: selectedColor[row.id_no] }));
+  
+      try {
+        await Promise.all(
+          colorsToUpdate.map((colorToUpdate) =>
+            fetch("http://localhost:8081/api/update-color-universe", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              credentials: "include", // Include this if you use sessions
+              body: JSON.stringify(colorToUpdate),
+            })
+          )
+        );
+  
+        // Update the row colors in the local state
+        setSelectedColor((prevColors) => {
+          const newColors = { ...prevColors };
+          selectedRows.forEach((row) => {
+            newColors[row.id_no] = selectedColor[row.id_no];
+          });
+          localStorage.setItem("rowColors", JSON.stringify(newColors));
+          return newColors;
+        });
+  
+        // Display the notification message after the row colors have been updated
+        notification.success({
+          message: "Industries marked successfully",
+          description: `The selected industries have been marked.`,
+        });
+      } catch (error) {
+        notification.error({
+          message: "Error",
+          description: "Failed to update colors",
+        });
+        console.error("Error updating colors:", error);
+      }
+    }
   };
 
   // Handle checkbox change
@@ -235,6 +281,24 @@ const Province = ({ theme }) => {
       .toUpperCase()}`;
   };
 
+  const handleRowSelect = (id_no) => {
+    if (selectedRowKeys.includes(id_no)) {
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
+    } else {
+      setSelectedRowKeys([...selectedRowKeys, id_no]);
+    }
+  };
+
+  const handleColorChange = (color) => {
+    setSelectedColors((prevSelectedColors) => {
+      const newSelectedColors = { ...prevSelectedColors };
+      for (const rowId of Object.keys(newSelectedColors)) {
+        newSelectedColors[rowId] = color;
+      }
+      return newSelectedColors;
+    });
+  };
+
   const colors = [
     "#e8dff5",
     "#fce1e4",
@@ -253,6 +317,8 @@ const Province = ({ theme }) => {
           justifyContent: "space-between",
         }}
       >
+        {" "}
+        <p className="p-row">Mark Selected Rows As</p>
         {colors.map((color) => (
           <button
             key={color}
@@ -269,6 +335,40 @@ const Province = ({ theme }) => {
                 (selectedRow && selectedColor[selectedRow.id_no]) === color
                   ? "2px solid #B4B4B8"
                   : "none",
+            }}
+          />
+        ))}
+      </div>
+    </Menu>
+  );
+
+  const colorMenuAll = (
+    <Menu style={{ width: 150 }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
+        <p className="p-row">Mark Selected Rows As</p>
+        {colors.map((color) => (
+          <button
+            key={color}
+            onClick={() => handleColorChange(color)}
+            style={{
+              backgroundColor: color,
+              height: 20,
+              width: 40,
+              borderRadius: 4,
+              border: "none",
+              margin: 2,
+              cursor: "pointer",
+              outline: Object.keys(selectedColors).some(
+                (rowId) => selectedColors[rowId] === color
+              )
+                ? "2px solid #B4B4B8"
+                : "none",
             }}
           />
         ))}
@@ -612,7 +712,7 @@ const Province = ({ theme }) => {
             />
           </Tooltip>
           <Tooltip title="Mark Row As">
-            <Dropdown overlay={colorMenu} placement="bottomLeft" arrow>
+            <Dropdown overlay={colorMenuAll} placement="bottomLeft" arrow>
               <Button className="btn-action" size="small">
                 <BgColorsOutlined />
               </Button>
@@ -685,7 +785,6 @@ const Province = ({ theme }) => {
 
     return "";
   };
-
 
   const handleExportPDF = (province) => {
     console.log("Selected province:", province); // Debugging line
@@ -818,17 +917,27 @@ const Province = ({ theme }) => {
       <div className="header-content">
         <h3 className="header-title">{`${capitalizedProvinceName} Universe of Firms and Industries`}</h3>
         <Button
+          type="primary"
           className="refresh-button"
           icon={<ReloadOutlined />}
           onClick={handleReload}
           loading={loading}
         ></Button>
         <Button
+          type="primary"
           className="refresh-button"
           icon={<ExportOutlined />}
           onClick={() => handleExportPDF(selectedProvince)}
-          loading={loading}
         ></Button>
+        <Tooltip title="Mark Row As">
+          <Dropdown overlay={colorMenu} placement="bottomLeft" arrow>
+            <Button
+              type="primary"
+              className="refresh-button"
+              icon={<BgColorsOutlined />}
+            ></Button>
+          </Dropdown>
+        </Tooltip>
         <Button type="primary" className="add-industry-button">
           Add Industry
         </Button>
@@ -932,7 +1041,10 @@ const Province = ({ theme }) => {
               size="small"
               className="custom-table"
               onRow={(record) => ({
-                onClick: () => handleRowClick(record),
+                onClick: () => {
+                  handleRowClick(record);
+                  handleRowSelect(record.id_no); // Call handleRowSelect here
+                },
                 style: {
                   backgroundColor: selectedRowKeys.includes(record.id_no)
                     ? "#e6f7ff"
