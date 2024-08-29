@@ -1,185 +1,216 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700;800&family=Roboto&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700;800&family=Roboto&display=swap");
 
 * {
-    margin: 0;
-    padding: 0;
-    border: none;
-    outline: none;
-    list-style: none;
-    box-sizing: border-box;
-    font-family: "Poppins", sans-serif;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  list-style: none;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
 }
 
 .sidebar {
-    color: #ffffff;
+  color: #ffffff;
 }
 
-.header-container{
-    padding: 0;
-    background-color: #31304D;
-    height: 85px;
+/* Ensure the header container is the correct height */
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 100px;
 }
 
-.logo {
-    display: flex;
-    align-items: center;
-    //justify-content: center;
-    color: #0066ff;
-    padding: 10px;
-    margin-top: 10px;
-    margin-left: 20px;
+.header-content {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%; 
+  //height: 100px;
 }
 
-.logo-icon {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    margin-left: 30px;
-    color: #ffffff;
+.content-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
 }
 
-.logo-icon-text {
-    width: 150px;
-    font-size: 1rem;
-    margin-left: 5px;
-    padding-left: 15px;
-    line-height: 15px;
-    font-weight: bold;
-    white-space: nowrap;
-}
 
 .ant-menu-item-dark > a {
-    color: #B6BBC4;
+  color: #b6bbc4;
 }
 
-.menu-bar {
-    position: fixed;
-    height: 88vh;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    font-size: 1rem;
-    position: relative;
-    overflow-y: auto;
+/* Ensure the entire layout container takes the full height of the viewport */
+.layout-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure the header container is the correct height */
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 64px;
+  background-color: #001529; /* Adjust based on theme */
+}
+
+/* Adjust the header content */
+.header-content {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+}
+
+/* Theme switch styles */
+.theme-switch {
+  display: flex;
+  align-items: center;
+  //margin-left: 10px;
+  padding-bottom: 7px;
+}
+
+/* Theme button styles */
+.theme-button {
+  color: #ffffff; /* Adjust color based on theme */
+}
+
+.content {
+  padding: 20px;
+  background-color: #f0f2f5;
+  flex: 1; 
+  display: flex;
+  flex-direction: column; 
+  justify-content: flex-start; 
+}
+
+.ant-layout-content {
+  min-height: calc(100vh - 64px); 
+}
+
+
+/* Adjust header background color and padding */
+.ant-layout-header {
+  background: #001529;
+  padding: 0 24px; 
+  line-height: 64px; 
+}
+
+/* Center align the footer text */
+.ant-layout-footer {
+  text-align: center;
 }
 
 .toggle {
-    position: fixed;
-    bottom: 25px;
-    left: 20px;
-    z-index: 1;
+  //position: fixed;
+  bottom: 25px;
+  left: 20px;
+  z-index: 1;
 }
 
 .btn-logout {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    margin-bottom: 16px;
-    z-index: 1;
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  margin-bottom: 16px;
+  z-index: 1;
 }
 
 .user-name {
-    font-size: 15px;
-    font-weight: 400;
-    color: #ffffff;
-    margin-right: 20px; /* Add space to the right */
-    display: flex; /* Ensure flex behavior */
-    align-items: center; /* Vertically center the text */
+  font-size: 11px;
+  font-weight: 400;
+  color: #ffffff;
+  margin-right: 20px; 
+  display: flex; 
+  align-items: center;
+  margin-right: 10px;
+  height: 15px;
+}
+
+.avatar-header{
+  display: flex;
+  align-items: center;
 }
 
 .profile_container {
-    display: flex;
-    justify-content: flex-start; /* Align elements to the right */
-    align-items: center; /* Vertically center elements */
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .notification-icon {
-    margin-right: 20px; /* Consistent spacing */
-    font-size: 20px;
-    color: white;
+  margin-right: 10px; 
+  font-size: 15px;
+  color: white;
 }
 
-.theme-button{
-  font-size: 20px;
+.theme-button {
+  font-size: 30px;
 }
 
 .link-menu {
-    text-decoration: none;
+  text-decoration: none;
 }
 
-.link-menu:hover, .selected {
-    color: #1890ff;
+.link-menu:hover,
+.selected {
+  color: #1890ff;
 }
 
 .link-menu-hover:hover {
-    color: #9cc6ed !important;
-    text-decoration: none !important;
+  color: #9cc6ed !important;
+  text-decoration: none !important;
 }
 
-
-.collapsed-logo-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 85px; /* Adjust the height as needed */
-  background-color: #001529; /* Background color for the container */
-  //border-bottom: 1px solid #e8e8e8; /* Border for separation */
-}
-
-.collapsed-logo {
-  width: 32px; /* Adjust the width of the logo image */
-  height: auto; /* Maintain aspect ratio */
-  text-align: left;
-}
-
-.theme-switch{
+.theme-switch {
   margin-right: 10px;
 }
 
 .dark-theme {
-  background-color: rgb(09, 21, 41); /* Change the background color for dark theme */
-  color: rgb(225, 225, 225); /* Change the text color for dark theme */
+  background-color: #091529; 
+  color: #ffffff;
 }
 
 .light-theme {
-  background-color: white; /* Change the background color for light theme */
-  color: rgb(34, 34, 34); /* Change the text color for light theme */
+  background-color: #ffffff;
+  color: #222222;
 }
 
-
 .dark-theme .logo-icon-text {
-  color: rgb(225, 225, 225); /* Change the text color for dark theme */
+  color: #ffffff; /* Adjusted text color for dark theme */
 }
 
 .light-theme .logo-icon-text {
-  color: rgb(34, 34, 34); /* Change the text color for light theme */
+  color: #222222; /* Adjusted text color for light theme */
 }
 
 .dark-theme-text {
-  color: rgb(225, 225, 225); /* Change the text color for dark theme */
+  color: #ffffff; /* Change the text color for dark theme */
 }
 
 .light-theme-text {
-  color: rgb(34, 34, 34); /* Change the text color for light theme */
+  color: #222222; /* Change the text color for light theme */
 }
 
 .dark-theme-icon {
-  color: rgb(225, 225, 225); /* Change the icon color for dark theme */
+  color: #ffffff; /* Change the icon color for dark theme */
 }
 
 .light-theme-icon {
-  color: rgb(34, 34, 34); /* Change the icon color for light theme */
+  color: #222222; /* Change the icon color for light theme */
 }
 
 .dark-theme-icon .anticon svg {
-  color: white; /* Change the icon color for dark theme */
+  color: #ffffff; /* Change the icon color for dark theme */
 }
 
 .light-theme-icon .anticon svg {
-  color: black; /* Change the icon color for light theme */
+  color: #222222; /* Change the icon color for light theme */
 }
 
 .dark-theme-icon img {

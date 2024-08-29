@@ -1,0 +1,39 @@
+.row-auto{
+    margin-bottom: -10px;
+}
+
+.row-auto-date{
+    margin-bottom: -14px;
+}
+
+.plus-button{
+    width: 20px;
+    height: 20px;
+}
+
+.textbox-label{
+    font-size: 12px;
+}
+
+
+.label_container{
+    font-size: 12px;
+}
+
+.text-area{
+    font-size: 11px;
+}
+
+.custom-datepicker .ant-picker-input input {
+    font-size: 12px; /* Adjust font size as needed */
+    padding: 4px 8px; /* Optional: adjust padding to make it look better */
+  }
+  
+  .custom-datepicker .ant-picker {
+    height: 30px; /* Optional: adjust height if needed */
+  }
+  
+  .custom-datepicker .ant-picker-placeholder {
+    font-size: 12px; /* Ensure placeholder text is also smaller */
+  }
+  

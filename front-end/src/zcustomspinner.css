@@ -1,0 +1,99 @@
+/* Full-screen overlay with semi-transparent background */
+.spinner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* Adjust the opacity as needed */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* Card styling for spinner content */
+.spinner-card {
+  text-align: center;
+  background-color: #fff; /* Card background color */
+  padding: 24px;
+  border-radius: 8px; /* Rounded corners */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Shadow effect */
+}
+
+/* Spinner icon customization */
+.spinner-icon {
+  margin-bottom: 16px;
+  border-color: #1890ff; /* Customize spinner color */
+}
+
+/* Animated spinner text */
+.spinner-text {
+  font-size: 18px;
+  color: #333; /* Text color */
+  margin-bottom: 16px;
+  animation: fadeInOut 1.5s infinite; /* Fade in and out animation */
+}
+
+/* Error message section */
+.error-section {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.error-title {
+  color: #ff4d4f; /* Error color */
+  margin-bottom: 8px;
+}
+
+.error-message {
+  color: #595959; /* Error message color */
+  margin-bottom: 16px;
+}
+
+/* Button styling for actions */
+.spinner-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: row; /* Align items in a row */
+  justify-content: center; /* Center items horizontally */
+  align-items: center;
+  gap: 16px; /* Space between buttons */
+}
+
+/* Button colors */
+.spinner-actions .ant-btn-primary {
+  background-color: #1890ff;
+  border-color: #1890ff;
+}
+
+.spinner-actions .ant-btn-default {
+  border-color: #d9d9d9;
+}
+
+/* Support info styling */
+.support-info {
+  margin-top: 20px;
+  font-size: 16px;
+  color: #333; /* Text color */
+}
+
+.support-info p {
+  margin-bottom: 8px;
+}
+
+.support-link {
+  color: #1890ff;
+  text-decoration: none;
+}
+
+.support-link:hover {
+  text-decoration: underline;
+}
+
+/* Keyframes for fading effect */
+@keyframes fadeInOut {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}

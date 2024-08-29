@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { GoogleMap, LoadScript, StreetViewPanorama } from '@react-google-maps/api';
-import { Card, Row, Col, Button, Alert, Spin } from 'antd';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  InfoWindow,
+} from "@react-google-maps/api";
+import { Card, Row, Col, Button, Alert, Spin } from "antd";
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyBQSWuvJx6N7wQ2adHqBEdNyurA3G9-ogc";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const mapContainerStyle = {
-  width: '100%',
-  height: '550px',
+  width: "100%",
+  height: "550px",
 };
 
 const R3Map = ({ latitude, longitude }) => {
@@ -14,6 +19,9 @@ const R3Map = ({ latitude, longitude }) => {
   const [center, setCenter] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showInfoWindow, setShowInfoWindow] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const mapRef = useRef(null);
 
   const handleRefresh = () => {
     setError(null);
@@ -24,7 +32,9 @@ const R3Map = ({ latitude, longitude }) => {
       setCenter({ lat, lng });
       setLoading(false);
     } else {
-      setError("Please check your coordinates encoded. Close this window and try again.");
+      setError(
+        "Please check your coordinates encoded. Close this window and try again."
+      );
       setLoading(false);
     }
   };
@@ -33,58 +43,104 @@ const R3Map = ({ latitude, longitude }) => {
     handleRefresh();
   }, [latitude, longitude]);
 
+  const onLoad = (map) => {
+    mapRef.current = map;
+    //console.log("Map loaded:", map);
+  };
+
+  const handleMarkerClick = (place) => {
+    setSelectedPlace(place);
+    setShowInfoWindow(true);
+  };
+
+  const handleInfoWindowClose = () => {
+    setShowInfoWindow(false);
+  };
+
   return (
     <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
       <Card
         title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <span>Industry Map</span>
-            <Button type='primary' onClick={handleRefresh}>Refresh</Button>
+            <Button type="primary" onClick={handleRefresh}>
+              Refresh
+            </Button>
           </div>
         }
       >
         {loading ? (
           <Spin tip="Loading Map..." size="large">
-            <div style={{ width: '100%', height: '550px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}></div>
+            <div
+              style={{
+                width: "100%",
+                height: "550px",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            ></div>
           </Spin>
         ) : error ? (
           <Alert
             type="error"
             message="No/Invalid Coordinates encoded"
             description={error}
-            // action={
-            //   <Button size="small" type="primary" onClick={handleRefresh}>
-            //     Refresh
-            //   </Button>
-            // }
           />
         ) : (
           <Row gutter={[16, 16]}>
-            {center && (
-              <Col span={24}>
-                {isStreetView ? (
-                  <StreetViewPanorama
+            <Col span={24}>
+              <GoogleMap
+                mapTypeId={"satellite"}
+                mapContainerStyle={mapContainerStyle}
+                center={center}
+                zoom={25} // Adjust zoom level as needed
+                onLoad={onLoad}
+                options={{
+                  disableDefaultUI: true,
+                  streetViewControl: true,
+                  mapTypeControl: true,
+                  fullscreenControl: true,
+                  scaleControl: true,
+                  zoomControl: true,
+                  rotateControl: true,
+                }}
+              >
+                {center && (
+                  <Marker
                     position={center}
-                    pov={{ heading: 0, pitch: 0 }}
-                    visible
-                    mapContainerStyle={mapContainerStyle}
-                  />
-                ) : (
-                  <GoogleMap
-                    mapContainerStyle={mapContainerStyle}
-                    center={center}
-                    zoom={25}
-                    mapTypeId={'satellite'} // Set map to satellite mode
+                    onClick={() =>
+                      handleMarkerClick({
+                        name: "Marker Name",
+                        details: "Marker Details",
+                      })
+                    }
                   />
                 )}
-              </Col>
-            )}
+                {showInfoWindow && selectedPlace && (
+                  <InfoWindow
+                    position={center}
+                    onCloseClick={handleInfoWindowClose}
+                  >
+                    <div>
+                      <h3>{selectedPlace.name}</h3>
+                      <p>{selectedPlace.details}</p>
+                    </div>
+                  </InfoWindow>
+                )}
+              </GoogleMap>
+            </Col>
           </Row>
         )}
       </Card>
     </LoadScript>
   );
 };
-
 
 export default R3Map;

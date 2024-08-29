@@ -1,61 +1,57 @@
 import React, { useState } from "react";
-import { Form, Input, Button, Spin, message } from "antd";
+import { Form, Input, Button } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./login.css";
 import homelogo from "./assets/emblogomenu.png";
 
-const antIcon = <LoadingOutlined style={{ fontSize: 24 }} spin />;
 
 const Login = () => {
-  const [values, setValues] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setValues((prevValues) => ({ ...prevValues, [name]: value }));
-  };
-
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
-
+  
     try {
       const response = await axios.post(
         "http://localhost:8081/login",
         {
-          email: values.email,
+          username: values.username,
           password: values.password,
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          withCredentials: true,
         }
       );
 
-      if (response.data?.status === "success") {
-        const token = response.data.token;
-        localStorage.setItem("authToken", token); // Store JWT token in local storage
-
-        message.success("Login successful!");
-        navigate("/universe"); // Navigate to a protected route
+      console.log("API Response:", response.data); 
+  
+      if (response.data.status === "success") {
+        console.log("Navigation to /universe triggered"); // Debugging output
+        localStorage.setItem("username", response.data.username);
+        localStorage.setItem("permission", JSON.stringify(response.data.permission));
+  
+        // Optional delay to ensure session is established
+        setTimeout(() => {
+          navigate("/universe");
+        }, 500); 
       } else {
-        setError("Login failed. Please try again."); // Handle unsuccessful login
+        setError("Login failed. Please try again.");
       }
     } catch (error) {
       console.error("Error during login:", error);
-      const errorMessage =
-        error.response?.data?.error || "An unexpected error occurred.";
-      setError(errorMessage);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
-      setIsLoading(false); // Stop loading animation
+      setIsLoading(false);
     }
   };
+  
 
+  
   return (
     <div className="background-login">
       <div className="background-form">
@@ -73,24 +69,16 @@ const Login = () => {
             <br />
             ENVIRONMENTAL MANAGEMENT BUREAU REGION III
             <br />
-            Universe Central Database System
+            Universe Centralized Database System
           </p>
-          {error && <p style={{ color: "red" }}>{error}</p>}{" "}
-          {/* Display error message */}
+          {error && <p style={{ color: "red" }}>{error}</p>}
           <Form onFinish={handleSubmit} layout="vertical">
             <Form.Item
-              name="email"
-              label="Email"
-              rules={[
-                { type: "email", message: "Invalid email format" },
-                { required: true, message: "Email is required" },
-              ]}
+              name="username"
+              label="Username"
+              rules={[{ required: true, message: "Username is required" }]}
             >
-              <Input
-                placeholder="Enter Email"
-                value={values.email}
-                onChange={handleChange}
-              />
+              <Input placeholder="Enter Username" size="large" />
             </Form.Item>
 
             <Form.Item
@@ -98,11 +86,7 @@ const Login = () => {
               label="Password"
               rules={[{ required: true, message: "Password is required" }]}
             >
-              <Input.Password
-                placeholder="Enter Password"
-                value={values.password}
-                onChange={handleChange}
-              />
+              <Input.Password placeholder="Enter Password" size="large" />
             </Form.Item>
 
             <Form.Item>
@@ -110,14 +94,17 @@ const Login = () => {
                 type="primary"
                 htmlType="submit"
                 block
+                size="large"
                 disabled={isLoading}
-                icon={isLoading ? antIcon : null}
+                icon={isLoading ? <LoadingOutlined spin /> : null}
               >
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </Form.Item>
             <Link to="/register">
-              <Button block>Create Account</Button>
+              <Button block size="large">
+                Create Account
+              </Button>
             </Link>
           </Form>
         </div>

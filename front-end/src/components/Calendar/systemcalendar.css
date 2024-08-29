@@ -1,0 +1,57 @@
+.calendar-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-calendar .ant-picker-calendar {
+  height: 100%;
+}
+
+.custom-calendar .ant-picker-calendar-full .ant-picker-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  
+}
+
+.clickable-date {
+  cursor: pointer;
+}
+
+.events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  
+}
+
+.event-title{
+  font-size: 10px;
+}
+
+.events .ant-badge-status {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.see-more {
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.calendar-title {
+  font-size: 15px;
+  color: #5a5a5a;
+  margin-bottom: 10px; 
+  font-weight: 500;
+}
+
+.data-label{
+  font-size: 11px;
+}

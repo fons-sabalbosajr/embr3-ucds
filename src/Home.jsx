@@ -1,63 +1,59 @@
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRightOutlined } from "@ant-design/icons";
-import { Button, Typography } from "antd";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "antd";
+import { MenuOutlined, CloseOutlined } from "@ant-design/icons";
 import homelogo from "./assets/emblogomenu.png";
+import databaseImage from "./assets/picbghome.png";
 import "./home.css";
 
 const Home = () => {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
+  };
+
   return (
-    <div className="background">
-      <div className="container">
-        <nav>
-          <div className="logo_container">
-            <img
-              src={homelogo}
-              width="44"
-              height="43"
-              viewBox="0 0 44 43"
-              fill="none"
-            />
-          </div>
+    <div className="home-container">
+      <nav className="navbar">
+        <div className="logo_container">
+          <img src={homelogo} alt="Logo" className="logo" />
+        </div>
+        <div className="menu_icon" onClick={toggleMenu}>
+          {menuOpen ? <CloseOutlined /> : <MenuOutlined />}
+        </div>
+        <ul className={`menu_container ${menuOpen ? "open" : ""}`}>
+          <li>
+            <a href="https://embr3-ucds.netlify.app" className="menu_item">About EMB-UCDS</a>
+          </li>
+          <li>
+            <a href="https://embr3-ucds.netlify.app" className="menu_item">Programs</a>
+          </li>
+          <li>
+            <a href="https://embr3-ucds.netlify.app" className="menu_item">Contacts</a>
+          </li>
+          <li>
+            <a href="/login" className="menu_item signup">Log in</a>
+          </li>
+        </ul>
+      </nav>
 
-          <div className="menu_container">
-            <ul>
-              <li>
-                <a href="home" className="active">
-                  About EMB-UCDS
-                </a>
-              </li>
-              <li>
-                <a href="home" className="active">
-                  Contact
-                </a>
-              </li>
-            </ul>
+      <div className="home-content">
+        <div className="text-content">
+          <h1>Universe <span className="highlight">Centralized Database System</span></h1>
+          <p className="subheading">
+            A harmonization of different firms and industries within DENR-EMB Region III Monitoring Plan.
+          </p>
+          <div className="button_container">
+            <Link to="/login">
+              <Button type="primary" className="btn-learn-more">
+                Get Started
+              </Button>
+            </Link>
           </div>
-        </nav>
-
-        <div className="content">
-          <div className="hero-text">
-            <p className="content_para">
-              ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-            </p>
-            <h2>
-              <span className="content_span">
-                EMB R3 Universe Central Database System
-              </span>
-            </h2>
-            <p className="content_alice">
-              A harmonization of different firms and industries within Region
-              III Monitoring Plan
-            </p>
-            <div className="button_container">
-              <Link to="/login">
-                <Button type="primary" className="btn-get-started">
-                  Get Started <ArrowRightOutlined />
-                </Button>
-              </Link>
-            </div>
-          </div>
+        </div>
+        <div className="image-content">
+          <img src={databaseImage} alt="Database Illustration" className="illustration" />
         </div>
       </div>
     </div>

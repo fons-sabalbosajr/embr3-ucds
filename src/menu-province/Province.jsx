@@ -1,354 +1,410 @@
-import React, { useContext, useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useParams } from "react-router-dom";
+import _ from "lodash";
 import {
   Table,
   Input,
   Tooltip,
   Button,
   Modal,
-  Progress,
   Select,
   Pagination,
-  Tabs,
-  Row,
-  Col,
-  Checkbox,
-  Typography,
-  Card,
-  DatePicker,
-  Space,
   Spin,
-  TimePicker,
+  Menu,
+  Dropdown,
+  notification,
+  Checkbox,
 } from "antd";
 import {
   SearchOutlined,
   EyeOutlined,
-  ExclamationCircleOutlined,
-  DeleteOutlined,
-  PlusOutlined,
-  MinusOutlined,
+  ReloadOutlined,
+  BgColorsOutlined,
+  ExportOutlined,
 } from "@ant-design/icons";
-import { DataContext } from "./DataContext";
 import "./province.css";
+import ProvinceModal from "./ProvinceModal";
+import { DataContext } from "./DataContext";
+import Swal from "sweetalert2";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
-import TextArea from "antd/es/input/TextArea";
-import IndustryTypeAutoComplete from "../components/IndustryType";
-import IndustrySubTypeAutoComplete from "../components/IndustrySubType";
-import IndustryClassAutoComplete from "../components/IndustryClass";
-import InspectionTypeAutoComplete from "../components/InspectionType";
-import InspectorsAutoComplete from "../components/Inspectors";
-import MonthAutoComplete from "../components/Month";
-import PermitSourceAutoComplete from "../components/PermitSource";
-import ReportTypeAutoComplete from "../components/ReportType";
-import SectionInChargeAutoComplete from "../components/SectionInCharge";
-import R3MapAutoComplete from "../components/R3Map";
-import moment from "moment";
-import styled from "styled-components";
-
-// Utility function to capitalize the first letter of a string
 const capitalizeFirstLetter = (str) => {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
 
 const { Option } = Select;
-const { TabPane } = Tabs;
-const { Paragraph } = Typography;
-const BoldTab = styled.span`
-  font-weight: 600;
-  font-size: 16px;
-`;
 
 const Province = ({ theme }) => {
-  const { provinceName } = useParams(); // Get province name from the route
-  const { data, loading, error, setCurrentProvince } = useContext(DataContext);
+  const { provinceName } = useParams();
+  const { data, loading, error, currentProvince, setCurrentProvince } =
+    useContext(DataContext);
+  const { fetchData } = useContext(DataContext);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const capitalizedProvinceName = capitalizeFirstLetter(provinceName);
-  const [modalVisible, setModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [originalRecord, setOriginalRecord] = useState(null);
-  const [rows, setRows] = useState([
-    {
-      sectionIncharge: "",
-      handler: "",
-      key: Date.now(),
-    },
-  ]);
-  const [rowsECC, setRowsECC] = useState([Date.now()]);
-  const [rowsPTO, setRowsPTO] = useState([Date.now()]);
-  const [rowsDP, setRowsDP] = useState([Date.now()]);
-  const [rowsHAZ, setRowsHAZ] = useState([Date.now()]);
-  const [rowsCHEM, setRowsCHEM] = useState(
-    Array.from({ length: 5 }, (_, index) => index + 1)
-  );
-  const [showAllRowsCHEM, setShowAllRowsCHEM] = useState(false);
-  const [rowsPCO, setRowsPCO] = useState([Date.now()]);
-
-  const maxRows = 3;
-  const maxRowsECC = 3;
-  const maxRowsPTO = 5;
-  const maxRowsDP = 5;
-  const maxRowsHAZ = 5;
-  const maxRowsCHEM = 100;
-  const maxRowsPCO = 5;
-
-  const { confirm } = Modal;
+  const [modalVisible, setModalVisible] = useState(false);
+  const [shouldRefreshTable, setShouldRefreshTable] = useState(false);
+  const [filteredData, setFilteredData] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [editedRecord, setEditedRecord] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [selectedColor, setSelectedColor] = useState({});
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [selectedProvince, setSelectedProvince] = useState("");
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [selectedColors, setSelectedColors] = useState({});
 
   useEffect(() => {
     if (provinceName) {
-      setCurrentProvince(provinceName); // Update the province in the context
+      setCurrentProvince(provinceName);
     }
-  }, [provinceName]); // Re-run when `provinceName` changes
+  }, [provinceName]);
 
-  // Filter data based on search term
-  const filteredData = data.filter((item) => {
-    return Object.values(item).some(
-      (value) =>
-        typeof value === "string" &&
-        value.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    if (shouldRefreshTable) {
+      fetchData(provinceName);
+      setShouldRefreshTable(false);
+    }
+  }, [shouldRefreshTable, fetchData, provinceName]);
+
+  useEffect(() => {
+    const filtered = filterData(data, searchTerm);
+    setFilteredData(filtered);
+  }, [data, searchTerm]);
+
+  useEffect(() => {
+    setTableLoading(loading);
+  }, [loading]);
+
+  useEffect(() => {
+    if (selectedRecord) {
+      setEditedRecord({ ...selectedRecord });
+    }
+  }, [selectedRecord]);
+
+  useEffect(() => {
+    // Load color data from localStorage
+    const storedColors = localStorage.getItem("rowColors");
+    if (storedColors) {
+      setSelectedColor(JSON.parse(storedColors));
+    }
+  }, []);
+
+  const filterData = (data, searchTerm) => {
+    return data.filter((item) =>
+      Object.values(item).some(
+        (value) =>
+          typeof value === "string" &&
+          value.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     );
-  });
+  };
+
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-US").format(number);
+  };
 
   const showModal = (record) => {
     setSelectedRecord(record);
-    setOriginalRecord(record); // Store the original data when the modal is opened
     setIsEditing(false);
     setModalVisible(true);
   };
 
   const handleCloseModal = () => {
-    // Close the modal completely
-    setModalVisible(false);
-    setSelectedRecord(null);
-    setIsEditing(false);
+    if (isEditing && !_.isEqual(editedRecord, selectedRecord)) {
+      Swal.fire({
+        title: "Unsaved changes",
+        text: "You have unsaved changes. Are you sure you want to close the modal?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Close",
+        cancelButtonText: "Stay",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setModalVisible(false);
+          setIsEditing(false);
+          setEditMode(false);
+        }
+      });
+    } else {
+      setModalVisible(false);
+      setIsEditing(false);
+    }
   };
 
-  const handleCancel = () => {
-    setSelectedRecord(originalRecord); // Reset to the original data
-    setIsEditing(false); // Exit edit mode
+  const handleToggleEdit = () => {
+    setIsEditing(!isEditing);
   };
 
-  const handleEdit = () => {
-    setIsEditing(true);
+  const handleReload = async () => {
+    try {
+      setTableLoading(true);
+      await fetchData(provinceName);
+      const filtered = filterData(data, searchTerm);
+      setFilteredData(filtered);
+    } catch (error) {
+      console.error("Error reloading data:", error);
+    } finally {
+      setTableLoading(false);
+    }
   };
 
-  const handleSave = () => {
-    console.log("Save", selectedRecord); // Handle save logic here
-    setIsEditing(false);
-    setOriginalRecord(selectedRecord);
+  const handleClick = async (color) => {
+    if (!selectedRow) {
+      console.error("Selected row is not set");
+      return;
+    }
+
+    if (!selectedRow.id_no) {
+      console.error("Selected row id_no is missing:", selectedRow);
+      return;
+    }
+
+    // Update the local state
+    setSelectedColor((prevColors) => {
+      const newColors = { ...prevColors, [selectedRow.id_no]: color };
+      localStorage.setItem("rowColors", JSON.stringify(newColors));
+      return newColors;
+    });
+
+    try {
+      await fetch("http://localhost:8081/api/update-color-universe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Include this if you use sessions
+        body: JSON.stringify({ id_no: selectedRow.id_no, color }),
+      });
+      notification.success({
+        message: "Industry marked successfully",
+        description: `The "${selectedRow.title}" has been marked.`,
+      });
+    } catch (error) {
+      notification.error({
+        message: "Error",
+        description: "Failed to update color",
+      });
+      console.error("Error updating color:", error);
+    }
   };
 
-  const handleChange = (field, value) => {
-    setSelectedRecord((prevRecord) => ({
-      ...prevRecord,
-      [field]: value,
-    }));
+  const handleRowClick = async (record) => {
+    if (!selectedRowKeys.includes(record.id_no)) {
+      // If the row is not already selected, add it to the selection
+      setSelectedRowKeys([...selectedRowKeys, record.id_no]);
+    } else {
+      // If the row is already selected, remove it from the selection
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== record.id_no));
+    }
+  
+    // Only update the API and display the notification message when multiple rows are selected
+    if (selectedRowKeys.length > 1) {
+      // Update the local state and API for all selected rows
+      const selectedRows = filteredData.filter((row) => selectedRowKeys.includes(row.id_no));
+      const colorsToUpdate = selectedRows.map((row) => ({ id_no: row.id_no, color: selectedColor[row.id_no] }));
+  
+      try {
+        await Promise.all(
+          colorsToUpdate.map((colorToUpdate) =>
+            fetch("http://localhost:8081/api/update-color-universe", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              credentials: "include", // Include this if you use sessions
+              body: JSON.stringify(colorToUpdate),
+            })
+          )
+        );
+  
+        // Update the row colors in the local state
+        setSelectedColor((prevColors) => {
+          const newColors = { ...prevColors };
+          selectedRows.forEach((row) => {
+            newColors[row.id_no] = selectedColor[row.id_no];
+          });
+          localStorage.setItem("rowColors", JSON.stringify(newColors));
+          return newColors;
+        });
+  
+        // Display the notification message after the row colors have been updated
+        notification.success({
+          message: "Industries marked successfully",
+          description: `The selected industries have been marked.`,
+        });
+      } catch (error) {
+        notification.error({
+          message: "Error",
+          description: "Failed to update colors",
+        });
+        console.error("Error updating colors:", error);
+      }
+    }
   };
 
-  const showCancelPrompt = () => {
-    confirm({
-      title: "Are you sure you want to cancel editing?",
-      icon: <ExclamationCircleOutlined />,
-      content: "Any unsaved changes will be lost.",
-      okText: "Yes, Cancel",
-      okType: "primary",
-      cancelText: "No, Keep Editing",
-      //transitionName: 'zoom',
-      onOk() {
-        handleCancel(); // If the user confirms, call handleCancelEdit
-      },
-      onCancel() {
-        console.log("Keep editing");
-      },
+  // Handle checkbox change
+  const handleCheckboxChange = (e, id_no) => {
+    const checked = e.target.checked;
+    const newSelectedRowKeys = checked
+      ? [...selectedRowKeys, id_no]
+      : selectedRowKeys.filter((key) => key !== id_no);
+
+    setSelectedRowKeys(newSelectedRowKeys);
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = (checked) => {
+    const allRowKeys = filteredData.map((item) => item.id_no);
+    setSelectedRowKeys(checked ? allRowKeys : []);
+  };
+
+  const darkenColor = (color, factor) => {
+    let colorHex = color.replace("#", "");
+    let r = parseInt(colorHex.substring(0, 2), 16);
+    let g = parseInt(colorHex.substring(2, 4), 16);
+    let b = parseInt(colorHex.substring(4, 6), 16);
+
+    r = Math.max(0, Math.min(255, Math.floor(r * factor)));
+    g = Math.max(0, Math.min(255, Math.floor(g * factor)));
+    b = Math.max(0, Math.min(255, Math.floor(b * factor)));
+
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b)
+      .toString(16)
+      .slice(1)
+      .toUpperCase()}`;
+  };
+
+  const handleRowSelect = (id_no) => {
+    if (selectedRowKeys.includes(id_no)) {
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
+    } else {
+      setSelectedRowKeys([...selectedRowKeys, id_no]);
+    }
+  };
+
+  const handleColorChange = (color) => {
+    setSelectedColors((prevSelectedColors) => {
+      const newSelectedColors = { ...prevSelectedColors };
+      for (const rowId of Object.keys(newSelectedColors)) {
+        newSelectedColors[rowId] = color;
+      }
+      return newSelectedColors;
     });
   };
 
-  const dateFormat = "MM/DD/YYYY";
-  const timeFormat = "h:mm A";
-  const initialDateMonitored = selectedRecord?.date_monitored
-    ? moment(selectedRecord.date_monitored, dateFormat)
-    : null;
+  const colors = [
+    "#e8dff5",
+    "#fce1e4",
+    "#fcf4dd",
+    "#ddedea",
+    "#daeaf6",
+    "#EEEEEE",
+  ];
 
-  const initialDateRouted = selectedRecord?.date_routed
-    ? moment(selectedRecord.date_routed, dateFormat)
-    : null;
+  const colorMenu = (
+    <Menu style={{ width: 150 }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
+        {" "}
+        <p className="p-row">Mark Selected Rows As</p>
+        {colors.map((color) => (
+          <button
+            key={color}
+            onClick={() => handleClick(color)}
+            style={{
+              backgroundColor: color,
+              height: 20,
+              width: 40,
+              borderRadius: 4,
+              border: "none",
+              margin: 2,
+              cursor: "pointer",
+              outline:
+                (selectedRow && selectedColor[selectedRow.id_no]) === color
+                  ? "2px solid #B4B4B8"
+                  : "none",
+            }}
+          />
+        ))}
+      </div>
+    </Menu>
+  );
 
-  const initialDateSigned = selectedRecord?.date_signed
-    ? moment(selectedRecord.date_signed, dateFormat)
-    : null;
-
-  const initialDateApprovedECC = selectedRecord?.date_approved
-    ? moment(selectedRecord.date_approved, dateFormat)
-    : null;
-
-  const initialDateAmendECC = selectedRecord?.date_amend
-    ? moment(selectedRecord.date_amend, dateFormat)
-    : null;
-
-  const DateIssuedPTO = selectedRecord?.pto_issued
-    ? moment(selectedRecord.pto_issued, dateFormat)
-    : null;
-
-  const DateExpPTO = selectedRecord?.pto_expiration
-    ? moment(selectedRecord.pto_expiration, dateFormat)
-    : null;
-
-  const DateIssuedWWDP = selectedRecord?.wwdp_issued
-    ? moment(selectedRecord.wwdp_issued, dateFormat)
-    : null;
-  const DateExpWWDP = selectedRecord?.wwdp_expiration
-    ? moment(selectedRecord.wwdp_expiration, dateFormat)
-    : null;
-
-  const DateIssuedHW = selectedRecord?.haz_issued
-    ? moment(selectedRecord.haz_issued, dateFormat)
-    : null;
-
-  const DateExpTSD = selectedRecord?.tsd_expiration
-    ? moment(selectedRecord.tsd_expiration, dateFormat)
-    : null;
-
-  const DateExpTP = selectedRecord?.tp_trc_expiration
-    ? moment(selectedRecord.tp_trc_expiration, dateFormat)
-    : null;
-
-  const DateIssuedChem = selectedRecord?.chem_permit_issued
-    ? moment(selectedRecord.chem_permit_issued, dateFormat)
-    : null;
-
-  const DateExpChem = selectedRecord?.chem_permit_exp
-    ? moment(selectedRecord.chem_permit_exp, dateFormat)
-    : null;
-
-  const DateForwardedLegal = selectedRecord?.date_forwarded
-    ? moment(selectedRecord.date_forwarded, dateFormat)
-    : null;
-
-    const DateValPCO = selectedRecord?.pco_validity
-    ? moment(selectedRecord.pco_validity, dateFormat)
-    : null;
-
-  const DateApprovedChiefLegal = selectedRecord?.date_approved
-    ? moment(selectedRecord.date_approved, dateFormat)
-    : null;
-
-  const DateNOVRelease = selectedRecord?.nov_released
-    ? moment(selectedRecord.nov_released, dateFormat)
-    : null;
-
-  const DateTCShed = selectedRecord?.tc_date_sched
-    ? moment(selectedRecord.tc_date_sched, dateFormat)
-    : null;
-
-  const DateTCActual = selectedRecord?.tc_date_actual
-    ? moment(selectedRecord.tc_date_actual, dateFormat)
-    : null;
-
-  const DateTCTime = selectedRecord?.time
-    ? moment(selectedRecord.time, timeFormat)
-    : null;
-
-  const DatePenalty = selectedRecord?.penalty
-    ? moment(selectedRecord.penalty, dateFormat)
-    : null;
-
-  const handleAddRow = () => {
-    if (rows.length < maxRows) {
-      setRows([...rows, { sectionIncharge: "", handler: "", key: Date.now() }]);
-    }
-  };
-
-  const handleRemoveRow = (index) => {
-    setRows(rows.filter((_, i) => i !== index));
-  };
-
-  const handleAddRowECC = () => {
-    if (rowsECC.length < maxRowsECC) {
-      setRowsECC([...rowsECC, Date.now()]);
-    }
-  };
-
-  const handleRemoveRowECC = () => {
-    if (rowsECC.length > 1) {
-      setRowsECC(rowsECC.slice(0, -1));
-    }
-  };
-
-  const handleAddRowPTO = () => {
-    if (rowsPTO.length < maxRowsPTO) {
-      setRowsPTO([...rowsPTO, Date.now()]);
-    }
-  };
-
-  const handleRemoveRowPTO = () => {
-    if (rowsPTO.length > 1) {
-      setRowsPTO(rowsPTO.slice(0, -1));
-    }
-  };
-
-  const handleAddRowDP = () => {
-    if (rowsDP.length < maxRowsDP) {
-      setRowsDP([...rowsDP, Date.now()]);
-    }
-  };
-
-  const handleRemoveRowDP = () => {
-    if (rowsDP.length > 1) {
-      setRowsDP(rowsDP.slice(0, -1));
-    }
-  };
-
-  const handleAddRowHAZ = () => {
-    if (rowsHAZ.length < maxRowsHAZ) {
-      setRowsHAZ([...rowsHAZ, Date.now()]);
-    }
-  };
-
-  const handleRemoveRowHAZ = () => {
-    if (rowsHAZ.length > 1) {
-      setRowsHAZ(rowsHAZ.slice(0, -1));
-    }
-  };
-
-  const handleAddRowCHEM = () => {
-    if (rowsCHEM.length < maxRowsCHEM) {
-      setRowsCHEM([...rowsCHEM, rowsCHEM.length + 1]);
-    }
-  };
-
-  const handleRemoveRowCHEM = () => {
-    if (rowsCHEM.length > 1) {
-      setRowsCHEM(rowsCHEM.slice(0, -1));
-    }
-  };
-
-  const handleAddRowPCO = () => {
-    if (rowsPCO.length < maxRowsPCO) {
-      setRowsPCO([...rowsPCO, rowsPCO.length + 1]);
-    }
-  };
-
-  const handleRemoveRowPCO = () => {
-    if (rowsPCO.length > 1) {
-      setRowsPCO(rowsPCO.slice(0, -1));
-    }
-  };
+  const colorMenuAll = (
+    <Menu style={{ width: 150 }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
+        <p className="p-row">Mark Selected Rows As</p>
+        {colors.map((color) => (
+          <button
+            key={color}
+            onClick={() => handleColorChange(color)}
+            style={{
+              backgroundColor: color,
+              height: 20,
+              width: 40,
+              borderRadius: 4,
+              border: "none",
+              margin: 2,
+              cursor: "pointer",
+              outline: Object.keys(selectedColors).some(
+                (rowId) => selectedColors[rowId] === color
+              )
+                ? "2px solid #B4B4B8"
+                : "none",
+            }}
+          />
+        ))}
+      </div>
+    </Menu>
+  );
 
   const columns = [
+    {
+      title: <Checkbox onChange={(e) => handleSelectAll(e.target.checked)} />,
+      align: "center",
+      render: (text, record) => (
+        <div
+          onClick={() => handleRowClick(record)}
+          style={{ cursor: "pointer" }}
+        >
+          <Checkbox
+            checked={selectedRowKeys.includes(record.id_no)}
+            onChange={(e) => handleCheckboxChange(e, record.id_no)}
+          />
+        </div>
+      ),
+    },
     {
       title: "ID No.",
       dataIndex: "id_no",
       key: "id_no",
-      width: 100,
+      align: "left",
+      width: "100px",
+      render: (text) => <div className="industry-label">{text}</div>,
     },
     {
       title: "Industry Details",
       key: "industryDetails",
       render: (text, record) => (
-        <>
+        <div className="industry-label">
           <strong>{record.title}</strong>
           <br />
           Proponent Name: <i>{record.name}</i>
@@ -365,2846 +421,654 @@ const Province = ({ theme }) => {
           >
             {record.ecc_cnc}
           </a>
-        </>
+        </div>
       ),
       align: "left",
+      width: "500px",
     },
     {
       title: "Industry Classification",
       key: "industry_class",
-      render: (text, record) => <>{record.industry_class}</>,
+      render: (text, record) => (
+        <div className="industry-label">{record.industry_class}</div>
+      ),
       align: "left",
+      width: "200px",
+    },
+    {
+      title: "Permits/Clearances",
+      width: "200px",
+      key: "permits_clearances",
+      render: (text, record) => (
+        <div
+          className="permits-clearances-container"
+          style={{ fontSize: "11px" }}
+        >
+          {record.ecc_cnc &&
+            ((record.permit_process === "ECC Online" ||
+              record.permit_process === "ECC Manual") &&
+            typeof record.ecc_cnc === "string" &&
+            (record.ecc_cnc.includes("ECC-OL") ||
+              record.ecc_cnc.includes("R3") ||
+              record.ecc_cnc.includes("03") ||
+              record.ecc_cnc.includes("III") ||
+              record.ecc_cnc.includes("RO3") ||
+              record.ecc_cnc.includes("ECC")) ? (
+              <Tooltip
+                title={
+                  <div className="tooltip-content" style={{ fontSize: "11px" }}>
+                    <div>ECC Information</div>
+                    <div>Reference No.: {record.ecc_cnc}</div>
+                    <div>Date Approved: {record.date_approved}</div>
+                    <div>Date Amended: {record.date_amend}</div>
+                  </div>
+                }
+                color="#0b5f74"
+              >
+                <Button
+                  type="text"
+                  className="custom-button-green"
+                  size="small"
+                >
+                  ECC
+                </Button>
+              </Tooltip>
+            ) : typeof record.ecc_cnc === "string" &&
+              (record.ecc_cnc.includes("CNC") ||
+                record.ecc_cnc.includes("R03")) ? (
+              <Tooltip
+                title={
+                  <div className="tooltip-content" style={{ fontSize: "11px" }}>
+                    <div>CNC Information</div>
+                    <div>Code: {record.ecc_cnc}</div>
+                    <div>Date Issued: {record.date_approved}</div>
+                  </div>
+                }
+                color="#bc6e00"
+              >
+                <Button
+                  type="text"
+                  className="custom-button-yellow"
+                  size="small"
+                >
+                  CNC
+                </Button>
+              </Tooltip>
+            ) : null)}
+
+          {record.pto_code && (
+            <Tooltip
+              title={
+                <div style={{ fontSize: "11px" }}>
+                  <div>PTO Information</div>
+                  <div>Code: {record.pto_code}</div>
+                  <div>Date Issued: {record.pto_issued}</div>
+                  <div>Date of Expiration: {record.pto_expiration}</div>
+                </div>
+              }
+              color="#643c6a"
+            >
+              <Button type="text" className="custom-button-blue" size="small">
+                {typeof record.pto_code === "string" &&
+                (record.pto_code.includes("POA") ||
+                  record.pto_code.includes("PTO") ||
+                  record.pto_code.includes("FLA"))
+                  ? "PTO"
+                  : record.pto_code}
+              </Button>
+            </Tooltip>
+          )}
+
+          {record.wwdp_code && (
+            <Tooltip
+              title={
+                <div style={{ fontSize: "11px" }}>
+                  <div>WWDP Information</div>
+                  <div>Code: {record.wwdp_code}</div>
+                  <div>Date Issued: {record.wwdp_issued}</div>
+                  <div>Date of Expiration: {record.wwdp_expiration}</div>
+                </div>
+              }
+              color="#b45248"
+            >
+              <Button type="text" className="custom-button-orange" size="small">
+                {typeof record.wwdp_code === "string" &&
+                record.wwdp_code.includes("DP")
+                  ? "WWDP"
+                  : record.wwdp_code}
+              </Button>
+            </Tooltip>
+          )}
+
+          {record.haz_id && (
+            <Tooltip
+              title={
+                <div style={{ fontSize: "11px" }}>
+                  <div>HWG ID Information</div>
+                  <div>Code: {record.haz_id}</div>
+                  <div>Date Issued: {record.haz_issued}</div>
+                </div>
+              }
+              color="#415e20"
+            >
+              <Button
+                type="text"
+                className="custom-button-skyblue"
+                size="small"
+              >
+                {typeof record.haz_id === "string" &&
+                (record.haz_id.includes("GR") ||
+                  record.haz_id.includes("M-GR") ||
+                  record.pto_code.includes("OL-GR") ||
+                  record.pto_code.includes("HW"))
+                  ? "HWG ID"
+                  : record.haz_id}
+              </Button>
+            </Tooltip>
+          )}
+
+          {record.tsd_ref_no && (
+            <Tooltip
+              title={
+                <div style={{ fontSize: "11px" }}>
+                  <div>TSD Information</div>
+                  <div>Code: {record.tsd_ref_no}</div>
+                  <div>Date of Expiration: {record.tsd_expiration}</div>
+                </div>
+              }
+              color="#542c14"
+            >
+              <Button type="text" className="custom-button-brown" size="small">
+                {typeof record.tsd_ref_no === "string" &&
+                (record.tsd_ref_no.includes("TR") ||
+                  record.tsd_ref_no.includes("OL-TR"))
+                  ? "TSD ID"
+                  : record.tsd_ref_no}
+              </Button>
+            </Tooltip>
+          )}
+
+          {record.tp_trc_ref_no && (
+            <Tooltip
+              title={
+                <div style={{ fontSize: "11px" }}>
+                  <div>TP/TRC Information</div>
+                  <div>Code: {record.tp_trc_ref_no}</div>
+                  <div>Date of Expiration: {record.tp_trc_expiration}</div>
+                </div>
+              }
+              color="#242726"
+            >
+              <Button type="text" className="custom-button-stone" size="small">
+                {typeof record.tp_trc_ref_no === "string" &&
+                (record.tp_trc_ref_no.includes("TR") ||
+                  record.tp_trc_ref_no.includes("OL-TP") ||
+                  record.tp_trc_ref_no.includes("OL-PTT"))
+                  ? "TP/TRC ID"
+                  : record.tp_trc_ref_no}
+              </Button>
+            </Tooltip>
+          )}
+
+          {record.chemical_code && (
+            <Tooltip
+              title={
+                <div>
+                  <div>Chemical Permit/s Information</div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Element</th>
+                        <th>Code</th>
+                        <th>Permit Issued</th>
+                        <th>Permit Expiration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>{record.chemical_code.split("-")[0]}</td>
+                        <td>{record.chemical_code.split("-")[2]}</td>
+                        <td>{record.chemical_code}</td>
+                        <td>{record.chem_permit_issued}</td>
+                        <td>{record.chem_permit_exp}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              }
+              color="#5e5d3e"
+            >
+              <Button type="text" className="custom-button-ash" size="small">
+                {typeof record.chemical_code === "string" &&
+                (record.chemical_code.includes("CCOr") ||
+                  record.chemical_code.includes("CCOi") ||
+                  record.chemical_code.includes("OL") ||
+                  record.chemical_code.includes("PCL") ||
+                  record.chemical_code.includes("SQI"))
+                  ? "Chemical Permits"
+                  : record.chemical_code}
+              </Button>
+            </Tooltip>
+          )}
+
+          {record.pco_no && (
+            <Tooltip
+              title={
+                <div style={{ fontSize: "11px" }}>
+                  <div>PCO Information</div>
+                  <div>Code: {record.pco_no}</div>
+                  <div>Name: {record.pco_name}</div>
+                  <div>Tel. No: {record.pco_tel_no}</div>
+                  <div>PCO Validity: {record.pco_validity}</div>
+                </div>
+              }
+              color="#243d57"
+            >
+              <Button type="text" className="custom-button-slate" size="small">
+                {typeof record.pco_no === "string" &&
+                (record.pco_no.includes("PCO") ||
+                  record.pco_no.includes("PCC") ||
+                  record.pco_no.includes("A-PCO"))
+                  ? "PCO ID"
+                  : record.pco_no}
+              </Button>
+            </Tooltip>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: "Section/Unit Incharged",
+      key: "section_incharge",
+      render: (text, record) => (
+        <div className="industry-label">{record.section_incharge}</div>
+      ),
+      align: "left",
+      width: "200px",
     },
     {
       title: "Remarks/Recommendations",
       key: "remarks_recommendations",
-      render: (text, record) => <>{record.remarks_recommendations}</>,
+      render: (text, record) => (
+        <div className="industry-label">{record.remarks_recommendations}</div>
+      ),
       align: "left",
     },
     {
       title: "Actions",
       key: "actions",
+      align: "center",
+      width: 200,
       render: (text, record) => (
-        <Tooltip title="View Details">
-          <Button
-            icon={<EyeOutlined />}
-            onClick={() => showModal(record)}
-            type="primary"
-          />
-        </Tooltip>
+        <div>
+          <Tooltip title="View Details" style={{ fontSize: "11px" }}>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => showModal(record)}
+              type="primary"
+              className="btn-action"
+              size="small"
+            />
+          </Tooltip>
+          <Tooltip title="Mark Row As">
+            <Dropdown overlay={colorMenuAll} placement="bottomLeft" arrow>
+              <Button className="btn-action" size="small">
+                <BgColorsOutlined />
+              </Button>
+            </Dropdown>
+          </Tooltip>
+        </div>
       ),
     },
   ];
 
+  const formatIndustryDetails = (record) => {
+    return `
+      ${record.title || ""}
+      Proponent Name: ${record.name || ""}, 
+      Address: ${record.address || ""}
+    `.trim();
+  };
+
+  const formatPermitsClearances = (record) => {
+    const permits = [];
+
+    if (record.ecc_cnc) {
+      permits.push(`ECC/CNC Ref. No.: ${record.ecc_cnc}`);
+    }
+
+    if (record.pto_code) {
+      permits.push(`PTO Code: ${record.pto_code}`);
+    }
+
+    if (record.wwdp_code) {
+      permits.push(`WWDP Code: ${record.wwdp_code}`);
+    }
+
+    if (record.haz_id) {
+      permits.push(`HWG ID Code: ${record.haz_id}`);
+    }
+
+    if (record.tsd_ref_no) {
+      permits.push(`TSD ID Code: ${record.tsd_ref_no}`);
+    }
+
+    if (record.tp_trc_ref_no) {
+      permits.push(`TP/TRC ID Code: ${record.tp_trc_ref_no}`);
+    }
+
+    if (record.chemical_code) {
+      permits.push(`Chemical Code: ${record.chemical_code}`);
+    }
+
+    if (record.pco_no) {
+      permits.push(`PCO Code: ${record.pco_no}`);
+    }
+
+    return permits.join("\n");
+  };
+
+  // Utility function to extract text content from React elements
+  const extractTextContent = (element) => {
+    if (typeof element === "string") {
+      return element;
+    }
+
+    if (React.isValidElement(element)) {
+      return React.Children.toArray(element.props.children)
+        .map((child) =>
+          typeof child === "string" ? child : extractTextContent(child)
+        )
+        .join("");
+    }
+
+    return "";
+  };
+
+  const handleExportPDF = (province) => {
+    console.log("Selected province:", province); // Debugging line
+    const provinceName =
+      typeof province === "object"
+        ? province.name || "Unknown Province"
+        : province;
+
+    console.log("Extracted province name:", provinceName); // Debugging line
+
+    // Check if any checkboxes are selected
+    if (selectedRowKeys.length === 0) {
+      Swal.fire({
+        title: "No Selections Made",
+        text: "No data is selected. Do you want to export all data?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, Export All",
+        cancelButtonText: "Cancel",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          exportAllData(provinceName);
+        }
+      });
+      return;
+    }
+
+    exportSelectedData(provinceName);
+  };
+
+  // Function to export all data
+  const exportAllData = (provinceName) => {
+    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+
+    // Customize title with province name
+    doc.setFontSize(15);
+    doc.text(`Province Data (${provinceName})`, 20, 20);
+
+    // Define columns and data for the PDF
+    const columns = [
+      { title: "ID No.", dataKey: "id_no" },
+      { title: "Industry Details", dataKey: "industryDetails" },
+      { title: "Industry Classification", dataKey: "industry_class" },
+      { title: "Permits/Clearances", dataKey: "permits_clearances" },
+      { title: "Section/Unit Incharged", dataKey: "section_incharge" },
+      { title: "Remarks/Recommendations", dataKey: "remarks_recommendations" },
+    ];
+
+    const data = filteredData.map((record) => ({
+      id_no: record.id_no || "",
+      industryDetails: formatIndustryDetails(record),
+      industry_class: record.industry_class || "",
+      permits_clearances: formatPermitsClearances(record),
+      section_incharge: record.section_incharge || "",
+      remarks_recommendations: record.remarks_recommendations || "",
+    }));
+
+    // Add autoTable to PDF
+    doc.autoTable({
+      startY: 30,
+      columns: columns,
+      body: data,
+      theme: "striped",
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        id_no: { cellWidth: 15 },
+        industryDetails: { cellWidth: 80 },
+        industry_class: { cellWidth: 30 },
+        permits_clearances: { cellWidth: 80 },
+        section_incharge: { cellWidth: 30 },
+      },
+    });
+
+    // Save the PDF
+    doc.save(`Province Data (${provinceName}).pdf`);
+  };
+
+  // Function to export selected data
+  const exportSelectedData = (provinceName) => {
+    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+
+    // Customize title with province name
+    doc.setFontSize(15);
+    doc.text(`Province Data (${provinceName})`, 20, 20);
+
+    // Define columns and data for the PDF
+    const columns = [
+      { title: "ID No.", dataKey: "id_no" },
+      { title: "Industry Details", dataKey: "industryDetails" },
+      { title: "Industry Classification", dataKey: "industry_class" },
+      { title: "Permits/Clearances", dataKey: "permits_clearances" },
+      { title: "Section/Unit Incharged", dataKey: "section_incharge" },
+      { title: "Remarks/Recommendations", dataKey: "remarks_recommendations" },
+    ];
+
+    // Filter data based on selected checkboxes
+    const data = filteredData
+      .filter((record) => selectedRowKeys.includes(record.id_no))
+      .map((record) => ({
+        id_no: record.id_no || "",
+        industryDetails: formatIndustryDetails(record),
+        industry_class: record.industry_class || "",
+        permits_clearances: formatPermitsClearances(record),
+        section_incharge: record.section_incharge || "",
+        remarks_recommendations: record.remarks_recommendations || "",
+      }));
+
+    // Add autoTable to PDF
+    doc.autoTable({
+      startY: 30,
+      columns: columns,
+      body: data,
+      theme: "striped",
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        id_no: { cellWidth: 15 },
+        industryDetails: { cellWidth: 80 },
+        industry_class: { cellWidth: 30 },
+        permits_clearances: { cellWidth: 80 },
+        section_incharge: { cellWidth: 30 },
+      },
+    });
+
+    // Save the PDF
+    doc.save(`Province Data (${provinceName}).pdf`);
+  };
+
   return (
-    <div>
-      {error ? (
-        <Card className="error-card">
-          {" "}
-          {/* Card for error handling */}
-          <strong>Oops... Something went wrong!</strong>
-          <p>Try to reload the data again.</p> {/* Error message */}
-          <Button
-            type="primary"
-            onClick={() => {
-              fetchData(provinceName); // Retry fetching data
-            }}
-          >
-            Reload
-          </Button>
-        </Card>
-      ) : (
-        <div>
-          <Modal
-            visible={modalVisible}
-            title={
-              <div className="modal-title-container">
-                {" "}
-                {/* Flex container for the title */}
-                <span className="title-left">
-                  Record ID: {selectedRecord?.id_no || "Unknown"}
-                </span>
-                <span>
-                  {selectedRecord?.title || ""} {/* Left-aligned part */}
-                </span>
-                <span className="title-right">
-                  {selectedRecord?.ecc_cnc || ""} {/* Right-aligned part */}
-                </span>
-              </div>
-            }
-            onCancel={handleCloseModal}
-            footer={[
-              isEditing ? (
-                <Button
-                  key="cancel"
-                  onClick={isEditing ? showCancelPrompt : handleCancel}
-                >
-                  {isEditing ? "Cancel" : "Close"}
-                </Button>
-              ) : (
-                <Button key="close" type="primary" onClick={handleCloseModal}>
-                  Close
-                </Button>
-              ),
-              !isEditing ? (
-                <Button key="edit" onClick={handleEdit}>
-                  Edit
-                </Button>
-              ) : null,
-              isEditing ? (
-                <Button key="save" type="primary" onClick={handleSave}>
-                  Save
-                </Button>
-              ) : null,
-            ]}
-            width={1300}
-          >
-            {selectedRecord ? (
-              <Tabs defaultActiveKey="1" className="tab-font">
-                {/* GENERAL INFORMATION */}
-                <TabPane tab={<BoldTab>General Information</BoldTab>} key="1">
-                  <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                      className="modalcol"
-                    >
-                      <Paragraph>
-                        {" "}
-                        <strong>Project Title:</strong>
-                        <TextArea
-                          className="poppins-textarea"
-                          value={selectedRecord?.title || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("title", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Paragraph>
-                        <strong>Proponent Name:</strong>
-                        <TextArea
-                          className="poppins-textarea"
-                          value={selectedRecord?.name || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) => handleChange("name", e.target.value)}
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>Industry Classification</strong>
-                            <IndustryClassAutoComplete
-                              value={selectedRecord?.industry_class || ""}
-                              disabled={!isEditing}
-                              onChange={(value) =>
-                                handleChange("industry_class", value)
-                              }
-                              style={{ width: "100%" }}
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          <Paragraph>
-                            <strong>PSIC Code:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.psic_code || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("psic_code", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
+    <div className={`header-panel ${theme}`}>
+      <div className="header-content">
+        <h3 className="header-title">{`${capitalizedProvinceName} Universe of Firms and Industries`}</h3>
+        <Button
+          type="primary"
+          className="refresh-button"
+          icon={<ReloadOutlined />}
+          onClick={handleReload}
+          loading={loading}
+        ></Button>
+        <Button
+          type="primary"
+          className="refresh-button"
+          icon={<ExportOutlined />}
+          onClick={() => handleExportPDF(selectedProvince)}
+        ></Button>
+        <Tooltip title="Mark Row As">
+          <Dropdown overlay={colorMenu} placement="bottomLeft" arrow>
+            <Button
+              type="primary"
+              className="refresh-button"
+              icon={<BgColorsOutlined />}
+            ></Button>
+          </Dropdown>
+        </Tooltip>
+        <Button type="primary" className="add-industry-button">
+          Add Industry
+        </Button>
+      </div>
 
-                      <Paragraph>
-                        <strong>Industry Type:</strong> <br />
-                        <IndustryTypeAutoComplete
-                          value={selectedRecord?.industry_type || ""}
-                          disabled={!isEditing}
-                          onChange={(value) =>
-                            handleChange("industry_type", value)
-                          }
-                        />
-                      </Paragraph>
+      <div className="search-pagination-container">
+        <div className="total-rows">
+          <span>Industry Count: {formatNumber(filteredData.length)}</span>
+        </div>
+        <div className="input-search">
+          <Input
+            placeholder="Search..."
+            prefix={<SearchOutlined />}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={loading} // Disable while loading
+          />
+        </div>
 
-                      <Paragraph>
-                        <strong>Industry Sub-Type:</strong>
-                        <IndustrySubTypeAutoComplete
-                          value={selectedRecord?.industry_subtype || ""}
-                          disabled={!isEditing}
-                          onChange={(value) =>
-                            handleChange("industry_subtype", value)
-                          }
-                        />
-                      </Paragraph>
-
-                      <Paragraph>
-                        <strong>Specific Project Type:</strong>
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.proj_type || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("proj_type", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                    </Col>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Paragraph>
-                        <strong>Complete Address:</strong>
-                        <TextArea
-                          className="poppins-textarea"
-                          value={selectedRecord?.address || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("address", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Paragraph>
-                        <strong>Street:</strong>
-                        <TextArea
-                          className="poppins-textarea"
-                          value={selectedRecord?.street || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("street", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Paragraph>
-                        <strong>Barangay:</strong>
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.brgy || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) => handleChange("brgy", e.target.value)}
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Paragraph>
-                        <strong>City/Municipality:</strong>
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.city || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) => handleChange("city", e.target.value)}
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Paragraph>
-                        <strong>Province:</strong> <br />
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.province || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("province", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                    </Col>
-                  </Row>
-                </TabPane>
-
-                {/* FOCAL PERSON */}
-                <TabPane
-                  tab={<BoldTab>Concerned Unit/Focal Person</BoldTab>}
-                  key="2"
-                >
-                  <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Paragraph>
-                        <strong>Number of Employees:</strong>
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.emp_no_total || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("emp_no_total", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-                      <Paragraph>
-                        <strong>Bio-Oxygen Demand (kg/day)</strong>
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.bod || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) => handleChange("bod", e.target.value)}
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-
-                      {rows.map((row, index) => (
-                        <Row gutter={[16, 16]} key={row.key}>
-                          <Col xs={24} sm={24} md={9} lg={9}>
-                            <Paragraph>
-                              <strong>Section/Unit In-Charged</strong>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                <SectionInChargeAutoComplete
-                                  value={row.sectionIncharge}
-                                  disabled={!isEditing}
-                                  onChange={(value) =>
-                                    handleChange(
-                                      index,
-                                      "sectionIncharge",
-                                      value
-                                    )
-                                  }
-                                  style={{ flex: 1 }} // Allow the input to take up available space
-                                />
-                              </div>
-                            </Paragraph>
-                          </Col>
-
-                          <Col xs={24} sm={24} md={9} lg={9}>
-                            <Paragraph>
-                              <strong>Inspector/Handler</strong> <br />
-                              <InspectorsAutoComplete
-                                value={row.handler}
-                                disabled={!isEditing}
-                                onChange={(value) =>
-                                  handleChange(index, "handler", value)
-                                }
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      ))}
-
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24}
-                          sm={24}
-                          md={24}
-                          lg={24}
-                          style={{
-                            textAlign: "left",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "flex-start",
-                          }}
-                        >
-                          <Tooltip title="Add New In-charge">
-                            <Button
-                              type="primary"
-                              icon={<PlusOutlined />}
-                              onClick={handleAddRow}
-                              className="btn-add"
-                              disabled={rows.length >= maxRows}
-                            />
-                          </Tooltip>
-                          {rows.length > 1 && (
-                            <Tooltip title="Remove">
-                              <Button
-                                type="primary"
-                                danger
-                                icon={<MinusOutlined />}
-                                onClick={() => handleRemoveRow(rows.length - 1)}
-                                className="btn-remove"
-                                style={{ marginLeft: "8px" }}
-                              />
-                            </Tooltip>
-                          )}
-                          {rows.length >= maxRows && (
-                            <span className="text-warning">
-                              Maximum number of sections reached ({maxRows})
-                              only.
-                              <br />
-                              Please ask for your supervisor for assistance
-                            </span>
-                          )}
-                        </Col>
-                      </Row>
-
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>Schedule of Monitoring</strong> <br />
-                            <MonthAutoComplete
-                              value={selectedRecord?.monitoring_sched || ""}
-                              disabled={!isEditing}
-                              onChange={(value) =>
-                                handleChange("monitoring_sched", value)
-                              }
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                    </Col>
-
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Paragraph>
-                        <strong>IIS No.:</strong>
-                        <Input
-                          className="poppins-textarea"
-                          value={selectedRecord?.iis_no || ""}
-                          style={isEditing ? {} : { color: "#aaa" }}
-                          disabled={!isEditing}
-                          onChange={(e) =>
-                            handleChange("iis_no", e.target.value)
-                          }
-                          placeholder="no data"
-                        />
-                      </Paragraph>
-
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>Type of Inspection:</strong>
-                            <InspectionTypeAutoComplete
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              value={selectedRecord?.insp_type || ""}
-                              disabled={!isEditing}
-                              onChange={(value) =>
-                                handleChange("insp_type", value)
-                              }
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>Type of Report Submitted:</strong>
-                            <ReportTypeAutoComplete
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              value={selectedRecord?.report_type || ""}
-                              disabled={!isEditing}
-                              onChange={(value) =>
-                                handleChange("report_type", value)
-                              }
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={8} // Half width on medium screens
-                          lg={8}
-                        >
-                          <Paragraph>
-                            <strong>Date Monitored:</strong>
-                            <DatePicker
-                              value={initialDateMonitored} // Set the initial value from the selected record
-                              format={dateFormat} // Define the desired date format
-                              disabled={!isEditing} // Disable if not in editing mode
-                              onChange={(date, dateString) => {
-                                handleChange("date_monitored", dateString);
-                              }}
-                              placeholder="Select date" // Placeholder for the date picker
-                              style={{ width: "100%" }}
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={8} // Half width on medium screens
-                          lg={8}
-                        >
-                          <Paragraph>
-                            <strong>Date Routed (IIS):</strong>
-                            <DatePicker
-                              value={initialDateRouted} // Set the initial value from the selected record
-                              format={dateFormat} // Define the desired date format
-                              disabled={!isEditing} // Disable if not in editing mode
-                              onChange={(date, dateString) => {
-                                handleChange("date_routed", dateString);
-                              }}
-                              placeholder="Select date" // Placeholder for the date picker
-                              style={{ width: "100%" }}
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={8} // Half width on medium screens
-                          lg={8}
-                        >
-                          <Paragraph>
-                            <span className="label_container">
-                              <strong className="label_title">
-                                Date Signed:
-                              </strong>
-                              <p className="label">
-                                (forwarded to focal person)
-                              </p>
-                            </span>
-                            <DatePicker
-                              value={initialDateSigned} // Set the initial value from the selected record
-                              format={dateFormat} // Define the desired date format
-                              disabled={!isEditing} // Disable if not in editing mode
-                              onChange={(date, dateString) => {
-                                handleChange("date_signed", dateString);
-                              }}
-                              placeholder="Select date" // Placeholder for the date picker
-                              style={{ width: "100%" }}
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 5,
-                          marginBottom: 5,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <strong>PLANNING UNIT</strong>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <span className="label_container">
-                                <strong className="label_title">
-                                  Total No. of Days:
-                                </strong>
-                                <p className="label">
-                                  (Date Monitored VS Date Submitted)
-                                </p>
-                              </span>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.days_dmds || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("days_dmds", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <span className="label_container">
-                                <strong className="label_title">
-                                  Total No. of Days:
-                                </strong>
-                                <p className="label">
-                                  (Date Submitted VS Date Signed)
-                                </p>
-                              </span>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.days_dsdrs || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("days_dsdrs", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Paragraph>
-                          <strong>Remarks/Recommendations:</strong> <br />
-                          <TextArea
-                            className="poppins-textarea"
-                            value={
-                              selectedRecord?.remarks_recommendations || ""
-                            }
-                            style={isEditing ? {} : { color: "#aaa" }}
-                            disabled={!isEditing}
-                            onChange={(e) =>
-                              handleChange(
-                                "remarks_recommendations",
-                                e.target.value
-                              )
-                            }
-                            placeholder="no data"
-                            rows={5}
-                          />
-                        </Paragraph>
-                        <Paragraph>
-                          <strong>
-                            Tracking of Reports (Received by Planning Unit):{" "}
-                          </strong>{" "}
-                          <br />
-                          <Checkbox
-                            checked={selectedRecord?.pismu_tracking === "✔"} // Check if '✓'
-                            disabled={!isEditing} // Only editable in edit mode
-                            onChange={(e) =>
-                              handleChange(
-                                "pismu_tracking	",
-                                e.target.checked ? "✔" : ""
-                              )
-                            }
-                            style={{ fontSize: "15px" }}
-                          >
-                            {selectedRecord?.pismu_tracking === "✔"
-                              ? "Yes"
-                              : "No"}
-                          </Checkbox>
-                        </Paragraph>
-                      </Card>
-                    </Col>
-                  </Row>
-                </TabPane>
-
-                {/* CPD */}
-                <TabPane
-                  tab={<BoldTab>Clearances and Permits</BoldTab>}
-                  key="3"
-                >
-                  <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedRecord?.pd1586 === "REQUIRED"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "pd1586",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>PD1586</strong>
-                            </Checkbox>
-                            <div className="add-remove-container">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowECC}
-                                  disabled={rowsECC.length >= maxRowsECC}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove">
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowECC}
-                                  disabled={rowsECC.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                ECC/CNC Reference No.
-                              </strong>
-                              {rowsECC.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.ecc_cnc}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("ecc_cnc", e.target.value)
-                                    }
-                                    placeholder="ECC/CNC Reference No."
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Permit Process Source
-                              </strong>
-                              {rowsECC.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <PermitSourceAutoComplete
-                                    value={selectedRecord?.permit_process}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange(
-                                        "permit_process",
-                                        e.target.value
-                                      )
-                                    }
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Approved
-                              </strong>
-                              {rowsECC.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={initialDateApprovedECC} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange("date_approved", dateString);
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Amended
-                              </strong>
-                              {rowsECC.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={initialDateAmendECC} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange("date_amend", dateString);
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        {rowsECC.length >= maxRowsECC && (
-                          <div
-                            style={{
-                              color: "red",
-                              textAlign: "center",
-                              marginTop: "10px",
-                            }}
-                          >
-                            Maximum number of sets reached ({maxRowsECC})
-                            permits only. You cannot add more sets.
-                          </div>
-                        )}
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedRecord?.ra8749 === "REQUIRED"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "ra8749",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>RA8749</strong>
-                            </Checkbox>
-                            <div className="add-remove-container">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowPTO}
-                                  disabled={rowsPTO.length >= maxRowsPTO}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove">
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowPTO}
-                                  disabled={rowsPTO.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">PTO Code</strong>
-                              {rowsPTO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.pto_code}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("pto_code", e.target.value)
-                                    }
-                                    placeholder="PTO Code"
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Issued
-                              </strong>
-                              {rowsPTO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateIssuedPTO} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange("pto_issued", dateString);
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date of Expiration
-                              </strong>
-                              {rowsPTO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateExpPTO} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange(
-                                        "pto_expiration",
-                                        dateString
-                                      );
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        {rowsPTO.length >= maxRowsPTO && (
-                          <div
-                            style={{
-                              color: "red",
-                              textAlign: "center",
-                              marginTop: "10px",
-                            }}
-                          >
-                            Maximum number of sets reached ({maxRowsPTO})
-                            permits only. You cannot add more sets.
-                          </div>
-                        )}
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedRecord?.ra9275 === "REQUIRED"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "ra9275",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>RA9275</strong>
-                            </Checkbox>
-                            <div className="add-remove-container">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowDP}
-                                  disabled={rowsDP.length >= maxRowsDP}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove">
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowDP}
-                                  disabled={rowsDP.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">WWDP Code</strong>
-                              {rowsDP.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.wwdp_code}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("wwdp_code", e.target.value)
-                                    }
-                                    placeholder="WWDP Code"
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Issued
-                              </strong>
-                              {rowsDP.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateIssuedWWDP} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange("wwdp_issued", dateString);
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date of Expiration
-                              </strong>
-                              {rowsDP.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateExpWWDP} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange(
-                                        "wwdp_expiration",
-                                        dateString
-                                      );
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        {rowsDP.length >= maxRowsDP && (
-                          <div
-                            style={{
-                              color: "red",
-                              textAlign: "center",
-                              marginTop: "10px",
-                            }}
-                          >
-                            Maximum number of sets reached ({maxRowsDP}) permits
-                            only. You cannot add more sets.
-                          </div>
-                        )}
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedRecord?.ra6969 === "REQUIRED"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "ra6969",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>RA6969</strong>
-                            </Checkbox>
-                            <div className="add-remove-container">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowHAZ}
-                                  disabled={rowsHAZ.length >= maxRowsHAZ}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove">
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowHAZ}
-                                  disabled={rowsHAZ.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Haz-waste ID
-                              </strong>
-                              {rowsHAZ.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.haz_id}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("haz_id", e.target.value)
-                                    }
-                                    placeholder="Haz-waste ID"
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Issued
-                              </strong>
-                              {rowsHAZ.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateIssuedHW} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange("haz_issued", dateString);
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        {rowsHAZ.length >= maxRowsHAZ && (
-                          <div
-                            style={{
-                              color: "red",
-                              textAlign: "center",
-                              marginTop: "10px",
-                            }}
-                          >
-                            Maximum number of sets reached ({maxRowsHAZ})
-                            permits only. You cannot add more sets.
-                          </div>
-                        )}
-                      </Card>
-                    </Col>
-
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 5,
-                          marginBottom: 5,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <Checkbox
-                          checked={selectedRecord?.tsd === "REQUIRED"} // Check if '✓'
-                          disabled={!isEditing} // Only editable in edit mode
-                          onChange={(e) =>
-                            handleChange(
-                              "tsd	",
-                              e.target.checked ? "REQUIRED" : ""
-                            )
-                          }
-                          style={{ fontSize: "15px" }}
-                        >
-                          {selectedRecord?.tsd === "REQUIRED" ? "" : ""}
-                          <strong>TSD Permit</strong>
-                        </Checkbox>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                TSD Date of Expiration:
-                              </strong>
-
-                              <DatePicker
-                                value={DateExpTSD} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("tsd_expiration", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 20,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <Checkbox
-                          checked={selectedRecord?.tp_trc === "REQUIRED"} // Check if '✓'
-                          disabled={!isEditing} // Only editable in edit mode
-                          onChange={(e) =>
-                            handleChange(
-                              "tsd_trc	",
-                              e.target.checked ? "REQUIRED" : ""
-                            )
-                          }
-                          style={{ fontSize: "15px" }}
-                        >
-                          {selectedRecord?.tp_trc === "REQUIRED" ? "" : ""}
-                          <strong>TP/TRC Permit</strong>
-                        </Checkbox>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                TP/TRC Date of Expiration:
-                              </strong>
-
-                              <DatePicker
-                                value={DateExpTP} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("tp_trc_expiration", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
-                              checked={
-                                selectedRecord?.chemical_permit === "REQUIRED"
-                              } // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "chemical_permit",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>Chemical Permits</strong>
-                            </Checkbox>
-                            <div className="add-remove-container-chem">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowCHEM}
-                                  disabled={rowsCHEM.length >= maxRowsCHEM}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove">
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowCHEM}
-                                  disabled={rowsCHEM.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">
-                              Chemical Type
-                            </strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">Permit Type</strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">Date Issued</strong>
-                          </Col>
-                          <Col xs={24} sm={24} md={6} lg={6}>
-                            <strong className="label_title">
-                              Date of Expiration
-                            </strong>
-                          </Col>
-                        </Row>
-
-                        {/* Render first five rows and additional rows conditionally */}
-                        {rowsCHEM.map((key, index) => (
-                          <div
-                            key={key}
-                            style={{
-                              display:
-                                showAllRowsCHEM || index < 5 ? "block" : "none",
-                            }}
-                          >
-                            <Row gutter={[16, 16]}>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <Paragraph>
-                                  <div
-                                    key={key}
-                                    style={{ marginBottom: "5px" }}
-                                  >
-                                    <Input
-                                      className="poppins-textarea"
-                                      value={selectedRecord?.chem_permit_type}
-                                      style={isEditing ? {} : { color: "#aaa" }}
-                                      disabled={!isEditing}
-                                      onChange={(e) =>
-                                        handleChange(
-                                          "chem_permit_type",
-                                          e.target.value
-                                        )
-                                      }
-                                      placeholder="Permit SubType"
-                                    />
-                                  </div>
-                                </Paragraph>
-                              </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.chem_permit_subtype}
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange(
-                                        "chem_permit_subtype",
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder="Permit SubType"
-                                  />
-                                </div>
-                              </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateIssuedChem} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange(
-                                        "chem_permit_issued",
-                                        dateString
-                                      );
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              </Col>
-                              <Col xs={24} sm={24} md={6} lg={6}>
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateExpChem} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange(
-                                        "chem_permit_exp",
-                                        dateString
-                                      );
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              </Col>
-                            </Row>
-                            {index === 4 && !showAllRowsCHEM && (
-                              <div className="gradient-more"></div>
-                            )}
-                          </div>
-                        ))}
-
-                        {/* Show All / Hide Additional Rows Button */}
-                        {rowsCHEM.length > 4 && (
-                          <div
-                            style={{ textAlign: "center", marginTop: "10px" }}
-                          >
-                            <Button
-                              type="primary"
-                              onClick={() =>
-                                setShowAllRowsCHEM(!showAllRowsCHEM)
-                              }
-                            >
-                              {showAllRowsCHEM
-                                ? "Hide Other Permits"
-                                : "Show All Chemical Permits"}
-                            </Button>
-                          </div>
-                        )}
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                        title={
-                          <div
-                            style={{
-                              display: "flex",
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedRecord?.pco === "REQUIRED"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "pco",
-                                  e.target.checked ? "REQUIRED" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              <strong>PCO Accreditation</strong>
-                            </Checkbox>
-                            <div className="add-remove-container-pco">
-                              <Tooltip title="Add New Permit">
-                                <Button
-                                  type="primary"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAddRowPCO}
-                                  disabled={rowsPCO.length >= maxRowsPCO}
-                                  style={{ marginRight: 8 }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="Remove"> 
-                                <Button
-                                  type="primary"
-                                  danger
-                                  icon={<MinusOutlined />}
-                                  onClick={handleRemoveRowPCO}
-                                  disabled={rowsPCO.length <= 1}
-                                />
-                              </Tooltip>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                Certificate of Accreditation No.
-                              </strong>
-                              {rowsPCO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.pco_no
-
-                                    }
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("pco_no", e.target.value)
-                                    }
-                                    placeholder="PCO No"
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                PCO Validity Date
-                              </strong>
-                              {rowsPCO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <DatePicker
-                                    value={DateValPCO} // Set the initial value from the selected record
-                                    format={dateFormat} // Define the desired date format
-                                    disabled={!isEditing} // Disable if not in editing mode
-                                    onChange={(date, dateString) => {
-                                      handleChange("pco_validity", dateString);
-                                    }}
-                                    placeholder="Select date" // Placeholder for the date picker
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                PCO Name
-                              </strong>
-                              {rowsPCO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.pco_name
-
-                                    }
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("pco_name", e.target.value)
-                                    }
-                                    placeholder="PCO Name"
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                          <Col xs={24} sm={24} md={12} lg={12}>
-                            <Paragraph>
-                              <strong className="label_title">
-                                PCO Contact No.
-                              </strong>
-                              {rowsPCO.map((key, index) => (
-                                <div key={key} style={{ marginBottom: "10px" }}>
-                                  <Input
-                                    className="poppins-textarea"
-                                    value={selectedRecord?.pco_tel_no
-
-                                    }
-                                    style={isEditing ? {} : { color: "#aaa" }}
-                                    disabled={!isEditing}
-                                    onChange={(e) =>
-                                      handleChange("pco_tel_no", e.target.value)
-                                    }
-                                    placeholder="PCO Contact"
-                                  />
-                                </div>
-                              ))}
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        {rowsPCO.length >= maxRowsPCO && (
-                          <div
-                            style={{
-                              color: "red",
-                              textAlign: "center",
-                              marginTop: "10px",
-                            }}
-                          >
-                            Maximum number of sets reached ({maxRowsPCO})
-                            permits only. You cannot add more sets.
-                          </div>
-                        )}
-                      </Card>
-                    </Col>
-                  </Row>
-                </TabPane>
-
-                {/* LEGAL SERVICES UNIT */}
-                <TabPane tab={<BoldTab>Legal Services Unit</BoldTab>} key="4">
-                  <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Card
-                        style={{
-                          width: 600,
-                          //marginTop: 20,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Docket No.:
-                              </strong>
-
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.docket_no || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("docket_no", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                DENR PAB Case No.:
-                              </strong>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.denr_pab_case_no || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange(
-                                    "denr_pab_case_no",
-                                    e.target.value
-                                  )
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Forwarded to Legal Staff:
-                              </strong>
-
-                              <DatePicker
-                                value={DateForwardedLegal} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("date_forwarded", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <span className="label_container">
-                                <strong className="label_title">
-                                  Total No. of Days:
-                                </strong>
-                                <p className="label">
-                                  (Date forwarded to staff vs. date approved)
-                                </p>
-                              </span>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.days_dfda || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("days_dfda", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Approved by Chief Legal:
-                              </strong>
-
-                              <DatePicker
-                                value={DateApprovedChiefLegal} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("date_approved", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                NOV Date Release:
-                              </strong>
-
-                              <DatePicker
-                                value={DateNOVRelease} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("nov_released", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Service Mode:
-                              </strong>
-
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.service_mode || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("service_mode", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 20,
-                          marginBottom: 20,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <strong>VIOLATION/S</strong>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              {" "}
-                              <strong>PD1586:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.v_pd1586 || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("v_pd1586", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              {" "}
-                              <strong>RA9275:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.v_ra9275 || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("v_ra9275", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              {" "}
-                              <strong>RA8749:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.v_ra8749 || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("v_ra8749", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              {" "}
-                              <strong>HAZWASTE:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.v_haz || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("v_haz", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              {" "}
-                              <strong>TOXIC CHEM:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.v_tchem || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("v_tchem", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-                    </Col>
-
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 5,
-                          marginBottom: 5,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <strong>Technical Conference</strong>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                TC Date Scheduled:
-                              </strong>
-                              <DatePicker
-                                value={DateTCShed} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("tc_date_sched", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                TC Date Actual:
-                              </strong>
-                              <DatePicker
-                                value={DateTCActual} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("tc_date_actual", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">Time:</strong>
-                              <TimePicker
-                                value={
-                                  DateTCTime
-                                    ? moment(DateTCTime, timeFormat)
-                                    : null
-                                } // Convert string to moment object
-                                format={timeFormat} // Use 12-hour format with AM/PM
-                                disabled={!isEditing} // Disable when not editing
-                                onChange={(date, dateString) =>
-                                  handleChange("time", dateString)
-                                } // Handle time change
-                                placeholder="Select time" // Placeholder text
-                                style={{ width: "100%" }} // Optional: Set to 100% width
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Legal Officer:
-                              </strong>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.legal_officer || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("legal_officer", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                T.C. Commitment/Deadline of Compliance
-                              </strong>
-                              &nbsp; <i>(Paste Link Here)</i>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.tc_commitment || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("tc_commitment", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 20,
-                          marginBottom: 5,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <strong>FOR INSPECTOR</strong>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                              Compliance with TC Commitment/Order
-                              </strong>
-                              &nbsp; <i>(Paste Link Here)</i>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.tc_commitment || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("tc_commitment", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-
-                      <Card
-                        style={{
-                          width: 600,
-                          marginTop: 20,
-                          marginBottom: 5,
-                          padding: 5,
-                        }}
-                        size="small"
-                      >
-                        <strong>For Order/Resolution</strong>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Position Paper
-                              </strong>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.pos_paper || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("pos_paper", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Date Payment of Penalty:
-                              </strong>
-                              <DatePicker
-                                value={DatePenalty} // Set the initial value from the selected record
-                                format={dateFormat} // Define the desired date format
-                                disabled={!isEditing} // Disable if not in editing mode
-                                onChange={(date, dateString) => {
-                                  handleChange("penalty", dateString);
-                                }}
-                                placeholder="Select date" // Placeholder for the date picker
-                                style={{ width: "100%" }}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">Amount:</strong>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.amount || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("amount", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={12} // Half width on medium screens
-                            lg={12}
-                          >
-                            <Paragraph>
-                              <strong className="label_title">
-                                Official Receipt (OR) Number:
-                              </strong>
-                              <Input
-                                className="poppins-textarea"
-                                value={selectedRecord?.or_number || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("or_number", e.target.value)
-                                }
-                                placeholder="no data"
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <Checkbox
-                                checked={
-                                  selectedRecord?.tc_order_compliance === "✔"
-                                } // Check if '✓'
-                                disabled={!isEditing} // Only editable in edit mode
-                                onChange={(e) =>
-                                  handleChange(
-                                    "tc_order_compliance",
-                                    e.target.checked ? "✔" : ""
-                                  )
-                                }
-                                style={{ fontSize: "15px" }}
-                              >
-                                {selectedRecord?.tc_order_compliance === "✔"
-                                  ? ""
-                                  : ""}
-                              </Checkbox>
-                              <strong>
-                                Compliance with TC Commitment/Order{" "}
-                              </strong>
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <strong>Remarks:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.remarks || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("remarks", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <Checkbox
-                                checked={selectedRecord?.resolution === "✔"} // Check if '✓'
-                                disabled={!isEditing} // Only editable in edit mode
-                                onChange={(e) =>
-                                  handleChange(
-                                    "resolution",
-                                    e.target.checked ? "✔" : ""
-                                  )
-                                }
-                                style={{ fontSize: "15px" }}
-                              >
-                                {selectedRecord?.resolution === "✔" ? "" : ""}
-                              </Checkbox>
-                              <strong>Issued Resolution </strong>
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <Checkbox
-                                checked={selectedRecord?.order === "✔"} // Check if '✓'
-                                disabled={!isEditing} // Only editable in edit mode
-                                onChange={(e) =>
-                                  handleChange(
-                                    "order",
-                                    e.target.checked ? "✔" : ""
-                                  )
-                                }
-                                style={{ fontSize: "15px" }}
-                              >
-                                {selectedRecord?.order === "✔" ? "" : ""}
-                              </Checkbox>
-                              <strong>Issued Order </strong>
-                            </Paragraph>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={[16, 16]}>
-                          <Col
-                            xs={24} // Full width on extra-small screens
-                            sm={24} // Full width on small screens
-                            md={24} // Half width on medium screens
-                            lg={24}
-                          >
-                            <Paragraph>
-                              <strong>Order Status:</strong>
-                              <br />{" "}
-                              <TextArea
-                                className="poppins-textarea"
-                                value={selectedRecord?.order_status || ""}
-                                style={isEditing ? {} : { color: "#aaa" }}
-                                disabled={!isEditing}
-                                onChange={(e) =>
-                                  handleChange("order_status", e.target.value)
-                                }
-                                placeholder="no data"
-                                rows={3}
-                              />
-                            </Paragraph>
-                          </Col>
-                        </Row>
-                      </Card>
-                    </Col>
-                  </Row>
-                </TabPane>
-
-                {/* MANILA BAY */}
-                <TabPane tab={<BoldTab>Manila Bay Unit</BoldTab>} key="5">
-                  <Row gutter={[16, 16]}>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                      className="modalcol"
-                    >
-                      <Row gutter={[16, 16]}>
-                        <Col span={23}>
-                          {/* Embed Google Maps with the fetched coordinates */}
-                          <R3MapAutoComplete
-                            latitude={selectedRecord?.lat || ""}
-                            longitude={selectedRecord?.long || ""}
-                          />
-                        </Col>
-                      </Row>
-                    </Col>
-                    <Col
-                      xs={24} // Full width on extra-small screens
-                      sm={24} // Full width on small screens
-                      md={12} // Half width on medium screens
-                      lg={12}
-                    >
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          <Paragraph>
-                            <strong>Latitude:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.lat || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("lat", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>Longitude:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.long || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("long", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={24} // Half width on medium screens
-                          lg={24}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>Complete Address:</strong>
-                            <TextArea
-                              className="poppins-textarea"
-                              value={selectedRecord?.address || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("address", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={24} // Half width on medium screens
-                          lg={24}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>Receiving Waterbody/River System:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.waterbody || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("waterbody", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>Street:</strong>
-                            <TextArea
-                              className="poppins-textarea"
-                              value={selectedRecord?.street || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("street", e.target.value)
-                              }
-                              placeholder="no data"
-                              rows={1}
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>Within Manila Bay Area: </strong> <br />
-                            <Checkbox
-                              checked={selectedRecord?.mbu_area === "✔"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "mbu_area",
-                                  e.target.checked ? "✔" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              {selectedRecord?.mbu_area === "✔" ? "Yes" : "No"}
-                            </Checkbox>
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>Barangay:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.brgy || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("brgy", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>For Request: Priority Industry: </strong>{" "}
-                            <br />
-                            <Checkbox
-                              checked={selectedRecord?.mbu_priority === "✔"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "mbu_priority",
-                                  e.target.checked ? "✔" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              {selectedRecord?.mbu_priority === "✔"
-                                ? "Yes"
-                                : "No"}
-                            </Checkbox>
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>City/Municipality:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.city || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("city", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>MBU Survey: </strong> <br />
-                            <Checkbox
-                              checked={selectedRecord?.mbu_survey === "✔"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "mbu_survey",
-                                  e.target.checked ? "✔" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              {selectedRecord?.mbu_survey === "✔"
-                                ? "Yes"
-                                : "No"}
-                            </Checkbox>
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                          className="modalcol"
-                        >
-                          {" "}
-                          <Paragraph>
-                            <strong>Province:</strong> <br />
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.province || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("province", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>For Request: Survey(MBU) </strong> <br />
-                            <Checkbox
-                              checked={
-                                selectedRecord?.mbu_survey_request === "✔"
-                              } // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "mbu_survey_request",
-                                  e.target.checked ? "✔" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              {selectedRecord?.mbu_survey_request === "✔"
-                                ? "Yes"
-                                : "No"}
-                            </Checkbox>
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                      <Row gutter={[16, 16]}>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>Congressional District:</strong>
-                            <Input
-                              className="poppins-textarea"
-                              value={selectedRecord?.cong_district || ""}
-                              style={isEditing ? {} : { color: "#aaa" }}
-                              disabled={!isEditing}
-                              onChange={(e) =>
-                                handleChange("cong_district", e.target.value)
-                              }
-                              placeholder="no data"
-                            />
-                          </Paragraph>
-                        </Col>
-                        <Col
-                          xs={24} // Full width on extra-small screens
-                          sm={24} // Full width on small screens
-                          md={12} // Half width on medium screens
-                          lg={12}
-                        >
-                          <Paragraph>
-                            <strong>For DP Universe</strong> <br />
-                            <Checkbox
-                              checked={selectedRecord?.dp_universe === "✔"} // Check if '✓'
-                              disabled={!isEditing} // Only editable in edit mode
-                              onChange={(e) =>
-                                handleChange(
-                                  "dp_universe",
-                                  e.target.checked ? "✔" : ""
-                                )
-                              }
-                              style={{ fontSize: "15px" }}
-                            >
-                              {selectedRecord?.dp_universe === "✔"
-                                ? "Yes"
-                                : "No"}
-                            </Checkbox>
-                          </Paragraph>
-                        </Col>
-                      </Row>
-                    </Col>
-                  </Row>
-                </TabPane>
-              </Tabs>
-            ) : (
-              <div>No Record Selected</div>
-            )}
-          </Modal>
-
-          <div className={`header-panel ${theme}`}>
-            <div className="header-content">
-              <h2>{`${capitalizedProvinceName} Universe of Firms and Industries`}</h2>
-              <Button className="add-industry-button">Add Industry</Button>
-            </div>
-
-            <div className="search-pagination-container">
-              <div className="search-input">
-                <Input
-                  placeholder="Search..."
-                  prefix={<SearchOutlined />}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  disabled={loading} // Disable while loading
-                />
-              </div>
-
-              <div className="pagination-controls">
-                <div className="pagination-dropdown">
-                  <label>Show:&nbsp;</label>
-                  <Select
-                    defaultValue={itemsPerPage}
-                    onChange={(value) => setItemsPerPage(Number(value))}
-                    disabled={loading} // Disable while loading
-                  >
-                    <Option value={10}>10</Option>
-                    <Option value={50}>50</Option>
-                    <Option value={100}>100</Option>
-                  </Select>
-                  <label>&nbsp;entries</label>
-                </div>
-              </div>
-
-              <div className="pagination">
-                {loading ? (
-                  <Spin size="small" /> // Spin animation during loading
-                ) : (
-                  <Pagination
-                    simple
-                    current={currentPage}
-                    total={filteredData.length}
-                    pageSize={itemsPerPage}
-                    showSizeChanger={false}
-                    onChange={(page) => setCurrentPage(page)}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div style={{ position: "relative", padding: "5px" }}>
-              {loading ? (
-                <Spin tip="Processing Universe Data..." size="large">
-                  {<strong className="loading_title">...</strong>}
-                </Spin>
-              ) : (
-                <Table
-                  columns={columns}
-                  dataSource={filteredData}
-                  rowKey={(record) => record.id_no} // Unique row key
-                  pagination={{
-                    current: currentPage,
-                    total: filteredData.length,
-                    pageSize: itemsPerPage,
-                    onChange: (page) => setCurrentPage(page),
-                  }}
-                />
-              )}
-            </div>
+        <div className="pagination-controls">
+          <div className="pagination-dropdown">
+            <label>Show:&nbsp;</label>
+            <Select
+              defaultValue={itemsPerPage}
+              onChange={(value) => setItemsPerPage(Number(value))}
+              disabled={loading} // Disable while loading
+            >
+              <Option value={10}>10</Option>
+              <Option value={50}>50</Option>
+              <Option value={100}>100</Option>
+            </Select>
+            <label>&nbsp;entries</label>
           </div>
         </div>
-      )}
+
+        <div className="pagination">
+          {loading ? (
+            <Spin size="small" /> // Spin animation during loading
+          ) : (
+            <Pagination
+              simple
+              current={currentPage}
+              total={filteredData.length}
+              pageSize={itemsPerPage}
+              showSizeChanger={false}
+              onChange={(page) => setCurrentPage(page)}
+            />
+          )}
+        </div>
+      </div>
+
+      <Modal
+        visible={modalVisible}
+        title={
+          <div className="modal-title-container">
+            <span className="modal-title">
+              Record ID: {selectedRecord?.id_no || "Unknown"}
+            </span>
+            <span className="modal-title">{selectedRecord?.title || ""}</span>
+            <span className="modal-title">{selectedRecord?.ecc_cnc || ""}</span>
+          </div>
+        }
+        onCancel={handleCloseModal}
+        width={1300}
+        footer={null}
+        onClose={handleCloseModal}
+      >
+        {selectedRecord && (
+          <ProvinceModal
+            record={selectedRecord}
+            isEditing={isEditing}
+            setIsEditing={setIsEditing}
+            onToggleEdit={handleToggleEdit}
+            onClose={handleCloseModal}
+            handleReload={handleReload}
+          />
+        )}
+      </Modal>
+
+      <div style={{ position: "relative", padding: "5px" }}>
+        {loading ? (
+          <Spin tip="Processing Universe Data..." size="large">
+            {<strong className="loading_title">...</strong>}
+          </Spin>
+        ) : (
+          <Spin spinning={tableLoading}>
+            <Table
+              columns={columns}
+              dataSource={filteredData}
+              loading={tableLoading}
+              pagination={{
+                current: currentPage,
+                pageSize: itemsPerPage,
+                onChange: (page) => setCurrentPage(page),
+              }}
+              rowClassName={(record) => {
+                const color = selectedColor[record.id_no];
+                return color ? `row-color-${color.replace("#", "")}` : "";
+              }}
+              rowKey="id_no"
+              size="small"
+              className="custom-table"
+              onRow={(record) => ({
+                onClick: () => {
+                  handleRowClick(record);
+                  handleRowSelect(record.id_no); // Call handleRowSelect here
+                },
+                style: {
+                  backgroundColor: selectedRowKeys.includes(record.id_no)
+                    ? "#e6f7ff"
+                    : "transparent",
+                  cursor: "pointer",
+                },
+                onMouseEnter: (e) => {
+                  const color = selectedColor[record.id_no] || "#FFFFFF";
+                  e.currentTarget.style.backgroundColor = darkenColor(
+                    color,
+                    0.9
+                  );
+                },
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.backgroundColor =
+                    selectedRowKeys.includes(record.id_no)
+                      ? "#e6f7ff"
+                      : "transparent";
+                },
+              })}
+            />
+          </Spin>
+        )}
+      </div>
     </div>
   );
 };
