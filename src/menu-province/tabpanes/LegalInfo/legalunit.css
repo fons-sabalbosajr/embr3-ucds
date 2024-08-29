@@ -1,0 +1,42 @@
+.paragraph-container {
+  margin-top: -10px;
+}
+
+.label_container_legal {
+  margin-bottom: -10px;
+  display: flex;
+}
+
+.label_title_legal {
+  margin-bottom: -5px;
+  margin-right: 10px;
+}
+
+.label_legal {
+  width: 100px;
+  font-size: 8px;
+  margin-top: -5px;
+}
+
+.label-tc {
+  display: flex;
+}
+
+.text-area-legal {
+  font-size: 11px;
+}
+
+.col-format {
+  margin-top: -10px;
+  margin-bottom: -10px;
+}
+
+.col-format-tc {
+  //margin-top: -5px;
+  margin-bottom: -10px;
+}
+
+
+.ant-picker-input input {
+    font-size: 11px !important;
+  }

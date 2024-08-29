@@ -1,0 +1,47 @@
+.row-auto{
+    margin-bottom: -10px;
+}
+
+.row-auto-date{
+    margin-bottom: -14px;
+}
+
+.plus-button{
+    width: 20px;
+    height: 20px;
+}
+
+.textbox-label{
+    font-size: 12px;
+}
+
+
+.label_container{
+    font-size: 12px;
+}
+
+.text-area{
+    font-size: 11px;
+}
+
+.custom-datepicker .ant-picker-input input {
+    font-size: 12px;
+    padding: 4px 8px;
+    
+  }
+  
+  .custom-datepicker .ant-picker {
+    height: 30px;
+  }
+  
+  .custom-datepicker .ant-picker-placeholder {
+    font-size: 12px; 
+  }
+  
+
+  .ant-picker-input input {
+    font-size: 11px !important;
+    color: #202020 !important; 
+  }
+
+  

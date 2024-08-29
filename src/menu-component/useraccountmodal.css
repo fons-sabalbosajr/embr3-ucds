@@ -1,0 +1,189 @@
+.modal-title-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.modal-title-container span {
+  white-space: nowrap;
+}
+
+.modal-title-line {
+  flex-grow: 1;
+  height: 1px;
+  background-color: rgb(178, 178, 178);
+  margin-left: 10px;
+}
+
+.user-details-container {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+}
+
+.user-details {
+  flex: 1;
+}
+
+.avatar-container {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-container .ant-avatar {
+  align-self: flex-start;
+}
+
+.avatar-edit-button {
+  position: absolute;
+  //margin-bottom: 40px;
+  bottom: 25%;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  background-color: rgba(0, 0, 0, 0.5);
+  width: 95%;
+  height: 50%;
+  border-radius: 0 0 75px 75px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.edit-avatar-icon {
+  color: white;
+  font-size: 24px;
+}
+
+.avatar-container:hover .avatar-edit-button {
+  opacity: 1;
+  transform: translate(-50%, 50%);
+}
+
+.user-name-container {
+  margin-top: 10px;
+}
+
+.user-status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.user-status-dot-container {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+
+.user-status-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #52c41a; /* Green color for online status */
+  position: absolute;
+  bottom: 0; /* Adjust this value to move the dot closer to the avatar */
+  right: 20px; /* Adjust this value to move the dot closer to the avatar */
+  border: 2px solid white;
+}
+
+.user-status-dot.online {
+  background-color: #52c41a; /* Green color for online status */
+}
+
+.user-status-dot.offline {
+  background-color: #d9d9d9; /* Gray color for offline status */
+}
+
+.user-info {
+  margin-left: 20px;
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  p {
+    margin-bottom: 8px; /* Adjust margin as needed */
+  }
+}
+
+.user-info-column {
+    width: 45%; /* Adjust the width as needed */
+  }
+
+.user-info input,
+.user-info .ant-select-selection {
+  width: 100%;
+  margin-bottom: 16px;
+  width: 300px;
+}
+
+.user-info .ant-select-selection {
+  margin-bottom: 24px;
+  width: 200px;
+}
+
+.modal-footer-container {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 10px;
+  gap: .66rem;
+}
+
+.tab-container{
+  padding: 20px;
+  margin-top: 10px;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+}
+
+.button-group{
+  margin-right: 10px;
+}
+
+.button-save{
+  margin-right: 10px;
+}
+
+@media (max-width: 768px) {
+  .user-profile-modal .user-details-container {
+    display: flex;
+    flex-direction: column; /* Stack items vertically by default */
+    align-items: center; /* Center items */
+    gap: 20px; /* Space between items */
+    padding: 20px; /* Padding inside the modal */
+  }
+
+  .avatar-container {
+    position: relative;
+    left: 0;
+  }
+
+  .user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 40px;
+    width: 100%; /* Make user info take full width */
+    margin-left: 150px;
+  }
+
+  .user-info-column {
+    flex: 1; /* Equally distribute space between columns */
+  }
+
+  .user-profile-modal {
+    width: 70% !important; /* Set the modal width to 90% of the screen width */
+    max-width: 70% !important; /* Ensure the modal doesn't exceed 90% width */
+  }
+}

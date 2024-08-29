@@ -1,0 +1,24 @@
+.row-auto {
+  margin-bottom: -10px;
+}
+
+.textbox-label {
+  font-size: 12px;
+}
+
+.label-title {
+  margin-top: 5px;
+}
+
+.label-industry-type {
+  margin-top: -4px;
+}
+
+.ant-input[disabled],
+.ant-textarea[disabled],
+.ant-select-selector[disabled],
+.ant-picker-input-disabled,
+.ant-picker-input[disabled],
+.ant-select-selector.ant-select-disabled {
+  color: #202020 !important; 
+}
