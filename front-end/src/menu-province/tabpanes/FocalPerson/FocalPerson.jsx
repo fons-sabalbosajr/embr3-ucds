@@ -381,7 +381,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                         Total No. of Days:
                       </strong>
                       <p className="label">
-                        (Date Monitored VS Date Submitted)
+                        (Date Monitored vs. Date Submitted)
                       </p>
                     </span>
                     <Input
@@ -401,7 +401,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       <strong className="label_title">
                         Total No. of Days:
                       </strong>
-                      <p className="label">(Date Submitted VS Date Signed)</p>
+                      <p className="label">(Date Submitted vs. Date Signed)</p>
                     </span>
                     <Input
                       value={daysDsdrs}

@@ -1,19 +1,22 @@
 import React from "react";
-import {
-  Input,
-  Row,
-  Col,
-  Typography,
-} from "antd";
+import { Input, Row, Col, Typography } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import "./geninfo.css";
 import IndustryClass from "../../../components/Autocomplete/IndustryClass";
 import IndustryType from "../../../components/Autocomplete/IndustryType";
 import IndustrySubType from "../../../components/Autocomplete/IndustrySubType";
+import Provinces from "../../../components/Autocomplete/Province";
+import Municipalities from "../../../components/Autocomplete/Municipalities";
+import Barangays from "../../../components/Autocomplete/Barangay";
 
 const { Paragraph } = Typography;
 
-const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
+const GenInfo = ({
+  editedRecord,
+  setEditedRecord,
+  handleChange,
+  isEditing,
+}) => {
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
@@ -83,7 +86,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
         </Paragraph>
 
         <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12} >
+          <Col xs={24} sm={24} md={12} lg={12}>
             <Paragraph className="label-industry-type">
               <strong>Latitude</strong>
               <Input
@@ -133,45 +136,45 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
         </Paragraph>
         <Paragraph>
           <strong>Barangay</strong>
-          <Input
+          <Barangays
             value={editedRecord ? editedRecord.brgy : ""}
-            onChange={(e) => handleChange("brgy", e.target.value)}
+            onChange={(value) => handleChange("brgy", value)}
             disabled={!isEditing}
             placeholder="No data"
-            className="textbox-label"
+            selectedProvince={editedRecord ? editedRecord.province : ""}
+            selectedMunicipality={editedRecord ? editedRecord.city : ""}
           />
         </Paragraph>
-        <Paragraph>
+        <Paragraph className="paragraph-margin">
           <strong>City/Municipality</strong>
-          <Input
+          <Municipalities
             value={editedRecord ? editedRecord.city : ""}
-            onChange={(e) => handleChange("city", e.target.value)}
+            onChange={(value) => handleChange("city", value)}
             disabled={!isEditing}
             placeholder="No data"
-            className="textbox-label"
+            selectedProvince={editedRecord ? editedRecord.province : ""}
           />
         </Paragraph>
-        <Paragraph>
+        <Paragraph className="paragraph-margin">
           <strong>Province</strong>
-          <Input
+          <Provinces
             value={editedRecord ? editedRecord.province : ""}
-            onChange={(e) => handleChange("province", e.target.value)}
+            onChange={(value) => handleChange("province", value)}
             disabled={!isEditing}
             placeholder="No data"
-            className="textbox-label"
           />
         </Paragraph>
 
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
+            <Paragraph className="paragraph-margin">
               <strong>Congressional District</strong>
               <Input
-               value={editedRecord ? editedRecord.cong_district : ""}
-               onChange={(e) => handleChange("cong_district", e.target.value)}
-               disabled={!isEditing}
-               placeholder="No data"
-               className="textbox-label"
+                value={editedRecord ? editedRecord.cong_district : ""}
+                onChange={(e) => handleChange("cong_district", e.target.value)}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="textbox-label"
               />
             </Paragraph>
           </Col>

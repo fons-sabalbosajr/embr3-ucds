@@ -14,6 +14,7 @@ import {
   Dropdown,
   notification,
   Checkbox,
+  ColorPicker,
 } from "antd";
 import {
   SearchOutlined,
@@ -53,12 +54,8 @@ const Province = ({ theme }) => {
   const [tableLoading, setTableLoading] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(null);
-  const [selectedColor, setSelectedColor] = useState({});
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [selectedProvince, setSelectedProvince] = useState("");
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [selectedColors, setSelectedColors] = useState({});
+  const [selectedRowColors, setSelectedRowColors] = useState({});
 
   useEffect(() => {
     if (provinceName) {
@@ -89,10 +86,10 @@ const Province = ({ theme }) => {
   }, [selectedRecord]);
 
   useEffect(() => {
-    // Load color data from localStorage
     const storedColors = localStorage.getItem("rowColors");
     if (storedColors) {
-      setSelectedColor(JSON.parse(storedColors));
+      const parsedColors = JSON.parse(storedColors);
+      setSelectedRowColors(parsedColors);
     }
   }, []);
 
@@ -155,43 +152,13 @@ const Province = ({ theme }) => {
     }
   };
 
-  const handleClick = async (color) => {
-    if (!selectedRow) {
-      console.error("Selected row is not set");
-      return;
-    }
-
-    if (!selectedRow.id_no) {
-      console.error("Selected row id_no is missing:", selectedRow);
-      return;
-    }
-
-    // Update the local state
-    setSelectedColor((prevColors) => {
-      const newColors = { ...prevColors, [selectedRow.id_no]: color };
-      localStorage.setItem("rowColors", JSON.stringify(newColors));
-      return newColors;
-    });
-
+  const handleColorReload = async () => {
     try {
-      await fetch("http://localhost:8081/api/update-color-universe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // Include this if you use sessions
-        body: JSON.stringify({ id_no: selectedRow.id_no, color }),
-      });
-      notification.success({
-        message: "Industry marked successfully",
-        description: `The "${selectedRow.title}" has been marked.`,
-      });
+      await fetchData(provinceName);
+      const filtered = filterData(data, searchTerm);
+      setFilteredData(filtered);
     } catch (error) {
-      notification.error({
-        message: "Error",
-        description: "Failed to update color",
-      });
-      console.error("Error updating color:", error);
+      console.error("Error reloading data:", error);
     }
   };
 
@@ -203,194 +170,62 @@ const Province = ({ theme }) => {
       // If the row is already selected, remove it from the selection
       setSelectedRowKeys(selectedRowKeys.filter((key) => key !== record.id_no));
     }
-  
-    // Only update the API and display the notification message when multiple rows are selected
-    if (selectedRowKeys.length > 1) {
-      // Update the local state and API for all selected rows
-      const selectedRows = filteredData.filter((row) => selectedRowKeys.includes(row.id_no));
-      const colorsToUpdate = selectedRows.map((row) => ({ id_no: row.id_no, color: selectedColor[row.id_no] }));
-  
-      try {
-        await Promise.all(
-          colorsToUpdate.map((colorToUpdate) =>
-            fetch("http://localhost:8081/api/update-color-universe", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              credentials: "include", // Include this if you use sessions
-              body: JSON.stringify(colorToUpdate),
-            })
-          )
-        );
-  
-        // Update the row colors in the local state
-        setSelectedColor((prevColors) => {
-          const newColors = { ...prevColors };
-          selectedRows.forEach((row) => {
-            newColors[row.id_no] = selectedColor[row.id_no];
-          });
-          localStorage.setItem("rowColors", JSON.stringify(newColors));
-          return newColors;
-        });
-  
-        // Display the notification message after the row colors have been updated
-        notification.success({
-          message: "Industries marked successfully",
-          description: `The selected industries have been marked.`,
-        });
-      } catch (error) {
-        notification.error({
-          message: "Error",
-          description: "Failed to update colors",
-        });
-        console.error("Error updating colors:", error);
-      }
-    }
   };
-
-  // Handle checkbox change
-  const handleCheckboxChange = (e, id_no) => {
-    const checked = e.target.checked;
-    const newSelectedRowKeys = checked
-      ? [...selectedRowKeys, id_no]
-      : selectedRowKeys.filter((key) => key !== id_no);
-
-    setSelectedRowKeys(newSelectedRowKeys);
-  };
-
-  // Handle select all checkbox
-  const handleSelectAll = (checked) => {
-    const allRowKeys = filteredData.map((item) => item.id_no);
-    setSelectedRowKeys(checked ? allRowKeys : []);
-  };
-
-  const darkenColor = (color, factor) => {
-    let colorHex = color.replace("#", "");
-    let r = parseInt(colorHex.substring(0, 2), 16);
-    let g = parseInt(colorHex.substring(2, 4), 16);
-    let b = parseInt(colorHex.substring(4, 6), 16);
-
-    r = Math.max(0, Math.min(255, Math.floor(r * factor)));
-    g = Math.max(0, Math.min(255, Math.floor(g * factor)));
-    b = Math.max(0, Math.min(255, Math.floor(b * factor)));
-
-    return `#${((1 << 24) + (r << 16) + (g << 8) + b)
-      .toString(16)
-      .slice(1)
-      .toUpperCase()}`;
-  };
-
-  const handleRowSelect = (id_no) => {
-    if (selectedRowKeys.includes(id_no)) {
-      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
-    } else {
-      setSelectedRowKeys([...selectedRowKeys, id_no]);
-    }
-  };
-
-  const handleColorChange = (color) => {
-    setSelectedColors((prevSelectedColors) => {
-      const newSelectedColors = { ...prevSelectedColors };
-      for (const rowId of Object.keys(newSelectedColors)) {
-        newSelectedColors[rowId] = color;
-      }
-      return newSelectedColors;
-    });
-  };
-
-  const colors = [
-    "#e8dff5",
-    "#fce1e4",
-    "#fcf4dd",
-    "#ddedea",
-    "#daeaf6",
-    "#EEEEEE",
-  ];
-
-  const colorMenu = (
-    <Menu style={{ width: 150 }}>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-        }}
-      >
-        {" "}
-        <p className="p-row">Mark Selected Rows As</p>
-        {colors.map((color) => (
-          <button
-            key={color}
-            onClick={() => handleClick(color)}
-            style={{
-              backgroundColor: color,
-              height: 20,
-              width: 40,
-              borderRadius: 4,
-              border: "none",
-              margin: 2,
-              cursor: "pointer",
-              outline:
-                (selectedRow && selectedColor[selectedRow.id_no]) === color
-                  ? "2px solid #B4B4B8"
-                  : "none",
-            }}
-          />
-        ))}
-      </div>
-    </Menu>
-  );
-
-  const colorMenuAll = (
-    <Menu style={{ width: 150 }}>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-        }}
-      >
-        <p className="p-row">Mark Selected Rows As</p>
-        {colors.map((color) => (
-          <button
-            key={color}
-            onClick={() => handleColorChange(color)}
-            style={{
-              backgroundColor: color,
-              height: 20,
-              width: 40,
-              borderRadius: 4,
-              border: "none",
-              margin: 2,
-              cursor: "pointer",
-              outline: Object.keys(selectedColors).some(
-                (rowId) => selectedColors[rowId] === color
-              )
-                ? "2px solid #B4B4B8"
-                : "none",
-            }}
-          />
-        ))}
-      </div>
-    </Menu>
-  );
 
   const columns = [
     {
-      title: <Checkbox onChange={(e) => handleSelectAll(e.target.checked)} />,
-      align: "center",
-      render: (text, record) => (
-        <div
-          onClick={() => handleRowClick(record)}
-          style={{ cursor: "pointer" }}
-        >
-          <Checkbox
-            checked={selectedRowKeys.includes(record.id_no)}
-            onChange={(e) => handleCheckboxChange(e, record.id_no)}
-          />
-        </div>
+      title: (
+        <Checkbox
+          onChange={(e) => handleSelectAll(e.target.checked)}
+          checked={selectedRowKeys.length === filteredData.length}
+          indeterminate={
+            selectedRowKeys.length > 0 &&
+            selectedRowKeys.length < filteredData.length
+          }
+        />
       ),
+      key: "select",
+      align: "center",
+      width: "20px",
+      render: (text, record) => (
+        <Checkbox
+          checked={selectedRowKeys.includes(record.id_no)}
+          onChange={(e) => handleCheckboxChange(e, record.id_no)}
+        />
+      ),
+      selections: [
+        Table.SELECTION_ALL,
+        Table.SELECTION_INVERT,
+        Table.SELECTION_NONE,
+        {
+          key: "odd",
+          text: "Select Odd Row",
+          onSelect: (changeableRowKeys) => {
+            let newSelectedRowKeys = [];
+            newSelectedRowKeys = changeableRowKeys.filter((_, index) => {
+              if (index % 2 !== 0) {
+                return false;
+              }
+              return true;
+            });
+            setSelectedRowKeys(newSelectedRowKeys);
+          },
+        },
+        {
+          key: "even",
+          text: "Select Even Row",
+          onSelect: (changeableRowKeys) => {
+            let newSelectedRowKeys = [];
+            newSelectedRowKeys = changeableRowKeys.filter((_, index) => {
+              if (index % 2 !== 0) {
+                return true;
+              }
+              return false;
+            });
+            setSelectedRowKeys(newSelectedRowKeys);
+          },
+        },
+      ],
     },
     {
       title: "ID No.",
@@ -695,6 +530,27 @@ const Province = ({ theme }) => {
       ),
       align: "left",
     },
+    // {
+    //   title: "Color",
+    //   key: "color",
+    //   render: (text, record) => {
+    //     let colorValue = record.color;
+    //     return (
+    //       <div
+    //         className="industry-label"
+    //         style={{
+    //           backgroundColor: colorValue,
+    //           padding: "10px",
+    //           width: "100%",
+    //         }}
+    //       >
+    //         {colorValue || "No color"}
+    //       </div>
+    //     );
+    //   },
+    //   align: "left",
+    //   width: "200px",
+    // },
     {
       title: "Actions",
       key: "actions",
@@ -710,13 +566,6 @@ const Province = ({ theme }) => {
               className="btn-action"
               size="small"
             />
-          </Tooltip>
-          <Tooltip title="Mark Row As">
-            <Dropdown overlay={colorMenuAll} placement="bottomLeft" arrow>
-              <Button className="btn-action" size="small">
-                <BgColorsOutlined />
-              </Button>
-            </Dropdown>
           </Tooltip>
         </div>
       ),
@@ -769,7 +618,6 @@ const Province = ({ theme }) => {
     return permits.join("\n");
   };
 
-  // Utility function to extract text content from React elements
   const extractTextContent = (element) => {
     if (typeof element === "string") {
       return element;
@@ -787,13 +635,13 @@ const Province = ({ theme }) => {
   };
 
   const handleExportPDF = (province) => {
-    console.log("Selected province:", province); // Debugging line
+    //console.log("Selected province:", province); // Debugging line
     const provinceName =
       typeof province === "object"
         ? province.name || "Unknown Province"
         : province;
 
-    console.log("Extracted province name:", provinceName); // Debugging line
+    //console.log("Extracted province name:", provinceName); // Debugging line
 
     // Check if any checkboxes are selected
     if (selectedRowKeys.length === 0) {
@@ -820,7 +668,7 @@ const Province = ({ theme }) => {
     const doc = new jsPDF({ orientation: "landscape", format: "a4" });
 
     // Customize title with province name
-    doc.setFontSize(15);
+    doc.setFontSize(12);
     doc.text(`Province Data (${provinceName})`, 20, 20);
 
     // Define columns and data for the PDF
@@ -848,7 +696,7 @@ const Province = ({ theme }) => {
       columns: columns,
       body: data,
       theme: "striped",
-      styles: { fontSize: 9, cellPadding: 3 },
+      styles: { fontSize: 8, cellPadding: 3 },
       columnStyles: {
         id_no: { cellWidth: 15 },
         industryDetails: { cellWidth: 80 },
@@ -862,75 +710,278 @@ const Province = ({ theme }) => {
     doc.save(`Province Data (${provinceName}).pdf`);
   };
 
-  // Function to export selected data
   const exportSelectedData = (provinceName) => {
-    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+    Swal.fire({
+      title: "Export Selected Data",
+      text: "Are you sure you want to export the selected data?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, Export",
+      cancelButtonText: "Cancel",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const doc = new jsPDF({ orientation: "landscape", format: "a4" });
 
-    // Customize title with province name
-    doc.setFontSize(15);
-    doc.text(`Province Data (${provinceName})`, 20, 20);
+        // Customize title with province name
+        doc.setFontSize(12);
+        doc.text(`Province Data (${provinceName})`, 20, 20);
 
-    // Define columns and data for the PDF
-    const columns = [
-      { title: "ID No.", dataKey: "id_no" },
-      { title: "Industry Details", dataKey: "industryDetails" },
-      { title: "Industry Classification", dataKey: "industry_class" },
-      { title: "Permits/Clearances", dataKey: "permits_clearances" },
-      { title: "Section/Unit Incharged", dataKey: "section_incharge" },
-      { title: "Remarks/Recommendations", dataKey: "remarks_recommendations" },
-    ];
+        // Define columns and data for the PDF
+        const columns = [
+          { title: "ID No.", dataKey: "id_no" },
+          { title: "Industry Details", dataKey: "industryDetails" },
+          { title: "Industry Classification", dataKey: "industry_class" },
+          { title: "Permits/Clearances", dataKey: "permits_clearances" },
+          { title: "Section/Unit Incharged", dataKey: "section_incharge" },
+          {
+            title: "Remarks/Recommendations",
+            dataKey: "remarks_recommendations",
+          },
+        ];
 
-    // Filter data based on selected checkboxes
-    const data = filteredData
-      .filter((record) => selectedRowKeys.includes(record.id_no))
-      .map((record) => ({
-        id_no: record.id_no || "",
-        industryDetails: formatIndustryDetails(record),
-        industry_class: record.industry_class || "",
-        permits_clearances: formatPermitsClearances(record),
-        section_incharge: record.section_incharge || "",
-        remarks_recommendations: record.remarks_recommendations || "",
-      }));
+        // Filter data based on selected checkboxes
+        const data = filteredData
+          .filter((record) => selectedRowKeys.includes(record.id_no))
+          .map((record) => ({
+            id_no: record.id_no || "",
+            industryDetails: formatIndustryDetails(record),
+            industry_class: record.industry_class || "",
+            permits_clearances: formatPermitsClearances(record),
+            section_incharge: record.section_incharge || "",
+            remarks_recommendations: record.remarks_recommendations || "",
+          }));
 
-    // Add autoTable to PDF
-    doc.autoTable({
-      startY: 30,
-      columns: columns,
-      body: data,
-      theme: "striped",
-      styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: {
-        id_no: { cellWidth: 15 },
-        industryDetails: { cellWidth: 80 },
-        industry_class: { cellWidth: 30 },
-        permits_clearances: { cellWidth: 80 },
-        section_incharge: { cellWidth: 30 },
-      },
+        // Add autoTable to PDF
+        doc.autoTable({
+          startY: 30,
+          columns: columns,
+          body: data,
+          theme: "striped",
+          styles: { fontSize: 8, cellPadding: 3 },
+          columnStyles: {
+            id_no: { cellWidth: 15 },
+            industryDetails: { cellWidth: 80 },
+            industry_class: { cellWidth: 30 },
+            permits_clearances: { cellWidth: 70 },
+            section_incharge: { cellWidth: 30 },
+          },
+        });
+
+        // Save the PDF
+        doc.save(`Province Data (${provinceName}).pdf`);
+      }
+    });
+  };
+
+  const handleRowSelect = (id_no) => {
+    if (selectedRowKeys.includes(id_no)) {
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
+      const newColors = { ...selectedRowColors };
+      delete newColors[id_no];
+      setSelectedRowColors(newColors);
+      localStorage.setItem("rowColors", JSON.stringify(newColors));
+    } else {
+      setSelectedRowKeys([...selectedRowKeys, id_no]);
+      const newColors = { ...selectedRowColors };
+      newColors[id_no] = selectedRowColors[id_no] || "#e6f7ff"; // default color
+      setSelectedRowColors(newColors);
+      localStorage.setItem("rowColors", JSON.stringify(newColors));
+    }
+  };
+
+  const handleSelectAll = (checked) => {
+    const allRowKeys = filteredData.map((item) => item.id_no);
+    setSelectedRowKeys(checked ? allRowKeys : []);
+  };
+
+  const handleCheckboxChange = (e, id_no) => {
+    const checked = e.target.checked;
+    const newSelectedRowKeys = checked
+      ? [...selectedRowKeys, id_no]
+      : selectedRowKeys.filter((key) => key !== id_no);
+
+    setSelectedRowKeys(newSelectedRowKeys);
+  };
+
+  const colors = [
+    "#f7f4c9", // Light yellow
+    "#c9e4ca", // Light green
+    "#e5d8b6", // Light brown
+    "#bdd7ee", // Light blue
+    "#ffe0e0", // Light pink
+    "#FFFFFF", // White
+    "#d2f5e3", // Soft mint
+    "#ffc2c2", // Soft peach
+    "#c5e1a5", // Light beige
+  ];
+
+  const handleColorClick = (selectedRowKeys, color) => {
+    setSelectedRowColors((prevSelectedRowColors) => {
+      const newSelectedRowColors = { ...prevSelectedRowColors };
+      selectedRowKeys.forEach((rowKey) => {
+        newSelectedRowColors[rowKey] = color;
+      });
+      return newSelectedRowColors;
     });
 
-    // Save the PDF
-    doc.save(`Province Data (${provinceName}).pdf`);
+    // Update the colors in local storage after setting them
+    setTimeout(() => {
+      localStorage.setItem("rowColors", JSON.stringify(selectedRowColors));
+    }, 0);
   };
+
+  const handleClearColors = (selectedRowKeys) => {
+    setSelectedRowColors((prevSelectedRowColors) => {
+      const newSelectedRowColors = { ...prevSelectedRowColors };
+      selectedRowKeys.forEach((rowKey) => {
+        delete newSelectedRowColors[rowKey];
+      });
+      return newSelectedRowColors;
+    });
+
+    // Update the local storage after clearing colors
+    setTimeout(() => {
+      localStorage.setItem("rowColors", JSON.stringify(selectedRowColors));
+    }, 0);
+  };
+
+  const handleSaveColors = () => {
+    const colorUpdates = selectedRowKeys.map((id_no) => ({
+      id_no,
+      color: selectedRowColors[id_no],
+    }));
+
+    if (colorUpdates.length === 0) {
+      notification.error({
+        message: "No rows selected to update colors.",
+      });
+      return;
+    }
+
+    fetch("http://localhost:8081/api/update-color-universe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(colorUpdates),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Error updating colors: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        notification.success({
+          message: "Industries marked successfully",
+          description: `The selected industries have been marked.`,
+          style: {
+            fontSize: 12, // reduce the font size to 12px
+          },
+        });
+
+        // Update the color data in storage
+        const storedData = localStorage.getItem("colorData");
+        const updatedData = storedData ? JSON.parse(storedData) : {};
+        colorUpdates.forEach((update) => {
+          updatedData[update.id_no] = update.color;
+        });
+        localStorage.setItem("colorData", JSON.stringify(updatedData));
+        console.log("Updated color data in storage:", updatedData);
+
+        // Reset the selectedRowKeys and selectedRowColors states
+        setSelectedRowKeys([]);
+        setSelectedRowColors({});
+
+        // Call the handleColorReload function to refresh the table data in real-time
+        handleColorReload();
+      })
+      .catch((error) => {
+        notification.error({
+          message: `Error updating colors: ${error}`,
+        });
+        console.error("Error updating colors:", error);
+      });
+  };
+
+  const colorMenu = (
+    <Menu style={{ width: 150 }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          //width: "100px"
+        }}
+      >
+        {colors.map((color) => (
+          <button
+            key={color}
+            onClick={() => handleColorClick(selectedRowKeys, color)}
+            style={{
+              backgroundColor: color,
+              height: 20,
+              width: 40,
+              borderRadius: 4,
+              border: "none",
+              margin: 2,
+              cursor: "pointer",
+              outline: selectedRowKeys.some(
+                (rowKey) => selectedRowColors[rowKey] === color
+              )
+                ? "2px solid #B4B4B8"
+                : "none",
+              boxShadow: "0px 0px 4px rgba(0, 0, 0, 0.2)", // Add drop shadow
+            }}
+          />
+        ))}
+        <Button
+          onClick={() => handleClearColors(selectedRowKeys)}
+          type="text"
+          size="small"
+          style={{
+            border: "1px solid #d9d9d9",
+            borderRadius: 4,
+            marginTop: 10,
+          }}
+        >
+          Clear
+        </Button>
+        {/* Save Colors Button */}
+        <Button
+          type="primary"
+          onClick={handleSaveColors}
+          disabled={Object.keys(selectedRowColors).length === 0}
+          size="small"
+          style={{ borderRadius: 4, marginTop: 10 }}
+        >
+          Save
+        </Button>
+      </div>
+    </Menu>
+  );
 
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
         <h3 className="header-title">{`${capitalizedProvinceName} Universe of Firms and Industries`}</h3>
-        <Button
-          type="primary"
-          className="refresh-button"
-          icon={<ReloadOutlined />}
-          onClick={handleReload}
-          loading={loading}
-        ></Button>
-        <Button
-          type="primary"
-          className="refresh-button"
-          icon={<ExportOutlined />}
-          onClick={() => handleExportPDF(selectedProvince)}
-        ></Button>
+        <Tooltip title="Reload Table">
+          <Button
+            type="primary"
+            className="refresh-button"
+            icon={<ReloadOutlined />}
+            onClick={handleReload}
+            loading={loading}
+          ></Button>
+        </Tooltip>
+        <Tooltip title="Export Data">
+          <Button
+            type="primary"
+            className="refresh-button"
+            icon={<ExportOutlined />}
+            onClick={() => handleExportPDF(capitalizedProvinceName)}
+          ></Button>
+        </Tooltip>
         <Tooltip title="Mark Row As">
-          <Dropdown overlay={colorMenu} placement="bottomLeft" arrow>
+          <Dropdown placement="bottomLeft" arrow overlay={colorMenu}>
             <Button
               type="primary"
               className="refresh-button"
@@ -944,48 +995,46 @@ const Province = ({ theme }) => {
       </div>
 
       <div className="search-pagination-container">
-        <div className="total-rows">
-          <span>Industry Count: {formatNumber(filteredData.length)}</span>
-        </div>
-        <div className="input-search">
-          <Input
-            placeholder="Search..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            disabled={loading} // Disable while loading
-          />
-        </div>
-
-        <div className="pagination-controls">
-          <div className="pagination-dropdown">
-            <label>Show:&nbsp;</label>
-            <Select
-              defaultValue={itemsPerPage}
-              onChange={(value) => setItemsPerPage(Number(value))}
+        <div className="search-header">
+          <span className="industry-count">
+            Industry Count: {formatNumber(filteredData.length)}
+          </span>
+          <div className="input-search">
+            <Input
+              placeholder="Search..."
+              prefix={<SearchOutlined />}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               disabled={loading} // Disable while loading
-            >
-              <Option value={10}>10</Option>
-              <Option value={50}>50</Option>
-              <Option value={100}>100</Option>
-            </Select>
-            <label>&nbsp;entries</label>
-          </div>
-        </div>
-
-        <div className="pagination">
-          {loading ? (
-            <Spin size="small" /> // Spin animation during loading
-          ) : (
-            <Pagination
-              simple
-              current={currentPage}
-              total={filteredData.length}
-              pageSize={itemsPerPage}
-              showSizeChanger={false}
-              onChange={(page) => setCurrentPage(page)}
             />
-          )}
+          </div>
+          <div className="pagination-container">
+            <div className="pagination-dropdown">
+              <label>Show:&nbsp;</label>
+              <Select
+                defaultValue={itemsPerPage}
+                onChange={(value) => setItemsPerPage(Number(value))}
+                disabled={loading} // Disable while loading
+              >
+                <Option value={10}>10</Option>
+                <Option value={50}>50</Option>
+                <Option value={100}>100</Option>
+              </Select>
+              <label>&nbsp;entries</label>
+            </div>
+            {loading ? (
+              <Spin size="small" /> // Spin animation during loading
+            ) : (
+              <Pagination
+                simple
+                current={currentPage}
+                total={filteredData.length}
+                pageSize={itemsPerPage}
+                showSizeChanger={false}
+                onChange={(page) => setCurrentPage(page)}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -993,11 +1042,15 @@ const Province = ({ theme }) => {
         visible={modalVisible}
         title={
           <div className="modal-title-container">
-            <span className="modal-title">
+            <span className="modal-title" style={{ whiteSpace: "normal" }}>
               Record ID: {selectedRecord?.id_no || "Unknown"}
             </span>
-            <span className="modal-title">{selectedRecord?.title || ""}</span>
-            <span className="modal-title">{selectedRecord?.ecc_cnc || ""}</span>
+            <span className="modal-title" style={{ whiteSpace: "normal", textAlign: "center", width:"50%" }}>
+              {selectedRecord?.title || ""}
+            </span>
+            <span className="modal-title" style={{ whiteSpace: "normal", textAlign: "right"}}>
+              {selectedRecord?.ecc_cnc || ""}
+            </span>
           </div>
         }
         onCancel={handleCloseModal}
@@ -1033,36 +1086,26 @@ const Province = ({ theme }) => {
                 pageSize: itemsPerPage,
                 onChange: (page) => setCurrentPage(page),
               }}
-              rowClassName={(record) => {
-                const color = selectedColor[record.id_no];
-                return color ? `row-color-${color.replace("#", "")}` : "";
-              }}
               rowKey="id_no"
               size="small"
               className="custom-table"
+              rowClassName={(record) => {
+                const rowId = record.id_no;
+                const colorValue =
+                  selectedRowColors[rowId] || record.color || "";
+                return "";
+              }}
               onRow={(record) => ({
                 onClick: () => {
                   handleRowClick(record);
-                  handleRowSelect(record.id_no); // Call handleRowSelect here
+                  handleRowSelect(record.id_no);
                 },
                 style: {
-                  backgroundColor: selectedRowKeys.includes(record.id_no)
-                    ? "#e6f7ff"
-                    : "transparent",
                   cursor: "pointer",
-                },
-                onMouseEnter: (e) => {
-                  const color = selectedColor[record.id_no] || "#FFFFFF";
-                  e.currentTarget.style.backgroundColor = darkenColor(
-                    color,
-                    0.9
-                  );
-                },
-                onMouseLeave: (e) => {
-                  e.currentTarget.style.backgroundColor =
-                    selectedRowKeys.includes(record.id_no)
-                      ? "#e6f7ff"
-                      : "transparent";
+                  backgroundColor:
+                    selectedRowColors[record.id_no] ||
+                    record.color ||
+                    "transparent",
                 },
               })}
             />

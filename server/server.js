@@ -633,65 +633,63 @@ app.post("/api/update-color", async (req, res) => {
   }
 });
 
-// Update color for a specific survey record
 app.post("/api/update-color-universe", async (req, res) => {
-  const { id_no, color } = req.body;
+  const colorUpdates = req.body;
 
-  if (!id_no || !color) {
-    return res.status(400).send("Serial number and color are required.");
+  if (!colorUpdates || !Array.isArray(colorUpdates)) {
+    return res.status(400).send({ error: "Color updates are required." });
   }
+
+  //console.log("Color updates:", colorUpdates);
 
   try {
-    const result = await ucdsCollection.updateOne(
-      { id_no },
-      { $set: { color } }
+    const results = await Promise.all(
+      colorUpdates.map((update) => {
+        //console.log("Updating document with id_no:", update.id_no);
+        //console.log("Setting color to:", update.color);
+
+        return ucdsCollection.updateOne(
+          { id_no: update.id_no },
+          { $set: { color: update.color } },
+          { upsert: true }
+        );
+      })
     );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).send("Record not found.");
-    }
+    //console.log("Update results:", results);
 
-    res.status(200).send("Color updated successfully.");
-  } catch (error) {
-    console.error("Error updating color:", error);
-    res.status(500).send("Internal server error.");
-  }
-});
+    const updatedCount = results.reduce(
+      (acc, result) => acc + result.modifiedCount,
+      0
+    );
+    const upsertedCount = results.reduce(
+      (acc, result) => acc + result.upsertedCount,
+      0
+    );
+    const matchedCount = results.reduce(
+      (acc, result) => acc + result.matchedCount,
+      0
+    );
 
-// Serve static files for uploaded avatars
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// API endpoint to upload avatar
-app.post(
-  "/api/profile/upload-avatar/:userId",
-  upload.single("avatar"),
-  async (req, res) => {
-    const { userId } = req.params;
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
-    try {
-      // Construct the URL for the uploaded avatar
-      const avatarUrl = `/uploads/avatars/${file.filename}`;
-
-      // Update the user's avatar URL in the database
-      await userCollection.updateOne(
-        { _id: ObjectId(userId) },
-        { $set: { avatar: avatarUrl } }
-      );
-
+    if (updatedCount === 0 && upsertedCount === 0 && matchedCount === 0) {
+      console.warn("No documents updated, upserted, or matched.");
       res
         .status(200)
-        .json({ message: "Avatar updated successfully", avatarUrl });
-    } catch (error) {
-      console.error("Error updating avatar:", error);
-      res.status(500).json({ error: "Failed to update avatar" });
+        .send({ message: "No documents updated, upserted, or matched." });
+    } else {
+      res
+        .status(200)
+        .send({
+          message: `Colors updated or upserted for ${
+            updatedCount + upsertedCount
+          } document(s).`,
+        });
     }
+  } catch (error) {
+    console.error("Error updating colors:", error);
+    res.status(500).send({ error: "Internal server error." });
   }
-);
+});
 
 app.post("/save-draft-report", upload.single("pdfFile"), async (req, res) => {
   try {
@@ -700,7 +698,7 @@ app.post("/save-draft-report", upload.single("pdfFile"), async (req, res) => {
 
     // Create a new draft report document
     const newDraft = {
-      user: { name: user.name }, 
+      user: { name: user.name },
       date: new Date(date),
       reportInfo: JSON.parse(reportInfo),
       fileName,
@@ -720,7 +718,7 @@ app.post("/save-draft-report", upload.single("pdfFile"), async (req, res) => {
 // app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
 
-app.get('/api/draft-report', async (req, res) => {
+app.get("/api/draft-report", async (req, res) => {
   try {
     const drafts = await reportdraftCollection.find().toArray();
     res.json(drafts);
@@ -1158,6 +1156,7 @@ app.get("/api/get-province-data", async (req, res) => {
       mbu_survey: doc.mbu_survey || "",
       mbu_survey_request: doc.mbu_survey_request || "",
       dp_universe: doc.dp_universe || "",
+      color: doc.color || "",
     }));
 
     return res.status(200).json(formattedData);
@@ -1573,7 +1572,7 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
       { $set: newData }
     );
 
-    console.log("Update result:", result);
+    //console.log("Update result:", result);
 
     if (result.modifiedCount === 1) {
       res.status(200).json({ message: "Data updated successfully" });

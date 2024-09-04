@@ -1,47 +1,63 @@
-.row-auto{
-    margin-bottom: -10px;
+.row-auto {
+  margin-bottom: -10px;
 }
 
-.row-auto-date{
-    margin-bottom: -14px;
+.row-auto-date {
+  margin-bottom: -14px;
 }
 
-.plus-button{
-    width: 20px;
-    height: 20px;
+.plus-button {
+  width: 20px;
+  height: 20px;
 }
 
-.textbox-label{
-    font-size: 12px;
+.textbox-label {
+  font-size: 12px;
 }
 
-
-.label_container{
-    font-size: 12px;
+.label_container {
+  font-size: 12px;
 }
 
-.text-area{
-    font-size: 11px;
+.text-area {
+  font-size: 11px;
+}
+
+.label_container {
+  display: flex;
+  font-size: 12px;
+  justify-content: flex-start;
+  height: 24px;
+}
+
+.label_title {
+  width: 130px;
+  height: 5px;
+  align-items: flex-start;
+  font-weight: 400;
+}
+
+.label {
+  font-size: 9px;
+  line-height: 10px;
+  width: 120px;
+  align-items: flex-start;
 }
 
 .custom-datepicker .ant-picker-input input {
-    font-size: 12px;
-    padding: 4px 8px;
-    
-  }
-  
-  .custom-datepicker .ant-picker {
-    height: 30px;
-  }
-  
-  .custom-datepicker .ant-picker-placeholder {
-    font-size: 12px; 
-  }
-  
+  font-size: 12px;
+  padding: 4px 8px;
+}
 
-  .ant-picker-input input {
-    font-size: 11px !important;
-    color: #202020 !important; 
-  }
+.custom-datepicker .ant-picker {
+  height: 30px;
+}
 
-  
+.custom-datepicker .ant-picker-placeholder {
+  font-size: 12px;
+}
+
+.ant-picker-input input {
+  font-size: 11px !important;
+  color: #202020 !important;
+}

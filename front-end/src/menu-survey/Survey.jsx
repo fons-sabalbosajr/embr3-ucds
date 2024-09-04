@@ -13,6 +13,7 @@ import {
   Menu,
   Dropdown,
   notification,
+  ConfigProvider,
 } from "antd";
 import {
   ReloadOutlined,
@@ -26,7 +27,6 @@ import "./survey.css";
 import { useNavigate } from "react-router-dom";
 import SurveyModal from "./SurveyModal";
 import axios from "axios";
-
 
 const { Option } = Select;
 
@@ -46,46 +46,45 @@ const Survey = ({ theme }) => {
   const [modifiedRows, setModifiedRows] = useState(new Set());
   const [initialState, setInitialState] = useState(new Map());
   const [selectedColor, setSelectedColor] = useState({});
-  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [selectedRows, setSelectedRows] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [currentRecord, setCurrentRecord] = useState(null);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editedRecord, setEditedRecord] = useState(null);
   const [filter, setFilter] = useState(null);
   const [responsibleUnit, setResponsibleUnit] = useState(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const response = await fetch("http://localhost:8081/api/surveys", {
-        method: 'GET',
-        credentials: 'include' 
+        method: "GET",
+        credentials: "include",
       });
-  
+
       if (!response.ok) {
-        const errorText = await response.text(); 
+        const errorText = await response.text();
         throw new Error(errorText);
       }
-  
+
       const result = await response.json();
-      setData(result);
-      setFilteredData(result);
-  
+      const sortedResult = result.sort((a, b) => a.id_no - b.id_no); // Sort by id_no
+      setData(sortedResult);
+      setFilteredData(sortedResult);
+
       const uniqueIndustryClasses = [
-        ...new Set(result.map((item) => item.industry_class)),
+        ...new Set(sortedResult.map((item) => item.industry_class)),
       ];
       setIndustryClasses(uniqueIndustryClasses);
-  
+
       const uniqueResponsibleUnits = [
-        ...new Set(result.map((item) => item.resp_unit)),
+        ...new Set(sortedResult.map((item) => item.resp_unit)),
       ];
       setResponsibleUnits(uniqueResponsibleUnits);
-  
+
       // Store initial states
       const stateMap = new Map();
-      result.forEach((item) => {
+      sortedResult.forEach((item) => {
         stateMap.set(item.id_no, {
           survey_eia: item.survey_eia,
           survey_air: item.survey_air,
@@ -103,14 +102,13 @@ const Survey = ({ theme }) => {
       setTableLoading(false);
     }
   };
-  
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
     if (selectedRecord) {
-      setEditedRecord({ ...selectedRecord }); 
+      setEditedRecord({ ...selectedRecord });
     }
   }, [selectedRecord]);
 
@@ -132,12 +130,12 @@ const Survey = ({ theme }) => {
 
   const filterData = (search, filter, responsibleUnit) => {
     // Ensure search is a string
-    const lowerSearch = typeof search === 'string' ? search.toLowerCase() : '';
-    
+    const lowerSearch = typeof search === "string" ? search.toLowerCase() : "";
+
     const filtered = data.filter((item) => {
       const matchSearch = Object.values(item).some(
         (val) =>
-          typeof val === 'string' && val.toLowerCase().includes(lowerSearch)
+          typeof val === "string" && val.toLowerCase().includes(lowerSearch)
       );
       const matchFilter = filter ? item.industry_class === filter : true;
       const matchResponsibleUnit = responsibleUnit
@@ -145,121 +143,10 @@ const Survey = ({ theme }) => {
         : true;
       return matchSearch && matchFilter && matchResponsibleUnit;
     });
-    
+
     setFilteredData(filtered);
   };
 
-  const handleTableChange = (pagination) => {
-    setPagination(pagination);
-  };
-
-  const handleClick = async (color) => {
-    if (!selectedRow) {
-      console.error("Selected row is not set");
-      return;
-    }
-
-    if (!selectedRow.id_no) {
-      console.error("Selected row id_no is missing:", selectedRow);
-      return;
-    }
-
-    // Update the local state
-    setSelectedColor((prevColors) => {
-      const newColors = { ...prevColors, [selectedRow.id_no]: color };
-      console.log("Updated colors:", newColors);
-      return newColors;
-    });
-
-    try {
-      await fetch("http://localhost:8081/api/update-color", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Include Authorization header if using tokens
-          // "Authorization": `Bearer ${token}`,
-        },
-        credentials: "include", // Include this if you use sessions
-        body: JSON.stringify({ id_no: selectedRow.id_no, color }),
-      });
-      notification.success({
-        message: "Industry marked successfully",
-        description: `The "${selectedRow.project_title}" has been marked.`,
-      });
-    } catch (error) {
-      notification.error({
-        message: "Error",
-        description: "Failed to update color",
-      });
-      console.error("Error updating color:", error);
-    }
-  };
-
-  const colors = [
-    "#e8dff5",
-    "#fce1e4",
-    "#fcf4dd",
-    "#ddedea",
-    "#daeaf6",
-    "#EEEEEE",
-  ];
-
-  const colorMenu = (
-    <Menu style={{ width: 150 }}>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-        }}
-      >
-        {colors.map((color) => (
-          <button
-            key={color}
-            onClick={() => handleClick(color)}
-            style={{
-              backgroundColor: color,
-              height: 20,
-              width: 40,
-              borderRadius: 4,
-              border: "none",
-              margin: 2,
-              cursor: "pointer",
-              outline:
-                (selectedRow &&
-                  selectedColor &&
-                  selectedColor[selectedRow.id_no]) === color
-                  ? "2px solid #B4B4B8"
-                  : "none",
-            }}
-          />
-        ))}
-      </div>
-    </Menu>
-  );
-
-  const handleCheckboxChange = (field, value, record) => {
-    const updatedData = data.map((item) =>
-      item.id_no === record.id_no
-        ? { ...item, [field]: value ? "✔" : "" }
-        : item
-    );
-    setData(updatedData);
-    setFilteredData(updatedData);
-
-    // Track modified rows
-    setModifiedRows((prev) => {
-      const newModifiedRows = new Set(prev);
-      const original = initialState.get(record.id_no);
-      const hasChanges = original && original[field] !== (value ? "✔" : "");
-      if (hasChanges) {
-        newModifiedRows.add(record.id_no);
-      } else {
-        newModifiedRows.delete(record.id_no);
-      }
-      return newModifiedRows;
-    });
-  };
 
   const handleUpdate = async (record) => {
     try {
@@ -271,7 +158,6 @@ const Survey = ({ theme }) => {
         survey_haz: record.survey_haz,
         survey_chem: record.survey_chem,
       });
-      
 
       // Notify user of success
       notification.success({
@@ -343,7 +229,7 @@ const Survey = ({ theme }) => {
       setTableLoading(true);
       await fetchData();
       // Pass searchText directly to filterData
-      filterData(searchText, filter, responsibleUnit); 
+      filterData(searchText, filter, responsibleUnit);
       // Note: Make sure `filter` and `responsibleUnit` are defined
     } catch (error) {
       console.error("Error reloading data:", error);
@@ -351,7 +237,6 @@ const Survey = ({ theme }) => {
       setTableLoading(false);
     }
   };
-  
 
   // Handle right-click to show context menu
   const handleRowContextMenu = (e, record) => {
@@ -368,155 +253,109 @@ const Survey = ({ theme }) => {
     return new Intl.NumberFormat("en-US").format(number);
   };
 
-
-  const columns = [
-    {
-      title: "No.",
-      dataIndex: "id_no",
-      key: "id_no",
-      align: "left",
-      render: (text) => <div className="industry-label">{text}</div>,
-    },
-    {
-      title: "Applicable Laws",
-      dataIndex: "applicable_laws",
-      key: "applicable_laws",
-      align: "left",
-      width: 200,
-      render: (text, record) => (
-        <div className="checkbox-container">
-          <div className={`checkbox-wrapper eia`}>
-            <Checkbox
-              checked={record.survey_eia === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_eia", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">EIA</span>
-          </div>
-          <div className={`checkbox-wrapper air`}>
-            <Checkbox
-              checked={record.survey_air === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_air", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">AIR</span>
-          </div>
-          <div className={`checkbox-wrapper water`}>
-            <Checkbox
-              checked={record.survey_water === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_water", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">WATER</span>
-          </div>
-          <div className={`checkbox-wrapper haz`}>
-            <Checkbox
-              checked={record.survey_haz === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_haz", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">HAZ</span>
-          </div>
-          <div className={`checkbox-wrapper chem`}>
-            <Checkbox
-              checked={record.survey_chem === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_chem", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">CHEMICAL</span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Project Title",
-      dataIndex: "project_title",
-      key: "project_title",
-      align: "left",
-      render: (text, record) => (
-        <div>
-          <strong className="industry-label">{text}</strong>
-          <div className="industry-label">
-            <p style={{ fontStyle: "italic" }}>{record.address}</p>
-            <p>Date Surveyed: {record.date_surveyed}</p>
-            <p>Responsible Unit: {record.resp_unit}</p>
-            <p>
-              IIS No.:{" "}
-              <a
-                href={`https://iis.emb.gov.ph/embis`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {record.iis_no}
-              </a>
-            </p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Industry Class",
-      dataIndex: "industry_class",
-      key: "industry_class",
-      align: "left",
-      render: (text) => <div className="industry-label">{text}</div>,
-    },
-    {
-      title: "Responsible Unit",
-      dataIndex: "resp_unit",
-      key: "resp_unit",
-      align: "left",
-      render: (text) => <div className="industry-label">{text}</div>,
-    },
-    {
-      title: "Status/Remarks",
-      dataIndex: "remarks",
-      key: "remarks",
-      align: "left",
-      render: (text) => <div className="industry-label">{text}</div>,
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      width: 200,
-      align: "left",
-      render: (text, record) => (
-        <div>
-          <Tooltip title="View Info">
-            <Button onClick={() => showModal(record)} className="btn-action" size="small">
-              <EyeOutlined />
-            </Button>
-          </Tooltip>
-          <Tooltip title="Mark Row As">
-            <Dropdown overlay={colorMenu} placement="bottomLeft" arrow>
-              <Button className="btn-action" size="small">
-                <BgColorsOutlined />
-              </Button>
-            </Dropdown>
-          </Tooltip>
-          <Tooltip title="Update">
-            <Badge
-              count={modifiedRows.has(record.id_no) ? 1 : 0}
-              style={{ backgroundColor: "#f5222d", marginRight: "10px" }}
+  const idColumn = {
+    title: "No.",
+    dataIndex: "id_no",
+    key: "id_no",
+    align: "center",
+    width: "50px", 
+    render: (text) => <div className="industry-label">{text}</div>,
+  };
+  
+  const projectTitleColumn = {
+    title: "Project Title",
+    dataIndex: "project_title",
+    key: "project_title",
+    align: "left",
+    width: "400px",
+    render: (text, record) => (
+      <div>
+        <strong className="industry-label">{text}</strong>
+        <div className="industry-label">
+          <p style={{ fontStyle: "italic" }}>{record.address}</p>
+          <p>Date Surveyed: {record.date_surveyed}</p>
+          <p>Responsible Unit: {record.resp_unit}</p>
+          <p>
+            IIS No.:{" "}
+            <a
+              href={`https://iis.emb.gov.ph/embis`}
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <Button
-                onClick={() => handleUpdate(record)}
-                type="primary"
-                icon={<SaveOutlined />}
-                className="btn-action" size="small"
-              />
-            </Badge>
-          </Tooltip>
+              {record.iis_no}
+            </a>
+          </p>
         </div>
-      ),
-    },
+      </div>
+    ),
+  };
+  
+  const industryClassColumn = {
+    title: "Industry Class",
+    dataIndex: "industry_class",
+    key: "industry_class",
+    align: "left",
+    render: (text) => <div className="industry-label">{text}</div>,
+  };
+  
+  const responsibleUnitColumn = {
+    title: "Responsible Unit",
+    dataIndex: "resp_unit",
+    key: "resp_unit",
+    align: "left",
+    render: (text) => <div className="industry-label">{text}</div>,
+  };
+  
+  const statusRemarksColumn = {
+    title: "Status/Remarks",
+    dataIndex: "remarks",
+    key: "remarks",
+    align: "left",
+    render: (text) => <div className="industry-label">{text}</div>,
+  };
+  
+  const actionsColumn = {
+    title: "Actions",
+    key: "actions",
+    width: "150px",
+    align: "left",
+    render: (text, record) => (
+      <div>
+        <Tooltip title="View Info">
+          <Button
+            onClick={() => showModal(record)}
+            className="btn-action"
+            size="small"
+          >
+            <EyeOutlined />
+          </Button>
+        </Tooltip>
+        <Tooltip title="Update">
+          <Badge
+            count={modifiedRows.has(record.id_no) ? 1 : 0}
+            style={{ backgroundColor: "#f5222d", marginRight: "10px" }}
+          >
+            <Button
+              onClick={() => handleUpdate(record)}
+              type="primary"
+              icon={<SaveOutlined />}
+              className="btn-action"
+              size="small"
+            />
+          </Badge>
+        </Tooltip>
+      </div>
+    ),
+  };
+  
+  const columns = [
+    idColumn,
+    projectTitleColumn,
+    industryClassColumn,
+    responsibleUnitColumn,
+    statusRemarksColumn,
+    actionsColumn,
   ];
-
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
@@ -540,34 +379,59 @@ const Survey = ({ theme }) => {
           prefix={<SearchOutlined />}
           value={searchText}
           onChange={handleSearch}
-          className="search-input"
+          className="search-input-survey"
         />
-        <Select
-          placeholder="Select Industry Class"
-          value={filterValue}
-          onChange={handleFilterChange}
-          className="select-input"
-        >
-          <Option value="">All Industry Classification</Option>
-          {industryClasses.map((industryClass) => (
-            <Option key={industryClass} value={industryClass}>
-              {industryClass}
-            </Option>
-          ))}
-        </Select>
-        <Select
-          placeholder="Select Responsible Unit"
-          value={selectedResponsibleUnit}
-          onChange={handleResponsibleUnitChange}
-          className="select-input-unit"
-        >
-          <Option value="">All Units/Sections</Option>
-          {responsibleUnits.map((unit) => (
-            <Option key={unit} value={unit}>
-              {unit}
-            </Option>
-          ))}
-        </Select>
+        <div className="custom-select-input">
+          <ConfigProvider
+            theme={{
+              components: {
+                Select: {
+                  fontSize: 12,
+                },
+              },
+            }}
+          >
+            <Select
+              placeholder="Select Industry Class"
+              value={filterValue}
+              onChange={handleFilterChange}
+              className="select-input"
+            >
+              <Option value="">All Industry Classification</Option>
+              {industryClasses.map((industryClass) => (
+                <Option key={industryClass} value={industryClass}>
+                  {industryClass}
+                </Option>
+              ))}
+            </Select>
+          </ConfigProvider>
+        </div>
+
+        <div className="custom-select-input">
+          <ConfigProvider
+            theme={{
+              components: {
+                Select: {
+                  fontSize: 12,
+                },
+              },
+            }}
+          >
+            <Select
+              placeholder="Select Responsible Unit"
+              value={selectedResponsibleUnit}
+              onChange={handleResponsibleUnitChange}
+              className="select-input-unit"
+            >
+              <Option value="">All Units/Sections</Option>
+              {responsibleUnits.map((unit) => (
+                <Option key={unit} value={unit}>
+                  {unit}
+                </Option>
+              ))}
+            </Select>
+          </ConfigProvider>
+        </div>
       </div>
 
       <div style={{ position: "relative", padding: "5px" }}>
@@ -583,15 +447,12 @@ const Survey = ({ theme }) => {
               loading={tableLoading}
               rowKey="id_no"
               pagination={pagination}
-              onChange={handleTableChange}
               onRow={(record) => ({
-                onClick: () => setSelectedRow(record),
+                onClick: () => {
+                  setSelectedRow(selectedRow === record ? null : record);
+                },
                 onContextMenu: (e) => handleRowContextMenu(e, record),
               })}
-              rowClassName={(record) => {
-                const color = selectedColor[record.id_no];
-                return color ? `row-color-${color.replace("#", "")}` : "";
-              }}
               size="small"
               className="custom-table"
             />

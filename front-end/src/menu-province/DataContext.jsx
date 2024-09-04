@@ -5,7 +5,7 @@ import axios from "axios";
 export const DataContext = createContext();
 
 export const DataProvider = ({ children }) => {
-  const [dataCache, setDataCache] = useState({}); // Cache for storing data for different provinces
+  const [dataCache, setDataCache] = useState({});
   const [data, setData] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -19,7 +19,7 @@ export const DataProvider = ({ children }) => {
       setLoading(true);
 
       // Append a unique query parameter to force cache busting
-      const response = await axios.get('http://localhost:8081/api/get-province-data' || 
+      const response = await axios.get(
       'http://localhost:8081/api/get-province-data', {
         params: { province, _nocache: Date.now() },
       });
