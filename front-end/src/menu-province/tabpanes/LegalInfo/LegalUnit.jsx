@@ -24,6 +24,8 @@ const customToken = {
     fontSizeSM: 9,
   },
 };
+
+
 const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
   const handleDateChange = (dateString) => {
     //console.log("handleDateChange called with:", dateString);
@@ -93,7 +95,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                 <Paragraph className="paragraph-container">
                   <strong>Docket No.</strong>
                   <Input
-                    value={editedRecord ? editedRecord.docket_no : ""}
+                   value={editedRecord ? editedRecord.docket_no : ""}
                     onChange={(e) => handleChange("docket_no", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
@@ -331,7 +333,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     disabled={!isEditing}
                     format="MM/DD/YYYY"
                     maxDate={dayjs()} // Set the maximum date to today
-                    disabledDate={(current) => current > dayjs()} // Disable dates after today
+                    //disabledDate={(current) => current > dayjs()} // Disable dates after today
                     placeholder="No data"
                     className="text-area-legal custom-date-picker"
                     style={{ width: "100%" }}

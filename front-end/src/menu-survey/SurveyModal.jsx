@@ -1,28 +1,71 @@
 import React, { useEffect, useState } from "react";
 import { Tabs, Button, message } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
+import Swal from "sweetalert2";
+import axios from "axios";
 import GenInfo from "./tabspanes/GenInfo/GenInfo";
 import FocalPerson from "./tabspanes/FocalPerson/FocalPerson";
 import LegalUnit from "./tabspanes/LegalUnit/LegalUnit";
 import MBU from "./tabspanes/MBU/MBU";
-import Swal from "sweetalert2";
-import axios from "axios";
-import styled from "styled-components";
 import "./surveymodal.css";
 
 const { TabPane } = Tabs;
-const BoldTab = styled.span`
-  font-weight: 600;
-  font-size: 16px;
-`;
 
-const SurveyModal = ({ record, onUpdate, onClose, handleReload }) => {
+const SurveyModal = ({ record, handleReload, onClose }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(record);
+  const [activeTab, setActiveTab] = useState("1");
 
   useEffect(() => {
-    setEditedRecord(record);
+    if (record) {
+      setEditedRecord(record);
+    }
   }, [record]);
+
+  const handleChange = (field, value) => {
+    setEditedRecord({
+      ...editedRecord,
+      [field]: value,
+    });
+  };
+
+  const handleSaveChanges = async () => {
+    Swal.fire({
+      title: "Confirm Save",
+      text: "Do you want to save the changes?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, save it!",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          // Create a copy of editedRecord and remove the '_id' field
+          const { _id, ...recordToUpdate } = editedRecord;
+
+          const response = await axios.put(
+            `http://localhost:8081/api/update-survey-data/${editedRecord.id_no}`,
+            recordToUpdate // Send the record without the '_id' field
+          );
+
+          if (response.status === 200) {
+            Swal.fire("Success", "Data updated successfully!", "success").then(
+              () => {
+                setIsEditing(false);
+                if (handleReload) handleReload();
+              }
+            );
+          } else {
+            Swal.fire("Error", "Failed to save changes", "error");
+          }
+        } catch (error) {
+          Swal.fire("Error", "Failed to save changes", "error");
+          console.error("Error updating data:", error);
+        }
+      }
+    });
+  };
 
   const handleCancelEdit = () => {
     Swal.fire({
@@ -41,94 +84,43 @@ const SurveyModal = ({ record, onUpdate, onClose, handleReload }) => {
     });
   };
 
-  const handleSave = async () => {
-    Swal.fire({
-      title: "Confirm Save",
-      text: "Do you want to save the changes?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Yes, save it!",
-      cancelButtonText: "No, cancel",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          // Create a copy of editedRecord excluding _id
-          const { _id, ...updatedFields } = editedRecord;
-  
-          const response = await axios.put(
-            `http://localhost:8081/api/update-survey-data/${editedRecord.id_no}`, // Ensure this matches your API
-            updatedFields // Send only the fields to be updated
-          );
-  
-          if (response.status === 200) {
-            Swal.fire({
-              title: "Success",
-              text: "Survey data updated successfully!",
-              icon: "success",
-              confirmButtonColor: "#3085d6",
-              confirmButtonText: "OK",
-            }).then(() => {
-              setIsEditing(false);
-              if (handleReload) handleReload();
-            });
-          } else {
-            Swal.fire("Error", "Failed to save changes", "error");
-          }
-        } catch (error) {
-          console.error(
-            "Error updating data:",
-            error.response ? error.response.data : error.message
-          );
-          Swal.fire("Error", "Failed to save changes", "error");
-        }
-      }
-    });
-  };
-  
-
-  
-  const handleTabChange = (key) => {
-    // Handle tab change if needed
-  };
-
-  const updateEditedRecord = (updatedFields) => {
-    setEditedRecord((prevRecord) => ({
-      ...prevRecord,
-      ...updatedFields,
-    }));
+  // Handle modal close and reset state
+  const handleModalClose = () => {
+    setEditedRecord(null); // Clear modal data on close
+    setIsEditing(false); // Reset editing state
+    setActiveTab("1"); // Reset to first tab
+    if (onClose) onClose(); // Call the onClose callback if provided
   };
 
   return (
-    <div>
-      <Tabs defaultActiveKey="1" onChange={handleTabChange}>
-        <TabPane tab={<BoldTab>General Information</BoldTab>} key="1">
+    <div className="modal-container">
+      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+        <TabPane tab="General Information" key="1">
           <GenInfo
-            record={editedRecord}
+            editedRecord={editedRecord}
+            handleChange={handleChange}
             isEditing={isEditing}
-            onUpdate={updateEditedRecord}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Concerned Unit/Focal Person</BoldTab>} key="2">
+        <TabPane tab="Concerned Unit/Focal Person" key="2">
           <FocalPerson
-            record={editedRecord}
+            editedRecord={editedRecord}
+            handleChange={handleChange}
             isEditing={isEditing}
-            onUpdate={updateEditedRecord}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Legal Services Unit</BoldTab>} key="3">
+        <TabPane tab="Legal Services Unit" key="3">
           <LegalUnit
-            record={editedRecord}
+            editedRecord={editedRecord}
+            handleChange={handleChange}
             isEditing={isEditing}
-            onUpdate={updateEditedRecord}
           />
         </TabPane>
-        <TabPane tab={<BoldTab>Manila Bay Unit</BoldTab>} key="4">
+        <TabPane tab="Manila Bay Unit" key="4">
           <MBU
-            record={editedRecord}
+            editedRecord={editedRecord}
+            handleChange={handleChange}
             isEditing={isEditing}
-            onUpdate={updateEditedRecord}
           />
         </TabPane>
       </Tabs>
@@ -139,7 +131,11 @@ const SurveyModal = ({ record, onUpdate, onClose, handleReload }) => {
             <Button onClick={handleCancelEdit} className="btn-cancel-right">
               Cancel
             </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSaveChanges}
+            >
               Save
             </Button>
           </div>

@@ -9,9 +9,6 @@ import {
   Checkbox,
   Tooltip,
   Badge,
-  message,
-  Menu,
-  Dropdown,
   notification,
   ConfigProvider,
 } from "antd";
@@ -20,11 +17,8 @@ import {
   SearchOutlined,
   EyeOutlined,
   SaveOutlined,
-  BgColorsOutlined,
-  MoreOutlined,
 } from "@ant-design/icons";
 import "./survey.css";
-import { useNavigate } from "react-router-dom";
 import SurveyModal from "./SurveyModal";
 import axios from "axios";
 
@@ -45,14 +39,16 @@ const Survey = ({ theme }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modifiedRows, setModifiedRows] = useState(new Set());
   const [initialState, setInitialState] = useState(new Map());
-  const [selectedColor, setSelectedColor] = useState({});
   const [contextMenu, setContextMenu] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editedRecord, setEditedRecord] = useState(null);
   const [filter, setFilter] = useState(null);
   const [responsibleUnit, setResponsibleUnit] = useState(null);
+  const [fetchIntervalId, setFetchIntervalId] = useState(null);
+  const [localRecord, setLocalRecord] = useState(editedRecord || {});
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [selectedRowColors, setSelectedRowColors] = useState({});
 
   const fetchData = async () => {
     setLoading(true);
@@ -78,8 +74,37 @@ const Survey = ({ theme }) => {
       setIndustryClasses(uniqueIndustryClasses);
 
       const uniqueResponsibleUnits = [
-        ...new Set(sortedResult.map((item) => item.resp_unit)),
-      ];
+        ...new Set(
+          [
+            "CPD",
+            "AWECMES",
+            "PEMU_Bataan",
+            "MBU",
+            "PEMU_Pampanga",
+            "PEMU_Aurora",
+            "PEMU_Nueva Ecija",
+            "PEMU_Zambales",
+            "PEMU_Tarlac",
+            "TCHWMS",
+            "PEMU_Bulacan",
+            "PEMU_BATAAN",
+            "PEMU_ZAMBALES",
+            "PEMU_BULACAN",
+            "PEMU_NUEVA ECIJA",
+            "PEMU_AURORA",
+            "PEMU_PAMPANGA",
+            "EMED",
+          ].map((item) => item.toLowerCase())
+        ),
+      ]
+        .map((unit) =>
+          unit.startsWith("pemu_")
+            ? "PEMU_" +
+              unit.slice(5).replace(/\b\w/g, (match) => match.toUpperCase())
+            : unit.toUpperCase()
+        )
+        .sort((a, b) => a.localeCompare(b)); // Add the sort method
+
       setResponsibleUnits(uniqueResponsibleUnits);
 
       // Store initial states
@@ -125,11 +150,15 @@ const Survey = ({ theme }) => {
 
   const handleResponsibleUnitChange = (value) => {
     setSelectedResponsibleUnit(value);
-    filterData(searchText, filterValue, value);
+    if (value === "") {
+      filterData(searchText, filterValue, null);
+    } else {
+      const filteredValue = value.toUpperCase();
+      filterData(searchText, filterValue, filteredValue);
+    }
   };
 
   const filterData = (search, filter, responsibleUnit) => {
-    // Ensure search is a string
     const lowerSearch = typeof search === "string" ? search.toLowerCase() : "";
 
     const filtered = data.filter((item) => {
@@ -146,7 +175,6 @@ const Survey = ({ theme }) => {
 
     setFilteredData(filtered);
   };
-
 
   const handleUpdate = async (record) => {
     try {
@@ -182,7 +210,6 @@ const Survey = ({ theme }) => {
   };
 
   const handleDiscardChanges = () => {
-    // Clear modifications when discarding changes
     setModifiedRows((prev) => {
       const updated = new Set(prev);
       updated.delete(selectedRow?.serial_no);
@@ -195,8 +222,14 @@ const Survey = ({ theme }) => {
   const showModal = (record) => {
     setSelectedRecord(record);
     setIsEditing(false);
-    setModalVisible(true);
+    setModalVisible(true); // Show the modal right away
   };
+
+  useEffect(() => {
+    if (selectedRow) {
+      setModalVisible(true);
+    }
+  }, [selectedRow]);
 
   const handleCloseModal = () => {
     if (isEditing && editedRecord !== selectedRecord) {
@@ -212,11 +245,13 @@ const Survey = ({ theme }) => {
           setModalVisible(false);
           setIsEditing(false);
           setEditMode(false);
+          setSelectedRecord(null);
         }
       });
     } else {
       setModalVisible(false);
       setIsEditing(false);
+      setSelectedRecord(null);
     }
   };
 
@@ -228,9 +263,7 @@ const Survey = ({ theme }) => {
     try {
       setTableLoading(true);
       await fetchData();
-      // Pass searchText directly to filterData
       filterData(searchText, filter, responsibleUnit);
-      // Note: Make sure `filter` and `responsibleUnit` are defined
     } catch (error) {
       console.error("Error reloading data:", error);
     } finally {
@@ -238,19 +271,123 @@ const Survey = ({ theme }) => {
     }
   };
 
-  // Handle right-click to show context menu
-  const handleRowContextMenu = (e, record) => {
-    e.preventDefault();
-    setContextMenu({
-      visible: true,
-      top: e.clientY,
-      left: e.clientX,
-      record,
+  useEffect(() => {
+    if (!modalVisible) {
+      if (fetchIntervalId) {
+        clearInterval(fetchIntervalId);
+      }
+      setFetchIntervalId(null);
+      setLocalRecord(editedRecord || {});
+    }
+  }, [modalVisible]);
+
+  useEffect(() => {
+    if (fetchIntervalId) {
+      clearInterval(fetchIntervalId);
+    }
+    setFetchIntervalId(null);
+  }, [editedRecord]);
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-US").format(number);
+  };
+
+  const handleCheckboxChange = (field, checked, record) => {
+    const updatedData = data.map((item) =>
+      item.id_no === record.id_no
+        ? { ...item, [field]: checked ? "✔" : "" }
+        : item
+    );
+
+    setData(updatedData);
+    setFilteredData(updatedData);
+
+    // Track modified rows
+    setModifiedRows((prev) => {
+      const newModifiedRows = new Set(prev);
+      const original = initialState.get(record.id_no);
+      const hasChanges = original && original[field] !== (checked ? "✔" : "");
+      if (hasChanges) {
+        newModifiedRows.add(record.id_no);
+      } else {
+        newModifiedRows.delete(record.id_no);
+      }
+      return newModifiedRows;
     });
   };
 
-  const formatNumber = (number) => {
-    return new Intl.NumberFormat("en-US").format(number);
+  const handleIDCheckboxChange = (checked, id_no) => {
+    const newSelectedRowKeys = checked
+      ? [...selectedRowKeys, id_no]
+      : selectedRowKeys.filter((key) => key !== id_no);
+
+    setSelectedRowKeys(newSelectedRowKeys);
+  };
+
+  const handleRowSelect = (id_no) => {
+    const isSelected = selectedRowKeys.includes(id_no);
+    if (isSelected) {
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
+      const newColors = { ...selectedRowColors };
+      delete newColors[id_no];
+      setSelectedRowColors(newColors);
+    } else {
+      setSelectedRowKeys([...selectedRowKeys, id_no]);
+      const newColors = { ...selectedRowColors };
+      newColors[id_no] = selectedRowColors[id_no] || "#e6f7ff"; // default color
+      setSelectedRowColors(newColors);
+    }
+  };
+
+  const handleSelectAll = (checked) => {
+    const allRowKeys = filteredData.map((item) => item.id_no);
+    setSelectedRowKeys(checked ? allRowKeys : []);
+  };
+
+  const checkboxColumn = {
+    title: (
+      <Checkbox
+        onChange={(e) => handleSelectAll(e.target.checked)}
+        checked={selectedRowKeys.length === filteredData.length}
+        indeterminate={
+          selectedRowKeys.length > 0 &&
+          selectedRowKeys.length < filteredData.length
+        }
+      />
+    ),
+    key: "select",
+    align: "center",
+    width: "20px",
+    render: (text, record) => (
+      <Checkbox
+        checked={selectedRowKeys.includes(record.id_no)}
+        onChange={(e) => handleIDCheckboxChange(e, record.id_no)}
+      />
+    ),
+    selections: [
+      Table.SELECTION_ALL,
+      Table.SELECTION_INVERT,
+      Table.SELECTION_NONE,
+      {
+        key: "odd",
+        text: "Select Odd Row",
+        onSelect: (changeableRowKeys) => {
+          const newSelectedRowKeys = changeableRowKeys.filter(
+            (_, index) => index % 2 === 0
+          );
+          setSelectedRowKeys(newSelectedRowKeys);
+        },
+      },
+      {
+        key: "even",
+        text: "Select Even Row",
+        onSelect: (changeableRowKeys) => {
+          const newSelectedRowKeys = changeableRowKeys.filter(
+            (_, index) => index % 2 !== 0
+          );
+          setSelectedRowKeys(newSelectedRowKeys);
+        },
+      },
+    ],
   };
 
   const idColumn = {
@@ -258,23 +395,79 @@ const Survey = ({ theme }) => {
     dataIndex: "id_no",
     key: "id_no",
     align: "center",
-    width: "50px", 
+    width: "50px",
     render: (text) => <div className="industry-label">{text}</div>,
   };
-  
+
+  const lawsColumn = {
+    title: "Applicable Laws",
+    dataIndex: "applicable_laws",
+    key: "applicable_laws",
+    align: "left",
+    width: 180,
+    render: (text, record) => (
+      <div className="checkbox-container">
+        <div className="checkbox-wrapper eia">
+          <Checkbox
+            checked={record.survey_eia === "✔"}
+            onChange={(e) =>
+              handleCheckboxChange("survey_eia", e.target.checked, record)
+            }
+          />
+          <span className="checkbox-label">EIA</span>
+        </div>
+        <div className="checkbox-wrapper air">
+          <Checkbox
+            checked={record.survey_air === "✔"}
+            onChange={(e) =>
+              handleCheckboxChange("survey_air", e.target.checked, record)
+            }
+          />
+          <span className="checkbox-label">AIR</span>
+        </div>
+        <div className="checkbox-wrapper water">
+          <Checkbox
+            checked={record.survey_water === "✔"}
+            onChange={(e) =>
+              handleCheckboxChange("survey_water", e.target.checked, record)
+            }
+          />
+          <span className="checkbox-label">WATER</span>
+        </div>
+        <div className="checkbox-wrapper haz">
+          <Checkbox
+            checked={record.survey_haz === "✔"}
+            onChange={(e) =>
+              handleCheckboxChange("survey_haz", e.target.checked, record)
+            }
+          />
+          <span className="checkbox-label">HAZ</span>
+        </div>
+        <div className="checkbox-wrapper chem">
+          <Checkbox
+            checked={record.survey_chem === "✔"}
+            onChange={(e) =>
+              handleCheckboxChange("survey_chem", e.target.checked, record)
+            }
+          />
+          <span className="checkbox-label">CHEMICAL</span>
+        </div>
+      </div>
+    ),
+  };
+
   const projectTitleColumn = {
     title: "Project Title",
     dataIndex: "project_title",
     key: "project_title",
     align: "left",
-    width: "400px",
+    width: "300px",
     render: (text, record) => (
       <div>
         <strong className="industry-label">{text}</strong>
         <div className="industry-label">
           <p style={{ fontStyle: "italic" }}>{record.address}</p>
           <p>Date Surveyed: {record.date_surveyed}</p>
-          <p>Responsible Unit: {record.resp_unit}</p>
           <p>
             IIS No.:{" "}
             <a
@@ -289,7 +482,7 @@ const Survey = ({ theme }) => {
       </div>
     ),
   };
-  
+
   const industryClassColumn = {
     title: "Industry Class",
     dataIndex: "industry_class",
@@ -297,7 +490,7 @@ const Survey = ({ theme }) => {
     align: "left",
     render: (text) => <div className="industry-label">{text}</div>,
   };
-  
+
   const responsibleUnitColumn = {
     title: "Responsible Unit",
     dataIndex: "resp_unit",
@@ -305,7 +498,7 @@ const Survey = ({ theme }) => {
     align: "left",
     render: (text) => <div className="industry-label">{text}</div>,
   };
-  
+
   const statusRemarksColumn = {
     title: "Status/Remarks",
     dataIndex: "remarks",
@@ -313,7 +506,7 @@ const Survey = ({ theme }) => {
     align: "left",
     render: (text) => <div className="industry-label">{text}</div>,
   };
-  
+
   const actionsColumn = {
     title: "Actions",
     key: "actions",
@@ -323,7 +516,10 @@ const Survey = ({ theme }) => {
       <div>
         <Tooltip title="View Info">
           <Button
-            onClick={() => showModal(record)}
+            onClick={(e) => {
+              e.stopPropagation(); // prevent row click event from firing
+              showModal(record);
+            }}
             className="btn-action"
             size="small"
           >
@@ -336,7 +532,13 @@ const Survey = ({ theme }) => {
             style={{ backgroundColor: "#f5222d", marginRight: "10px" }}
           >
             <Button
-              onClick={() => handleUpdate(record)}
+              onClick={() => {
+                handleUpdate(record); // Handle updating state and data
+                // Optionally reset checkbox column selection
+                setSelectedRowKeys(
+                  selectedRowKeys.filter((id) => id !== record.id_no)
+                );
+              }}
               type="primary"
               icon={<SaveOutlined />}
               className="btn-action"
@@ -347,15 +549,18 @@ const Survey = ({ theme }) => {
       </div>
     ),
   };
-  
+
   const columns = [
+    checkboxColumn,
     idColumn,
+    lawsColumn,
     projectTitleColumn,
     industryClassColumn,
     responsibleUnitColumn,
     statusRemarksColumn,
     actionsColumn,
   ];
+
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
@@ -374,63 +579,64 @@ const Survey = ({ theme }) => {
         <div className="total-rows">
           Industry Count: {formatNumber(filteredData.length)}
         </div>
-        <Input
-          placeholder="Search..."
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={handleSearch}
-          className="search-input-survey"
-        />
-        <div className="custom-select-input">
-          <ConfigProvider
-            theme={{
-              components: {
-                Select: {
-                  fontSize: 12,
+        <div className="right-container">
+          <Input
+            placeholder="Search..."
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={handleSearch}
+            className="search-input-survey"
+          />
+          <div className="custom-select-input">
+            <ConfigProvider
+              theme={{
+                components: {
+                  Select: {
+                    fontSize: 12,
+                  },
                 },
-              },
-            }}
-          >
-            <Select
-              placeholder="Select Industry Class"
-              value={filterValue}
-              onChange={handleFilterChange}
-              className="select-input"
+              }}
             >
-              <Option value="">All Industry Classification</Option>
-              {industryClasses.map((industryClass) => (
-                <Option key={industryClass} value={industryClass}>
-                  {industryClass}
-                </Option>
-              ))}
-            </Select>
-          </ConfigProvider>
-        </div>
-
-        <div className="custom-select-input">
-          <ConfigProvider
-            theme={{
-              components: {
-                Select: {
-                  fontSize: 12,
+              <Select
+                placeholder="Select Industry Class"
+                value={filterValue}
+                onChange={handleFilterChange}
+                className="select-input"
+              >
+                <Option value="">All Industry Classification</Option>
+                {industryClasses.map((industryClass) => (
+                  <Option key={industryClass} value={industryClass}>
+                    {industryClass}
+                  </Option>
+                ))}
+              </Select>
+            </ConfigProvider>
+          </div>
+          <div className="custom-select-input">
+            <ConfigProvider
+              theme={{
+                components: {
+                  Select: {
+                    fontSize: 12,
+                  },
                 },
-              },
-            }}
-          >
-            <Select
-              placeholder="Select Responsible Unit"
-              value={selectedResponsibleUnit}
-              onChange={handleResponsibleUnitChange}
-              className="select-input-unit"
+              }}
             >
-              <Option value="">All Units/Sections</Option>
-              {responsibleUnits.map((unit) => (
-                <Option key={unit} value={unit}>
-                  {unit}
-                </Option>
-              ))}
-            </Select>
-          </ConfigProvider>
+              <Select
+                placeholder="Select Responsible Unit"
+                value={selectedResponsibleUnit}
+                onChange={handleResponsibleUnitChange}
+                className="select-input-unit"
+              >
+                <Option value="">All Units/Sections</Option>
+                {responsibleUnits.map((unit) => (
+                  <Option key={unit} value={unit}>
+                    {unit}
+                  </Option>
+                ))}
+              </Select>
+            </ConfigProvider>
+          </div>
         </div>
       </div>
 
@@ -447,14 +653,24 @@ const Survey = ({ theme }) => {
               loading={tableLoading}
               rowKey="id_no"
               pagination={pagination}
-              onRow={(record) => ({
-                onClick: () => {
-                  setSelectedRow(selectedRow === record ? null : record);
-                },
-                onContextMenu: (e) => handleRowContextMenu(e, record),
-              })}
               size="small"
               className="custom-table"
+              rowClassName={(record) => {
+                const rowId = record.id_no;
+                const colorValue =
+                  selectedRowColors[rowId] || record.color || "";
+                return colorValue;
+              }}
+              onRow={(record) => ({
+                onClick: () => handleRowSelect(record.id_no),
+                style: {
+                  cursor: "pointer",
+                  backgroundColor:
+                    selectedRowColors[record.id_no] ||
+                    record.color ||
+                    "transparent",
+                },
+              })}
             />
           </Spin>
         )}

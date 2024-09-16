@@ -93,6 +93,11 @@ const Province = ({ theme }) => {
     }
   }, []);
 
+  const adjustedData = data.map((item, index) => ({
+    ...item,
+    adjusted_id_no: index + 1, // Adjust id_no to start from 1
+  }));
+
   const filterData = (data, searchTerm) => {
     return data.filter((item) =>
       Object.values(item).some(
@@ -172,6 +177,40 @@ const Province = ({ theme }) => {
     }
   };
 
+  const sectionBackgroundColor = (section) => {
+    switch (section) {
+      case "PEMU_Aurora":
+        return "#ffccbc"; // Light pink
+      case "PEMU_Bataan":
+        return "#e0f7fa"; // Light cyan
+      case "PEMU_Bulacan":
+        return "#f3e5f5"; // Light purple
+      case "PEMU_Nueva Ecija":
+        return "#fffde7"; // Light green
+      case "PEMU_Pampanga":
+        return "#fffde7"; // Light yellow
+      case "PEMU_Tarlac":
+        return "#fce4ec"; // Light pink
+      case "PEMU_Zambales":
+        return "#d1c4e9"; // Light lavender
+      case "MBU":
+        return "#ffccbc"; // Light green
+      case "TCHWMS":
+        return "#d1c4e9";
+      case "AWECMES":
+        return "#c8e6c9";
+      default:
+        return "#ffffff"; // Default white
+    }
+  };
+
+  const measureTextWidth = (text, font = "14px Poppins") => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    context.font = font;
+    return context.measureText(text).width;
+  };
+
   const columns = [
     {
       title: (
@@ -229,7 +268,7 @@ const Province = ({ theme }) => {
     },
     {
       title: "ID No.",
-      dataIndex: "id_no",
+      dataIndex: "adjusted_id_no", // Use adjusted_id_no for display
       key: "id_no",
       align: "left",
       width: "100px",
@@ -248,11 +287,9 @@ const Province = ({ theme }) => {
           <br />
           ECC/CNC Ref. No.:{" "}
           <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault(); // Prevent default anchor behavior
-              showModal(record); // Open the modal
-            }}
+            href={`https://iis.emb.gov.ph/embis/`}
+            target="_blank"
+            rel="noopener noreferrer"
           >
             {record.ecc_cnc}
           </a>
@@ -516,9 +553,27 @@ const Province = ({ theme }) => {
     {
       title: "Section/Unit Incharged",
       key: "section_incharge",
-      render: (text, record) => (
-        <div className="industry-label">{record.section_incharge}</div>
-      ),
+      render: (text, record) => {
+        const textWidth = measureTextWidth(record.section_incharge);
+        const backgroundColor = sectionBackgroundColor(record.section_incharge);
+
+        return (
+          <div
+            className="industry-label"
+            style={{
+              backgroundColor: backgroundColor,
+              padding: "5px",
+              width: `${textWidth + 5}px`, // Add some padding for better appearance
+              display: "inline-block",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              borderRadius: "5px",
+            }}
+          >
+            {record.section_incharge}
+          </div>
+        );
+      },
       align: "left",
       width: "200px",
     },
@@ -1045,10 +1100,20 @@ const Province = ({ theme }) => {
             <span className="modal-title" style={{ whiteSpace: "normal" }}>
               Record ID: {selectedRecord?.id_no || "Unknown"}
             </span>
-            <span className="modal-title" style={{ whiteSpace: "normal", textAlign: "center", width:"50%" }}>
+            <span
+              className="modal-title"
+              style={{
+                whiteSpace: "normal",
+                textAlign: "center",
+                width: "50%",
+              }}
+            >
               {selectedRecord?.title || ""}
             </span>
-            <span className="modal-title" style={{ whiteSpace: "normal", textAlign: "right"}}>
+            <span
+              className="modal-title"
+              style={{ whiteSpace: "normal", textAlign: "right" }}
+            >
               {selectedRecord?.ecc_cnc || ""}
             </span>
           </div>
@@ -1079,7 +1144,7 @@ const Province = ({ theme }) => {
           <Spin spinning={tableLoading}>
             <Table
               columns={columns}
-              dataSource={filteredData}
+              dataSource={adjustedData}
               loading={tableLoading}
               pagination={{
                 current: currentPage,

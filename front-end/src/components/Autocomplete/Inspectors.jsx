@@ -125,7 +125,7 @@ const Inspectors = ({ value, disabled, onChange }) => {
             height: "29px",
             padding: "4px 8px",
           }}
-          placeholder="select section/unit"
+          placeholder="handler"
           placeholderStyle={{
             fontSize: "9px",
           }}

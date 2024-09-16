@@ -528,7 +528,7 @@ app.post("/api/newusers", async (req, res) => {
   }
 });
 
-app.post("/api/posting", async (req, res) => {
+app.post("/api/posting", logActivity, async (req, res) => {
   try {
     const { title, message, date, acknowledgement, iconType } = req.body;
 
@@ -609,7 +609,7 @@ app.post(
 );
 
 // Update color for a specific survey record
-app.post("/api/update-color", async (req, res) => {
+app.post("/api/update-color", logActivity, async (req, res) => {
   const { id_no, color } = req.body;
 
   if (!id_no || !color) {
@@ -633,7 +633,7 @@ app.post("/api/update-color", async (req, res) => {
   }
 });
 
-app.post("/api/update-color-universe", async (req, res) => {
+app.post("/api/update-color-universe", logActivity, async (req, res) => {
   const colorUpdates = req.body;
 
   if (!colorUpdates || !Array.isArray(colorUpdates)) {
@@ -735,6 +735,29 @@ app.get("/api/surveys", async (req, res) => {
   } catch (error) {
     console.error("Error fetching survey data:", error);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get('/api/survey/:id_no', async (req, res) => {
+  const id_no = req.params.id_no;
+  const surveyRecord = await surveyCollection.findOne({ id_no });
+
+  if (surveyRecord && surveyRecord.docket_no) {
+    res.json({ docket_no: surveyRecord.docket_no });
+  } else {
+    // If no data is found, set a timeout to stop sending updates after 1 minute
+    const timeoutId = setTimeout(() => {
+      res.status(404).json({ error: 'Not found' });
+    }, 10000); // 1 minute
+
+    // Try to fetch the data again after a short delay
+    setTimeout(async () => {
+      const surveyRecord = await surveyCollection.findOne({ id_no });
+      if (surveyRecord && surveyRecord.docket_no) {
+        res.json({ docket_no: surveyRecord.docket_no });
+        clearTimeout(timeoutId);
+      }
+    }, 2000); // 2 seconds
   }
 });
 
@@ -1730,16 +1753,13 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
     const newData = req.body;
 
     // Ensure connection to the database
-    if (!client.topology.isConnected()) {
-      await client.connect();
-    }
-
+    // Assuming you have a stable connection established elsewhere in your app
     const database = client.db("universe-db");
     const collection = database.collection("survey-data");
 
     // Perform the update operation
     const result = await collection.updateOne(
-      { id_no: parseInt(id) },
+      { id_no: parseInt(id) }, // Convert id to a number
       { $set: newData }
     );
 

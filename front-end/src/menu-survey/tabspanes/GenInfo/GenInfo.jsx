@@ -1,91 +1,78 @@
-import React, { useEffect } from "react";
-import { Form, Input, Row, Col, Typography, Checkbox } from "antd";
+import React, { useEffect, useState } from "react";
+import { Input, Row, Col, Typography, Checkbox } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import IndustryClass from "../../../components/Autocomplete/IndustryClass"
-import IndustryType from "../../../components/Autocomplete/IndustryType"; // Adjust the import path as needed
-import IndustrySubType from "../../../components/Autocomplete/IndustrySubType"; // Adjust the import path as needed
-import "./geninfo.css"; // Ensure this CSS file exists
+import IndustryClass from "../../../components/Autocomplete/IndustryClass";
+import IndustryType from "../../../components/Autocomplete/IndustryType";
+import IndustrySubType from "../../../components/Autocomplete/IndustrySubType";
+import Provinces from "../../../components/Autocomplete/Province";
+import Municipalities from "../../../components/Autocomplete/Municipalities";
+import Barangays from "../../../components/Autocomplete/Barangay";
+import "./geninfo.css";
 
 const { Paragraph } = Typography;
 
-const GenInfo = ({ record, isEditing, onUpdate }) => {
-  const [form] = Form.useForm();
-
-  // Convert "✔" to boolean true/false
-  const convertRecordValues = (data) => {
-    return {
-      ...data,
-      survey_eia: data.survey_eia === "✔",
-      survey_air: data.survey_air === "✔",
-      survey_water: data.survey_water === "✔",
-      survey_haz: data.survey_haz === "✔",
-      survey_chem: data.survey_chem === "✔",
-    };
-  };
-
-  // Convert boolean true/false back to "✔" or empty string
-  const revertRecordValues = (data) => {
-    return {
-      ...data,
-      survey_eia: data.survey_eia ? "✔" : "",
-      survey_air: data.survey_air ? "✔" : "",
-      survey_water: data.survey_water ? "✔" : "",
-      survey_haz: data.survey_haz ? "✔" : "",
-      survey_chem: data.survey_chem ? "✔" : "",
-    };
-  };
+const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
+  const [localRecord, setLocalRecord] = useState(editedRecord || {});
 
   useEffect(() => {
-    if (record) {
-      const convertedRecord = convertRecordValues(record);
-      form.setFieldsValue(convertedRecord); // Update form values with new record
-    } else {
-      form.resetFields(); // Clear fields if no record
-    }
-  }, [record, form]); // Ensure form is reset when record changes
-  
-  const handleChange = (changedValues) => {
-    const updatedRecord = { ...form.getFieldsValue(), ...changedValues };
-    onUpdate(revertRecordValues(updatedRecord));
+    setLocalRecord(editedRecord);
+  }, [editedRecord]);
+
+  const handleInputChange = (field, value) => {
+    const updatedRecord = { ...localRecord, [field]: value };
+    setLocalRecord(updatedRecord);
+    handleChange(field, value);
   };
-  
+
+  const handleCheckboxChange = (field, e) => {
+    const value = e.target.checked ? "✔" : "";
+    handleInputChange(field, value);
+  };
+
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      initialValues={record}
-      onValuesChange={(changedValues) => handleChange(changedValues)}
-    >
+    <div>
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={24} md={24} lg={24} className="modalcol">
           <Paragraph>
-            <strong>Applicable Laws:</strong>
             <div className="applicable-laws-container">
-              <Form.Item name="survey_eia" valuePropName="checked" noStyle>
-                <Checkbox disabled={!isEditing}>
-                  <strong>EIA Project Survey</strong>
+              <strong className="label">Applicable Laws:</strong>
+              <div className="checkboxes">
+                <Checkbox
+                  disabled={!isEditing}
+                  checked={localRecord.survey_eia === "✔"}
+                  onChange={(e) => handleCheckboxChange("survey_eia", e)}
+                >
+                  <strong className="label-checkbox">EIA Project Survey</strong>
                 </Checkbox>
-              </Form.Item>
-              <Form.Item name="survey_air" valuePropName="checked" noStyle>
-                <Checkbox disabled={!isEditing}>
-                  <strong>AIR</strong>
+                <Checkbox
+                  disabled={!isEditing}
+                  checked={localRecord.survey_air === "✔"}
+                  onChange={(e) => handleCheckboxChange("survey_air", e)}
+                >
+                  <strong className="label-checkbox">AIR</strong>
                 </Checkbox>
-              </Form.Item>
-              <Form.Item name="survey_water" valuePropName="checked" noStyle>
-                <Checkbox disabled={!isEditing}>
-                  <strong>WATER</strong>
+                <Checkbox
+                  disabled={!isEditing}
+                  checked={localRecord.survey_water === "✔"}
+                  onChange={(e) => handleCheckboxChange("survey_water", e)}
+                >
+                  <strong className="label-checkbox">WATER</strong>
                 </Checkbox>
-              </Form.Item>
-              <Form.Item name="survey_haz" valuePropName="checked" noStyle>
-                <Checkbox disabled={!isEditing}>
-                  <strong>HAZ</strong>
+                <Checkbox
+                  disabled={!isEditing}
+                  checked={localRecord.survey_haz === "✔"}
+                  onChange={(e) => handleCheckboxChange("survey_haz", e)}
+                >
+                  <strong className="label-checkbox">HAZ</strong>
                 </Checkbox>
-              </Form.Item>
-              <Form.Item name="survey_chem" valuePropName="checked" noStyle>
-                <Checkbox disabled={!isEditing}>
-                  <strong>CHEMICAL</strong>
+                <Checkbox
+                  disabled={!isEditing}
+                  checked={localRecord.survey_chem === "✔"}
+                  onChange={(e) => handleCheckboxChange("survey_chem", e)}
+                >
+                  <strong className="label-checkbox">CHEMICAL</strong>
                 </Checkbox>
-              </Form.Item>
+              </div>
             </div>
           </Paragraph>
         </Col>
@@ -95,85 +82,131 @@ const GenInfo = ({ record, isEditing, onUpdate }) => {
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Paragraph>
             <strong>Project Title</strong>
-            <Form.Item name="project_title" noStyle>
-              <TextArea disabled={!isEditing} placeholder="No data" rows={1} />
-            </Form.Item>
+            <TextArea
+              value={localRecord.project_title || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              rows={2}
+              className="textbox-label disabled-input"
+              onChange={(e) =>
+                handleInputChange("project_title", e.target.value)
+              }
+            />
           </Paragraph>
 
           <Paragraph>
             <strong>Project Type</strong>
-            <Form.Item name="project_type" noStyle>
-              <IndustryType disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <IndustryType
+              value={localRecord.project_type || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              onChange={(value) => handleInputChange("project_type", value)}
+            />
           </Paragraph>
 
-          <Paragraph>
+          <Paragraph className="paragraph-margin-top">
             <strong>Project Sub-Type</strong>
-            <Form.Item name="project_subtype" noStyle>
-              <IndustrySubType disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <IndustrySubType
+              value={localRecord.project_subtype || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              onChange={(value) => handleInputChange("project_subtype", value)}
+            />
           </Paragraph>
 
-          <Paragraph>
+          <Paragraph className="paragraph-margin-top">
             <strong>Industry Classification</strong>
-            <Form.Item name="industry_class" noStyle>
-              <IndustryClass disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <IndustryClass
+              value={localRecord.industry_class || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              onChange={(value) => handleInputChange("industry_class", value)}
+            />
           </Paragraph>
 
-          <Paragraph>
+          <Paragraph className="paragraph-margin-top">
             <strong>Other Project Type</strong>
-            <Form.Item name="other_project_type" noStyle>
-              <Input disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <Input
+              value={localRecord.other_project_type || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              className="textbox-label disabled-input"
+              onChange={(e) =>
+                handleInputChange("other_project_type", e.target.value)
+              }
+            />
           </Paragraph>
 
           <Paragraph>
             <strong>PSIC Code</strong>
-            <Form.Item name="pisc_code" noStyle>
-              <Input disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <Input
+              value={localRecord.pisc_code || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              className="textbox-label disabled-input"
+              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
+            />
           </Paragraph>
         </Col>
 
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Paragraph>
             <strong>Complete Address</strong>
-            <Form.Item name="address" noStyle>
-              <TextArea disabled={!isEditing} placeholder="No data" rows={1} />
-            </Form.Item>
+            <TextArea
+              value={localRecord.address || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              rows={2}
+              className="textbox-label disabled-input"
+              onChange={(e) => handleInputChange("address", e.target.value)}
+            />
           </Paragraph>
 
           <Paragraph>
             <strong>Street</strong>
-            <Form.Item name="street" noStyle>
-              <Input disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <Input
+              value={localRecord.street || ""}
+              disabled={!isEditing}
+              placeholder="No data"
+              className="textbox-label disabled-input"
+              onChange={(e) => handleInputChange("street", e.target.value)}
+            />
           </Paragraph>
-
           <Paragraph>
             <strong>Barangay</strong>
-            <Form.Item name="brgy" noStyle>
-              <Input disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <Barangays
+              value={localRecord.brgy || ""}
+              onChange={(value) => handleInputChange("brgy", value)}
+              disabled={!isEditing}
+              placeholder="No data"
+              selectedProvince={localRecord.province || ""}
+              selectedMunicipality={localRecord.city || ""}
+            />
           </Paragraph>
 
-          <Paragraph>
-            <strong>City</strong>
-            <Form.Item name="city" noStyle>
-              <Input disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+          <Paragraph className="paragraph-margin-top">
+            <strong>City/Municipality</strong>
+            <Municipalities
+              value={localRecord.city || ""}
+              onChange={(value) => handleInputChange("city", value)}
+              disabled={!isEditing}
+              placeholder="No data"
+              selectedProvince={localRecord.province || ""}
+            />
           </Paragraph>
 
-          <Paragraph>
+          <Paragraph className="paragraph-margin-top">
             <strong>Province</strong>
-            <Form.Item name="province" noStyle>
-              <Input disabled={!isEditing} placeholder="No data" />
-            </Form.Item>
+            <Provinces
+              value={localRecord.province || ""}
+              onChange={(value) => handleInputChange("province", value)}
+              disabled={!isEditing}
+              placeholder="No data"
+            />
           </Paragraph>
         </Col>
       </Row>
-    </Form>
+    </div>
   );
 };
 

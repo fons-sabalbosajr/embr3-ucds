@@ -42,6 +42,7 @@ function calculateWeekdayDiff(startDate, endDate) {
 }
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
+  
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
       // Handle Excel date numeric value
