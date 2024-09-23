@@ -933,7 +933,6 @@ const Province = ({ theme }) => {
           },
         });
 
-        // Update the color data in storage
         const storedData = localStorage.getItem("colorData");
         const updatedData = storedData ? JSON.parse(storedData) : {};
         colorUpdates.forEach((update) => {
@@ -942,11 +941,9 @@ const Province = ({ theme }) => {
         localStorage.setItem("colorData", JSON.stringify(updatedData));
         console.log("Updated color data in storage:", updatedData);
 
-        // Reset the selectedRowKeys and selectedRowColors states
         setSelectedRowKeys([]);
         setSelectedRowColors({});
 
-        // Call the handleColorReload function to refresh the table data in real-time
         handleColorReload();
       })
       .catch((error) => {

@@ -133,6 +133,7 @@ const Universe = () => {
       );
   
       if (response.status === 200) {
+        localStorage.clear();
         navigate("/login");
       } else {
         message.error("Logout failed. Please try again.");

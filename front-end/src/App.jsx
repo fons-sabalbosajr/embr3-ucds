@@ -18,8 +18,8 @@ function App() {
           <Route path='/register' element={<Register />} />
           <Route path='/home' element={<Home />} />
           <Route path='/login' element={<Login />} />
-          {/* Protected Routes */}
-          <Route element={<ProtectedRoute />}> {/* No need for `isAuthenticated` prop */}
+          
+          <Route element={<ProtectedRoute />}> 
             <Route path='/universe/*' element={<Universe />} />
           </Route>
         </Routes>

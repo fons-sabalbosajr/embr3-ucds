@@ -330,20 +330,25 @@ module.exports = logActivity;
 
 const authenticateSession = (req, res, next) => {
   if (req.session && req.session.user) {
-    //console.log("Session authenticated:", req.session.user);
     return next();
   }
   console.log("User not authenticated:", req.session);
   res.status(401).json({ message: "User not authenticated" });
 };
 
+app.get("/auth/check", (req, res) => {
+  if (req.session && req.session.user) {
+    res.status(200).json({ isAuthenticated: true });
+  } else {
+    res.status(401).json({ isAuthenticated: false });
+  }
+});
+
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    return res
-      .status(400)
-      .json({ error: "Username and password are required." });
+    return res.status(400).json({ error: "Username and password are required." });
   }
 
   try {
@@ -359,6 +364,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
+    // Create a session for the user
     req.session.user = {
       userId: user._id.toString(),
       name: user.name,
@@ -384,7 +390,7 @@ app.post("/login", async (req, res) => {
       { upsert: true }
     );
 
-    // Send username and permissions in the response
+    // Send response with user information
     res.status(200).json({
       status: "success",
       username: user.username,
@@ -440,6 +446,11 @@ app.get("/api/current-user/avatar", authenticateSession, async (req, res) => {
     console.error(err);
     res.status(500).send({ message: "Internal Server Error" });
   }
+});
+
+// Protected route example
+app.get("/protected-route", authenticateSession, (req, res) => {
+  res.json({ message: "This is a protected route!" });
 });
 
 app.get("/check-auth", authenticateSession, (req, res) => {

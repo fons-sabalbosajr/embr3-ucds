@@ -27,31 +27,26 @@ const Login = () => {
           withCredentials: true,
         }
       );
-
-      console.log("API Response:", response.data); 
+  
+      console.log("API Response:", response.data);
   
       if (response.data.status === "success") {
-        console.log("Navigation to /universe triggered"); // Debugging output
         localStorage.setItem("username", response.data.username);
         localStorage.setItem("permission", JSON.stringify(response.data.permission));
   
-        // Optional delay to ensure session is established
-        setTimeout(() => {
-          navigate("/universe");
-        }, 500); 
+        // Navigate to the /universe page
+        navigate("/universe");
       } else {
         setError("Login failed. Please try again.");
       }
     } catch (error) {
       console.error("Error during login:", error);
-      setError("An unexpected error occurred. Please try again.");
+      setError("Invalid username or password.");
     } finally {
       setIsLoading(false);
     }
   };
-  
 
-  
   return (
     <div className="background-login">
       <div className="background-form">
