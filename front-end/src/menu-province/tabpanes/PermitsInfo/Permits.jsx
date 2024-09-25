@@ -135,7 +135,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
         <Col xs={24} sm={24} md={12} lg={12}>
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -225,7 +225,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -299,7 +299,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -374,7 +374,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -434,7 +434,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
         <Col xs={24} sm={24} md={12} lg={12}>
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -497,7 +497,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -560,7 +560,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"
@@ -648,7 +648,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 10,
             }}
             size="small"

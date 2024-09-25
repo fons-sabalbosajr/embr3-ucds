@@ -1,13 +1,16 @@
 import React from 'react';
 import { Avatar } from "antd";
-import { UserOutlined } from "@ant-design/icons";
-import NiceAvatar from "react-nice-avatar";
+import NiceAvatar from "react-nice-avatar"; // Assuming you are using this library for avatars
 
-const AvatarWithName = ({ avatar }) => {
-  if (!avatar) {
-    return <NiceAvatar style={{ width: '30px', height: '30px' }} />;
-  }
-  return <NiceAvatar style={{ width: '30px', height: '30px' }} {...avatar} />; // Spread the avatar object
+const AvatarWithName = ({ avatar, name }) => {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {/* Avatar */}
+      <NiceAvatar style={{ width: '30px', height: '30px', marginRight: '8px' }} {...avatar} />
+      {/* Name */}
+      <span>{name}</span>
+    </div>
+  );
 };
 
 export default AvatarWithName;

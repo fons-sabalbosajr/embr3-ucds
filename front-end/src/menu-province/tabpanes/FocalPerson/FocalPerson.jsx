@@ -197,7 +197,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
-              <strong>Bio-Oxygen Demand (kg/day)</strong>
+              <strong>BOD (kg/day)</strong>
               <Input
                 value={bod}
                 onChange={(e) => handleChange("bod", e.target.value)}

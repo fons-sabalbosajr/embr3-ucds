@@ -7,7 +7,7 @@ import {
   EllipsisOutlined,
   UserOutlined,
   CloseCircleOutlined,
-  CameraOutlined
+  CameraOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import "./useraccount.css";
@@ -36,7 +36,7 @@ const UserAccounts = () => {
     current: 1,
     pageSize: 10,
   });
-
+  const [tableLoading, setTableLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -147,6 +147,52 @@ const UserAccounts = () => {
     }
   };
 
+  const handleReload = async () => {
+    try {
+      setTableLoading(true);
+      await fetchSignUpUsers();
+    } catch (error) {
+      console.error("Error reloading data:", error);
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  const handleRemoveUser = async (record) => {
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `Do you want to remove user ${record.name}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, remove it!",
+      cancelButtonText: "No, cancel",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const response = await axios.delete(
+          `http://localhost:8081/api/remove-user/${record._id}`
+        );
+
+        if (response.data.message === "User removed successfully") {
+          Swal.fire("Removed!", "The user has been removed.", "success");
+
+          //fetchSignUpUsers();
+          handleReload();
+        } else {
+          Swal.fire("Error!", "Failed to remove the user.", "error");
+        }
+      } catch (error) {
+        console.error("Error removing user:", error);
+        Swal.fire("Error!", "Failed to remove the user.", "error");
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchSignUpUsers();
+  }, [pagination.current, pagination.pageSize]);
+
   useEffect(() => {
     const uniquePermissions = new Set();
     userData.forEach((user) => {
@@ -213,27 +259,28 @@ const UserAccounts = () => {
       render: (name, record) => (
         <AvatarWithName avatar={record.avatar} name={name} />
       ),
-       align: "left",
+      align: "left",
+      width: "200px",
     },
     {
       title: "Email Address",
       dataIndex: "email",
       key: "email",
       ellipsis: true,
-       align: "left",
+      align: "left",
+      width: "200px",
     },
     {
       title: "Designation/Position",
       dataIndex: "division",
       key: "division",
       ellipsis: true,
-       align: "left",
+      align: "left",
     },
     {
       title: "Permission",
       dataIndex: "permission",
       key: "permission",
-      ellipsis: true,
       render: (permission) => {
         let color = "";
         switch (permission) {
@@ -257,17 +304,19 @@ const UserAccounts = () => {
             style={{
               backgroundColor: color,
               color: "white",
-              padding: "4px 8px",
-              borderRadius: "4px",
+              padding: "2px 4px", // Reduced padding
+              borderRadius: "3px",
               display: "inline-block",
-              fontSize: 12,
+              fontSize: 10, // Reduced font size
+              minWidth: "50px", // Optional: to keep a consistent size for different permissions
+              textAlign: "center", // Center the text
             }}
           >
             {permission}
           </span>
         );
       },
-       align: "left",
+      align: "left",
     },
     {
       title: "Status",
@@ -291,10 +340,12 @@ const UserAccounts = () => {
             style={{
               backgroundColor: color,
               color: "white",
-              padding: "4px 8px",
-              borderRadius: "4px",
+              padding: "2px 4px", // Reduced padding
+              borderRadius: "3px",
               display: "inline-block",
-              fontSize: 12,
+              fontSize: 10, // Reduced font size
+              minWidth: "50px", // Optional: to keep a consistent size for different statuses
+              textAlign: "center", // Center the text
             }}
           >
             {status}
@@ -306,7 +357,7 @@ const UserAccounts = () => {
     {
       title: "Action",
       dataIndex: "action",
-      key: "action", 
+      key: "action",
       align: "left",
       render: (_, record) => (
         <Popover
@@ -343,8 +394,11 @@ const UserAccounts = () => {
       key: "name",
       ellipsis: true,
       align: "left",
+      width: 200,
       render: (name, record) => (
-        <div style={{ display: "flex", alignItems: "center" }}>
+        <div
+          style={{ display: "flex", alignItems: "center", maxWidth: "100%" }}
+        >
           {record.avatar ? (
             <Avatar src={record.avatar} />
           ) : (
@@ -352,10 +406,20 @@ const UserAccounts = () => {
               icon={<UserOutlined />}
               style={{ backgroundColor: "#87d068" }}
             >
-              {name.charAt(0)}
+              {name.charAt(0).toUpperCase()}{" "}
+              {/* Fallback to first letter, capitalized */}
             </Avatar>
           )}
-          <span style={{ marginLeft: "8px" }}>{name}</span>
+          <span
+            style={{
+              marginLeft: "8px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {name}
+          </span>
         </div>
       ),
     },
@@ -398,7 +462,6 @@ const UserAccounts = () => {
           });
 
           if (result.isConfirmed) {
-            // Call backend API to update status
             try {
               const response = await axios.put(
                 ` http://localhost:8081/api/status/${record._id}`,
@@ -413,7 +476,6 @@ const UserAccounts = () => {
                   title: "Success!",
                   text: "Status updated successfully.",
                 });
-                // You can update your local data or fetch fresh data as needed
               } else {
                 Swal.fire({
                   icon: "error",
@@ -472,12 +534,22 @@ const UserAccounts = () => {
               </List.Item>
               <List.Item>
                 <Button type="text" size="small">
-                  Disapproved
+                  Disapprove
+                </Button>
+              </List.Item>
+              <List.Item>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  onClick={() => handleRemoveUser(record)}
+                >
+                  Remove
                 </Button>
               </List.Item>
             </List>
           }
-          placement="rightTop" // Placement of the popover
+          placement="rightTop"
         >
           <Button icon={<EllipsisOutlined />} />
         </Popover>
@@ -518,10 +590,6 @@ const UserAccounts = () => {
 
   const handleExport = () => {
     console.log("Exporting...");
-  };
-
-  const handleAddUser = () => {
-    console.log("Adding new user...");
   };
 
   const handleEvaluate = () => {
@@ -612,7 +680,7 @@ const UserAccounts = () => {
 
       {/* Container for Users Needing Approval */}
       <div className="signed-up-container">
-        <h2 className="account-title">Registering Users</h2>
+        <h2 className="account-title">Signed Up Users</h2>
         <div className="filter-options">
           <div className="filter-input">
             <Input

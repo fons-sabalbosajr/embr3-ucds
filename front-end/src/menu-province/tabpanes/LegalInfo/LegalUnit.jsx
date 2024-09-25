@@ -84,7 +84,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 20,
               padding: 5,
             }}
@@ -227,7 +227,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 20,
               padding: 5,
             }}
@@ -307,7 +307,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 20,
               padding: 5,
             }}
@@ -421,7 +421,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
 
           <Card
             style={{
-              width: 600,
+              width: 500,
               marginBottom: 20,
               padding: 5,
             }}

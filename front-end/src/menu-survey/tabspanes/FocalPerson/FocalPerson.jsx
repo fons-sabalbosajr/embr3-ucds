@@ -159,7 +159,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           </Paragraph>
         </Col>
 
-        <Col xs={24} sm={24} md={4} lg={4} className="modalcol"></Col>
+        
 
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
         <Paragraph>

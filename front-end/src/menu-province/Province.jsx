@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { useParams } from "react-router-dom";
 import _ from "lodash";
 import {
@@ -14,7 +14,8 @@ import {
   Dropdown,
   notification,
   Checkbox,
-  ColorPicker,
+  Tag,
+  Space,
 } from "antd";
 import {
   SearchOutlined,
@@ -29,6 +30,7 @@ import { DataContext } from "./DataContext";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import Highlighter from "react-highlight-words";
 
 const capitalizeFirstLetter = (str) => {
   if (!str) return "";
@@ -50,12 +52,18 @@ const Province = ({ theme }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [shouldRefreshTable, setShouldRefreshTable] = useState(false);
-  const [filteredData, setFilteredData] = useState([]);
+  const [filteredData, setFilteredData] = useState(data);
   const [tableLoading, setTableLoading] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [selectedRowColors, setSelectedRowColors] = useState({});
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [searchedColumn, setSearchedColumn] = useState("");
+  const searchInput = useRef(null);
+  const [filteredSearch, setFilteredSearch] = useState(data);
 
   useEffect(() => {
     if (provinceName) {
@@ -69,11 +77,6 @@ const Province = ({ theme }) => {
       setShouldRefreshTable(false);
     }
   }, [shouldRefreshTable, fetchData, provinceName]);
-
-  useEffect(() => {
-    const filtered = filterData(data, searchTerm);
-    setFilteredData(filtered);
-  }, [data, searchTerm]);
 
   useEffect(() => {
     setTableLoading(loading);
@@ -93,20 +96,180 @@ const Province = ({ theme }) => {
     }
   }, []);
 
+  const filterDataByTags = (adjustedData, selectedTags) => {
+    if (!selectedTags.length) return adjustedData;
+
+    return adjustedData.filter((item) => {
+      return selectedTags.some((tag) => {
+        const lowerCaseTag = tag.toLowerCase();
+        return (
+          (item.adjusted_id_no &&
+            item.adjusted_id_no.toString().includes(tag)) ||
+          (item.id_no &&
+            item.id_no.toString().toLowerCase().includes(lowerCaseTag)) ||
+          (typeof item.name === "string" &&
+            item.name.toLowerCase().includes(lowerCaseTag)) ||
+          (typeof item.address === "string" &&
+            item.address.toLowerCase().includes(lowerCaseTag)) ||
+          (typeof item.title === "string" &&
+            item.title.toLowerCase().includes(lowerCaseTag)) ||
+          (typeof item.section_incharge === "string" &&
+            item.section_incharge.toLowerCase().includes(lowerCaseTag)) ||
+          (typeof item.remarks_recommendations === "string" &&
+            item.remarks_recommendations.toLowerCase().includes(lowerCaseTag))
+        );
+      });
+    });
+  };
+
   const adjustedData = data.map((item, index) => ({
     ...item,
     adjusted_id_no: index + 1, // Adjust id_no to start from 1
   }));
 
-  const filterData = (data, searchTerm) => {
-    return data.filter((item) =>
-      Object.values(item).some(
-        (value) =>
-          typeof value === "string" &&
-          value.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
+  useEffect(() => {
+    const filtered = filterDataByTags(adjustedData, selectedTags);
+    setFilteredData(filtered);
+  }, [adjustedData, selectedTags]);
+
+  const handleTagClose = (removedTag) => {
+    setSelectedTags(selectedTags.filter((tag) => tag !== removedTag));
   };
+
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleInputConfirm = () => {
+    if (inputValue && !selectedTags.includes(inputValue)) {
+      setSelectedTags([...selectedTags, inputValue]);
+    }
+    setInputValue(""); // Clear input field
+  };
+
+  const handleSearch = (selectedKeys, confirm, dataIndex) => {
+    confirm();
+    setSearchText(selectedKeys[0]);
+    setSearchedColumn(dataIndex);
+
+    // Filter data when searching
+    const filtered = data.filter((record) =>
+      record[dataIndex]
+        .toString()
+        .toLowerCase()
+        .includes(selectedKeys[0].toLowerCase())
+    );
+    setFilteredSearch(filtered); // Update filteredSearch with filtered results
+  };
+
+  const handleReset = (clearFilters) => {
+    clearFilters();
+    setSearchText("");
+    setFilteredSearch(data); // Reset filteredSearch to original data
+  };
+
+  const getColumnSearchProps = (dataIndex) => ({
+    filterDropdown: ({
+      setSelectedKeys,
+      selectedKeys,
+      confirm,
+      clearFilters,
+      close,
+    }) => (
+      <div
+        style={{
+          padding: 8,
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Input
+          ref={searchInput}
+          placeholder={`Search ${dataIndex}`}
+          value={selectedKeys[0]}
+          onChange={(e) =>
+            setSelectedKeys(e.target.value ? [e.target.value] : [])
+          }
+          onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
+          style={{
+            marginBottom: 8,
+            display: "block",
+          }}
+        />
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{
+              width: 90,
+            }}
+          >
+            Search
+          </Button>
+          <Button
+            onClick={() => clearFilters && handleReset(clearFilters)}
+            size="small"
+            style={{
+              width: 90,
+            }}
+          >
+            Reset
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              confirm({
+                closeDropdown: false,
+              });
+              setSearchText(selectedKeys[0]);
+              setSearchedColumn(dataIndex);
+            }}
+          >
+            Filter
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              close();
+            }}
+          >
+            Close
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: (filtered) => (
+      <SearchOutlined
+        style={{
+          color: filtered ? "#1677ff" : undefined,
+        }}
+      />
+    ),
+    onFilter: (value, record) =>
+      record[dataIndex].toString().toLowerCase().includes(value.toLowerCase()),
+    onFilterDropdownOpenChange: (visible) => {
+      if (visible) {
+        setTimeout(() => searchInput.current?.select(), 100);
+      }
+    },
+    render: (text) =>
+      searchedColumn === dataIndex ? (
+        <Highlighter
+          highlightStyle={{
+            backgroundColor: "#ffc069",
+            padding: 0,
+          }}
+          searchWords={[searchText]}
+          autoEscape
+          textToHighlight={text ? text.toString() : ""}
+        />
+      ) : (
+        text
+      ),
+  });
 
   const formatNumber = (number) => {
     return new Intl.NumberFormat("en-US").format(number);
@@ -180,27 +343,47 @@ const Province = ({ theme }) => {
   const sectionBackgroundColor = (section) => {
     switch (section) {
       case "PEMU_Aurora":
-        return "#ffccbc"; // Light pink
+      case "PEMU_AURORA":
+        return "transparent"; // no color encoded
+
       case "PEMU_Bataan":
-        return "#e0f7fa"; // Light cyan
+      case "PEMU_BATAAN":
+        return "#FCE5BB"; // Biege. pero pag namonitor na, transparent
+
       case "PEMU_Bulacan":
-        return "#f3e5f5"; // Light purple
+      case "PEMU_BULACAN":
+        return "#FCE5BB"; // Light purple
+
       case "PEMU_Nueva Ecija":
-        return "#fffde7"; // Light green
+      case "PEMU_NUEVA ECIJA":
+        return "#FFE225"; // Yellow
+
       case "PEMU_Pampanga":
-        return "#fffde7"; // Light yellow
+      case "PEMU_PAMPANGA":
+        return "#FFE225"; // Yellow
+
       case "PEMU_Tarlac":
-        return "#fce4ec"; // Light pink
+      case "PEMU_TARLAC":
+        return "#39C665"; // Green
+
       case "PEMU_Zambales":
+      case "PEMU_ZAMBALES":
         return "#d1c4e9"; // Light lavender
+
       case "MBU":
-        return "#ffccbc"; // Light green
+      case "mbu":
+        return "#FF9B3E"; // Light green
+
       case "TCHWMS":
-        return "#d1c4e9";
+      case "tchwms":
+        return "#936DDF";
+
       case "AWECMES":
+      case "awecmes":
         return "#c8e6c9";
+
       default:
-        return "#ffffff"; // Default white
+        return "transparent"; // Default transparent background
     }
   };
 
@@ -272,11 +455,13 @@ const Province = ({ theme }) => {
       key: "id_no",
       align: "left",
       width: "100px",
+      ...getColumnSearchProps("adjusted_id_no"), // Add search props
       render: (text) => <div className="industry-label">{text}</div>,
     },
     {
       title: "Industry Details",
       key: "industryDetails",
+      ...getColumnSearchProps("title"), // Add search props
       render: (text, record) => (
         <div className="industry-label">
           <strong>{record.title}</strong>
@@ -296,16 +481,17 @@ const Province = ({ theme }) => {
         </div>
       ),
       align: "left",
-      width: "500px",
+      width: "300px",
     },
     {
       title: "Industry Classification",
       key: "industry_class",
+      ...getColumnSearchProps("industry_class"),
       render: (text, record) => (
         <div className="industry-label">{record.industry_class}</div>
       ),
       align: "left",
-      width: "200px",
+      width: "300px",
     },
     {
       title: "Permits/Clearances",
@@ -553,6 +739,7 @@ const Province = ({ theme }) => {
     {
       title: "Section/Unit Incharged",
       key: "section_incharge",
+      ...getColumnSearchProps("section_incharge"),
       render: (text, record) => {
         const textWidth = measureTextWidth(record.section_incharge);
         const backgroundColor = sectionBackgroundColor(record.section_incharge);
@@ -580,6 +767,7 @@ const Province = ({ theme }) => {
     {
       title: "Remarks/Recommendations",
       key: "remarks_recommendations",
+      ...getColumnSearchProps("remarks_recommendations"),
       render: (text, record) => (
         <div className="industry-label">{record.remarks_recommendations}</div>
       ),
@@ -606,6 +794,24 @@ const Province = ({ theme }) => {
     //   align: "left",
     //   width: "200px",
     // },
+    {
+      title: "IIS Transaction No.",
+      key: "iis_no",
+      ...getColumnSearchProps("iis_no"),
+      render: (text, record) => (
+        <div className="industry-label">
+          <a
+            href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {record.iis_no}
+          </a>
+        </div>
+      ),
+      align: "left",
+      width: "200px",
+    },
     {
       title: "Actions",
       key: "actions",
@@ -859,15 +1065,15 @@ const Province = ({ theme }) => {
   };
 
   const colors = [
-    "#f7f4c9", // Light yellow
-    "#c9e4ca", // Light green
-    "#e5d8b6", // Light brown
-    "#bdd7ee", // Light blue
-    "#ffe0e0", // Light pink
-    "#FFFFFF", // White
-    "#d2f5e3", // Soft mint
-    "#ffc2c2", // Soft peach
-    "#c5e1a5", // Light beige
+    "#FCE5BB",
+    "#FFE225",
+    "#FFE225",
+    "#39C665",
+    "#d1c4e9",
+    "#FF9B3E",
+    "#936DDF",
+    "#c8e6c9",
+    "#ffffff",
   ];
 
   const handleColorClick = (selectedRowKeys, color) => {
@@ -913,9 +1119,16 @@ const Province = ({ theme }) => {
       return;
     }
 
+    // Get the auth token (if you are using JWT, token could be stored in localStorage or a cookie)
+    const authToken = localStorage.getItem("authToken");
+
     fetch("http://localhost:8081/api/update-color-universe", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Add Authorization header if needed
+        Authorization: `Bearer ${authToken}`,
+      },
       body: JSON.stringify(colorUpdates),
     })
       .then((response) => {
@@ -929,7 +1142,7 @@ const Province = ({ theme }) => {
           message: "Industries marked successfully",
           description: `The selected industries have been marked.`,
           style: {
-            fontSize: 12, // reduce the font size to 12px
+            fontSize: 11, // reduce the font size to 12px
           },
         });
 
@@ -1051,22 +1264,39 @@ const Province = ({ theme }) => {
           <span className="industry-count">
             Industry Count: {formatNumber(filteredData.length)}
           </span>
-          <div className="input-search">
+
+          <div className="tag-search">
             <Input
-              placeholder="Search..."
-              prefix={<SearchOutlined />}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={loading} // Disable while loading
+              type="text"
+              size="small"
+              value={inputValue}
+              onChange={handleInputChange}
+              onPressEnter={handleInputConfirm}
+              placeholder="search..."
+              className="input-tag"
             />
           </div>
+          <div className="tag-keyword-container">
+            {selectedTags.map((tag) => (
+              <Tag
+                key={tag}
+                closable
+                onClose={() => handleTagClose(tag)}
+                color="blue"
+                className="tag-keyword"
+              >
+                {tag}
+              </Tag>
+            ))}
+          </div>
+
           <div className="pagination-container">
             <div className="pagination-dropdown">
               <label>Show:&nbsp;</label>
               <Select
                 defaultValue={itemsPerPage}
                 onChange={(value) => setItemsPerPage(Number(value))}
-                disabled={loading} // Disable while loading
+                disabled={loading}
               >
                 <Option value={10}>10</Option>
                 <Option value={50}>50</Option>
@@ -1074,8 +1304,9 @@ const Province = ({ theme }) => {
               </Select>
               <label>&nbsp;entries</label>
             </div>
+
             {loading ? (
-              <Spin size="small" /> // Spin animation during loading
+              <Spin size="small" />
             ) : (
               <Pagination
                 simple
@@ -1084,6 +1315,7 @@ const Province = ({ theme }) => {
                 pageSize={itemsPerPage}
                 showSizeChanger={false}
                 onChange={(page) => setCurrentPage(page)}
+                size="small"
               />
             )}
           </div>
@@ -1116,7 +1348,7 @@ const Province = ({ theme }) => {
           </div>
         }
         onCancel={handleCloseModal}
-        width={1300}
+        width={1100}
         footer={null}
         onClose={handleCloseModal}
       >
@@ -1141,13 +1373,18 @@ const Province = ({ theme }) => {
           <Spin spinning={tableLoading}>
             <Table
               columns={columns}
-              dataSource={adjustedData}
+              dataSource={filteredData}
               loading={tableLoading}
               pagination={{
                 current: currentPage,
                 pageSize: itemsPerPage,
                 onChange: (page) => setCurrentPage(page),
               }}
+              footer={() => (
+                <span className="search-result-count">
+                  Industry Count: {filteredSearch.length}
+                </span>
+              )}
               rowKey="id_no"
               size="small"
               className="custom-table"

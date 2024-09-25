@@ -620,7 +620,7 @@ app.post(
 );
 
 // Update color for a specific survey record
-app.post("/api/update-color", logActivity, async (req, res) => {
+app.post("/api/update-color", logActivity, authenticateSession, async (req, res) => {
   const { id_no, color } = req.body;
 
   if (!id_no || !color) {
@@ -644,7 +644,7 @@ app.post("/api/update-color", logActivity, async (req, res) => {
   }
 });
 
-app.post("/api/update-color-universe", logActivity, async (req, res) => {
+app.post("/api/update-color-universe", async (req, res) => {
   const colorUpdates = req.body;
 
   if (!colorUpdates || !Array.isArray(colorUpdates)) {
@@ -1859,6 +1859,26 @@ app.delete("/api/postings/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+// Assuming you have a user collection
+app.delete("/api/remove-user/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await signUpCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 1) {
+      res.status(200).send({ message: "User removed successfully" });
+    } else {
+      res.status(404).send({ message: "User not found" });
+    }
+  } catch (error) {
+    console.error("Error removing user:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+
 
 // Start server
 app.listen(8081, () => {

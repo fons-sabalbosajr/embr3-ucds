@@ -134,7 +134,7 @@ const SideMenu = ({ theme, permissions }) => {
                 Extract Data (DEV)
               </Link>
             </Menu.Item>
-            <Menu.Item key="/universe/report">
+            {/* <Menu.Item key="/universe/report">
               <Link
                 to="/universe/report"
                 className={`link-menu-hover ${
@@ -143,7 +143,7 @@ const SideMenu = ({ theme, permissions }) => {
               >
                 Generate Report (DEV)
               </Link>
-            </Menu.Item>
+            </Menu.Item> */}
           </SubMenu>
 
           {showAdminMenu && (

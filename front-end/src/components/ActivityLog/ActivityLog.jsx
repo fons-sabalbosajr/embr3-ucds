@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Table, Input, DatePicker, Select  } from "antd";
+import { Table, Input, DatePicker, Select } from "antd";
 import axios from "axios";
 import moment from "moment";
 import "./activitlylog.css";
@@ -12,7 +12,7 @@ const ActivityLog = () => {
   const [searchText, setSearchText] = useState("");
   const [filteredLogs, setFilteredLogs] = useState([]);
   const [dateRange, setDateRange] = useState([null, null]);
-  const [selectedMethod, setSelectedMethod] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState("");
 
   useEffect(() => {
     // Fetch logs from the API
@@ -31,17 +31,28 @@ const ActivityLog = () => {
   }, []);
 
   useEffect(() => {
-    const filtered = logs.filter(log => {
-      const matchesSearchText = log.username?.toLowerCase().includes(searchText.toLowerCase()) || 
-                                log.actionType?.toLowerCase().includes(searchText.toLowerCase()) || 
-                                false;
+    const filtered = logs.filter((log) => {
+      const matchesSearchText =
+        log.username?.toLowerCase().includes(searchText.toLowerCase()) ||
+        log.actionType?.toLowerCase().includes(searchText.toLowerCase()) ||
+        false;
 
-      const [startDate, endDate] = dateRange.length === 2 ? dateRange : [null, null];
+      const [startDate, endDate] =
+        dateRange.length === 2 ? dateRange : [null, null];
       const logDate = moment(log.timestamp);
-      const matchesDateRange = startDate && endDate ? 
-        logDate.isBetween(moment(startDate), moment(endDate).endOf('day'), null, '[]') : true;
+      const matchesDateRange =
+        startDate && endDate
+          ? logDate.isBetween(
+              moment(startDate),
+              moment(endDate).endOf("day"),
+              null,
+              "[]"
+            )
+          : true;
 
-      const matchesMethod = selectedMethod ? log.method === selectedMethod : true;
+      const matchesMethod = selectedMethod
+        ? log.method === selectedMethod
+        : true;
 
       return matchesSearchText && matchesDateRange && matchesMethod;
     });
@@ -83,31 +94,51 @@ const ActivityLog = () => {
 
   const getMethodStyle = (method) => {
     switch (method) {
-      case 'GET':
-        return { backgroundColor: '#d4edda', color: '#155724', borderRadius: '4px' }; // Green background for GET
-      case 'POST':
-        return { backgroundColor: '#cce5ff', color: '#004085', borderRadius: '4px' }; // Blue background for POST
-      case 'PUT':
-        return { backgroundColor: '#fff3cd', color: '#856404', borderRadius: '4px' }; // Yellow background for PUT
-      case 'DELETE':
-        return { backgroundColor: '#f8d7da', color: '#721c24', borderRadius: '4px' }; // Red background for DELETE
+      case "GET":
+        return {
+          backgroundColor: "#d4edda",
+          color: "#155724",
+          borderRadius: "4px",
+        }; // Green background for GET
+      case "POST":
+        return {
+          backgroundColor: "#cce5ff",
+          color: "#004085",
+          borderRadius: "4px",
+        }; // Blue background for POST
+      case "PUT":
+        return {
+          backgroundColor: "#fff3cd",
+          color: "#856404",
+          borderRadius: "4px",
+        }; // Yellow background for PUT
+      case "DELETE":
+        return {
+          backgroundColor: "#f8d7da",
+          color: "#721c24",
+          borderRadius: "4px",
+        }; // Red background for DELETE
       default:
-        return { backgroundColor: '#e2e3e5', color: '#383d41', borderRadius: '4px' }; // Default background for other methods
+        return {
+          backgroundColor: "#e2e3e5",
+          color: "#383d41",
+          borderRadius: "4px",
+        }; // Default background for other methods
     }
   };
 
   const getDropdownStyle = (method) => {
     switch (method) {
-      case 'GET':
-        return { backgroundColor: '#d4edda', color: '#155724' }; // Green background for GET
-      case 'POST':
-        return { backgroundColor: '#cce5ff', color: '#004085' }; // Blue background for POST
-      case 'PUT':
-        return { backgroundColor: '#fff3cd', color: '#856404' }; // Yellow background for PUT
-      case 'DELETE':
-        return { backgroundColor: '#f8d7da', color: '#721c24' }; // Red background for DELETE
+      case "GET":
+        return { backgroundColor: "#d4edda", color: "#155724" }; // Green background for GET
+      case "POST":
+        return { backgroundColor: "#cce5ff", color: "#004085" }; // Blue background for POST
+      case "PUT":
+        return { backgroundColor: "#fff3cd", color: "#856404" }; // Yellow background for PUT
+      case "DELETE":
+        return { backgroundColor: "#f8d7da", color: "#721c24" }; // Red background for DELETE
       default:
-        return { backgroundColor: '#e2e3e5', color: '#383d41' }; // Default background for other methods
+        return { backgroundColor: "#e2e3e5", color: "#383d41" }; // Default background for other methods
     }
   };
 
@@ -132,12 +163,10 @@ const ActivityLog = () => {
       align: "left",
     },
     {
-      title: 'Method',
-      dataIndex: 'method',
-      key: 'method',
-      render: (text) => (
-        <div style={getMethodStyle(text)}>{text}</div>
-      ),
+      title: "Method",
+      dataIndex: "method",
+      key: "method",
+      render: (text) => <div style={getMethodStyle(text)}>{text}</div>,
     },
     {
       title: "Path",
@@ -158,26 +187,25 @@ const ActivityLog = () => {
     if (!menu.props || !menu.props.children) {
       return menu; // Return the default menu if no children
     }
-  
+
     return (
       <div>
-        {React.Children.map(menu.props.children, child => {
+        {React.Children.map(menu.props.children, (child) => {
           if (!React.isValidElement(child)) {
             return null; // Skip invalid elements
           }
-  
+
           const method = child.props.value;
           const style = getDropdownStyle(method);
-  
+
           return React.cloneElement(child, {
             style: { ...child.props.style, ...style },
-            className: 'dropdown-option'
+            className: "dropdown-option",
           });
         })}
       </div>
     );
   };
-  
 
   return (
     <div>
@@ -191,9 +219,9 @@ const ActivityLog = () => {
         onChange={(dates) => setDateRange(dates)}
         style={{ marginBottom: 16, marginLeft: 16 }}
       />
-        <Select 
-        placeholder="Select method" 
-        style={{ width: 200, marginBottom: 16, marginLeft: 16 }} 
+      <Select
+        placeholder="Select method"
+        style={{ width: 200, marginBottom: 16, marginLeft: 16 }}
         onChange={(value) => setSelectedMethod(value)}
         allowClear
         dropdownRender={customDropdownRender}

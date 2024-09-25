@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Tabs, Button, message } from "antd";
+import { Tabs, Button, message, Result } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -93,6 +93,15 @@ const SurveyModal = ({ record, handleReload, onClose }) => {
   };
 
   return (
+    // <>
+    // <Result
+    //     status="403"
+    //     title="403"
+    //     subTitle="Sorry, this page is under maintenance."
+    //     extra={<Button type="primary">Back to Dashboard</Button>}
+    //   />
+    // </>
+
     <div className="modal-container">
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <TabPane tab="General Information" key="1">

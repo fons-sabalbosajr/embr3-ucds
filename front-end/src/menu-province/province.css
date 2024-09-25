@@ -84,16 +84,33 @@
   text-align: left;
 }
 
-.input-search {
+.input-tag{
+  width: 120px;
+  font-style: italic;
+  margin-left: -90px;
+}
+
+.tag-search {
   padding: 8px;
   border-radius: 4px;
   font-size: 11px;
   width: 100%;
   border: none;
   flex: 1;
-  max-width: 400px;
-  margin-left: 150px;
+  max-width: 300px;
+  margin-left: 100px;
   position: fixed;
+}
+
+.tag-keyword-container{
+  display: flex;
+  align-items: flex-start;
+  position: fixed;
+  margin-left: 280px;
+}
+
+.tag-keyword{
+  margin-left: 5px;
 }
 
 .pagination-controls {
@@ -116,6 +133,14 @@
   border: 1px solid #ccc;
   padding: 5px;
   border-radius: 4px;
+}
+
+.search-result-count{
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  display: block;
+  margin-right: 10px;
 }
 
 .ant-table-tbody > tr > td:first-child {

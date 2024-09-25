@@ -34,7 +34,6 @@ const Survey = ({ theme }) => {
   const [selectedResponsibleUnit, setSelectedResponsibleUnit] = useState("");
   const [loading, setLoading] = useState(true);
   const [industryClasses, setIndustryClasses] = useState([]);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [selectedRow, setSelectedRow] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modifiedRows, setModifiedRows] = useState(new Set());
@@ -49,6 +48,11 @@ const Survey = ({ theme }) => {
   const [localRecord, setLocalRecord] = useState(editedRecord || {});
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [selectedRowColors, setSelectedRowColors] = useState({});
+    const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0, // You can set the total number of items here
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -322,21 +326,29 @@ const Survey = ({ theme }) => {
 
     setSelectedRowKeys(newSelectedRowKeys);
   };
-
   const handleRowSelect = (id_no) => {
     const isSelected = selectedRowKeys.includes(id_no);
+  
     if (isSelected) {
+      // If already selected, deselect it
       setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
       const newColors = { ...selectedRowColors };
       delete newColors[id_no];
       setSelectedRowColors(newColors);
+      setSelectedRow(null); // Deselecting means no row is selected
     } else {
+      // If not selected, select it
       setSelectedRowKeys([...selectedRowKeys, id_no]);
       const newColors = { ...selectedRowColors };
       newColors[id_no] = selectedRowColors[id_no] || "#e6f7ff"; // default color
       setSelectedRowColors(newColors);
+  
+      // Find the selected record and set it to selectedRow
+      const selectedRecord = filteredData.find((record) => record.id_no === id_no);
+      setSelectedRow(selectedRecord);
     }
   };
+  
 
   const handleSelectAll = (checked) => {
     const allRowKeys = filteredData.map((item) => item.id_no);
@@ -697,7 +709,7 @@ const Survey = ({ theme }) => {
             </span>
           </div>
         }
-        width={1300}
+        width={1000}
         footer={null}
         onCancel={handleDiscardChanges}
         onClose={handleCloseModal}
