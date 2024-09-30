@@ -1,7 +1,6 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-// Define a context for sharing data
 export const DataContext = createContext();
 
 export const DataProvider = ({ children }) => {
@@ -11,6 +10,7 @@ export const DataProvider = ({ children }) => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [currentProvince, setCurrentProvince] = useState("Aurora");
+  const loaded = useRef(false);
 
   // Function to fetch data for a specific province
   const fetchData = async (province) => {
@@ -24,6 +24,7 @@ export const DataProvider = ({ children }) => {
         params: { province, _nocache: Date.now() },
       });
 
+      
       if (response.status >= 200 && response.status < 300) {
         const fetchedData = response.data;
 
@@ -51,10 +52,12 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  // Fetch data when the province changes
   useEffect(() => {
-    fetchData(currentProvince); // Fetch with the current province
-  }, [currentProvince]); // Dependency on currentProvince
+    if (currentProvince && !loaded.current) {
+      loaded.current = true;
+      fetchData(currentProvince);
+    }
+  }, [currentProvince, fetchData]);
 
   return (
     <DataContext.Provider

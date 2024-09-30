@@ -1,8 +1,13 @@
 import React from 'react'
+import { Button, Result } from 'antd';
 
 const formCIC = () => {
   return (
-    <div><h3>Report will be available soon...</h3></div>
+    <Result
+    status="404"
+    title="404"
+    subTitle="Sorry, the page you visited is under development."
+  />
   )
 }
 

@@ -1275,19 +1275,21 @@ const Province = ({ theme }) => {
               placeholder="search..."
               className="input-tag"
             />
-          </div>
-          <div className="tag-keyword-container">
-            {selectedTags.map((tag) => (
-              <Tag
-                key={tag}
-                closable
-                onClose={() => handleTagClose(tag)}
-                color="blue"
-                className="tag-keyword"
-              >
-                {tag}
-              </Tag>
-            ))}
+
+            {/* Container for the selected tags */}
+            <div className="tag-keyword-container">
+              {selectedTags.map((tag) => (
+                <Tag
+                  key={tag}
+                  closable
+                  onClose={() => handleTagClose(tag)}
+                  color="blue"
+                  className="tag-keyword"
+                >
+                  {tag}
+                </Tag>
+              ))}
+            </div>
           </div>
 
           <div className="pagination-container">
@@ -1309,13 +1311,16 @@ const Province = ({ theme }) => {
               <Spin size="small" />
             ) : (
               <Pagination
-                simple
+              simple={{
+                readOnly: true,
+              }}
                 current={currentPage}
                 total={filteredData.length}
                 pageSize={itemsPerPage}
                 showSizeChanger={false}
                 onChange={(page) => setCurrentPage(page)}
                 size="small"
+                align="end"
               />
             )}
           </div>

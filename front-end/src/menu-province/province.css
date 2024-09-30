@@ -82,36 +82,36 @@
 .industry-count{
   font-weight: 600;
   text-align: left;
+  width: 230px;
 }
 
-.input-tag{
-  width: 120px;
+.input-tag {
+  width: 150px; 
   font-style: italic;
-  margin-left: -90px;
+  margin-right: 10px; 
 }
 
 .tag-search {
+  display: flex;
+  align-items: center;
   padding: 8px;
   border-radius: 4px;
-  font-size: 11px;
   width: 100%;
   border: none;
-  flex: 1;
-  max-width: 300px;
-  margin-left: 100px;
-  position: fixed;
+  font-size: 11px;
+  gap: 10px;
 }
 
-.tag-keyword-container{
+.tag-keyword-container {
   display: flex;
-  align-items: flex-start;
-  position: fixed;
-  margin-left: 280px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.tag-keyword{
-  margin-left: 5px;
+.tag-keyword {
+  margin-right: 5px;
 }
+
 
 .pagination-controls {
   display: flex;
@@ -121,6 +121,7 @@
 
 .pagination-dropdown {
   padding: 5px;
+  width: 180px;
 }
 
 .pagination-container {
@@ -131,7 +132,6 @@
 
 .pagination-dropdown select {
   border: 1px solid #ccc;
-  padding: 5px;
   border-radius: 4px;
 }
 

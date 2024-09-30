@@ -3,56 +3,59 @@ import {
   Table,
   Button,
   Spin,
-  Input,
-  Select,
-  Modal,
-  Checkbox,
   Tooltip,
-  Badge,
+  Dropdown,
   notification,
+  Input,
+  Checkbox,
+  Menu,
   ConfigProvider,
+  Select,
+  Badge,
+  Modal,
 } from "antd";
 import {
   ReloadOutlined,
+  ExportOutlined,
+  BgColorsOutlined,
   SearchOutlined,
   EyeOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
 import "./survey.css";
-import SurveyModal from "./SurveyModal";
 import axios from "axios";
-
-const { Option } = Select;
+import Highlighter from "react-highlight-words";
+import debounce from "lodash.debounce";
+import SurveyModal from "./SurveyModal";
 
 const Survey = ({ theme }) => {
   const [data, setData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
-  const [tableLoading, setTableLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [filterValue, setFilterValue] = useState("");
-  const [responsibleUnits, setResponsibleUnits] = useState([]);
-  const [selectedResponsibleUnit, setSelectedResponsibleUnit] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [industryClasses, setIndustryClasses] = useState([]);
-  const [selectedRow, setSelectedRow] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modifiedRows, setModifiedRows] = useState(new Set());
-  const [initialState, setInitialState] = useState(new Map());
-  const [contextMenu, setContextMenu] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState(null);
-  const [editedRecord, setEditedRecord] = useState(null);
-  const [filter, setFilter] = useState(null);
-  const [responsibleUnit, setResponsibleUnit] = useState(null);
-  const [fetchIntervalId, setFetchIntervalId] = useState(null);
-  const [localRecord, setLocalRecord] = useState(editedRecord || {});
+  const [searchedColumn, setSearchedColumn] = useState("");
+  const [filteredData, setFilteredData] = useState(data);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [uniqueUnits, setUniqueUnits] = useState([]);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [selectedColor, setSelectedColor] = useState(null);
+  const [colorMenuVisible, setColorMenuVisible] = useState(false);
+  const storedColors = localStorage.getItem("rowColors");
+  const rowColors = storedColors ? JSON.parse(storedColors) : {};
   const [selectedRowColors, setSelectedRowColors] = useState({});
-    const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-    total: 0, // You can set the total number of items here
-  });
+  const [filterValue, setFilterValue] = useState("");
+  const [industryClasses, setIndustryClasses] = useState([]);
+  const [isModified, setIsModified] = useState(false);
+  const [modifiedRows, setModifiedRows] = useState({});
+  const [ignoreRowSelection, setIgnoreRowSelection] = useState(false);
+  const [selectedRows, setSelectedRows] = useState({});
+  const [initialState, setInitialState] = useState(new Map());
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [viewedRecord, setViewedRecord] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-US").format(number);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -72,44 +75,9 @@ const Survey = ({ theme }) => {
       setData(sortedResult);
       setFilteredData(sortedResult);
 
-      const uniqueIndustryClasses = [
-        ...new Set(sortedResult.map((item) => item.industry_class)),
+      const uniqueUnits = [
+        ...new Set(sortedResult.map((item) => item.resp_unit)),
       ];
-      setIndustryClasses(uniqueIndustryClasses);
-
-      const uniqueResponsibleUnits = [
-        ...new Set(
-          [
-            "CPD",
-            "AWECMES",
-            "PEMU_Bataan",
-            "MBU",
-            "PEMU_Pampanga",
-            "PEMU_Aurora",
-            "PEMU_Nueva Ecija",
-            "PEMU_Zambales",
-            "PEMU_Tarlac",
-            "TCHWMS",
-            "PEMU_Bulacan",
-            "PEMU_BATAAN",
-            "PEMU_ZAMBALES",
-            "PEMU_BULACAN",
-            "PEMU_NUEVA ECIJA",
-            "PEMU_AURORA",
-            "PEMU_PAMPANGA",
-            "EMED",
-          ].map((item) => item.toLowerCase())
-        ),
-      ]
-        .map((unit) =>
-          unit.startsWith("pemu_")
-            ? "PEMU_" +
-              unit.slice(5).replace(/\b\w/g, (match) => match.toUpperCase())
-            : unit.toUpperCase()
-        )
-        .sort((a, b) => a.localeCompare(b)); // Add the sort method
-
-      setResponsibleUnits(uniqueResponsibleUnits);
 
       // Store initial states
       const stateMap = new Map();
@@ -124,464 +92,629 @@ const Survey = ({ theme }) => {
         });
       });
       setInitialState(stateMap);
+
+      setUniqueUnits(uniqueUnits);
+      setSelectedKeys([]);
     } catch (error) {
       console.error("Error fetching survey data:", error.message);
     } finally {
       setLoading(false);
-      setTableLoading(false);
     }
   };
+
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
-    if (selectedRecord) {
-      setEditedRecord({ ...selectedRecord });
-    }
-  }, [selectedRecord]);
+    const filteredData = data.filter((record) => {
+      const recordValue = record.resp_unit;
+      if (typeof recordValue === "string" && recordValue !== null) {
+        const normalizedRecordValue = recordValue.toLowerCase();
+        const filteredSelectedKeys = selectedKeys.map((key) =>
+          key.toLowerCase()
+        );
+        return (
+          filteredSelectedKeys.length === 0 ||
+          filteredSelectedKeys.some(
+            (key) =>
+              normalizedRecordValue.includes(key) ||
+              key.includes(normalizedRecordValue)
+          )
+        );
+      }
+      return false;
+    });
+    setFilteredData(filteredData);
+  }, [selectedKeys, data]);
 
-  const handleSearch = (e) => {
-    const value = e.target.value;
-    setSearchText(value);
-    filterData(value, filterValue, selectedResponsibleUnit);
+  useEffect(() => {
+    if (data && data.length > 0) {
+      const rowColors = {};
+      data.forEach((row) => {
+        rowColors[row.id_no] = row.color;
+      });
+      localStorage.setItem("rowColors", JSON.stringify(rowColors));
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const uniqueIndustryClasses = [
+      ...new Set(data.map((item) => item.industry_class)),
+    ];
+    setIndustryClasses(uniqueIndustryClasses);
+  }, [data]);
+
+  // Search functionality for each column
+  let searchInput = null;
+  const handleSearch = (selectedKeys, confirm, dataIndex) => {
+    confirm();
+    setSearchText(selectedKeys[0]);
+    setSearchedColumn(dataIndex);
   };
+
+  const handleSearchKeyWord = debounce((e) => {
+    const searchText = e.target.value.toLowerCase();
+    const filteredData = data.filter((item) => {
+      return Object.values(item).some((value) => {
+        return String(value).toLowerCase().includes(searchText);
+      });
+    });
+    setFilteredData(filteredData);
+  }, 500);
 
   const handleFilterChange = (value) => {
     setFilterValue(value);
-    filterData(searchText, value, selectedResponsibleUnit);
+    const filteredData = data.filter((item) => {
+      return item.industry_class === value || value === "";
+    });
+    setFilteredData(filteredData);
   };
 
-  const handleResponsibleUnitChange = (value) => {
-    setSelectedResponsibleUnit(value);
-    if (value === "") {
-      filterData(searchText, filterValue, null);
-    } else {
-      const filteredValue = value.toUpperCase();
-      filterData(searchText, filterValue, filteredValue);
-    }
+  const handleReset = (clearFilters) => {
+    clearFilters();
+    setSearchText("");
   };
 
-  const filterData = (search, filter, responsibleUnit) => {
-    const lowerSearch = typeof search === "string" ? search.toLowerCase() : "";
-
-    const filtered = data.filter((item) => {
-      const matchSearch = Object.values(item).some(
-        (val) =>
-          typeof val === "string" && val.toLowerCase().includes(lowerSearch)
+  const getColumnSearchProps = (dataIndex) => ({
+    filterDropdown: ({
+      setSelectedKeys,
+      selectedKeys,
+      confirm,
+      clearFilters,
+    }) => (
+      <div style={{ padding: 8 }}>
+        <Input
+          ref={(node) => {
+            searchInput = node;
+          }}
+          placeholder={`Search ${dataIndex}`}
+          value={selectedKeys[0]}
+          onChange={(e) =>
+            setSelectedKeys(e.target.value ? [e.target.value] : [])
+          }
+          onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
+          style={{ marginBottom: 8, display: "block" }}
+        />
+        <Button
+          type="primary"
+          onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
+          icon={<SearchOutlined />}
+          size="small"
+          style={{ width: 90, marginRight: 8 }}
+        >
+          Search
+        </Button>
+        <Button
+          onClick={() => handleReset(clearFilters)}
+          size="small"
+          style={{ width: 90 }}
+        >
+          Reset
+        </Button>
+      </div>
+    ),
+    filterIcon: (filtered) => (
+      <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+    ),
+    // Modify the onFilter method to search across multiple fields
+    onFilter: (value, record) => {
+      const searchText = value.toLowerCase();
+      return (
+        record.project_title.toLowerCase().includes(searchText) ||
+        (record.address && record.address.toLowerCase().includes(searchText)) ||
+        (record.date_surveyed &&
+          new Date(record.date_surveyed)
+            .toLocaleDateString()
+            .toLowerCase()
+            .includes(searchText)) ||
+        (record.resp_unit &&
+          record.resp_unit.toLowerCase().includes(searchText)) ||
+        (record.iis_no && record.iis_no.toLowerCase().includes(searchText))
       );
-      const matchFilter = filter ? item.industry_class === filter : true;
-      const matchResponsibleUnit = responsibleUnit
-        ? item.resp_unit === responsibleUnit
-        : true;
-      return matchSearch && matchFilter && matchResponsibleUnit;
-    });
+    },
+    onFilterDropdownVisibleChange: (visible) => {
+      if (visible) {
+        setTimeout(() => searchInput.select(), 100);
+      }
+    },
+    render: (text) =>
+      searchedColumn === dataIndex ? (
+        <Highlighter
+          highlightStyle={{ backgroundColor: "#ffc069", padding: 0 }}
+          searchWords={[searchText]}
+          autoEscape
+          textToHighlight={text ? text.toString() : ""}
+        />
+      ) : (
+        text
+      ),
+  });
 
-    setFilteredData(filtered);
-  };
+  const getColumnFilterProps = (
+    dataIndex,
+    uniqueUnits,
+    selectedKeys,
+    setSelectedKeys
+  ) => {
+    const normalizedUnits = new Set();
+    const displayUnits = [];
 
-  const handleUpdate = async (record) => {
-    try {
-      // Update the record
-      await axios.put(`http://localhost:8081/api/survey/${record._id}`, {
-        survey_eia: record.survey_eia,
-        survey_air: record.survey_air,
-        survey_water: record.survey_water,
-        survey_haz: record.survey_haz,
-        survey_chem: record.survey_chem,
-      });
-
-      // Notify user of success
-      notification.success({
-        message: "Update Successfully!",
-        description: `Data updated for ${record.project_title} successfully.`,
-      });
-
-      // Clear modifications after update
-      setModifiedRows((prev) => {
-        const updated = new Set(prev);
-        updated.delete(record.id_no);
-        return updated;
-      });
-    } catch (error) {
-      // Handle errors
-      notification.error({
-        message: "Update Failed",
-        description: `Failed to update data for ${record.id_no}.`,
-      });
-      console.error("Error updating record:", error);
-    }
-  };
-
-  const handleDiscardChanges = () => {
-    setModifiedRows((prev) => {
-      const updated = new Set(prev);
-      updated.delete(selectedRow?.serial_no);
-      return updated;
-    });
-    setModalVisible(false);
-    setIsEditing(false);
-  };
-
-  const showModal = (record) => {
-    setSelectedRecord(record);
-    setIsEditing(false);
-    setModalVisible(true); // Show the modal right away
-  };
-
-  useEffect(() => {
-    if (selectedRow) {
-      setModalVisible(true);
-    }
-  }, [selectedRow]);
-
-  const handleCloseModal = () => {
-    if (isEditing && editedRecord !== selectedRecord) {
-      Swal.fire({
-        title: "Unsaved changes",
-        text: "You have unsaved changes. Are you sure you want to close the modal?",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Close",
-        cancelButtonText: "Stay",
-      }).then((result) => {
-        if (result.isConfirmed) {
-          setModalVisible(false);
-          setIsEditing(false);
-          setEditMode(false);
-          setSelectedRecord(null);
+    // Populate unique display units while avoiding duplicates (case insensitive)
+    uniqueUnits.forEach((unit) => {
+      if (unit !== undefined && unit !== null) {
+        const normalizedUnit = unit.toLowerCase();
+        if (!normalizedUnits.has(normalizedUnit)) {
+          normalizedUnits.add(normalizedUnit); // Keep the normalized value
+          displayUnits.push(unit); // Add to display array
         }
+      }
+    });
+
+    return {
+      filterDropdown: ({ confirm, clearFilters }) => (
+        <div style={{ padding: 8, maxHeight: "200px", overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            {displayUnits.map((unit) => (
+              <Checkbox
+                key={unit}
+                checked={selectedKeys.includes(unit)}
+                onChange={(e) => {
+                  const newKeys = e.target.checked
+                    ? [...selectedKeys, unit]
+                    : selectedKeys.filter((key) => key !== unit);
+                  setSelectedKeys(newKeys);
+                }}
+              >
+                {unit}
+              </Checkbox>
+            ))}
+          </div>
+          <div style={{ marginTop: "8px" }}>
+            <Button
+              type="primary"
+              onClick={() => {
+                confirm();
+              }}
+              icon={<SearchOutlined />}
+              size="small"
+              style={{ width: 90, marginRight: 8 }}
+            >
+              Filter
+            </Button>
+            <Button
+              onClick={() => {
+                clearFilters();
+                setSelectedKeys([]);
+              }}
+              size="small"
+              style={{ width: 90 }}
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
+      ),
+
+      onFilter: (value, record) => {
+        const recordValue = record[dataIndex];
+        if (typeof recordValue === "string" && recordValue !== null) {
+          const normalizedRecordValue = recordValue.toLowerCase();
+          const filteredSelectedKeys = selectedKeys.map((key) =>
+            key.toLowerCase()
+          );
+          return (
+            filteredSelectedKeys.length === 0 ||
+            filteredSelectedKeys.some(
+              (key) =>
+                normalizedRecordValue.includes(key) ||
+                key.includes(normalizedRecordValue)
+            )
+          );
+        }
+        return false;
+      },
+      render: (text) => <div className="industry-label">{text}</div>,
+    };
+  };
+
+  const updateRowColors = async (ids, color) => {
+    setLoading(true);
+    try {
+      const promises = ids.map((id) => {
+        return fetch(`http://localhost:8081/api/surveys/${id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ color }),
+          credentials: "include",
+        });
       });
-    } else {
-      setModalVisible(false);
-      setIsEditing(false);
-      setSelectedRecord(null);
+
+      const responses = await Promise.all(promises);
+      const results = await Promise.all(
+        responses.map((response) => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error(`Error updating row color: ${response.statusText}`);
+          }
+        })
+      );
+      //console.log("Row colors updated:", results);
+      fetchData();
+    } catch (error) {
+      console.error("Error updating row colors:", error.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const colors = [
+    "#FCE5BB",
+    "#FFE225",
+    "#FFF4EA",
+    "#39C665",
+    "#d1c4e9",
+    "#FF9B3E",
+    "#936DDF",
+    "#c8e6c9",
+    "#ffffff",
+  ];
+
+  const handleColorClick = (color) => {
+    setSelectedColor(color);
+  };
+
+  const handleSaveColor = () => {
+    if (
+      Array.isArray(selectedRowKeys) &&
+      selectedRowKeys.length > 0 &&
+      selectedColor
+    ) {
+      updateRowColors(
+        selectedRowKeys.map((id) => id.toString()),
+        selectedColor
+      ); // Update the row colors
+      notification.success({
+        message: "Data marked successfully",
+        description: `The selected data have been marked.`,
+      });
+    }
+  };
+  const handleClearColors = () => {
+    setSelectedColor(null);
+  };
+
+  const colorMenu = (
+    <Menu style={{ width: 150 }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
+        {colors.map((color) => (
+          <button
+            key={color}
+            onClick={() => handleColorClick(color)}
+            style={{
+              backgroundColor: color,
+              height: 20,
+              width: 40,
+              borderRadius: 4,
+              border: "none",
+              margin: 2,
+              cursor: "pointer",
+              outline: selectedColor === color ? "2px solid #B4B4B8" : "none",
+              boxShadow: "0px 0px 4px rgba(0, 0, 0, 0.2)",
+            }}
+          />
+        ))}
+        <Button
+          onClick={handleClearColors}
+          type="text"
+          size="small"
+          style={{
+            border: "1px solid #d9d9d9",
+            borderRadius: 4,
+            marginTop: 10,
+          }}
+        >
+          Clear
+        </Button>
+        <Button
+          type="primary"
+          onClick={handleSaveColor}
+          disabled={selectedColor === null}
+          size="small"
+          style={{ borderRadius: 4, marginTop: 10 }}
+        >
+          Save
+        </Button>
+      </div>
+    </Menu>
+  );
+
+  const handleSave = () => {
+    // Save the data
+    setModifiedRows({});
+  };
+
+  const handleRowClick = async (record) => {
+    if (!selectedRowKeys.includes(record.id_no)) {
+      setSelectedRowKeys([...selectedRowKeys, record.id_no]);
+    } else {
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== record.id_no));
+    }
+  };
+
+  const handleRowSelect = (id) => {
+    const updatedSelectedRowKeys = [...selectedRowKeys];
+    if (updatedSelectedRowKeys.includes(id)) {
+      updatedSelectedRowKeys.splice(updatedSelectedRowKeys.indexOf(id), 1);
+    } else {
+      updatedSelectedRowKeys.push(id);
+    }
+    setSelectedRowKeys(updatedSelectedRowKeys);
+  };
+
+  const uniqueResponsibleUnits = [
+    ...new Set(data.map((item) => item.resp_unit)),
+  ];
+
+  const handleCheckboxChange = (field, checked, record) => {
+    setIgnoreRowSelection(true);
+    const updatedRecord = { ...record };
+    updatedRecord[field] = checked ? "✔" : "";
+    const updatedData = data.map((item) => {
+      if (item.id_no === record.id_no) {
+        return updatedRecord;
+      }
+      return item;
+    });
+    setData(updatedData);
+    setModifiedRows((prevModifiedRows) => ({
+      ...prevModifiedRows,
+      [record.id_no]: true,
+    }));
   };
 
   const handleToggleEdit = () => {
     setIsEditing(!isEditing);
   };
 
-  const handleReload = async () => {
-    try {
-      setTableLoading(true);
-      await fetchData();
-      filterData(searchText, filter, responsibleUnit);
-    } catch (error) {
-      console.error("Error reloading data:", error);
-    } finally {
-      setTableLoading(false);
-    }
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
   };
 
-  useEffect(() => {
-    if (!modalVisible) {
-      if (fetchIntervalId) {
-        clearInterval(fetchIntervalId);
-      }
-      setFetchIntervalId(null);
-      setLocalRecord(editedRecord || {});
-    }
-  }, [modalVisible]);
-
-  useEffect(() => {
-    if (fetchIntervalId) {
-      clearInterval(fetchIntervalId);
-    }
-    setFetchIntervalId(null);
-  }, [editedRecord]);
-  const formatNumber = (number) => {
-    return new Intl.NumberFormat("en-US").format(number);
+  const handleView = (record) => {
+    // Set the viewed record and show the modal
+    setViewedRecord(record);
+    setIsModalVisible(true);
   };
 
-  const handleCheckboxChange = (field, checked, record) => {
-    const updatedData = data.map((item) =>
-      item.id_no === record.id_no
-        ? { ...item, [field]: checked ? "✔" : "" }
-        : item
-    );
-
-    setData(updatedData);
-    setFilteredData(updatedData);
-
-    // Track modified rows
-    setModifiedRows((prev) => {
-      const newModifiedRows = new Set(prev);
-      const original = initialState.get(record.id_no);
-      const hasChanges = original && original[field] !== (checked ? "✔" : "");
-      if (hasChanges) {
-        newModifiedRows.add(record.id_no);
-      } else {
-        newModifiedRows.delete(record.id_no);
-      }
-      return newModifiedRows;
-    });
+  const handleReload = () => {
+    fetchData();
   };
 
-  const handleIDCheckboxChange = (checked, id_no) => {
-    const newSelectedRowKeys = checked
-      ? [...selectedRowKeys, id_no]
-      : selectedRowKeys.filter((key) => key !== id_no);
-
-    setSelectedRowKeys(newSelectedRowKeys);
-  };
-  const handleRowSelect = (id_no) => {
-    const isSelected = selectedRowKeys.includes(id_no);
-  
-    if (isSelected) {
-      // If already selected, deselect it
-      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== id_no));
-      const newColors = { ...selectedRowColors };
-      delete newColors[id_no];
-      setSelectedRowColors(newColors);
-      setSelectedRow(null); // Deselecting means no row is selected
-    } else {
-      // If not selected, select it
-      setSelectedRowKeys([...selectedRowKeys, id_no]);
-      const newColors = { ...selectedRowColors };
-      newColors[id_no] = selectedRowColors[id_no] || "#e6f7ff"; // default color
-      setSelectedRowColors(newColors);
-  
-      // Find the selected record and set it to selectedRow
-      const selectedRecord = filteredData.find((record) => record.id_no === id_no);
-      setSelectedRow(selectedRecord);
-    }
-  };
-  
-
-  const handleSelectAll = (checked) => {
-    const allRowKeys = filteredData.map((item) => item.id_no);
-    setSelectedRowKeys(checked ? allRowKeys : []);
-  };
-
-  const checkboxColumn = {
-    title: (
-      <Checkbox
-        onChange={(e) => handleSelectAll(e.target.checked)}
-        checked={selectedRowKeys.length === filteredData.length}
-        indeterminate={
-          selectedRowKeys.length > 0 &&
-          selectedRowKeys.length < filteredData.length
-        }
-      />
-    ),
-    key: "select",
-    align: "center",
-    width: "20px",
-    render: (text, record) => (
-      <Checkbox
-        checked={selectedRowKeys.includes(record.id_no)}
-        onChange={(e) => handleIDCheckboxChange(e, record.id_no)}
-      />
-    ),
-    selections: [
-      Table.SELECTION_ALL,
-      Table.SELECTION_INVERT,
-      Table.SELECTION_NONE,
-      {
-        key: "odd",
-        text: "Select Odd Row",
-        onSelect: (changeableRowKeys) => {
-          const newSelectedRowKeys = changeableRowKeys.filter(
-            (_, index) => index % 2 === 0
-          );
-          setSelectedRowKeys(newSelectedRowKeys);
-        },
-      },
-      {
-        key: "even",
-        text: "Select Even Row",
-        onSelect: (changeableRowKeys) => {
-          const newSelectedRowKeys = changeableRowKeys.filter(
-            (_, index) => index % 2 !== 0
-          );
-          setSelectedRowKeys(newSelectedRowKeys);
-        },
-      },
-    ],
-  };
-
-  const idColumn = {
-    title: "No.",
-    dataIndex: "id_no",
-    key: "id_no",
-    align: "center",
-    width: "50px",
-    render: (text) => <div className="industry-label">{text}</div>,
-  };
-
-  const lawsColumn = {
-    title: "Applicable Laws",
-    dataIndex: "applicable_laws",
-    key: "applicable_laws",
-    align: "left",
-    width: 180,
-    render: (text, record) => (
-      <div className="checkbox-container">
-        <div className="checkbox-wrapper eia">
-          <Checkbox
-            checked={record.survey_eia === "✔"}
-            onChange={(e) =>
-              handleCheckboxChange("survey_eia", e.target.checked, record)
-            }
-          />
-          <span className="checkbox-label">EIA</span>
-        </div>
-        <div className="checkbox-wrapper air">
-          <Checkbox
-            checked={record.survey_air === "✔"}
-            onChange={(e) =>
-              handleCheckboxChange("survey_air", e.target.checked, record)
-            }
-          />
-          <span className="checkbox-label">AIR</span>
-        </div>
-        <div className="checkbox-wrapper water">
-          <Checkbox
-            checked={record.survey_water === "✔"}
-            onChange={(e) =>
-              handleCheckboxChange("survey_water", e.target.checked, record)
-            }
-          />
-          <span className="checkbox-label">WATER</span>
-        </div>
-        <div className="checkbox-wrapper haz">
-          <Checkbox
-            checked={record.survey_haz === "✔"}
-            onChange={(e) =>
-              handleCheckboxChange("survey_haz", e.target.checked, record)
-            }
-          />
-          <span className="checkbox-label">HAZ</span>
-        </div>
-        <div className="checkbox-wrapper chem">
-          <Checkbox
-            checked={record.survey_chem === "✔"}
-            onChange={(e) =>
-              handleCheckboxChange("survey_chem", e.target.checked, record)
-            }
-          />
-          <span className="checkbox-label">CHEMICAL</span>
-        </div>
-      </div>
-    ),
-  };
-
-  const projectTitleColumn = {
-    title: "Project Title",
-    dataIndex: "project_title",
-    key: "project_title",
-    align: "left",
-    width: "300px",
-    render: (text, record) => (
-      <div>
-        <strong className="industry-label">{text}</strong>
-        <div className="industry-label">
-          <p style={{ fontStyle: "italic" }}>{record.address}</p>
-          <p>Date Surveyed: {record.date_surveyed}</p>
-          <p>
-            IIS No.:{" "}
-            <a
-              href={`https://iis.emb.gov.ph/embis`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {record.iis_no}
-            </a>
-          </p>
-        </div>
-      </div>
-    ),
-  };
-
-  const industryClassColumn = {
-    title: "Industry Class",
-    dataIndex: "industry_class",
-    key: "industry_class",
-    align: "left",
-    render: (text) => <div className="industry-label">{text}</div>,
-  };
-
-  const responsibleUnitColumn = {
-    title: "Responsible Unit",
-    dataIndex: "resp_unit",
-    key: "resp_unit",
-    align: "left",
-    render: (text) => <div className="industry-label">{text}</div>,
-  };
-
-  const statusRemarksColumn = {
-    title: "Status/Remarks",
-    dataIndex: "remarks",
-    key: "remarks",
-    align: "left",
-    render: (text) => <div className="industry-label">{text}</div>,
-  };
-
-  const actionsColumn = {
-    title: "Actions",
-    key: "actions",
-    width: "150px",
-    align: "left",
-    render: (text, record) => (
-      <div>
-        <Tooltip title="View Info">
-          <Button
-            onClick={(e) => {
-              e.stopPropagation(); // prevent row click event from firing
-              showModal(record);
-            }}
-            className="btn-action"
-            size="small"
-          >
-            <EyeOutlined />
-          </Button>
-        </Tooltip>
-        <Tooltip title="Update">
-          <Badge
-            count={modifiedRows.has(record.id_no) ? 1 : 0}
-            style={{ backgroundColor: "#f5222d", marginRight: "10px" }}
-          >
-            <Button
-              onClick={() => {
-                handleUpdate(record); // Handle updating state and data
-                // Optionally reset checkbox column selection
-                setSelectedRowKeys(
-                  selectedRowKeys.filter((id) => id !== record.id_no)
-                );
-              }}
-              type="primary"
-              icon={<SaveOutlined />}
-              className="btn-action"
-              size="small"
-            />
-          </Badge>
-        </Tooltip>
-      </div>
-    ),
-  };
-
+  // Define table columns
   const columns = [
-    checkboxColumn,
-    idColumn,
-    lawsColumn,
-    projectTitleColumn,
-    industryClassColumn,
-    responsibleUnitColumn,
-    statusRemarksColumn,
-    actionsColumn,
+    {
+      title: "ID No.",
+      dataIndex: "id_no",
+      key: "id_no",
+      ...getColumnSearchProps("id_no"),
+      align: "left",
+      width: 75,
+      fixed: "left",
+    },
+    {
+      title: "Applicable Laws",
+      dataIndex: "applicable_laws",
+      key: "applicable_laws",
+      align: "left",
+      width: 100,
+      render: (text, record) => (
+        <div className="checkbox-container">
+          <div className={`checkbox-wrapper eia`}>
+            <Checkbox
+              checked={record.survey_eia === "✔"}
+              onChange={(e) =>
+                handleCheckboxChange("survey_eia", e.target.checked, record)
+              }
+            />
+            <span className="checkbox-label">EIA</span>
+          </div>
+          <div className={`checkbox-wrapper air`}>
+            <Checkbox
+              checked={record.survey_air === "✔"}
+              onChange={(e) =>
+                handleCheckboxChange("survey_air", e.target.checked, record)
+              }
+            />
+            <span className="checkbox-label">AIR</span>
+          </div>
+          <div className={`checkbox-wrapper water`}>
+            <Checkbox
+              checked={record.survey_water === "✔"}
+              onChange={(e) =>
+                handleCheckboxChange("survey_water", e.target.checked, record)
+              }
+            />
+            <span className="checkbox-label">WATER</span>
+          </div>
+          <div className={`checkbox-wrapper haz`}>
+            <Checkbox
+              checked={record.survey_haz === "✔"}
+              onChange={(e) =>
+                handleCheckboxChange("survey_haz", e.target.checked, record)
+              }
+            />
+            <span className="checkbox-label">HAZ</span>
+          </div>
+          <div className={`checkbox-wrapper chem`}>
+            <Checkbox
+              checked={record.survey_chem === "✔"}
+              onChange={(e) =>
+                handleCheckboxChange("survey_chem", e.target.checked, record)
+              }
+            />
+            <span className="checkbox-label">CHEMICAL</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Project Title",
+      dataIndex: "project_title",
+      ...getColumnSearchProps("project_title"),
+      key: "project_title",
+      align: "left",
+      width: 300,
+      fixed: "left",
+      render: (text, record) => (
+        <div>
+          <strong className="industry-label">{text}</strong>
+          <div className="industry-label">
+            <p style={{ fontStyle: "italic" }}>{record.address}</p>
+            <p>Date Surveyed: {record.date_surveyed}</p>
+            <p>Responsible Unit: {record.resp_unit}</p>
+            <p>
+              IIS No.:{" "}
+              <a
+                href={`https://iis.emb.gov.ph/embis`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {record.iis_no}
+              </a>
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Industry Class",
+      dataIndex: "industry_class",
+      key: "industry_class",
+      align: "left",
+      width: 200,
+      fixed: "left",
+      ...getColumnSearchProps("industry_class"),
+    },
+    {
+      title: "Responsible Unit",
+      dataIndex: "resp_unit",
+      key: "resp_unit",
+      align: "left",
+      width: 200,
+      fixed: "left",
+      ...getColumnFilterProps(
+        "resp_unit",
+        uniqueResponsibleUnits,
+        selectedKeys,
+        setSelectedKeys
+      ),
+    },
+    {
+      title: "Remarks",
+      dataIndex: "remarks",
+      key: "remarks",
+      align: "left",
+      ...getColumnSearchProps("remarks"),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      align: "left",
+      width: 100,
+      fixed: "right",
+      render: (text, record) => (
+        <div>
+          <Button
+            icon={<EyeOutlined />}
+            onClick={() => handleView(record)}
+            aria-label="View"
+            size="small"
+            className="btn-action"
+          />
+          <Button
+            type="primary"
+            aria-label="Save"
+            size="small"
+            onClick={() => handleSave()}
+          >
+            {isModified ? (
+              <Badge count={1}>
+                <SaveOutlined />
+              </Badge>
+            ) : (
+              <SaveOutlined />
+            )}
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
         <h3 className="header-title">Survey Template</h3>
-        <Button
-          className="refresh-button"
-          icon={<ReloadOutlined />}
-          onClick={fetchData}
-        ></Button>
+        <Tooltip title="Reload Table">
+          <Button
+            type="primary"
+            className="refresh-button"
+            icon={<ReloadOutlined />}
+            onClick={fetchData}
+            loading={loading}
+          />
+        </Tooltip>
+        <Tooltip title="Export Data">
+          <Button
+            type="primary"
+            className="refresh-button"
+            icon={<ExportOutlined />}
+            //onClick={() => handleExportPDF(capitalizedProvinceName)}
+          />
+        </Tooltip>
+        <Tooltip title="Mark Row As">
+          <Dropdown
+            overlay={colorMenu}
+            visible={colorMenuVisible}
+            onVisibleChange={(visible) => setColorMenuVisible(visible)}
+            placement="bottomLeft"
+          >
+            <Button
+              type="primary"
+              className="refresh-button"
+              icon={<BgColorsOutlined />}
+            />
+          </Dropdown>
+        </Tooltip>
         <Button type="primary" className="add-industry-button">
           Add Industry
         </Button>
@@ -591,12 +724,15 @@ const Survey = ({ theme }) => {
         <div className="total-rows">
           Industry Count: {formatNumber(filteredData.length)}
         </div>
-        <div className="right-container">
+        <div className="filter-inputs">
           <Input
             placeholder="Search..."
             prefix={<SearchOutlined />}
             value={searchText}
-            onChange={handleSearch}
+            onChange={(e) => {
+              setSearchText(e.target.value);
+              handleSearchKeyWord(e);
+            }}
             className="search-input-survey"
           />
           <div className="custom-select-input">
@@ -624,79 +760,18 @@ const Survey = ({ theme }) => {
               </Select>
             </ConfigProvider>
           </div>
-          <div className="custom-select-input">
-            <ConfigProvider
-              theme={{
-                components: {
-                  Select: {
-                    fontSize: 12,
-                  },
-                },
-              }}
-            >
-              <Select
-                placeholder="Select Responsible Unit"
-                value={selectedResponsibleUnit}
-                onChange={handleResponsibleUnitChange}
-                className="select-input-unit"
-              >
-                <Option value="">All Units/Sections</Option>
-                {responsibleUnits.map((unit) => (
-                  <Option key={unit} value={unit}>
-                    {unit}
-                  </Option>
-                ))}
-              </Select>
-            </ConfigProvider>
-          </div>
         </div>
       </div>
 
-      <div style={{ position: "relative", padding: "5px" }}>
-        {loading ? (
-          <Spin tip="Processing Universe Data..." size="large">
-            {<strong className="loading_title">...</strong>}
-          </Spin>
-        ) : (
-          <Spin spinning={tableLoading}>
-            <Table
-              columns={columns}
-              dataSource={filteredData}
-              loading={tableLoading}
-              rowKey="id_no"
-              pagination={pagination}
-              size="small"
-              className="custom-table"
-              rowClassName={(record) => {
-                const rowId = record.id_no;
-                const colorValue =
-                  selectedRowColors[rowId] || record.color || "";
-                return colorValue;
-              }}
-              onRow={(record) => ({
-                onClick: () => handleRowSelect(record.id_no),
-                style: {
-                  cursor: "pointer",
-                  backgroundColor:
-                    selectedRowColors[record.id_no] ||
-                    record.color ||
-                    "transparent",
-                },
-              })}
-            />
-          </Spin>
-        )}
-      </div>
-
       <Modal
-        visible={modalVisible}
+        visible={isModalVisible}
         title={
           <div className="modal-title-container">
             <span className="modal-title">
-              Firm No.: {selectedRow?.id_no || "Unknown"}
+              ID No.: {viewedRecord?.id_no || "Unknown"}
             </span>
             <span className="modal-title">
-              {selectedRow?.project_title || ""}
+              {viewedRecord?.project_title || ""}
             </span>
             <span className="modal-title">
               <a
@@ -704,19 +779,18 @@ const Survey = ({ theme }) => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {selectedRow?.iis_no || ""}
+                {viewedRecord?.iis_no || ""}
               </a>
             </span>
           </div>
         }
         width={1000}
         footer={null}
-        onCancel={handleDiscardChanges}
-        onClose={handleCloseModal}
+        onCancel={() => setIsModalVisible(false)}
       >
-        {selectedRow && (
+        {viewedRecord && (
           <SurveyModal
-            record={selectedRecord}
+            record={viewedRecord}
             isEditing={isEditing}
             setIsEditing={setIsEditing}
             onToggleEdit={handleToggleEdit}
@@ -726,6 +800,61 @@ const Survey = ({ theme }) => {
           />
         )}
       </Modal>
+
+      {/* Table for displaying survey data */}
+      <div className="survey-table">
+        {loading ? (
+          <Spin size="large" />
+        ) : (
+          <Table
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (newSelectedRowKeys) => {
+                setSelectedRowKeys(newSelectedRowKeys);
+              },
+              getCheckboxProps: (record) => ({
+                name: record.name,
+                checked: selectedRows[record.id_no],
+                onChange: (e) => {
+                  if (e.target.checked) {
+                    setSelectedRows((prevSelectedRows) => ({
+                      ...prevSelectedRows,
+                      [record.id_no]: true,
+                    }));
+                  } else {
+                    // do nothing
+                  }
+                },
+              }),
+            }}
+            size="small"
+            className="custom-table"
+            columns={columns}
+            dataSource={filteredData}
+            rowKey="id_no"
+            pagination={{ pageSize: 10 }}
+            rowClassName={(record) => {
+              const rowId = record.id_no;
+              const colorValue = selectedRowColors[rowId] || record.color || "";
+              return "";
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                handleRowClick(record);
+                handleRowSelect(record.id_no);
+              },
+              style: {
+                cursor: "pointer",
+                backgroundColor:
+                  selectedRowColors[record.id_no] ||
+                  record.color ||
+                  "transparent",
+              },
+              badge: modifiedRows[record.id_no] ? <Badge count={1} /> : null,
+            })}
+          />
+        )}
+      </div>
     </div>
   );
 };

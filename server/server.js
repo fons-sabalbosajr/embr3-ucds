@@ -1841,6 +1841,27 @@ app.patch("/api/postings/:id", logActivity, async (req, res) => {
   }
 });
 
+app.patch("/api/surveys/:id", async (req, res) => {
+  const id = req.params.id;
+  const color = req.body.color;
+
+  try {
+    const filter = { id_no: parseInt(id) };
+    const update = { $set: { color } };
+
+    const result = await surveyCollection.updateOne(filter, update);
+    if (result.matchedCount === 0) {
+      res.status(404).json({ message: "Survey not found" });
+    } else {
+      const survey = await surveyCollection.findOne(filter);
+      res.json(survey);
+    }
+  } catch (error) {
+    console.error("Error updating row color:", error.message);
+    res.status(500).json({ message: "Error updating row color" });
+  }
+});
+
 /////////////////////////////////////////////////////////////////
 
 app.delete("/api/postings/:id", async (req, res) => {
