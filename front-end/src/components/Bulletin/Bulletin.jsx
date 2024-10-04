@@ -132,7 +132,7 @@ const Bulletin = () => {
       />
       <Modal
         title="Bulletin Details"
-        visible={isModalVisible || showModalOnLoad}
+        open={isModalVisible || showModalOnLoad}
         onCancel={handleModalCancel}
         footer={[
           <Button type="primary" key="dont-show" onClick={handleDontShowAgain}>Don't Show This Message Again</Button>,

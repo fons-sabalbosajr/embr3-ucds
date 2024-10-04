@@ -5,10 +5,9 @@ const MBU = () => {
   return (
     <div>
       <Result
-        status="403"
-        title="403"
-        subTitle="Sorry, this page is under maintenance."
-        extra={<Button type="primary">Back to Dashboard</Button>}
+        status="404"
+        title="404"
+        subTitle="Sorry, the page you visited is under development."
       />
     </div>
   );

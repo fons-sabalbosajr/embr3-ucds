@@ -348,7 +348,9 @@ app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    return res.status(400).json({ error: "Username and password are required." });
+    return res
+      .status(400)
+      .json({ error: "Username and password are required." });
   }
 
   try {
@@ -620,29 +622,34 @@ app.post(
 );
 
 // Update color for a specific survey record
-app.post("/api/update-color", logActivity, authenticateSession, async (req, res) => {
-  const { id_no, color } = req.body;
+app.post(
+  "/api/update-color",
+  logActivity,
+  authenticateSession,
+  async (req, res) => {
+    const { id_no, color } = req.body;
 
-  if (!id_no || !color) {
-    return res.status(400).send("Serial number and color are required.");
-  }
-
-  try {
-    const result = await surveyCollection.updateOne(
-      { id_no },
-      { $set: { color } }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).send("Record not found.");
+    if (!id_no || !color) {
+      return res.status(400).send("Serial number and color are required.");
     }
 
-    res.status(200).send("Color updated successfully.");
-  } catch (error) {
-    console.error("Error updating color:", error);
-    res.status(500).send("Internal server error.");
+    try {
+      const result = await surveyCollection.updateOne(
+        { id_no },
+        { $set: { color } }
+      );
+
+      if (result.matchedCount === 0) {
+        return res.status(404).send("Record not found.");
+      }
+
+      res.status(200).send("Color updated successfully.");
+    } catch (error) {
+      console.error("Error updating color:", error);
+      res.status(500).send("Internal server error.");
+    }
   }
-});
+);
 
 app.post("/api/update-color-universe", async (req, res) => {
   const colorUpdates = req.body;
@@ -688,13 +695,11 @@ app.post("/api/update-color-universe", async (req, res) => {
         .status(200)
         .send({ message: "No documents updated, upserted, or matched." });
     } else {
-      res
-        .status(200)
-        .send({
-          message: `Colors updated or upserted for ${
-            updatedCount + upsertedCount
-          } document(s).`,
-        });
+      res.status(200).send({
+        message: `Colors updated or upserted for ${
+          updatedCount + upsertedCount
+        } document(s).`,
+      });
     }
   } catch (error) {
     console.error("Error updating colors:", error);
@@ -742,14 +747,14 @@ app.get("/api/draft-report", async (req, res) => {
 app.get("/api/surveys", async (req, res) => {
   try {
     const surveys = await surveyCollection.find({}).toArray();
-    res.json(surveys);
+    res.status(200).json(surveys);
   } catch (error) {
     console.error("Error fetching survey data:", error);
     res.status(500).send("Internal Server Error");
   }
 });
 
-app.get('/api/survey/:id_no', async (req, res) => {
+app.get("/api/survey/:id_no", async (req, res) => {
   const id_no = req.params.id_no;
   const surveyRecord = await surveyCollection.findOne({ id_no });
 
@@ -758,7 +763,7 @@ app.get('/api/survey/:id_no', async (req, res) => {
   } else {
     // If no data is found, set a timeout to stop sending updates after 1 minute
     const timeoutId = setTimeout(() => {
-      res.status(404).json({ error: 'Not found' });
+      res.status(404).json({ error: "Not found" });
     }, 10000); // 1 minute
 
     // Try to fetch the data again after a short delay
@@ -1067,9 +1072,6 @@ app.get("/api/get-province-data", async (req, res) => {
 
     // Capitalize the first letter of each word in the province name
     const province = capitalizeFirstLetter(provinceQuery);
-
-    // Debug log to trace the province value
-    //console.log(`Querying data for province: ${province}`);
 
     // Create a case-insensitive regex query for the specified province
     const query = { province: new RegExp(`^${province}$`, "i") };
@@ -1727,34 +1729,40 @@ app.put("/api/status/:id", logActivity, async (req, res) => {
   }
 });
 
-// Define an update endpoint for survey data
 app.put("/api/survey/:id", logActivity, async (req, res) => {
   const { id } = req.params;
-  const { survey_eia, survey_air, survey_water, survey_haz, survey_chem } =
-    req.body;
+  const update = req.body;
 
   try {
+  
+    // Fetch the current record by _id
+    const currentRecord = await surveyCollection.findOne({ _id: new ObjectId(id) });
+    //console.log("Current Record Before Update:", currentRecord);
+
+    if (!currentRecord) {
+      return res.status(404).json({ message: "Record not found" });
+    }
+
+    // Update the record using _id
     const result = await surveyCollection.updateOne(
-      { _id: new ObjectId(id) },
+      { _id: new ObjectId(id) }, // Find by '_id'
       {
-        $set: {
-          survey_eia,
-          survey_air,
-          survey_water,
-          survey_haz,
-          survey_chem,
-        },
+        $set: update,
       }
     );
 
+    // Fetch the updated record
+    const updatedRecord = await surveyCollection.findOne({ _id: new ObjectId(id) });
+    //console.log("Updated Record After Update:", updatedRecord);
+
     if (result.modifiedCount > 0) {
-      res.status(200).json({ message: "Update successful!" });
+      return res.status(200).json({ message: "Update successful!" });
     } else {
-      res.status(404).json({ message: "Record not found or no changes made" });
+      return res.status(404).json({ message: "No changes made or record not found" });
     }
   } catch (error) {
-    console.error("Error updating record:", error);
-    res.status(500).json({ message: "Internal server error" });
+    //console.error("Error updating record:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 
@@ -1898,8 +1906,6 @@ app.delete("/api/remove-user/:id", async (req, res) => {
     res.status(500).send({ message: "Internal server error" });
   }
 });
-
-
 
 // Start server
 app.listen(8081, () => {

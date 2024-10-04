@@ -121,7 +121,17 @@ const SideMenu = ({ theme, permissions }) => {
                   isMenuSelected("mbu") ? "selected" : ""
                 }`}
               >
-                Manila Bay Unit (DEV)
+                MBU Pipeline
+              </Link>
+            </Menu.Item>
+            <Menu.Item key="/universe/eswm-database">
+              <Link
+                to="/universe/eswm-database"
+                className={`link-menu-hover ${
+                  isMenuSelected("mbu") ? "selected" : ""
+                }`}
+              >
+                ESWM Database
               </Link>
             </Menu.Item>
             <Menu.Item key="/universe/extract">
@@ -180,6 +190,16 @@ const SideMenu = ({ theme, permissions }) => {
                   Activity Logs
                 </Link>
               </Menu.Item>
+              <Menu.Item key="/universe/duplicate-firms">
+              <Link
+                to="/universe/duplicate-firms"
+                className={`link-menu-hover ${
+                  isMenuSelected("duplicate-firms") ? "selected" : ""
+                }`}
+              >
+                Duplicated Firms List
+              </Link>
+            </Menu.Item>
             </SubMenu>
           )}
         </Menu>

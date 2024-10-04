@@ -138,9 +138,10 @@
 .search-result-count{
   text-align: right;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   display: block;
   margin-right: 10px;
+  font-style: italic;
 }
 
 .ant-table-tbody > tr > td:first-child {
@@ -149,6 +150,12 @@
 
 .custom-table .ant-table-tbody > tr {
   transition: background-color 0.3s;
+}
+
+.custom-table .ant-table-thead > tr > th {
+  font-size: 12px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .custom-table-row{

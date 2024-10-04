@@ -104,6 +104,11 @@
 
 .btn-action {
   margin-right: 8px;
+  margin-top: 10px;
+}
+
+.btn-modify{
+  margin-top: 10px;
 }
 
 /* Default row color */
@@ -126,6 +131,7 @@
 .custom-table .ant-table-row td, .custom-table .ant-table-row th {
   background-color: inherit;
 }
+
 
 .custom-table-row{
   height: 30px;

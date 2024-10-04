@@ -27,6 +27,7 @@ import axios from "axios";
 import Highlighter from "react-highlight-words";
 import debounce from "lodash.debounce";
 import SurveyModal from "./SurveyModal";
+import Swal from "sweetalert2";
 
 const Survey = ({ theme }) => {
   const [data, setData] = useState([]);
@@ -143,6 +144,10 @@ const Survey = ({ theme }) => {
       ...new Set(data.map((item) => item.industry_class)),
     ];
     setIndustryClasses(uniqueIndustryClasses);
+  }, [data]);
+
+  useEffect(() => {
+    setFilteredData(data);
   }, [data]);
 
   // Search functionality for each column
@@ -403,6 +408,7 @@ const Survey = ({ theme }) => {
       });
     }
   };
+
   const handleClearColors = () => {
     setSelectedColor(null);
   };
@@ -458,9 +464,76 @@ const Survey = ({ theme }) => {
     </Menu>
   );
 
-  const handleSave = () => {
-    // Save the data
-    setModifiedRows({});
+  const handleSave = async (record) => {
+    try {
+      // Check if the record has an ID
+      if (!record._id) {
+        // Ensure you use _id
+        notification.error({
+          message: "Error",
+          description: "Record ID is missing.",
+        });
+        return;
+      }
+
+      // Prepare the payload with only the updated fields
+      const payload = {};
+      if (record.modifiedApplicableLaws) {
+        if (record.survey_eia !== initialState.get(record.id_no).survey_eia) {
+          payload.survey_eia = record.survey_eia === "✔" ? true : false;
+        }
+        if (record.survey_air !== initialState.get(record.id_no).survey_air) {
+          payload.survey_air = record.survey_air === "✔" ? true : false;
+        }
+        if (
+          record.survey_water !== initialState.get(record.id_no).survey_water
+        ) {
+          payload.survey_water = record.survey_water === "✔" ? true : false;
+        }
+        if (record.survey_haz !== initialState.get(record.id_no).survey_haz) {
+          payload.survey_haz = record.survey_haz === "✔" ? true : false;
+        }
+        if (record.survey_chem !== initialState.get(record.id_no).survey_chem) {
+          payload.survey_chem = record.survey_chem === "✔" ? true : false;
+        }
+      }
+
+      // Call the API using _id
+      const response = await axios.put(
+        `http://localhost:8081/api/survey/${record._id}`,
+        payload
+      );
+
+      if (response.data.message === "Update successful!") {
+        notification.success({
+          message: "Update Successfully!",
+          description: "Data updated successfully.",
+        });
+      } else if (response.data.message === "No changes made") {
+        notification.info({
+          message: "No Changes Made",
+          description: "No changes were made to the data.",
+        });
+      }
+
+      // Call fetchData to refresh the data
+      await fetchData();
+
+      // Clear modifications after update
+      setModifiedRows({});
+    } catch (error) {
+      // Log the error response if available
+      if (error.response) {
+        console.error("Error updating record:", error.response.data);
+      } else {
+        console.error("Error updating record:", error);
+      }
+
+      notification.error({
+        message: "Update Failed",
+        description: "Failed to update data.",
+      });
+    }
   };
 
   const handleRowClick = async (record) => {
@@ -487,19 +560,47 @@ const Survey = ({ theme }) => {
 
   const handleCheckboxChange = (field, checked, record) => {
     setIgnoreRowSelection(true);
-    const updatedRecord = { ...record };
-    updatedRecord[field] = checked ? "✔" : "";
+
+    // Update the field in the record to "✔" if checked, otherwise ""
+    record[field] = checked ? "✔" : "";
+
+    // Log the changes for debugging purposes
+    console.log(
+      `ID_No: ${record.id_no}, IIS No: ${record.iis_no}, ${field} Checked: ${
+        checked ? "✔" : ""
+      }`
+    );
+
+    // Update the data array with the modified record
     const updatedData = data.map((item) => {
       if (item.id_no === record.id_no) {
-        return updatedRecord;
+        return record;
       }
       return item;
     });
+
+    // Set the updated data
     setData(updatedData);
-    setModifiedRows((prevModifiedRows) => ({
-      ...prevModifiedRows,
-      [record.id_no]: true,
-    }));
+    setFilteredData(updatedData);
+
+    // Mark the record as modified
+    if (checked) {
+      setModifiedRows((prevModifiedRows) => ({
+        ...prevModifiedRows,
+        [record.id_no]: {
+          ...prevModifiedRows[record.id_no],
+          [field]: "✔",
+        },
+      }));
+    } else {
+      setModifiedRows((prevModifiedRows) => ({
+        ...prevModifiedRows,
+        [record.id_no]: {
+          ...prevModifiedRows[record.id_no],
+          [field]: "",
+        },
+      }));
+    }
   };
 
   const handleToggleEdit = () => {
@@ -537,55 +638,95 @@ const Survey = ({ theme }) => {
       key: "applicable_laws",
       align: "left",
       width: 100,
-      render: (text, record) => (
-        <div className="checkbox-container">
-          <div className={`checkbox-wrapper eia`}>
-            <Checkbox
-              checked={record.survey_eia === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_eia", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">EIA</span>
+      render: (text, record) => {
+        // Define a function to log checkbox states
+        const logCheckboxStates = (field, checked) => {
+          const logMessage = {
+            ID_No: record.id_no,
+            EIA: record.survey_eia,
+            AIR: record.survey_air,
+            WATER: record.survey_water,
+            HAZ: record.survey_haz,
+            CHEMICAL: record.survey_chem,
+            [field]: checked,
+          };
+          console.log(logMessage);
+        };
+
+        return (
+          <div className="checkbox-container">
+            <div className={`checkbox-wrapper eia`}>
+              <Checkbox
+                checked={
+                  record.survey_eia === "✔" || record.survey_eia === true
+                }
+                onChange={(e) => {
+                  handleCheckboxChange("survey_eia", e.target.checked, record);
+                  logCheckboxStates("EIA", e.target.checked);
+                  record.modifiedApplicableLaws = true; // Mark as modified
+                }}
+              />
+              <span className="checkbox-label">EIA</span>
+            </div>
+            <div className={`checkbox-wrapper air`}>
+              <Checkbox
+                checked={
+                  record.survey_air === "✔" || record.survey_air === true
+                }
+                onChange={(e) => {
+                  handleCheckboxChange("survey_air", e.target.checked, record);
+                  logCheckboxStates("AIR", e.target.checked);
+                  record.modifiedApplicableLaws = true; // Mark as modified
+                }}
+              />
+              <span className="checkbox-label">AIR</span>
+            </div>
+            <div className={`checkbox-wrapper water`}>
+              <Checkbox
+                checked={
+                  record.survey_water === "✔" || record.survey_water === true
+                }
+                onChange={(e) => {
+                  handleCheckboxChange(
+                    "survey_water",
+                    e.target.checked,
+                    record
+                  );
+                  logCheckboxStates("WATER", e.target.checked);
+                  record.modifiedApplicableLaws = true; // Mark as modified
+                }}
+              />
+              <span className="checkbox-label">WATER</span>
+            </div>
+            <div className={`checkbox-wrapper haz`}>
+              <Checkbox
+                checked={
+                  record.survey_haz === "✔" || record.survey_haz === true
+                }
+                onChange={(e) => {
+                  handleCheckboxChange("survey_haz", e.target.checked, record);
+                  logCheckboxStates("HAZ", e.target.checked);
+                  record.modifiedApplicableLaws = true; // Mark as modified
+                }}
+              />
+              <span className="checkbox-label">HAZ</span>
+            </div>
+            <div className={`checkbox-wrapper chem`}>
+              <Checkbox
+                checked={
+                  record.survey_chem === "✔" || record.survey_chem === true
+                }
+                onChange={(e) => {
+                  handleCheckboxChange("survey_chem", e.target.checked, record);
+                  logCheckboxStates("CHEMICAL", e.target.checked);
+                  record.modifiedApplicableLaws = true; // Mark as modified
+                }}
+              />
+              <span className="checkbox-label">CHEMICAL</span>
+            </div>
           </div>
-          <div className={`checkbox-wrapper air`}>
-            <Checkbox
-              checked={record.survey_air === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_air", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">AIR</span>
-          </div>
-          <div className={`checkbox-wrapper water`}>
-            <Checkbox
-              checked={record.survey_water === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_water", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">WATER</span>
-          </div>
-          <div className={`checkbox-wrapper haz`}>
-            <Checkbox
-              checked={record.survey_haz === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_haz", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">HAZ</span>
-          </div>
-          <div className={`checkbox-wrapper chem`}>
-            <Checkbox
-              checked={record.survey_chem === "✔"}
-              onChange={(e) =>
-                handleCheckboxChange("survey_chem", e.target.checked, record)
-              }
-            />
-            <span className="checkbox-label">CHEMICAL</span>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: "Project Title",
@@ -653,7 +794,7 @@ const Survey = ({ theme }) => {
       width: 100,
       fixed: "right",
       render: (text, record) => (
-        <div>
+        <div style={{ display: "flex", alignItems: "center" }}>
           <Button
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
@@ -665,15 +806,25 @@ const Survey = ({ theme }) => {
             type="primary"
             aria-label="Save"
             size="small"
-            onClick={() => handleSave()}
+            onClick={() => handleSave(record)}
+            className="btn-modify"
           >
-            {isModified ? (
-              <Badge count={1}>
-                <SaveOutlined />
-              </Badge>
-            ) : (
+            <span style={{ position: "relative", display: "inline-block" }}>
               <SaveOutlined />
-            )}
+              {modifiedRows && modifiedRows[record.id_no] ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -5,
+                    right: -10,
+                    backgroundColor: "red",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                  }}
+                />
+              ) : null}
+            </span>
           </Button>
         </div>
       ),
@@ -704,8 +855,8 @@ const Survey = ({ theme }) => {
         <Tooltip title="Mark Row As">
           <Dropdown
             overlay={colorMenu}
-            visible={colorMenuVisible}
-            onVisibleChange={(visible) => setColorMenuVisible(visible)}
+            open={colorMenuVisible}
+            onOpenChange={(visible) => setColorMenuVisible(visible)}
             placement="bottomLeft"
           >
             <Button
@@ -822,7 +973,6 @@ const Survey = ({ theme }) => {
                       [record.id_no]: true,
                     }));
                   } else {
-                    // do nothing
                   }
                 },
               }),
@@ -850,7 +1000,10 @@ const Survey = ({ theme }) => {
                   record.color ||
                   "transparent",
               },
-              badge: modifiedRows[record.id_no] ? <Badge count={1} /> : null,
+              badge:
+                modifiedRows && modifiedRows[record.id_no] ? (
+                  <Badge status="warning" />
+                ) : null,
             })}
           />
         )}

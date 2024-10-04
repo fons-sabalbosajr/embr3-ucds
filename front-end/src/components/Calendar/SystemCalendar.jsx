@@ -210,11 +210,6 @@ const SystemCalendar = () => {
     }
   };
 
-  const data = selectedNotices.map((notice, index) => ({
-    ...notice,
-    key: index,
-  }));
-
   const handleCancel = () => {
     setIsModalVisible(false);
     setSelectedDate("");
@@ -270,7 +265,7 @@ const SystemCalendar = () => {
       />
       <Modal
         title={`Monitored Industries as of ${selectedDate}`}
-        visible={isModalVisible}
+        open={isModalVisible}
         onCancel={handleCancel}
         footer={null}
         width={1400} // Adjust width as needed

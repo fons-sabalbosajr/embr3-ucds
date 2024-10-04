@@ -19,6 +19,8 @@ import NotificationsPopover from "./components/PopOverNotification";
 import SideMenu from "./components/SideMenu";
 import AvatarWithName from "./components/AvatarwithName";
 import ActivityLog from "./components/ActivityLog/ActivityLog";
+import Duplicates from "./menu-archive/ArchvieData";
+import ESWM from "./menu-eswm/ESWM";
 import Z_CustomSpinner from "./Z_CustomSpinner";
 
 const { Header, Content } = Layout;
@@ -227,6 +229,7 @@ const Universe = () => {
                 <Route path="/province/:provinceName" element={<Province />} />
                 <Route path="survey" element={<Survey />} />
                 <Route path="mbu" element={<MBU />} />
+                <Route path="eswm-database" element={<ESWM />} />
                 {permissions.includes("admin") && (
                   <Route path="admin" element={<Admin />} />
                 )}
@@ -235,6 +238,7 @@ const Universe = () => {
                 <Route path="admin-report" element={<Report />} />
                 <Route path="posting" element={<Posting />} />
                 <Route path="activitylog" element={<ActivityLog />} />
+                <Route path="duplicate-firms" element={<Duplicates />} />
               </Routes>
             </Content>
           )}

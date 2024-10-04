@@ -1,3 +1,15 @@
 .paragraph-margin-bottom{
     margin-bottom: -10px;
 }
+
+.textbox_legal{
+    margin-top: 6px;
+}
+
+.label_title_legal{
+    font-size: 11px;
+}
+
+.label_legal{
+    width: 100px;
+}

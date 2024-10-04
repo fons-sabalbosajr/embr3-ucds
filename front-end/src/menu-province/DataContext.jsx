@@ -1,11 +1,17 @@
-import React, { createContext, useState, useEffect, useRef } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import axios from "axios";
 
 export const DataContext = createContext();
 
 export const DataProvider = ({ children }) => {
   const [dataCache, setDataCache] = useState({});
-  const [data, setData] = useState([]); 
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
@@ -13,35 +19,30 @@ export const DataProvider = ({ children }) => {
   const loaded = useRef(false);
 
   // Function to fetch data for a specific province
-  const fetchData = async (province) => {
+  const fetchData = useCallback(async (province) => {
     try {
-      setProgress(10);
       setLoading(true);
+      setProgress(0);
 
       // Append a unique query parameter to force cache busting
       const response = await axios.get(
-      'http://localhost:8081/api/get-province-data', {
-        params: { province, _nocache: Date.now() },
-      });
+        "http://localhost:8081/api/get-province-data",
+        {
+          params: { province, _nocache: Date.now() },
+        }
+      );
 
-      
       if (response.status >= 200 && response.status < 300) {
         const fetchedData = response.data;
 
-        setProgress(50);
         setData(fetchedData);
-
         setDataCache((prevCache) => ({
           ...prevCache,
           [province]: fetchedData, // Store the data in the cache
         }));
 
-        setProgress(75);
-
-        setTimeout(() => {
-          setLoading(false);
-          setProgress(100);
-        }, 1000);
+        setLoading(false);
+        setProgress(100);
       } else {
         throw new Error(`Unexpected response status: ${response.status}`);
       }
@@ -50,14 +51,14 @@ export const DataProvider = ({ children }) => {
       setError("Failed to fetch data");
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (currentProvince && !loaded.current) {
       loaded.current = true;
       fetchData(currentProvince);
     }
-  }, [currentProvince, fetchData]);
+  }, [currentProvince, loaded.current]);
 
   return (
     <DataContext.Provider
@@ -68,7 +69,7 @@ export const DataProvider = ({ children }) => {
         error,
         currentProvince,
         setCurrentProvince,
-        fetchData
+        fetchData,
       }}
     >
       {children}
