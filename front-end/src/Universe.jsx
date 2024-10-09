@@ -19,7 +19,7 @@ import NotificationsPopover from "./components/PopOverNotification";
 import SideMenu from "./components/SideMenu";
 import AvatarWithName from "./components/AvatarwithName";
 import ActivityLog from "./components/ActivityLog/ActivityLog";
-import Duplicates from "./menu-archive/ArchvieData";
+import Duplicates from "./menu-archive/ArchiveData";
 import ESWM from "./menu-eswm/ESWM";
 import Z_CustomSpinner from "./Z_CustomSpinner";
 

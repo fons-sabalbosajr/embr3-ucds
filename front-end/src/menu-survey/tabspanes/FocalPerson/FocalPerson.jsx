@@ -119,7 +119,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           <Paragraph>
             <strong>Total No. of Employees</strong>
             <Input
-              value={localRecord.employee_no || ""} // Handle undefined employee_no
+              value={localRecord.employee_no || ""}
               disabled={!isEditing}
               placeholder="No data"
               onChange={(e) => handleInputChange("employee_no", e.target.value)}

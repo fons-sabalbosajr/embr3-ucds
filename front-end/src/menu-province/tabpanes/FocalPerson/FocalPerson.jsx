@@ -92,7 +92,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
         formattedDateRouted
       );
       setDaysDmds(newDaysDmds);
-      handleChange("days_dmds", newDaysDmds); // Add this line
+      handleChange("days_dmds", newDaysDmds);
     }
   }, [formattedDateMonitored, formattedDateRouted]);
 

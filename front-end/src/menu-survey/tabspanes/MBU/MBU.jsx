@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Form, Input, Row, Col, Typography, Card, Checkbox } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import R3MapAutoComplete from "../../../components/R3Map";
@@ -6,36 +6,36 @@ import "./mbu.css";
 
 const { Paragraph } = Typography;
 
-const MBU = ({ record, isEditing, onUpdate }) => {
-  const [form] = Form.useForm();
+const MBU = ({ editedRecord, handleChange, isEditing }) => {
+  const [localRecord, setLocalRecord] = useState(editedRecord || {});
 
   useEffect(() => {
-    if (record) {
-      form.setFieldsValue(record); // Update form values with new record
-    } else {
-      form.resetFields(); // Clear fields if no record
-    }
-  }, [record, form]); // Ensure form is reset when record changes
+    setLocalRecord(editedRecord);
+  }, [editedRecord]);
 
-  const handleChange = (changedValues) => {
-    const updatedRecord = { ...form.getFieldsValue(), ...changedValues };
-    onUpdate(updatedRecord); // Send updated record to the parent component
+  const handleInputChange = (field, value) => {
+    const updatedRecord = { ...localRecord, [field]: value };
+    setLocalRecord(updatedRecord);
+    handleChange(field, value);
   };
 
   return (
     <Form
-      form={form}
       layout="vertical"
-      initialValues={record}
-      onValuesChange={(changedValues) => handleChange(changedValues)}
+      initialValues={localRecord}
+      onValuesChange={(changedValues) => {
+        const field = Object.keys(changedValues)[0];
+        const value = Object.values(changedValues)[0];
+        handleInputChange(field, value);
+      }}
     >
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Row gutter={[16, 16]}>
             <Col span={23}>
               <R3MapAutoComplete
-                latitude={record ? record.lat : ""}
-                longitude={record ? record.long : ""}
+                latitude={localRecord ? localRecord.lat : ""}
+                longitude={localRecord ? localRecord.long : ""}
               />
             </Col>
           </Row>
@@ -43,39 +43,65 @@ const MBU = ({ record, isEditing, onUpdate }) => {
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
-              <strong>Latitude</strong>
-              <Form.Item name="lat" noStyle>
-                <Input disabled={!isEditing} placeholder="No data" />
-              </Form.Item>
+              <strong>Latitude:</strong>
+
+              <Input
+                value={localRecord.lat || ""}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="textbox-label disabled-input"
+                onChange={(e) => handleInputChange("lat", e.target.value)}
+              />
             </Paragraph>
             <Paragraph>
-              <strong>Longitude</strong>
-              <Form.Item name="long" noStyle>
-                <Input disabled={!isEditing} placeholder="No data" />
-              </Form.Item>
+              <strong>Longitude:</strong>
+
+              <Input
+                value={localRecord.long || ""}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="textbox-label disabled-input"
+                onChange={(e) => handleInputChange("long", e.target.value)}
+              />
             </Paragraph>
             <Paragraph>
               <strong>Congressional District</strong>
-              <Form.Item name="cong_district" noStyle>
-                <Input disabled={!isEditing} placeholder="No data" />
-              </Form.Item>
+
+              <Input
+                value={localRecord.cong_district || ""}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="textbox-label disabled-input"
+                onChange={(e) =>
+                  handleInputChange("cong_district", e.target.value)
+                }
+              />
             </Paragraph>
-            
           </Col>
           <Col xs={24} sm={24} md={24} lg={24} className="modal-col">
             <Paragraph>
               <strong>Complete Address</strong>
-              <Form.Item name="address" noStyle>
-                <TextArea disabled={!isEditing} placeholder="No data" rows={3} />
-              </Form.Item>
+
+              <TextArea
+                value={localRecord.address || ""}
+                disabled={!isEditing}
+                placeholder="No data"
+                rows={2}
+                className="textbox-label disabled-input"
+                onChange={(e) => handleInputChange("address", e.target.value)}
+              />
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={24} lg={24} className="modal-col-waterbody">
             <Paragraph>
               <strong>Receiving Waterbody/River System</strong>
-              <Form.Item name="waterbody" noStyle>
-                <Input disabled={!isEditing} placeholder="No data" rows={3} />
-              </Form.Item>
+              <Input
+                value={localRecord.waterbody || ""}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="textbox-label disabled-input"
+                onChange={(e) => handleInputChange("waterbody", e.target.value)}
+              />
             </Paragraph>
           </Col>
         </Col>

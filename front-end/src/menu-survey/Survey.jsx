@@ -27,7 +27,6 @@ import axios from "axios";
 import Highlighter from "react-highlight-words";
 import debounce from "lodash.debounce";
 import SurveyModal from "./SurveyModal";
-import Swal from "sweetalert2";
 
 const Survey = ({ theme }) => {
   const [data, setData] = useState([]);
@@ -609,6 +608,7 @@ const Survey = ({ theme }) => {
 
   const handleCloseModal = () => {
     setIsModalVisible(false);
+    setIsLogChecked(false); // Reset the isLogChecked state
   };
 
   const handleView = (record) => {
@@ -746,11 +746,13 @@ const Survey = ({ theme }) => {
             <p>
               IIS No.:{" "}
               <a
-                href={`https://iis.emb.gov.ph/embis`}
+                href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                  record.iis_no
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {record.iis_no}
+                {record.iis_no || ""}
               </a>
             </p>
           </div>
@@ -926,7 +928,9 @@ const Survey = ({ theme }) => {
             </span>
             <span className="modal-title">
               <a
-                href={`https://iis.emb.gov.ph/embis`}
+                href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                  viewedRecord?.iis_no
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >

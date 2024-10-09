@@ -1,8 +1,10 @@
 import React from "react";
+import { Button, Result } from "antd";
 
-const ArchvieData = () => {
+const ArchiveData = () => {
   return (
     <div>
+      {" "}
       <Result
         status="404"
         title="404"
@@ -12,4 +14,4 @@ const ArchvieData = () => {
   );
 };
 
-export default ArchvieData;
+export default ArchiveData;

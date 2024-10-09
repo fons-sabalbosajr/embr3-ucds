@@ -57,6 +57,7 @@ let postingCollection;
 let reportdraftCollection;
 let surveyCollection;
 let activityLogsCollection;
+let surveyLogCollection;
 
 app.use(
   session({
@@ -91,6 +92,7 @@ async function connectToMongo() {
     reportdraftCollection = db.collection("draft-reports");
     surveyCollection = db.collection("survey-data");
     activityLogsCollection = db.collection("app-logs");
+    surveyLogCollection = db.collection("survey-log");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error;
@@ -728,6 +730,17 @@ app.post("/save-draft-report", upload.single("pdfFile"), async (req, res) => {
   } catch (error) {
     console.error("Error saving draft report:", error);
     res.status(500).send({ message: "Failed to save draft report" });
+  }
+});
+
+app.post("/api/survey-log", async (req, res) => {
+  try {
+    const logEntry = req.body;
+    await surveyLogCollection.insertOne(logEntry); // Assuming surveyLogCollection is defined
+    res.status(200).send(logEntry);
+  } catch (error) {
+    console.error("Error saving log entry:", error);
+    res.status(500).send("Error saving log entry");
   }
 });
 
@@ -1580,6 +1593,64 @@ app.get("/api/recent-activity", authenticateSession, async (req, res) => {
   }
 });
 
+app.get("/api/survey-log", async (req, res) => {
+  const { iis_no } = req.query;
+  try {
+    // If iis_no is provided, filter by it; otherwise, return all logs
+    const query = iis_no ? { newValue: { $regex: iis_no, $options: "i" } } : {};
+
+    const logs = await surveyLogCollection.find(query).toArray();
+
+    if (logs.length === 0) {
+      //console.log("No logs found for the provided iis_no or no logs available.");
+      return res.status(200).json([]); // Return an empty array if no logs are found
+    } else {
+      //console.log("Fetched logs from database:", logs); // Log the fetched logs
+      return res.status(200).json(logs); // Return the fetched logs
+    }
+  } catch (error) {
+    console.error("Error fetching survey logs:", error);
+    return res.status(500).send("Internal Server Error");
+  }
+});
+
+// Get the latest transaction ID from the survey-log collection
+app.get("/api/get-latest-transaction-id", async (req, res) => {
+  try {
+    const database = client.db("universe-db");
+    const collection = database.collection("survey-log");
+
+    const latestTransactionId = await collection.find().sort({ transactionID: -1 }).limit(1).toArray();
+
+    if (latestTransactionId.length > 0) {
+      const transactionId = latestTransactionId[0].transactionID;
+      const id = parseInt(transactionId.replace("TRX-", ""));
+      res.status(200).json({ transactionId: id });
+    } else {
+      res.status(200).json({ transactionId: 0 }); // Return 0 if no documents are found
+    }
+  } catch (error) {
+    console.error("Error getting latest transaction ID:", error);
+    res.status(500).json({ error: "Failed to get latest transaction ID" });
+  }
+});
+
+app.post("/api/create-survey-log-entry", async (req, res) => {
+  try {
+    const database = client.db("universe-db");
+    const collection = database.collection("survey-log");
+
+    const surveyLogEntry = req.body;
+
+    await collection.insertOne(surveyLogEntry);
+
+    res.status(201).json({ message: "Survey log entry created successfully" });
+  } catch (error) {
+    console.error("Error creating survey log entry:", error);
+    res.status(500).json({ error: "Failed to create survey log entry" });
+  }
+});
+
 //////////////////////////////////////////////////////////////////////////////////////////
 
 //Update the data per provinces
@@ -1734,9 +1805,10 @@ app.put("/api/survey/:id", logActivity, async (req, res) => {
   const update = req.body;
 
   try {
-  
     // Fetch the current record by _id
-    const currentRecord = await surveyCollection.findOne({ _id: new ObjectId(id) });
+    const currentRecord = await surveyCollection.findOne({
+      _id: new ObjectId(id),
+    });
     //console.log("Current Record Before Update:", currentRecord);
 
     if (!currentRecord) {
@@ -1752,13 +1824,17 @@ app.put("/api/survey/:id", logActivity, async (req, res) => {
     );
 
     // Fetch the updated record
-    const updatedRecord = await surveyCollection.findOne({ _id: new ObjectId(id) });
+    const updatedRecord = await surveyCollection.findOne({
+      _id: new ObjectId(id),
+    });
     //console.log("Updated Record After Update:", updatedRecord);
 
     if (result.modifiedCount > 0) {
       return res.status(200).json({ message: "Update successful!" });
     } else {
-      return res.status(404).json({ message: "No changes made or record not found" });
+      return res
+        .status(404)
+        .json({ message: "No changes made or record not found" });
     }
   } catch (error) {
     //console.error("Error updating record:", error);
@@ -1770,24 +1846,44 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params;
     const newData = req.body;
+    const iisNo = req.body.iis_no;
+    const updatedBy = req.body.updated_by;
 
-    // Ensure connection to the database
-    // Assuming you have a stable connection established elsewhere in your app
     const database = client.db("universe-db");
     const collection = database.collection("survey-data");
 
-    // Perform the update operation
+    // Retrieve the old document from the database
+    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
+
     const result = await collection.updateOne(
       { id_no: parseInt(id) }, // Convert id to a number
       { $set: newData }
     );
 
-    // Check the result of the update operation
-    if (result.modifiedCount === 1) {
-      res.status(200).json({ message: "Data updated successfully" });
-    } else {
-      res.status(404).json({ error: "Data not found or no changes were made" });
-    }
+    const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+
+    const auditLog = {
+      updated_by: updatedBy,
+      updated_at: new Date(),
+      iis_no: iisNo,
+      changes: [],
+    };
+
+    // Loop through the old and new documents to find the changed fields
+    Object.keys(newData).forEach((key) => {
+      if (oldDocument[key] !== newData[key]) {
+        auditLog.changes.push({
+          field: key,
+          old_value: oldDocument[key],
+          new_value: newData[key],
+        });
+      }
+    });
+
+    //console.log("Audit Log:", auditLog);
+
+    // Return the audit log object in the response
+    res.status(200).json(auditLog);
   } catch (error) {
     console.error("Error updating data:", error);
     res

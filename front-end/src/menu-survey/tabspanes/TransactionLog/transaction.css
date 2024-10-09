@@ -1,0 +1,63 @@
+/* Table Styles */
+.table-header {
+  font-size: 10px;
+  text-align: center;
+}
+
+.ant-table-thead > tr > th {
+  text-align: center;
+  padding: 4px 8px !important; /* Reduce the padding to decrease the header height */
+  line-height: 1.4 !important; /* Adjust line height to make the header more compact */
+  height: auto !important; /* Set the height to auto so it adapts to the reduced padding */
+  font-size: 11px  /* Optional: reduce the font size if needed */
+}
+
+.ant-table-tbody > tr > td {
+  text-align: center; /* Center-align table content */
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+.tag-create {
+  background-color: #dfdfdf;
+  color: #dfdfdf;
+  border: none;
+}
+
+.tag-add {
+  background-color: #005542;
+  color: #dfdfdf;
+  border: none;
+}
+
+.tag-update {
+  background-color: #ffbe00;
+  //color: #DFDFDF;
+  border: none;
+}
+
+.tag-delete {
+  background-color: #b43f3f;
+  color: #dfdfdf;
+  border: none;
+}
+
+/* Button Styling */
+.action-button {
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.action-button-danger {
+  color: #ff4d4f; /* Red color for Delete button */
+}
+
+.table-row {
+  font-size: 10px; /* Adjust this value as needed */
+}

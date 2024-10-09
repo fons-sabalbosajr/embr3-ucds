@@ -54,6 +54,7 @@ const LegalOfficers = ({ value, disabled, onChange }) => {
             fontSize: "11px",
             height: "27px",
             padding: "4px 8px",
+            marginTop: "7px"
           }}
           placeholder="Select Legal Officer"
           placeholderStyle={{
