@@ -32,7 +32,7 @@ const Universe = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("dark");
-  const [permissions, setPermissions] = useState([]); 
+  const [permissions, setPermissions] = useState([]);
   const [avatar, setAvatar] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [user, setUser] = useState(null);
@@ -44,66 +44,62 @@ const Universe = () => {
   const backendUrl = "http://localhost:8081";
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await axios.get(`${backendUrl}/check-auth`, {
-          withCredentials: true,
-        });
-        //console.log("Auth Response:", response.data);  // Add this for debugging
-  
-        if (response.data.status === "Success") {  // Ensure this matches the exact expected value
-          const { name, avatar, permissions, username, division } = response.data;
-          setName(name);
-          setAvatar(avatar || "default-avatar-url");
-          setPermissions(permissions || []);
-          setUserHandle(username);
-          setDivision(division || "");
-          setAuth(true);
-          setErrorMessage(""); 
-        } else {
-          throw new Error("Authentication failed");
-        }
-      } catch (error) {
-        console.error("Error during authentication check:", error);
-        setErrorMessage("Authentication failed. Please check your credentials and try again.");
-        setAuth(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-  
-    checkAuth();
-  }, [navigate]);
-  
-
-  const handleRetry = async () => {
-    setRetrying(true);
-    setErrorMessage("");
-
+  const checkAuth = async () => {
     try {
       const response = await axios.get(`${backendUrl}/check-auth`, {
         withCredentials: true,
       });
 
       if (response.data.status === "Success") {
-        const { name, avatar, permissions, userHandle, username, division } = response.data;
+        const {
+          name,
+          avatar,
+          permissions,
+          username,
+          division,
+          canGenerateData,
+          canManageData,
+          canViewAdminPanel,
+          canViewDataHistory,
+        } = response.data;
+
         setName(name);
         setAvatar(avatar || "default-avatar-url");
-        setPermissions(permissions || []);
+        setPermissions(
+          permissions || [
+            canGenerateData,
+            canManageData,
+            canViewAdminPanel,
+            canViewDataHistory,
+          ]
+        );
+
         setUserHandle(username);
         setDivision(division || "");
         setAuth(true);
         setErrorMessage("");
       } else {
-        setErrorMessage("Authentication failed. Please check your credentials and try again.");
+        throw new Error("Authentication failed");
       }
     } catch (error) {
-      console.error("Error during authentication retry:", error);
-      setErrorMessage("An unexpected error occurred. Please try again later.");
+      console.error("Error during authentication check:", error);
+      setErrorMessage("Authentication failed. Please check your credentials and try again.");
+      setAuth(false);
     } finally {
-      setRetrying(false);
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    checkAuth(); // Initial call to check authentication
+  }, []);
+
+  const currentUser = {
+    name,
+    username: userHandle,
+    avatar,
+    division,
+    permissions,
   };
 
   if (loading) {
@@ -133,7 +129,7 @@ const Universe = () => {
         {},
         { withCredentials: true }
       );
-  
+
       if (response.status === 200) {
         localStorage.clear();
         navigate("/login");
@@ -160,6 +156,7 @@ const Universe = () => {
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         permissions={permissions}
+        currentUser={currentUser}
       />
 
       <Layout>
@@ -195,7 +192,7 @@ const Universe = () => {
                   trigger="click"
                   placement="bottomRight"
                 >
-                 <div className="avatar-header">
+                  <div className="avatar-header">
                     <AvatarWithName avatar={avatar} />
                   </div>
                 </Popover>
@@ -226,8 +223,8 @@ const Universe = () => {
                   path="dashboard"
                   element={<Dashboard avatar={avatar} name={name} />}
                 />
-                <Route path="/province/:provinceName" element={<Province />} />
-                <Route path="survey" element={<Survey />} />
+                <Route path="/province/:provinceName" element={<Province currentUser={currentUser} />} />
+                <Route path="survey" element={<Survey currentUser={currentUser} />} />
                 <Route path="mbu" element={<MBU />} />
                 <Route path="eswm-database" element={<ESWM />} />
                 {permissions.includes("admin") && (

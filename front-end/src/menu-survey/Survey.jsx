@@ -21,6 +21,9 @@ import {
   SearchOutlined,
   EyeOutlined,
   SaveOutlined,
+  MonitorOutlined,
+  GlobalOutlined,
+  CheckCircleFilled,
 } from "@ant-design/icons";
 import "./survey.css";
 import axios from "axios";
@@ -28,7 +31,7 @@ import Highlighter from "react-highlight-words";
 import debounce from "lodash.debounce";
 import SurveyModal from "./SurveyModal";
 
-const Survey = ({ theme }) => {
+const Survey = ({ theme, currentUser }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -44,7 +47,6 @@ const Survey = ({ theme }) => {
   const [selectedRowColors, setSelectedRowColors] = useState({});
   const [filterValue, setFilterValue] = useState("");
   const [industryClasses, setIndustryClasses] = useState([]);
-  const [isModified, setIsModified] = useState(false);
   const [modifiedRows, setModifiedRows] = useState({});
   const [ignoreRowSelection, setIgnoreRowSelection] = useState(false);
   const [selectedRows, setSelectedRows] = useState({});
@@ -608,7 +610,7 @@ const Survey = ({ theme }) => {
 
   const handleCloseModal = () => {
     setIsModalVisible(false);
-    setIsLogChecked(false); // Reset the isLogChecked state
+    setIsLogChecked(false);
   };
 
   const handleView = (record) => {
@@ -619,6 +621,82 @@ const Survey = ({ theme }) => {
 
   const handleReload = () => {
     fetchData();
+  };
+
+  const responsibleUnitBackgroundColor = (unit) => {
+    switch (unit.toUpperCase()) {
+      case "PEMU_AURORA":
+      case "PEMU_Aurora":
+        return "transparent"; // No color
+
+      case "PEMU_BATAAN":
+      case "PEMU_Bataan":
+        return "#FCE5BB"; // Beige
+
+      case "PEMU_BULACAN":
+      case "PEMU_Bulacan":
+        return "#FCE5BB"; // Light purple
+
+      case "PEMU_NUEVA ECIJA":
+      case "PEMU_Nueva_Ecija":
+        return "#FFE225"; // Yellow
+
+      case "PEMU_PAMPANGA":
+      case "PEMU_Pampanga":
+        return "#FFE225"; // Yellow
+
+      case "PEMU_TARLAC":
+      case "PEMU_Tarlac":
+        return "#39C665"; // Green
+
+      case "PEMU_ZAMBALES":
+      case "PEMU_Zambales":
+        return "#d1c4e9"; // Light lavender
+
+      case "MBU":
+        return "#FF9B3E"; // Light green
+
+      case "TCHWMS":
+        return "#936DDF"; // Dark purple
+
+      case "AWECMES":
+        return "#c8e6c9"; // Light green
+
+      case "EMED":
+        return "#FFD09B";
+
+      case "CPD":
+        return "#D2E0FB";
+
+      default:
+        return "transparent"; // Default
+    }
+  };
+
+  const measureTextWidth = (text) => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    context.font = "12px Arial"; // You can adjust the font size here
+    const metrics = context.measureText(text);
+    return metrics.width;
+  };
+
+  // Utility function to darken a given color
+  const darkenColor = (color, percent) => {
+    const num = parseInt(color.slice(1), 16),
+      amt = Math.round(2.55 * percent),
+      R = (num >> 16) + amt,
+      G = ((num >> 8) & 0x00ff) + amt,
+      B = (num & 0x0000ff) + amt;
+
+    return `#${(
+      0x1000000 +
+      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 1 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)}`;
   };
 
   // Define table columns
@@ -639,7 +717,7 @@ const Survey = ({ theme }) => {
       align: "left",
       width: 100,
       render: (text, record) => {
-        // Define a function to log checkbox states
+        // Function to log checkbox states
         const logCheckboxStates = (field, checked) => {
           const logMessage = {
             ID_No: record.id_no,
@@ -650,77 +728,89 @@ const Survey = ({ theme }) => {
             CHEMICAL: record.survey_chem,
             [field]: checked,
           };
-          console.log(logMessage);
+          //console.log(logMessage);
+        };
+
+        const isAnyChecked = () => {
+          return Object.values(record).some((value) => {
+            return (
+              [
+                "survey_eia",
+                "survey_air",
+                "survey_water",
+                "survey_haz",
+                "survey_chem",
+              ].includes(field) && value === "✔"
+            );
+          });
+        };
+
+        const handleCheckboxChange = (field, checked) => {
+          record[field] = checked ? "✔" : ""; // Mark as checked or unchecked
+          //console.log(`record: ${JSON.stringify(record)}`);
+          const allUnchecked = Object.values(record).every((value) => {
+            return (
+              ![
+                "survey_eia",
+                "survey_air",
+                "survey_water",
+                "survey_haz",
+                "survey_chem",
+              ].includes(field) || value !== "✔"
+            );
+          }); // Check if all checkboxes are unchecked
+          record.modifiedApplicableLaws = allUnchecked ? false : true; // Update the modified flag
+          logCheckboxStates(field, checked); // Log the checkbox state
+          setModifiedRows((prev) => ({
+            ...prev,
+            [record.id_no]: record.modifiedApplicableLaws,
+          })); // Update modified rows state
         };
 
         return (
           <div className="checkbox-container">
             <div className={`checkbox-wrapper eia`}>
               <Checkbox
-                checked={
-                  record.survey_eia === "✔" || record.survey_eia === true
+                checked={record.survey_eia === "✔"}
+                onChange={(e) =>
+                  handleCheckboxChange("survey_eia", e.target.checked)
                 }
-                onChange={(e) => {
-                  handleCheckboxChange("survey_eia", e.target.checked, record);
-                  logCheckboxStates("EIA", e.target.checked);
-                  record.modifiedApplicableLaws = true; // Mark as modified
-                }}
               />
               <span className="checkbox-label">EIA</span>
             </div>
             <div className={`checkbox-wrapper air`}>
               <Checkbox
-                checked={
-                  record.survey_air === "✔" || record.survey_air === true
+                checked={record.survey_air === "✔"}
+                onChange={(e) =>
+                  handleCheckboxChange("survey_air", e.target.checked)
                 }
-                onChange={(e) => {
-                  handleCheckboxChange("survey_air", e.target.checked, record);
-                  logCheckboxStates("AIR", e.target.checked);
-                  record.modifiedApplicableLaws = true; // Mark as modified
-                }}
               />
               <span className="checkbox-label">AIR</span>
             </div>
             <div className={`checkbox-wrapper water`}>
               <Checkbox
-                checked={
-                  record.survey_water === "✔" || record.survey_water === true
+                checked={record.survey_water === "✔"}
+                onChange={(e) =>
+                  handleCheckboxChange("survey_water", e.target.checked)
                 }
-                onChange={(e) => {
-                  handleCheckboxChange(
-                    "survey_water",
-                    e.target.checked,
-                    record
-                  );
-                  logCheckboxStates("WATER", e.target.checked);
-                  record.modifiedApplicableLaws = true; // Mark as modified
-                }}
               />
               <span className="checkbox-label">WATER</span>
             </div>
             <div className={`checkbox-wrapper haz`}>
               <Checkbox
-                checked={
-                  record.survey_haz === "✔" || record.survey_haz === true
+                checked={record.survey_haz === "✔"}
+                onChange={(e) =>
+                  handleCheckboxChange("survey_haz", e.target.checked)
                 }
-                onChange={(e) => {
-                  handleCheckboxChange("survey_haz", e.target.checked, record);
-                  logCheckboxStates("HAZ", e.target.checked);
-                  record.modifiedApplicableLaws = true; // Mark as modified
-                }}
               />
               <span className="checkbox-label">HAZ</span>
             </div>
             <div className={`checkbox-wrapper chem`}>
               <Checkbox
-                checked={
-                  record.survey_chem === "✔" || record.survey_chem === true
+                checked={record.survey_chem === "✔"}
+                onChange={(e) =>
+                  handleCheckboxChange("survey_chem", e.target.checked)
                 }
-                onChange={(e) => {
-                  handleCheckboxChange("survey_chem", e.target.checked, record);
-                  logCheckboxStates("CHEMICAL", e.target.checked);
-                  record.modifiedApplicableLaws = true; // Mark as modified
-                }}
               />
               <span className="checkbox-label">CHEMICAL</span>
             </div>
@@ -781,6 +871,40 @@ const Survey = ({ theme }) => {
         selectedKeys,
         setSelectedKeys
       ),
+      render: (text, record) => {
+        const backgroundColor = responsibleUnitBackgroundColor(
+          record.resp_unit
+        );
+        const textWidth = measureTextWidth(record.resp_unit); // Measure the text width
+        const darkerBackgroundColor = darkenColor(backgroundColor, -50); // Darker shade
+
+        return (
+          <Tooltip
+            title={
+              <div style={{ fontSize: "12px" }}>
+                <div>Responsible Unit: {record.resp_unit}</div>
+                <div>Handler: {record.handler || "N/A"}</div>
+              </div>
+            }
+            color={darkerBackgroundColor} // Tooltip background color (slightly darker)
+          >
+            <div
+              style={{
+                backgroundColor: backgroundColor,
+                padding: "5px",
+                borderRadius: "4px",
+                color: backgroundColor !== "transparent" ? "black" : "inherit",
+                width: `${textWidth + 10}px`, // Set the width dynamically based on the text length
+                display: "inline-block", // Ensure the width is applied properly
+                whiteSpace: "nowrap", // Prevent text from wrapping
+                cursor: "pointer", // Change cursor to pointer on hover
+              }}
+            >
+              {record.resp_unit}
+            </div>
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Remarks",
@@ -788,6 +912,59 @@ const Survey = ({ theme }) => {
       key: "remarks",
       align: "left",
       ...getColumnSearchProps("remarks"),
+      width: 150,
+    },
+    {
+      title: "Survey Status",
+      key: "date_surveyed",
+      ...getColumnSearchProps("date_surveyed"),
+      render: (text, record) => (
+        <div className="industry-label">
+          {/* One-liner for each field */}
+          <div>
+            {/* Date Monitored */}
+            {record.date_surveyed && (
+              <div>
+                <Tooltip title="Date Surveyed">
+                  <MonitorOutlined
+                    style={{ marginRight: 8, color: "#1890ff" }}
+                  />{" "}
+                  {/* Blue */}
+                  {record.date_surveyed}
+                </Tooltip>
+              </div>
+            )}
+
+            {/* Date Routed */}
+            {record.date_routed && (
+              <div>
+                <Tooltip title="Date Routed to IIS">
+                  <GlobalOutlined
+                    style={{ marginRight: 8, color: "#52c41a" }}
+                  />{" "}
+                  {/* Green */}
+                  {record.date_routed}
+                </Tooltip>
+              </div>
+            )}
+
+            {/* Date Signed */}
+            {record.date_signed && (
+              <div>
+                <Tooltip title="Date Report Signed">
+                  <CheckCircleFilled
+                    style={{ marginRight: 8, color: "#faad14" }}
+                  />{" "}
+                  {/* Yellow */}
+                  {record.date_signed}
+                </Tooltip>
+              </div>
+            )}
+          </div>
+        </div>
+      ),
+      width: 150, // Adjust as needed
+      align: "left",
     },
     {
       title: "Actions",
@@ -810,10 +987,11 @@ const Survey = ({ theme }) => {
             size="small"
             onClick={() => handleSave(record)}
             className="btn-modify"
+            disabled={!record.modifiedApplicableLaws} // Disable if not modified
           >
             <span style={{ position: "relative", display: "inline-block" }}>
               <SaveOutlined />
-              {modifiedRows && modifiedRows[record.id_no] ? (
+              {record.modifiedApplicableLaws ? (
                 <span
                   style={{
                     position: "absolute",
@@ -952,6 +1130,7 @@ const Survey = ({ theme }) => {
             onClose={handleCloseModal}
             handleReload={handleReload}
             centered
+            currentUser={currentUser}
           />
         )}
       </Modal>

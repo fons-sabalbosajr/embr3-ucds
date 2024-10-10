@@ -1,0 +1,32 @@
+.icon-container {
+    width: 30px;
+    height: 20px;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-right: 8px; 
+  }
+  
+  .access-icon {
+    font-size: 20px; /* Adjust the icon size */
+    color: #1890ff; /* Change color as needed */
+  }
+  
+  .note-section {
+    background-color: #f0f8ff; 
+    border: 1px solid #d9e2f2; 
+    border-radius: 8px; 
+    padding: 10px;
+    margin-bottom: 20px; 
+    display: flex;
+    align-items: center;
+  }
+
+  .note-label{
+    margin-left: 10px;
+    font-size: 11px;
+    color: rgb(28, 28, 28);
+  }
+  

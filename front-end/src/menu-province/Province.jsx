@@ -52,7 +52,7 @@ const tourContent = (
   </div>
 );
 
-const Province = ({ theme }) => {
+const Province = ({ theme, currentUser  }) => {
   const { provinceName } = useParams();
   const { data, error, fetchData, setCurrentProvince } =
     useContext(DataContext);
@@ -507,8 +507,8 @@ const Province = ({ theme }) => {
   };
 
   const handleCloseModal = () => {
-    setIsModalVisible(false); // Close the modal
-    setSelectedRecord(null); // Clear the selected record
+    setIsModalVisible(false);
+    setSelectedRecord(null); 
   };
 
   // Function to format industry details
@@ -808,6 +808,7 @@ const Province = ({ theme }) => {
       ),
     },
   ];
+
 
   const columns = [
     {
@@ -1328,6 +1329,7 @@ const Province = ({ theme }) => {
             onToggleEdit={handleToggleEdit}
             onClose={handleCloseModal}
             handleReload={handleReload}
+            currentUser={currentUser}
           />
         )}
       </Modal>

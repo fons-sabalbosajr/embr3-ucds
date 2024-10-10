@@ -8,12 +8,21 @@ import {
 import moment from "moment";
 import "./transaction.css";
 import axios from "axios";
+import Swal from "sweetalert2";
 
-const Transaction = ({ editedRecord }) => {
+const Transaction = ({ editedRecord, currentUser }) => {
   const [transactions, setTransactions] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10); // Set initial page size to 5
+  const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
+  const [userData, setUserData] = useState(null);
+
+  // Extract permissions from currentUser
+  const permissions = currentUser?.permissions || [];
+  const canGenerateData = permissions[0];
+  const canManageData = permissions[1];
+  const canViewAdminPanel = permissions[2];
+  const canViewDataHistory = permissions[3];
 
   useEffect(() => {
     if (editedRecord && editedRecord.iis_no) {
@@ -66,6 +75,29 @@ const Transaction = ({ editedRecord }) => {
     };
   }, [editedRecord]);
 
+  const fetchUserByUsername = async (username) => {
+    try {
+      const response = await axios.get(`http://localhost:8081/api/users`, {
+        params: { username }, // This sends the username as a query parameter
+      });
+      return response.data.length > 0 ? response.data[0] : null; // Return the first user or null if not found
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      return null; // Return null on error
+    }
+  };
+
+  useEffect(() => {
+    const username = localStorage.getItem("username"); // Get username from local storage
+    if (username) {
+      fetchUserByUsername(username).then((user) => {
+        if (user) {
+          setUserData(user); // Store user data
+        }
+      });
+    }
+  }, []);
+
   const handleTableChange = (pagination) => {
     setCurrentPage(pagination.current);
     setPageSize(pagination.pageSize);
@@ -77,7 +109,7 @@ const Transaction = ({ editedRecord }) => {
       dataIndex: "transactionID",
       key: "transactionID",
       align: "center",
-      width: 60
+      width: 60,
     },
     {
       title: <span className="table-header">Date</span>,
@@ -124,25 +156,9 @@ const Transaction = ({ editedRecord }) => {
       key: "newValue",
       align: "center",
       render: (newValue) => {
-        // Assume the iis_no is the first part of the newValue before the line break
-        const iisNoMatch = newValue.split("\n")[0]; // Split by line breaks
-        const restOfNewValue = newValue.split("\n").slice(1).join("\n"); // Remainder of newValue after the iis_no
+        const restOfNewValue = newValue.split("\n").slice(1).join("\n");
 
-        return (
-          <div>
-            <a
-              href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                iisNoMatch
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {iisNoMatch}
-            </a>
-            <br />
-            {restOfNewValue}
-          </div>
-        );
+        return <div>{restOfNewValue}</div>;
       },
     },
     {
@@ -150,6 +166,8 @@ const Transaction = ({ editedRecord }) => {
       dataIndex: "userActed",
       key: "userActed",
       align: "center",
+      render: () =>
+        userData ? `${userData.name} \n ${userData.division}` : "Loading...", // Display the full name
     },
     {
       title: <span className="table-header">Date Acted</span>,
@@ -158,47 +176,70 @@ const Transaction = ({ editedRecord }) => {
       render: (date) => moment(date).format("MM/DD/yyyy \n hh:mm A"),
       align: "center",
     },
-    {
-      title: <span className="table-header">Actions</span>,
-      key: "actions",
-      align: "center",
-      render: (_, record) => (
-        <div className="action-buttons">
-          <div>
-            <Tooltip title="View Data">
-              <Button
-                type="primary"
-                className="action-button"
-                size="small"
-                icon={<EyeOutlined />}
-              />
-            </Tooltip>
-          </div>
-          <div>
-            <Tooltip title="Revert Changes">
-              <Button
-                type="primary"
-                className="action-button"
-                size="small"
-                icon={<RollbackOutlined />}
-              />
-            </Tooltip>
-          </div>
-          <div>
-            <Tooltip title="Delete Transaction">
-              <Button
-                type="primary"
-                danger
-                icon={<DeleteOutlined />}
-                className="action-button action-button-danger"
-                size="small"
-              />
-            </Tooltip>
-          </div>
-        </div>
-      ),
-    },
-  ];
+  ].concat(
+    canManageData
+      ? [
+          {
+            title: <span className="table-header">Actions</span>,
+            key: "actions",
+            align: "center",
+            render: (_, record) => (
+              <div className="action-buttons">
+                <Tooltip title="View Data">
+                  <Button
+                    type="primary"
+                    className="action-button"
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => {
+                      Swal.fire({
+                        icon: "info",
+                        title: "In Development",
+                        text: "This feature is still under development.",
+                        confirmButtonText: "OK",
+                      });
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip title="Revert Changes">
+                  <Button
+                    type="primary"
+                    className="action-button button-revert"
+                    size="small"
+                    icon={<RollbackOutlined />}
+                    onClick={() => {
+                      Swal.fire({
+                        icon: "info",
+                        title: "In Development",
+                        text: "This feature is still under development.",
+                        confirmButtonText: "OK",
+                      });
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip title="Delete Transaction">
+                  <Button
+                    type="primary"
+                    danger
+                    icon={<DeleteOutlined />}
+                    className="action-button button-danger"
+                    size="small"
+                    onClick={() => {
+                      Swal.fire({
+                        icon: "info",
+                        title: "In Development",
+                        text: "This feature is still under development.",
+                        confirmButtonText: "OK",
+                      });
+                    }}
+                  />
+                </Tooltip>
+              </div>
+            ),
+          },
+        ]
+      : []
+  );
 
   return (
     <div>

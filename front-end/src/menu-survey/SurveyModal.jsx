@@ -12,7 +12,7 @@ import "./surveymodal.css";
 
 const { TabPane } = Tabs;
 
-const SurveyModal = ({ record, handleReload, onClose }) => {
+const SurveyModal = ({ record, handleReload, currentUser }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(record);
   const [activeTab, setActiveTab] = useState("1");
@@ -23,6 +23,7 @@ const SurveyModal = ({ record, handleReload, onClose }) => {
     return storedValue ? JSON.parse(storedValue) : {};
   });
   const [previousRecord, setPreviousRecord] = useState(null);
+
 
   useEffect(() => {
     localStorage.setItem("isLogChecked", JSON.stringify(isLogChecked));
@@ -297,6 +298,8 @@ const SurveyModal = ({ record, handleReload, onClose }) => {
     });
   };
 
+
+
   return (
     <div className="modal-container">
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
@@ -348,12 +351,11 @@ const SurveyModal = ({ record, handleReload, onClose }) => {
           tab={<span className="custom-tab-history">History</span>}
           key="5"
         >
-          <Transaction editedRecord={editedRecord} />
+          <Transaction editedRecord={editedRecord} currentUser={currentUser}/>
         </TabPane>
       </Tabs>
 
       <div className="action-buttons-container">
-        {/* Hide buttons if Transaction History tab is active */}
         {activeTab !== "5" && (
           <div>
             {isEditing ? (

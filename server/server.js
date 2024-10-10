@@ -58,6 +58,8 @@ let reportdraftCollection;
 let surveyCollection;
 let activityLogsCollection;
 let surveyLogCollection;
+let ucdsLogCollection;
+
 
 app.use(
   session({
@@ -93,6 +95,7 @@ async function connectToMongo() {
     surveyCollection = db.collection("survey-data");
     activityLogsCollection = db.collection("app-logs");
     surveyLogCollection = db.collection("survey-log");
+    ucdsLogCollection = db.collection("ucds-log");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error;
@@ -376,6 +379,10 @@ app.post("/login", async (req, res) => {
       division: user.division,
       permission: user.permission,
       avatar: user.avatar,
+      canGenerateData: user.canGenerateData || false, // Include permissions
+      canManageData: user.canManageData || false,
+      canViewAdminPanel: user.canViewAdminPanel || false,
+      canViewDataHistory: user.canViewDataHistory || false,
     };
 
     await loginStatusCollection.updateOne(
@@ -399,6 +406,10 @@ app.post("/login", async (req, res) => {
       status: "success",
       username: user.username,
       permission: user.permission,
+      canGenerateData: user.canGenerateData || false, // Send permissions
+      canManageData: user.canManageData || false,
+      canViewAdminPanel: user.canViewAdminPanel || false,
+      canViewDataHistory: user.canViewDataHistory || false,
     });
   } catch (error) {
     console.error("Error during login:", error);
@@ -466,6 +477,10 @@ app.get("/check-auth", authenticateSession, (req, res) => {
     division: req.session.user.division,
     permission: req.session.user.permission,
     avatar: req.session.user.avatar,
+    canGenerateData: req.session.user.canGenerateData,
+    canManageData: req.session.user.canManageData,
+    canViewAdminPanel: req.session.user.canViewAdminPanel,
+    canViewDataHistory: req.session.user.canViewDataHistory
   });
 });
 
@@ -743,6 +758,21 @@ app.post("/api/survey-log", async (req, res) => {
     res.status(500).send("Error saving log entry");
   }
 });
+
+
+app.post("/api/ucds-log", async (req, res) => {
+  try {
+    const logEntry = req.body;
+    await ucdsLogCollection.insertOne(logEntry);
+    res.status(200).send(logEntry);
+  } catch (error) {
+    console.error("Error saving log entry:", error);
+    res.status(500).send("Error saving log entry");
+  }
+});
+
+
+
 
 // app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1375,11 +1405,18 @@ app.get("/api/extract-province-data", async (req, res) => {
   }
 });
 
-// Define route to fetch user data
 app.get("/api/users", async (req, res) => {
+  const { username } = req.query; // Get the username from the query parameters
   try {
-    const users = await userCollection.find().toArray(); // Fetch all users from the "user" collection
-    res.json(users); // Return the users as JSON
+    // If a username is provided, find the specific user; otherwise, fetch all users
+    const query = username ? { username } : {};
+    const users = await userCollection.find(query).toArray(); // Fetch user(s) based on query
+
+    if (username && users.length === 0) {
+      return res.status(404).json({ message: "User not found" }); // Handle case when no user is found
+    }
+
+    res.json(users); // Return the user(s) as JSON
   } catch (error) {
     console.error("Error fetching user data:", error);
     res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
@@ -1614,13 +1651,39 @@ app.get("/api/survey-log", async (req, res) => {
   }
 });
 
+
+app.get("/api/ucds-log", async (req, res) => {
+  const { ecc_cnc } = req.query;
+  try {
+    // If iis_no is provided, filter by it; otherwise, return all logs
+    const query = ecc_cnc ? { newValue: { $regex: ecc_cnc, $options: "i" } } : {};
+
+    const logs = await ucdsLogCollection.find(query).toArray();
+
+    if (logs.length === 0) {
+      
+      return res.status(200).json([]); 
+    } else {
+      return res.status(200).json(logs); // Return the fetched logs
+    }
+  } catch (error) {
+    console.error("Error fetching survey logs:", error);
+    return res.status(500).send("Internal Server Error");
+  }
+});
+
+
 // Get the latest transaction ID from the survey-log collection
 app.get("/api/get-latest-transaction-id", async (req, res) => {
   try {
     const database = client.db("universe-db");
     const collection = database.collection("survey-log");
 
-    const latestTransactionId = await collection.find().sort({ transactionID: -1 }).limit(1).toArray();
+    const latestTransactionId = await collection
+      .find()
+      .sort({ transactionID: -1 })
+      .limit(1)
+      .toArray();
 
     if (latestTransactionId.length > 0) {
       const transactionId = latestTransactionId[0].transactionID;
@@ -1965,6 +2028,38 @@ app.patch("/api/surveys/:id", async (req, res) => {
     res.status(500).json({ message: "Error updating row color" });
   }
 });
+
+// Update user privileges API using email
+app.patch("/api/users/:email/permissions", async (req, res) => {
+  const { email } = req.params; // Get the user's email from the URL
+  const { canViewAdminPanel, canViewDataHistory, canManageData, canGenerateData } = req.body; // Destructure the privilege values from the request body
+
+  try {
+    // Find the user by email and update the permissions
+    const result = await userCollection.updateOne(
+      { email: email }, // Match the document by email
+      {
+        $set: {
+          canViewAdminPanel: canViewAdminPanel, // Update Admin Panel permission
+          canViewDataHistory: canViewDataHistory, // Update Data History permission
+          canManageData: canManageData, // Update Manage Data permission
+          canGenerateData: canGenerateData, // Update Generate Data permission
+        },
+      }
+    );
+
+    // Check if any document was modified
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: "User not found or no changes applied" });
+    }
+
+    res.status(200).json({ message: "User permissions updated successfully" });
+  } catch (error) {
+    console.error("Error updating user permissions:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 /////////////////////////////////////////////////////////////////
 

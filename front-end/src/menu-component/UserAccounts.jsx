@@ -1,5 +1,15 @@
 import { useState, useEffect } from "react";
-import { Avatar, Table, Input, Button, Select, Popover, List, Tag } from "antd";
+import {
+  Avatar,
+  Table,
+  Input,
+  Button,
+  Select,
+  Popover,
+  List,
+  Tag,
+  Modal,
+} from "antd";
 import {
   SearchOutlined,
   DownloadOutlined,
@@ -16,6 +26,7 @@ import SignAccountModal from "./SignAccountModal";
 import Swal from "sweetalert2";
 import NiceAvatar from "react-nice-avatar";
 import AvatarWithName from "../components/AvatarwithName";
+import AccountPermission from "./AccountPermission";
 
 const { Option } = Select;
 
@@ -37,11 +48,15 @@ const UserAccounts = () => {
     pageSize: 10,
   });
   const [tableLoading, setTableLoading] = useState(false);
+  const [isModalAccessVisible, setModalAccessVisible] = useState(false);
+  const [selectedAccessUser, setSelectedAccessUser] = useState(null);
+  const [isAccountPermissionVisible, setAccountPermissionVisible] =
+    useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(" http://localhost:8081/api/users", {
+      const response = await axios.get("http://localhost:8081/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -251,6 +266,20 @@ const UserAccounts = () => {
     fetchData();
   }, [pagination.current, pagination.pageSize]);
 
+  const handleEditAccess = (record) => {
+    setSelectedAccessUser(record); // Set the selected user for access
+    setModalAccessVisible(true); // Open the main modal
+  };
+
+  const handleModalClose = () => {
+    setModalAccessVisible(false);
+    setSelectedAccessUser(null); // Reset the selected user
+  };
+
+  const handleAccountPermissionClose = () => {
+    setAccountPermissionVisible(false);
+  };
+
   const columns = [
     {
       title: "Name",
@@ -373,8 +402,12 @@ const UserAccounts = () => {
                 </Button>
               </List.Item>
               <List.Item>
-                <Button type="text" size="small">
-                  Evaluate
+                <Button
+                  type="text"
+                  size="small"
+                  onClick={() => handleEditAccess(record)}
+                >
+                  Edit Access
                 </Button>
               </List.Item>
             </List>
@@ -592,11 +625,6 @@ const UserAccounts = () => {
     console.log("Exporting...");
   };
 
-  const handleEvaluate = () => {
-    // Your evaluate function here
-    setPopoverVisible(null); // Close the popover
-  };
-
   const handleEdit = (record) => {
     setSelectedUser(record);
     setIsModalVisible(true);
@@ -618,6 +646,15 @@ const UserAccounts = () => {
       return "disabled-row"; // CSS class to apply to disabled rows
     }
     return "";
+  };
+  
+  const handleClose = () => {
+    setModalAccessVisible(false);
+  };
+
+  const handlePermissionsUpdate = () => {
+    //console.log("Permissions updated, re-authenticating...");
+
   };
 
   return (
@@ -670,12 +707,37 @@ const UserAccounts = () => {
           loading={loading}
           onChange={handlePaginationChange}
         />
-        {/* UserProfileModal component can be used here for detailed view/edit */}
+
         <UserProfileModal
           user={selectedUser}
           visible={isModalVisible}
           onCancel={handleModalCancel}
         />
+
+        <Modal
+          title="User Permission"
+          visible={isModalAccessVisible}
+          footer={null}
+          closable={true} 
+          onCancel={handleClose}
+          width={800}
+        >
+          {selectedAccessUser && (
+            <div>
+              <AccountPermission
+                visible={isAccountPermissionVisible}
+                onClose={handleModalClose}
+                onPermissionsUpdate={handlePermissionsUpdate} 
+                userData={{
+                  name: selectedAccessUser.name,
+                  email: selectedAccessUser.email,
+                  division: selectedAccessUser.division,
+                  permission: selectedAccessUser.permission
+                }}
+              />
+            </div>
+          )}
+        </Modal>
       </div>
 
       {/* Container for Users Needing Approval */}

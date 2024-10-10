@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ConfigProvider, Layout, Menu, Button } from "antd";
 import {
   DashboardFilled,
@@ -15,10 +15,26 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 const { Sider } = Layout;
 const { SubMenu } = Menu;
 
-const SideMenu = ({ theme, permissions }) => {
+const SideMenu = ({ theme, currentUser }) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Extract permissions from currentUser
+  const permissions = currentUser?.permissions || [];
+  const canGenerateData = permissions[0];
+  const canManageData = permissions[1];
+  const canViewAdminPanel = permissions[2];
+  const canViewDataHistory = permissions[3];
+
+  useEffect(() => {
+    if (currentUser) {
+      console.log("Can Generate Data:", canGenerateData);
+      console.log("Can Manage Data Data:", canManageData);
+      console.log("Can View Admin Panel:", canViewAdminPanel);
+      console.log("Can View Data History:", canViewDataHistory);
+    }
+  }, [currentUser]);
 
   const onCollapse = (collapsed) => {
     setCollapsed(collapsed);
@@ -29,16 +45,8 @@ const SideMenu = ({ theme, permissions }) => {
   };
 
   const handleExportDataClick = () => {
-    navigate("/universe/exportdata"); // Navigate to Export Data
+    navigate("/universe/exportdata"); 
   };
-
-  
-
-  const storedPermissions =
-    JSON.parse(localStorage.getItem("permission")) || [];
-  const showAdminMenu =
-    storedPermissions.includes("admin") ||
-    storedPermissions.includes("developer");
 
   return (
     <Sider
@@ -47,7 +55,7 @@ const SideMenu = ({ theme, permissions }) => {
       theme={theme}
       width={220}
       className="sider-container"
-      trigger={null} // Remove default collapse trigger
+      trigger={null}
     >
       <div className="sider-header">
         <Logo theme={theme} collapsed={collapsed} />
@@ -96,7 +104,10 @@ const SideMenu = ({ theme, permissions }) => {
               "Zambales",
             ].map((province) => (
               <Menu.Item key={`/universe/province/${province.toLowerCase()}`}>
-                <Link to={`/universe/province/${province.toLowerCase()}`} className="link-menu">
+                <Link
+                  to={`/universe/province/${province.toLowerCase()}`}
+                  className="link-menu"
+                >
                   {province}
                 </Link>
               </Menu.Item>
@@ -104,102 +115,38 @@ const SideMenu = ({ theme, permissions }) => {
           </SubMenu>
 
           <SubMenu key="reports" icon={<PushpinFilled />} title="Reports">
-            <Menu.Item key="/universe/survey">
-              <Link
-                to="/universe/survey"
-                className={`link-menu-hover ${
-                  isMenuSelected("survey") ? "selected" : ""
-                }`}
-              >
-                Survey List
-              </Link>
-            </Menu.Item>
-            <Menu.Item key="/universe/mbu">
-              <Link
-                to="/universe/mbu"
-                className={`link-menu-hover ${
-                  isMenuSelected("mbu") ? "selected" : ""
-                }`}
-              >
-                MBU Pipeline
-              </Link>
-            </Menu.Item>
-            <Menu.Item key="/universe/eswm-database">
-              <Link
-                to="/universe/eswm-database"
-                className={`link-menu-hover ${
-                  isMenuSelected("mbu") ? "selected" : ""
-                }`}
-              >
-                ESWM Database
-              </Link>
-            </Menu.Item>
-            <Menu.Item key="/universe/extract">
-              <Link
-                to="/universe/extract"
-                className={`link-menu-hover ${
-                  isMenuSelected("extract") ? "selected" : ""
-                }`}
-              >
-                Extract Data (DEV)
-              </Link>
-            </Menu.Item>
-            {/* <Menu.Item key="/universe/report">
-              <Link
-                to="/universe/report"
-                className={`link-menu-hover ${
-                  isMenuSelected("report") ? "selected" : ""
-                }`}
-              >
-                Generate Report (DEV)
-              </Link>
-            </Menu.Item> */}
+            <>
+              <Menu.Item key="/universe/survey">
+                <Link to="/universe/survey">Survey List</Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/mbu">
+                <Link to="/universe/mbu">MBU Pipeline</Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/eswm-database">
+                <Link to="/universe/eswm-database">ESWM Database</Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/extract">
+                <Link to="/universe/extract">Extract Data (DEV)</Link>
+              </Menu.Item>
+            </>
           </SubMenu>
 
-          {showAdminMenu && (
+          {canViewAdminPanel && (
             <SubMenu key="admin" icon={<SettingFilled />} title="Admin">
               <Menu.Item key="/universe/accounts">
-                <Link
-                  to="/universe/accounts"
-                  className={`link-menu-hover ${
-                    isMenuSelected("accounts") ? "selected" : ""
-                  }`}
-                >
-                  User Accounts
-                </Link>
+                <Link to="/universe/accounts">User Accounts</Link>
               </Menu.Item>
-
               <Menu.Item key="/universe/posting">
-                <Link
-                  to="/universe/posting"
-                  className={`link-menu-hover ${
-                    isMenuSelected("posting") ? "selected" : ""
-                  }`}
-                >
-                  Post to Bulletin
-                </Link>
+                <Link to="/universe/posting">Post to Bulletin</Link>
               </Menu.Item>
-
               <Menu.Item key="/universe/activitylog">
-                <Link
-                  to="/universe/activitylog"
-                  className={`link-menu-hover ${
-                    isMenuSelected("activitylog") ? "selected" : ""
-                  }`}
-                >
-                  Activity Logs
-                </Link>
+                <Link to="/universe/activitylog">Activity Logs</Link>
               </Menu.Item>
               <Menu.Item key="/universe/duplicate-firms">
-              <Link
-                to="/universe/duplicate-firms"
-                className={`link-menu-hover ${
-                  isMenuSelected("duplicate-firms") ? "selected" : ""
-                }`}
-              >
-                Duplicated Firms List
-              </Link>
-            </Menu.Item>
+                <Link to="/universe/duplicate-firms">
+                  Duplicated Firms List
+                </Link>
+              </Menu.Item>
             </SubMenu>
           )}
         </Menu>
