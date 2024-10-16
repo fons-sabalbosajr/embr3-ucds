@@ -103,6 +103,45 @@ const Transaction = ({ editedRecord, currentUser }) => {
     setPageSize(pagination.pageSize);
   };
 
+  const handleDeleteTransaction = async (transactionID) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/survey-transaction/${transactionID}`, // Use transactionID instead of ID
+        {
+          method: "DELETE",
+          credentials: "include", // Include credentials if necessary
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        Swal.fire({
+          title: "Success!",
+          text: result.message,
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+      } else {
+        const error = await response.json();
+        console.error("Server response error:", error); // Log the error
+        Swal.fire({
+          title: "Error",
+          text: error.message || "Error deleting transaction",
+          icon: "error",
+          confirmButtonText: "OK",
+        });
+      }
+    } catch (error) {
+      console.error("Network error:", error); // Log network errors
+      Swal.fire({
+        title: "Error",
+        text: "Error deleting transaction",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+    }
+  };
+
   const columns = [
     {
       title: <span className="table-header">Trans. ID</span>,
@@ -185,55 +224,34 @@ const Transaction = ({ editedRecord, currentUser }) => {
             align: "center",
             render: (_, record) => (
               <div className="action-buttons">
-                <Tooltip title="View Data">
-                  <Button
-                    type="primary"
-                    className="action-button"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() => {
-                      Swal.fire({
-                        icon: "info",
-                        title: "In Development",
-                        text: "This feature is still under development.",
-                        confirmButtonText: "OK",
-                      });
-                    }}
-                  />
-                </Tooltip>
-                <Tooltip title="Revert Changes">
-                  <Button
-                    type="primary"
-                    className="action-button button-revert"
-                    size="small"
-                    icon={<RollbackOutlined />}
-                    onClick={() => {
-                      Swal.fire({
-                        icon: "info",
-                        title: "In Development",
-                        text: "This feature is still under development.",
-                        confirmButtonText: "OK",
-                      });
-                    }}
-                  />
-                </Tooltip>
-                <Tooltip title="Delete Transaction">
-                  <Button
-                    type="primary"
-                    danger
-                    icon={<DeleteOutlined />}
-                    className="action-button button-danger"
-                    size="small"
-                    onClick={() => {
-                      Swal.fire({
-                        icon: "info",
-                        title: "In Development",
-                        text: "This feature is still under development.",
-                        confirmButtonText: "OK",
-                      });
-                    }}
-                  />
-                </Tooltip>
+                {/* Conditionally render delete button */}
+                {record.actionType !== "Initial Data" && (
+                  <Tooltip title="Delete Transaction">
+                    <Button
+                      type="primary"
+                      danger
+                      icon={<DeleteOutlined />}
+                      className="action-button button-danger"
+                      size="small"
+                      onClick={async () => {
+                        const result = await Swal.fire({
+                          title: "Are you sure?",
+                          text: "This will permanently delete the transaction!",
+                          icon: "warning",
+                          showCancelButton: true,
+                          confirmButtonColor: "#d33",
+                          cancelButtonColor: "#3085d6",
+                          confirmButtonText: "Yes, delete it!",
+                          cancelButtonText: "Cancel",
+                        });
+
+                        if (result.isConfirmed) {
+                          await handleDeleteTransaction(record.transactionID);
+                        }
+                      }}
+                    />
+                  </Tooltip>
+                )}
               </div>
             ),
           },

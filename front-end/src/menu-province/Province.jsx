@@ -395,7 +395,7 @@ const Province = ({ theme, currentUser  }) => {
     switch (section) {
       case "PEMU_Aurora":
       case "PEMU_AURORA":
-        return "transparent"; // no color encoded
+        return "#F0F3FF";
 
       case "PEMU_Bataan":
       case "PEMU_BATAAN":
@@ -845,7 +845,7 @@ const Province = ({ theme, currentUser  }) => {
               </a>
             ) : (
               <a
-                href={`https://iis.emb.gov.ph/embis/`}
+                href={`https://ecconline.emb.gov.ph/live/Account/Login.aspx/`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -1131,7 +1131,7 @@ const Province = ({ theme, currentUser  }) => {
                 <Tooltip
                   key={index}
                   title={
-                    <div style={{ fontSize: "12px" }}>
+                    <div style={{ fontSize: "11px" }}>
                       {" "}
                       {/* Reduced font size */}
                       <div>Section Incharge: {record.section_incharge}</div>
@@ -1160,7 +1160,7 @@ const Province = ({ theme, currentUser  }) => {
                       whiteSpace: "nowrap",
                       borderRadius: "5px",
                       cursor: "pointer", // Cursor changes to pointer on hover
-                      fontSize: "11px",
+                      fontSize: "10px",
                     }}
                   >
                     {section}

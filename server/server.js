@@ -60,7 +60,6 @@ let activityLogsCollection;
 let surveyLogCollection;
 let ucdsLogCollection;
 
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -96,6 +95,7 @@ async function connectToMongo() {
     activityLogsCollection = db.collection("app-logs");
     surveyLogCollection = db.collection("survey-log");
     ucdsLogCollection = db.collection("ucds-log");
+    projectTypeCollection = db.collection("project_type");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error;
@@ -480,7 +480,7 @@ app.get("/check-auth", authenticateSession, (req, res) => {
     canGenerateData: req.session.user.canGenerateData,
     canManageData: req.session.user.canManageData,
     canViewAdminPanel: req.session.user.canViewAdminPanel,
-    canViewDataHistory: req.session.user.canViewDataHistory
+    canViewDataHistory: req.session.user.canViewDataHistory,
   });
 });
 
@@ -638,6 +638,65 @@ app.post(
   }
 );
 
+app.post(
+  "/save-draft-report-survey",
+  upload.single("pdfFile"),
+  logActivity,
+  async (req, res) => {
+    try {
+      // Extract the fields from req.body and req.file
+      const { reportInfo, user, date, fileName } = req.body;
+
+      // Validate required fields
+      if (!reportInfo || !user || !date || !req.file) {
+        return res.status(400).send({ message: "Missing required fields" });
+      }
+
+      // Parse and validate the data
+      let parsedReportInfo;
+      let parsedUser;
+      try {
+        parsedReportInfo = JSON.parse(reportInfo);
+        parsedUser = JSON.parse(user);
+      } catch (parseError) {
+        return res.status(400).send({ message: "Invalid JSON format" });
+      }
+
+      // Validate fields within the parsed data
+      const { id_no, name, title, iis_no, address } = parsedReportInfo;
+      if (!id_no || !name || !title || !iis_no || !address) {
+        return res.status(400).send({ message: "Incomplete reportInfo data" });
+      }
+
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).send({ message: "Invalid date format" });
+      }
+
+      // Save the PDF file to the server
+      const pdfFilePath = `uploads/${req.file.filename}`; // Specify where to save the uploaded file
+
+      const draftReport = {
+        user: parsedUser,
+        date: parsedDate,
+        reportInfo: { id_no, name, title, iis_no, address },
+        fileName: fileName || "", // Default to empty string if fileName is not provided
+        pdfUrl: pdfFilePath, // Store the path to the uploaded PDF
+      };
+
+      // Insert the draft report into the database
+      await reportdraftCollection.insertOne(draftReport);
+      res.status(200).send({ message: "Draft report saved successfully" });
+    } catch (error) {
+      console.error("Failed to save draft report:", error);
+      res
+        .status(500)
+        .send({ message: "Failed to save draft report", error: error.message });
+    }
+  }
+);
+
+
 // Update color for a specific survey record
 app.post(
   "/api/update-color",
@@ -759,7 +818,6 @@ app.post("/api/survey-log", async (req, res) => {
   }
 });
 
-
 app.post("/api/ucds-log", async (req, res) => {
   try {
     const logEntry = req.body;
@@ -770,9 +828,6 @@ app.post("/api/ucds-log", async (req, res) => {
     res.status(500).send("Error saving log entry");
   }
 });
-
-
-
 
 // app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -787,9 +842,39 @@ app.get("/api/draft-report", async (req, res) => {
   }
 });
 
+app.get("/api/firm-count", async (req, res) => {
+  try {
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data");
+
+    // Get the total count of documents in the collection
+    const count = await collection.countDocuments();
+
+    return res.status(200).json({ count, updatedFirms: 0 }); // Return the total count
+  } catch (error) {
+    console.error("Error retrieving firm count:", error);
+    return res.status(500).json({ error: "Failed to retrieve firm count." });
+  }
+});
+
 app.get("/api/surveys", async (req, res) => {
   try {
     const surveys = await surveyCollection.find({}).toArray();
+    res.status(200).json(surveys);
+  } catch (error) {
+    console.error("Error fetching survey data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds", async (req, res) => {
+  try {
+    const surveys = await ucdsCollection.find({}).toArray();
     res.status(200).json(surveys);
   } catch (error) {
     console.error("Error fetching survey data:", error);
@@ -1058,6 +1143,166 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
   } catch (error) {
     console.error("Error generating ICIR:", error);
     res.status(500).send("Failed to generate ICIR");
+  }
+});
+
+//GENERATION OF SURVEY FORM PDF AS PRIMARY INFORMATION
+app.get("/generate-survey-report/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Validate id_no format
+    if (!parseInt(id)) {
+      return res.status(400).send("Invalid id_no format");
+    }
+
+    // Find record by id_no from ucds-data collection
+    const record = await surveyCollection.findOne({ id_no: parseInt(id) });
+
+    // Handle if record not found
+    if (!record) {
+      return res.status(404).send("Record not found");
+    }
+
+    // Load existing PDF template
+    const pdfPath = path.join(__dirname, "tmp", "survey-form.pdf");
+    const pdfBuffer = await fs.promises.readFile(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+
+    // Register fontkit
+    pdfDoc.registerFontkit(fontkit);
+
+    // Load custom font
+    const fontPath = path.join(__dirname, "fonts", "arial.ttf");
+    const fontBytes = await fs.promises.readFile(fontPath);
+    const customFont = await pdfDoc.embedFont(fontBytes);
+
+    const form = pdfDoc.getForm();
+    const formFields = form.getFields();
+
+    formFields.forEach((field) => {
+      switch (field.getName()) {
+        case "establishment_name":
+          field.setText(`${record.project_title || ""}`);
+          field.updateAppearances(customFont);
+          break;
+        case "plant_address":
+          field.setText(`${record.address || ""}`);
+          field.updateAppearances(customFont);
+          break;
+        case "main_address":
+          field.setText(`${record.address || ""}`);
+          field.updateAppearances(customFont);
+          break;
+        case "nature_business":
+          field.setText(`${record.industry_class || ""}`);
+          field.updateAppearances(customFont);
+          break;
+        case "longitude":
+          field.setText(`${record.long || ""}`);
+          field.updateAppearances(customFont);
+          break;
+        case "latitude":
+          field.setText(`${record.lat || ""}`);
+          field.updateAppearances(customFont);
+          break;
+        default:
+          console.log(`Unknown field: ${field.getName()}`);
+      }
+    });
+
+    // Send the modified PDF file to the client
+    const pdfBytes = await pdfDoc.save();
+    const compressedPdfBytes = zlib.gzipSync(pdfBytes);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="ICIR-${record.title}.pdf"`
+    );
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Content-Length", compressedPdfBytes.length);
+    res.send(compressedPdfBytes);
+  } catch (error) {
+    console.error("Error generating Survey Report:", error);
+    res.status(500).send("Failed to generate Survey Report");
+  }
+});
+
+// GENERATION OF CUSTOM SURVEY REPORT FORM PDF AS PRIMARY INFORMATION
+app.get("/generate-custom-survey-report/:id", async (req, res) => {
+  const { id } = req.params;
+  const selectedData = req.query;
+
+  // Define field mappings based on field names from the PDF
+  const fieldMapping = {
+    project_title: "establishment_name",
+    industry_class: "nature_business",
+    long: "longitude",
+    lat: "latitude",
+  };
+
+  try {
+    // Validate id_no format
+    if (!parseInt(id)) {
+      return res.status(400).send("Invalid id_no format");
+    }
+
+    // Load existing PDF template
+    const pdfPath = path.join(__dirname, "tmp", "survey-form.pdf");
+    const pdfBuffer = await fs.promises.readFile(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+
+    // Register fontkit
+    pdfDoc.registerFontkit(fontkit);
+
+    // Load custom font
+    const fontPath = path.join(__dirname, "fonts", "arial.ttf");
+    const fontBytes = await fs.promises.readFile(fontPath);
+    const customFont = await pdfDoc.embedFont(fontBytes);
+
+    const form = pdfDoc.getForm();
+    const formFields = form.getFields();
+
+    // Map provided values to PDF fields
+    formFields.forEach((field) => {
+      const fieldName = field.getName();
+
+      // Special handling for plant_address and main_address
+      if (fieldName === "plant_address") {
+        const value = selectedData["address"] || ""; // Use the same 'address' value for both fields
+        field.setText(value);
+        field.updateAppearances(customFont);
+      }
+
+      // For other fields based on the fieldMapping
+      const pdfFieldName = Object.keys(fieldMapping).find(
+        (key) => fieldMapping[key] === fieldName
+      );
+      if (pdfFieldName) {
+        const value = selectedData[pdfFieldName] || "";
+        field.setText(value);
+        field.updateAppearances(customFont);
+      }
+    });
+
+    // Send the modified PDF file to the client
+    const pdfBytes = await pdfDoc.save();
+    const compressedPdfBytes = zlib.gzipSync(pdfBytes);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="SURVEY REPORT-${
+        selectedData.project_title || "Unknown"
+      }.pdf"`
+    );
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Content-Length", compressedPdfBytes.length);
+    res.send(compressedPdfBytes);
+  } catch (error) {
+    console.error("Error generating Survey Report:", error);
+    res.status(500).send("Failed to generate Survey Report");
   }
 });
 
@@ -1488,22 +1733,25 @@ app.get("/api/daily_notices", async (req, res) => {
   try {
     const notices = await dailyNoticesCollection
       .find(
-        { date_monitored: { $exists: true, $ne: "" } }, // Filter to ensure date_monitored exists and is not empty
+        { date_monitored: { $exists: true, $ne: "" } },
         {
           projection: {
             date_monitored: 1,
             title: 1,
             address: 1,
             industry_class: 1,
-            date_monitored: 1,
             date_routed: 1,
             date_signed: 1,
             iis_no: 1,
             section_incharge: 1,
+            fmr_section_incharged: 1, // Ensure these fields are included
+            handler: 1,
+            monitoring_sched: 1,
+            insp_type: 1,
             remarks_recommendation: 1,
             _id: 0,
           },
-        } // Include only these fields
+        }
       )
       .toArray();
 
@@ -1542,6 +1790,36 @@ app.get("/api/ucds-data/:id", async (req, res) => {
 
     // Query the database
     const data = await ucdsCollection.findOne({ id_no: idNumber });
+
+    //console.log(`Data found: ${JSON.stringify(data)}`);
+
+    if (!data) {
+      return res.status(404).json({ error: "Data not found" });
+    } else {
+      return res.json(data);
+    }
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/survey-data/:id", async (req, res) => {
+  const { id } = req.params;
+
+  //console.log(`Received request for id: ${id}`);
+
+  // Validate id parameter
+  if (!id || isNaN(id)) {
+    return res.status(400).json({ error: "Valid ID parameter is required" });
+  }
+
+  try {
+    // Convert id to a number
+    const idNumber = parseInt(id, 10);
+
+    // Query the database
+    const data = await surveyCollection.findOne({ id_no: idNumber });
 
     //console.log(`Data found: ${JSON.stringify(data)}`);
 
@@ -1651,18 +1929,18 @@ app.get("/api/survey-log", async (req, res) => {
   }
 });
 
-
 app.get("/api/ucds-log", async (req, res) => {
   const { ecc_cnc } = req.query;
   try {
     // If iis_no is provided, filter by it; otherwise, return all logs
-    const query = ecc_cnc ? { newValue: { $regex: ecc_cnc, $options: "i" } } : {};
+    const query = ecc_cnc
+      ? { newValue: { $regex: ecc_cnc, $options: "i" } }
+      : {};
 
     const logs = await ucdsLogCollection.find(query).toArray();
 
     if (logs.length === 0) {
-      
-      return res.status(200).json([]); 
+      return res.status(200).json([]);
     } else {
       return res.status(200).json(logs); // Return the fetched logs
     }
@@ -1671,7 +1949,6 @@ app.get("/api/ucds-log", async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 });
-
 
 // Get the latest transaction ID from the survey-log collection
 app.get("/api/get-latest-transaction-id", async (req, res) => {
@@ -1698,19 +1975,26 @@ app.get("/api/get-latest-transaction-id", async (req, res) => {
   }
 });
 
-app.post("/api/create-survey-log-entry", async (req, res) => {
+app.get("/api/project_type", async (req, res) => {
+  const { industry_class } = req.query;
+
   try {
-    const database = client.db("universe-db");
-    const collection = database.collection("survey-log");
+    const projectData = await projectTypeCollection.findOne({
+      industry_class: industry_class,
+    });
 
-    const surveyLogEntry = req.body;
-
-    await collection.insertOne(surveyLogEntry);
-
-    res.status(201).json({ message: "Survey log entry created successfully" });
+    if (projectData) {
+      res.status(200).json(projectData);
+    } else {
+      res
+        .status(404)
+        .json({ message: "No project type found for this industry class" });
+    }
   } catch (error) {
-    console.error("Error creating survey log entry:", error);
-    res.status(500).json({ error: "Failed to create survey log entry" });
+    console.error("Error fetching project data:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching project data." });
   }
 });
 
@@ -1721,6 +2005,7 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params;
     const newData = req.body;
+    const updatedBy = req.body.updated_by; // Assuming you pass the user who updated the data
 
     // Ensure connection to the database
     if (!client.topology.isConnected()) {
@@ -1731,10 +2016,11 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     const collection = database.collection("ucds-data");
 
     // Fetch the existing document before updating
-    const existingData = await collection.findOne({ id_no: parseInt(id) });
+    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
 
-    //console.log("Existing Data:", existingData);
-    //console.log("New Data:", newData);
+    if (!oldDocument) {
+      return res.status(404).json({ error: "Data not found" });
+    }
 
     // Perform the update operation
     const result = await collection.updateOne(
@@ -1742,10 +2028,31 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
       { $set: newData }
     );
 
-    //console.log("Update result:", result);
-
     if (result.modifiedCount === 1) {
-      res.status(200).json({ message: "Data updated successfully" });
+      // If the update was successful, create an audit log
+      const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+
+      // Create an audit log to track changes
+      const auditLog = {
+        updated_by: updatedBy,
+        updated_at: new Date(),
+        ecc_cnc: newData.ecc_cnc, // Include the ecc_cnc if relevant to your data
+        changes: [],
+      };
+
+      // Compare old and new data to find changes
+      Object.keys(newData).forEach((key) => {
+        if (oldDocument[key] !== newData[key]) {
+          auditLog.changes.push({
+            field: key,
+            old_value: oldDocument[key],
+            new_value: newData[key],
+          });
+        }
+      });
+
+      // Return the audit log in the response
+      res.status(200).json(auditLog);
     } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
       res.status(200).json({ message: "No changes were made to the data" });
     } else {
@@ -2032,7 +2339,12 @@ app.patch("/api/surveys/:id", async (req, res) => {
 // Update user privileges API using email
 app.patch("/api/users/:email/permissions", async (req, res) => {
   const { email } = req.params; // Get the user's email from the URL
-  const { canViewAdminPanel, canViewDataHistory, canManageData, canGenerateData } = req.body; // Destructure the privilege values from the request body
+  const {
+    canViewAdminPanel,
+    canViewDataHistory,
+    canManageData,
+    canGenerateData,
+  } = req.body; // Destructure the privilege values from the request body
 
   try {
     // Find the user by email and update the permissions
@@ -2050,7 +2362,9 @@ app.patch("/api/users/:email/permissions", async (req, res) => {
 
     // Check if any document was modified
     if (result.modifiedCount === 0) {
-      return res.status(404).json({ message: "User not found or no changes applied" });
+      return res
+        .status(404)
+        .json({ message: "User not found or no changes applied" });
     }
 
     res.status(200).json({ message: "User permissions updated successfully" });
@@ -2059,7 +2373,6 @@ app.patch("/api/users/:email/permissions", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 
 /////////////////////////////////////////////////////////////////
 
@@ -2095,6 +2408,46 @@ app.delete("/api/remove-user/:id", async (req, res) => {
   } catch (error) {
     console.error("Error removing user:", error);
     res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+app.delete("/api/transaction/:transactionID", async (req, res) => {
+  const { transactionID } = req.params;
+
+  try {
+    // Use transactionID directly in the query
+    const result = await ucdsLogCollection.deleteOne({
+      transactionID: transactionID,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    res.json({ message: "Transaction deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
+  const { transactionID } = req.params;
+
+  try {
+    // Use transactionID directly in the query
+    const result = await surveyLogCollection.deleteOne({
+      transactionID: transactionID,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    res.json({ message: "Transaction deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

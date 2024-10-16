@@ -45,6 +45,7 @@ const ProvinceModal = ({
     return storedValue ? JSON.parse(storedValue) : {};
   });
   const [previousRecord, setPreviousRecord] = useState(null);
+  
 
   useEffect(() => {
     localStorage.setItem("isLogChecked", JSON.stringify(isLogChecked));
@@ -136,7 +137,7 @@ const ProvinceModal = ({
       }
 
       const logData = {
-        transactionID: `TRX-${String(transactionCounter).padStart(4, "0")}`,
+        transactionID: `TRXM-${String(transactionCounter).padStart(4, "0")}`,
         transactionDate: transactionDate,
         actionType: "Initial Data",
         oldValue: "-",
@@ -186,16 +187,22 @@ const ProvinceModal = ({
       if (result.isConfirmed) {
         try {
           const { _id, ...recordToUpdate } = editedRecord;
+  
           const currentUsername = localStorage.getItem("username");
-
+          const updatedRecord = {
+            ...recordToUpdate,
+            ecc_cnc: editedRecord.ecc_cnc,
+            updated_by: currentUsername, // Add the username to the request body
+          };
+  
           const response = await axios.put(
-            `http://localhost:8081/api/update-data/${record.id_no}`,
-            { ...recordToUpdate, updated_by: currentUsername }
+            `http://localhost:8081/api/update-data/${editedRecord.id_no}`,
+            updatedRecord
           );
-
+  
           if (response.status === 200) {
             const auditLog = response.data; // Assuming this contains audit log information
-
+  
             if (showNotification) {
               Swal.fire("Success", "Changes saved successfully!", "success");
             }
@@ -204,54 +211,58 @@ const ProvinceModal = ({
             }
             setIsEditing(false);
             handleReload();
-
-            // Get the latest transaction ID from the survey-log collection
-            axios
-              .get("http://localhost:8081/api/ucds-log")
-              .then((response) => {
-                const transactions = response.data;
-                let transactionCounter = 1;
-
-                if (transactions.length > 0) {
-                  const lastTransaction = transactions[transactions.length - 1];
-                  const lastTransactionID = lastTransaction.transactionID;
-                  const lastTransactionNumber = parseInt(
-                    lastTransactionID.replace("TRX-", "")
-                  );
-                  transactionCounter = lastTransactionNumber + 1;
-                }
-
-                // Create the survey log entry based on the audit log returned from the server
-                const surveyLogEntry = {
-                  transactionID: `TRX-${String(transactionCounter).padStart(
-                    4,
-                    "0"
-                  )}`,
-                  transactionDate: new Date().toLocaleString(),
-                  actionType: "Modified",
-                  oldValue: auditLog.changes
-                    .map((change) => `${change.old_value}`)
-                    .join("\n"),
-                  newValue: auditLog.changes
-                    .map((change) => `${change.new_value}`)
-                    .join("\n"),
-                  userActed: auditLog.updated_by,
-                  dateActed: new Date(auditLog.updated_at).toLocaleString(),
-                };
-
-                // Save the survey log entry to the survey-log collection
-                axios
-                  .post("http://localhost:8081/api/survey-log", surveyLogEntry)
-                  .then((response) => {
-                    // Log entry created successfully, if needed
-                  })
-                  .catch((error) => {
-                    console.error("Error creating survey log entry:", error);
-                  });
-              })
-              .catch((error) => {
-                console.error("Error getting latest transaction ID:", error);
-              });
+  
+            // Get the latest transaction ID from the ucds-log collection
+            const logResponse = await axios.get("http://localhost:8081/api/ucds-log");
+            const transactions = logResponse.data;
+  
+            let transactionCounter = 1;
+            if (transactions.length > 0) {
+              const lastTransaction = transactions[transactions.length - 1];
+              const lastTransactionID = lastTransaction.transactionID;
+              const lastTransactionNumber = parseInt(
+                lastTransactionID.replace("TRX-", "")
+              );
+              transactionCounter = lastTransactionNumber + 1;
+            }
+  
+            const transactionDate = new Date().toLocaleString();
+  
+            // Safely handle missing or empty changes
+            const changes = auditLog.changes || []; // Default to empty array if changes is undefined
+            const oldValues = changes.length
+              ? changes.map((change) => `${change.old_value}`).join("\n")
+              : "-"; // Use "-" if there are no changes
+            const newValues = changes.length
+              ? `${auditLog.ecc_cnc} \n${changes
+                  .map((change) => `${change.new_value}`)
+                  .join("\n")}`
+              : `${auditLog.ecc_cnc || editedRecord.ecc_cnc}`; // Use ecc_cnc directly if no changes
+  
+            // Ensure the updated_at field is valid before converting to string
+            const updatedAt = auditLog.updated_at
+              ? new Date(auditLog.updated_at).toLocaleString()
+              : new Date().toLocaleString(); // Use current date if updated_at is invalid
+  
+            // Create the log entry based on the audit log returned from the server
+            const logData = {
+              transactionID: `TRX-${String(transactionCounter).padStart(4, "0")}`,
+              transactionDate: transactionDate,
+              actionType: "Modified",
+              oldValue: oldValues,
+              newValue: newValues,
+              userActed: auditLog.updated_by || currentUsername, // Fallback to the current user if undefined
+              dateActed: updatedAt,
+              ecc_cnc: auditLog.ecc_cnc || editedRecord.ecc_cnc, // Fallback to the editedRecord ecc_cnc
+            };
+  
+            // Save the log entry to the ucds-log collection
+            try {
+              await axios.post("http://localhost:8081/api/ucds-log", logData);
+              console.log("Log entry created successfully");
+            } catch (error) {
+              console.error("Error creating log entry:", error);
+            }
           } else {
             Swal.fire("Error", "Failed to save changes", "error");
           }
@@ -262,6 +273,7 @@ const ProvinceModal = ({
       }
     });
   };
+  
 
   const handleCancelEdit = () => {
     Swal.fire({

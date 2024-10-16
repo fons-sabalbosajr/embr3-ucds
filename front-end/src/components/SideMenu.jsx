@@ -27,14 +27,14 @@ const SideMenu = ({ theme, currentUser }) => {
   const canViewAdminPanel = permissions[2];
   const canViewDataHistory = permissions[3];
 
-  useEffect(() => {
-    if (currentUser) {
-      console.log("Can Generate Data:", canGenerateData);
-      console.log("Can Manage Data Data:", canManageData);
-      console.log("Can View Admin Panel:", canViewAdminPanel);
-      console.log("Can View Data History:", canViewDataHistory);
-    }
-  }, [currentUser]);
+  // useEffect(() => {
+  //   if (currentUser) {
+  //     console.log("Can Generate Data:", canGenerateData);
+  //     console.log("Can Manage Data Data:", canManageData);
+  //     console.log("Can View Admin Panel:", canViewAdminPanel);
+  //     console.log("Can View Data History:", canViewDataHistory);
+  //   }
+  // }, [currentUser]);
 
   const onCollapse = (collapsed) => {
     setCollapsed(collapsed);

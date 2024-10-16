@@ -8,7 +8,7 @@ import {
   Menu,
   Button,
   Badge,
-  Input,
+  Input, Tooltip
 } from "antd";
 import { DownOutlined, SearchOutlined } from "@ant-design/icons";
 import axios from "axios";
@@ -72,7 +72,9 @@ const SystemCalendar = () => {
             return (
               <a
                 key={index}
-                href={`https://iis.emb.gov.ph/embis/`}
+                href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                  part.trim()
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -105,6 +107,79 @@ const SystemCalendar = () => {
       setFilteredData(filteredDataSource);
     }
   };
+
+  // Utility function to darken a given color
+  const darkenColor = (color, percent) => {
+    const num = parseInt(color.slice(1), 16),
+      amt = Math.round(2.55 * percent),
+      R = (num >> 16) + amt,
+      G = ((num >> 8) & 0x00ff) + amt,
+      B = (num & 0x0000ff) + amt;
+
+    return `#${(
+      0x1000000 +
+      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 1 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)}`;
+  };
+
+  const sectionBackgroundColor = (section) => {
+    switch (section) {
+      case "PEMU_Aurora":
+      case "PEMU_AURORA":
+        return "#F0F3FF";
+
+      case "PEMU_Bataan":
+      case "PEMU_BATAAN":
+        return "#FCE5BB"; // Biege. pero pag namonitor na, transparent
+
+      case "PEMU_Bulacan":
+      case "PEMU_BULACAN":
+        return "#FCE5BB"; // Light purple
+
+      case "PEMU_Nueva_Ecija":
+      case "PEMU_NUEVA ECIJA":
+        return "#FFE225"; // Yellow
+
+      case "PEMU_Pampanga":
+      case "PEMU_PAMPANGA":
+        return "#FFE225"; // Yellow
+
+      case "PEMU_Tarlac":
+      case "PEMU_TARLAC":
+        return "#39C665"; // Green
+
+      case "PEMU_Zambales":
+      case "PEMU_ZAMBALES":
+        return "#d1c4e9"; // Light lavender
+
+      case "MBU":
+      case "mbu":
+        return "#FF9B3E"; // Light green
+
+      case "TCHWMS":
+      case "tchwms":
+        return "#936DDF";
+
+      case "AWECMES":
+      case "awecmes":
+        return "#c8e6c9";
+
+      default:
+        return "transparent"; // Default transparent background
+    }
+  };
+
+  const measureTextWidth = (text, font = "14px Poppins") => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    context.font = font;
+    return context.measureText(text).width;
+  };
+
 
   const columns = [
     {
@@ -153,8 +228,58 @@ const SystemCalendar = () => {
       title: "Section Incharge",
       dataIndex: "section_incharge",
       key: "section_incharge",
-      width: "100px",
+      width: "150px",
       align: "left",
+      render: (text, record) => {
+        // Split sections by comma
+        const sections = record.section_incharge
+          .split(",")
+          .map((section) => section.trim());
+    
+        return (
+          <div style={{ display: "flex", flexWrap: "wrap" }}>
+            {sections.map((section, index) => {
+              const textWidth = measureTextWidth(section);
+              const backgroundColor = sectionBackgroundColor(section); // Base background color
+              const darkerBackgroundColor = darkenColor(backgroundColor, -40); // Darker shade
+    
+              return (
+                <Tooltip
+                  key={index}
+                  title={
+                    <div style={{ fontSize: "11px" }}>
+                      <div>Section Incharge: {record.section_incharge}</div>
+                      <div>FMR Section Incharge: {record.fmr_section_incharged || "N/A"}</div>
+                      <div>Handler: {record.handler || "N/A"}</div>
+                      <div>Monitoring Schedule: {record.monitoring_sched || "N/A"}</div>
+                      <div>Inspection Type: {record.insp_type || "N/A"}</div>
+                    </div>
+                  }
+                  color={darkerBackgroundColor}
+                >
+                  <div
+                    className="industry-label"
+                    style={{
+                      backgroundColor: backgroundColor,
+                      padding: "5px",
+                      margin: "2px",
+                      width: `${textWidth + 10}px`,
+                      display: "inline-block",
+                      overflow: "hidden",
+                      whiteSpace: "nowrap",
+                      borderRadius: "5px",
+                      cursor: "pointer",
+                      fontSize: "10px",
+                    }}
+                  >
+                    {section}
+                  </div>
+                </Tooltip>
+              );
+            })}
+          </div>
+        );
+      },
     },
     {
       title: "Remarks/Recommendation",
@@ -243,7 +368,11 @@ const SystemCalendar = () => {
           {displayNotices.length > 0 &&
             displayNotices.map((notice, index) => (
               <li key={index}>
-                <Badge status="success" text={notice.title} className="event-title" />
+                <Badge
+                  status="success"
+                  text={notice.title}
+                  className="event-title"
+                />
               </li>
             ))}
           {dailyNotices.length > 1 && (
@@ -261,7 +390,7 @@ const SystemCalendar = () => {
         onSelect={onSelect}
         cellRender={dateCellRender}
         className="custom-calendar"
-        style={{ height: '100%', width: '100%' }}
+        style={{ height: "100%", width: "100%" }}
       />
       <Modal
         title={`Monitored Industries as of ${selectedDate}`}
@@ -292,6 +421,7 @@ const SystemCalendar = () => {
           pagination={{ pageSize: 10 }}
           scroll={{ y: 700 }}
           size="small"
+          className="custom-table"
         />
       </Modal>
     </div>
@@ -299,4 +429,3 @@ const SystemCalendar = () => {
 };
 
 export default SystemCalendar;
-

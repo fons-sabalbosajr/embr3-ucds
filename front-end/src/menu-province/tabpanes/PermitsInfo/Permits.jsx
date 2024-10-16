@@ -54,13 +54,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
       cancelText: "Cancel",
       onOk() {
         console.log("onOk triggered");
-  
+
         // Update the editedRecord with the current dataSource values
         const updatedRecord = { ...editedRecord };
         updatedRecord.chemical_permit = dataSource[0].permitNo;
         updatedRecord.chem_permit_issued = dataSource[0].permitIssued;
         updatedRecord.chem_permit_exp = dataSource[0].permitExpiration;
-  
+
         // Update the dataSource state with the new values
         setDataSource([
           {
@@ -70,10 +70,10 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
             permitExpiration: updatedRecord.chem_permit_exp,
           },
         ]);
-  
+
         // Trigger the parent component's save function
         onSaveChanges(updatedRecord, false);
-  
+
         notification.success({
           message: "Success",
           description: "Your changes have been saved successfully.",
@@ -102,6 +102,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
       size="small"
     />
   );
+
+  const handleValueChange = (field, newValue) => {
+    const oldValue = editedRecord[field]; // Capture the old value
+    // console.log(
+    //   `Field: ${field}, Old Value: ${oldValue}, New Value: ${newValue}`
+    // );
+  };
 
   const columns = [
     {
@@ -148,14 +155,19 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.pd1586 === "REQUIRED"}
+                  checked={editedRecord?.pd1586 === "REQUIRED ECC"}
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange("pd1586", e.target.checked ? "REQUIRED" : "")
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED ECC"
+                      : "NOT REQUIRED ECC";
+                    handleValueChange("pd1586", newValue); // Log and handle the value change
+                    handleChange("pd1586", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.pd1586 === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.pd1586 === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">PD1586</span>
                 </Checkbox>
               </div>
@@ -238,14 +250,19 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.ra8749 === "REQUIRED"}
+                  checked={editedRecord?.ra8749 === "REQUIRED PTO"}
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange("ra8749", e.target.checked ? "REQUIRED" : "")
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED PTO"
+                      : "NOT REQUIRED PTO";
+                    handleValueChange("ra8749", newValue); // Log and handle the value change
+                    handleChange("ra8749", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.ra8749 === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.ra8749 === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">RA8749</span>
                 </Checkbox>
               </div>
@@ -312,14 +329,19 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.ra9275 === "REQUIRED"}
+                  checked={editedRecord?.ra9275 === "REQUIRED WWDP"}
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange("ra9275", e.target.checked ? "REQUIRED" : "")
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED WWDP"
+                      : "NOT REQUIRED WWDP";
+                    handleValueChange("ra9275", newValue); // Log and handle the value change
+                    handleChange("ra9275", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.ra9275 === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.ra9275 === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">RA9275</span>
                 </Checkbox>
               </div>
@@ -387,14 +409,19 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.ra6969 === "REQUIRED"}
+                  checked={editedRecord?.ra6969 === "REQUIRED HAZWASTE PERMIT"}
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange("ra6969", e.target.checked ? "REQUIRED" : "")
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED HAZWASTE PERMIT"
+                      : "NOT REQUIRED HAZWASTE PERMIT";
+                    handleValueChange("ra6969", newValue); // Log and handle the value change
+                    handleChange("ra6969", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.ra6969 === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.ra6969 === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">RA6969</span>
                 </Checkbox>
               </div>
@@ -447,17 +474,22 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.tsd_required === "REQUIRED"}
-                  disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange(
-                      "tsd_required",
-                      e.target.checked ? "REQUIRED" : ""
-                    )
+                  checked={
+                    editedRecord?.tsd_required ===
+                    "REQUIRED TSD CLEARANCE/PERMIT"
                   }
+                  disabled={!isEditing}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED TSD CLEARANCE/PERMIT"
+                      : "NOT REQUIRED TSD CLEARANCE/PERMIT";
+                    handleValueChange("tsd_required", newValue); // Log and handle the value change
+                    handleChange("tsd_required", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.tsd_required === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.tsd_required === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">TSD Permit</span>
                 </Checkbox>
               </div>
@@ -510,17 +542,21 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.tp_trc_required === "REQUIRED"}
-                  disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange(
-                      "tp_trc_required",
-                      e.target.checked ? "REQUIRED" : ""
-                    )
+                  checked={
+                    editedRecord?.tp_trc_required === "REQUIRED TP/TRC PERMIT"
                   }
+                  disabled={!isEditing}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED TP/TRC PERMIT"
+                      : "NOT REQUIRED TP/TRC PERMIT";
+                    handleValueChange("tp_trc_required", newValue); // Log and handle the value change
+                    handleChange("tp_trc_required", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.tp_trc_required === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.tp_trc_required === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">TP/TRC Permit</span>
                 </Checkbox>
               </div>
@@ -573,14 +609,19 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                 }}
               >
                 <Checkbox
-                  checked={editedRecord?.pco === "REQUIRED"}
+                  checked={editedRecord?.pco === "REQUIRED PCO Accreditation"}
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange("pco", e.target.checked ? "REQUIRED" : "")
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED PCO Accreditation"
+                      : "NOT REQUIRED PCO Accreditation";
+                    handleValueChange("pco", newValue); // Log and handle the value change
+                    handleChange("pco", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.pco === "REQUIRED" ? "" : ""}
+                  {/* {editedRecord?.pco === "REQUIRED" ? "" : ""} */}
                   <span className="permit-label">PCO Accreditation</span>
                 </Checkbox>
               </div>
@@ -662,20 +703,23 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
               >
                 <Checkbox
                   checked={
-                    editedRecord?.chemical_permit_required === "REQUIRED"
+                    editedRecord?.chemical_permit_required ===
+                    "REQUIRED CHEMICAL PERMIT"
                   }
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange(
-                      "chemical_permit_required",
-                      e.target.checked ? "REQUIRED" : ""
-                    )
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "REQUIRED CHEMICAL PERMIT"
+                      : "NOT REQUIRED CHEMICAL PERMIT";
+                    handleValueChange("chemical_permit_required", newValue); // Log and handle the value change
+                    handleChange("chemical_permit_required", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "15px" }}
                 >
-                  {editedRecord?.chemical_permit_required === "REQUIRED"
+                  {/* {editedRecord?.chemical_permit_required === "REQUIRED"
                     ? ""
-                    : ""}
+                    : ""} */}
                   <span className="permit-label">Chemical Permits</span>
                 </Checkbox>
               </div>
@@ -695,14 +739,24 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
 
         <Modal
           title={
-            <div className="modal-title-container">
-              <span className="modal-title">
+            <div className="modal-title-container-permit">
+              <span className="modal-title-permit">
                 Record ID: {editedRecord ? editedRecord.id_no : ""}
               </span>
-              <span className="modal-title">
+              <span
+                className="modal-title-permit"
+                style={{
+                  whiteSpace: "normal",
+                  textAlign: "center",
+                  width: "50%",
+                }}
+              >
                 {editedRecord ? editedRecord.title : ""}
               </span>
-              <span className="modal-title">
+              <span
+                className="modal-title-permit"
+                style={{ whiteSpace: "normal", textAlign: "right" }}
+              >
                 {editedRecord ? editedRecord.ecc_cnc : ""}
               </span>
             </div>

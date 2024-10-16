@@ -218,7 +218,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     disabled={!isEditing}
                     placeholder="No data"
                     rows={1}
-                    className="text-area-legal"
+                    className="text-area-legal textbox-prov"
                   />
                 </Paragraph>
               </Col>

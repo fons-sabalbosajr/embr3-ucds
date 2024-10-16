@@ -26,3 +26,15 @@
 .custom-table .ant-table-thead > tr > th {
   font-size: 12px; /* Keep header font size default or adjust as needed */
 }
+
+.modal-title-container-permit{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title-permit{
+  font-size: 12px;
+  margin-right: 30px;
+  white-space: normal;
+}

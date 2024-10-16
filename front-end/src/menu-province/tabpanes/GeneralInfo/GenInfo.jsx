@@ -1,10 +1,9 @@
-import React from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
 import { Input, Row, Col, Typography } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import "./geninfo.css";
 import IndustryClass from "../../../components/Autocomplete/IndustryClass";
-import IndustryType from "../../../components/Autocomplete/IndustryType";
-import IndustrySubType from "../../../components/Autocomplete/IndustrySubType";
 import Provinces from "../../../components/Autocomplete/Province";
 import Municipalities from "../../../components/Autocomplete/Municipalities";
 import Barangays from "../../../components/Autocomplete/Barangay";
@@ -17,6 +16,44 @@ const GenInfo = ({
   handleChange,
   isEditing,
 }) => {
+  const [projectData, setProjectData] = useState({});
+
+  useEffect(() => {
+    const fetchProjectData = async () => {
+      if (!editedRecord?.industry_class) {
+        // If industry_class is blank, clear the related fields
+        setProjectData({});
+        handleChange("psic_code", "");
+        handleChange("industry_type", "");
+        handleChange("industry_subtype", "");
+        return;
+      }
+
+      // Fetch project data when industry_class is not blank
+      try {
+        const response = await axios.get(
+          `http://localhost:8081/api/project_type?industry_class=${editedRecord.industry_class}`
+        );
+        if (response.data) {
+          const { psic_code, project_type, project_subtype } = response.data;
+          setProjectData({
+            psic_code: psic_code,
+            industry_type: project_type,
+            industry_subtype: project_subtype,
+          });
+          // Automatically update fields based on project data
+          handleChange("psic_code", psic_code || ""); // Default to empty string if undefined
+          handleChange("industry_type", project_type || "");
+          handleChange("industry_subtype", project_subtype || "");
+        }
+      } catch (error) {
+        console.error("Error fetching project data:", error);
+      }
+    };
+
+    fetchProjectData();
+  }, [editedRecord?.industry_class]);
+
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
@@ -57,7 +94,11 @@ const GenInfo = ({
             <Paragraph>
               <strong>PSIC Code</strong>
               <Input
-                value={editedRecord ? editedRecord.psic_code : ""}
+                value={
+                  projectData
+                    ? projectData.psic_code
+                    : editedRecord.psic_code || ""
+                }
                 onChange={(e) => handleChange("psic_code", e.target.value)}
                 disabled={!isEditing}
                 placeholder="No data"
@@ -66,22 +107,33 @@ const GenInfo = ({
             </Paragraph>
           </Col>
         </Row>
+
         <Paragraph>
           <strong>Industry Type</strong>
-          <IndustryType
-            value={editedRecord ? editedRecord.industry_type : ""}
-            onChange={(value) => handleChange("industry_type", value)}
+          <Input
+            value={
+              projectData
+                ? projectData.industry_type
+                : editedRecord.industry_type || ""
+            }
+            onChange={(e) => handleChange("industry_type", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph className="label-industry-type">
           <strong>Industry Sub-Type</strong>
-          <IndustrySubType
-            value={editedRecord ? editedRecord.industry_subtype : ""}
-            onChange={(value) => handleChange("industry_subtype", value)}
+          <Input
+            value={
+              projectData
+                ? projectData.industry_subtype
+                : editedRecord.industry_subtype || ""
+            }
+            onChange={(e) => handleChange("industry_subtype", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
+            className="textbox-label"
           />
         </Paragraph>
 
@@ -167,7 +219,7 @@ const GenInfo = ({
 
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph className="paragraph-margin">
+            <Paragraph className="paragraph-margin congress">
               <strong>Congressional District</strong>
               <Input
                 value={editedRecord ? editedRecord.cong_district : ""}

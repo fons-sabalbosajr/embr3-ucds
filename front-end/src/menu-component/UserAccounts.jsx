@@ -52,6 +52,7 @@ const UserAccounts = () => {
   const [selectedAccessUser, setSelectedAccessUser] = useState(null);
   const [isAccountPermissionVisible, setAccountPermissionVisible] =
     useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(10000);
 
   const fetchData = async () => {
     setLoading(true);
@@ -73,10 +74,15 @@ const UserAccounts = () => {
       setLoading(false);
     }
   };
-
+  
+  useEffect(() => {
+    const intervalId = setInterval(fetchData, refreshInterval);
+    return () => clearInterval(intervalId);
+  }, [refreshInterval, pagination.current, pagination.pageSize]);
+  
   useEffect(() => {
     fetchData();
-  }, [pagination.current, pagination.pageSize]);
+  }, []);
 
   useEffect(() => {
     const uniquePermissions = new Set();
@@ -117,6 +123,18 @@ const UserAccounts = () => {
       return [];
     }
   };
+
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      const data = await fetchSignUpUsers();
+      setSignUpUsers(data);
+    }, refreshInterval);
+    return () => clearInterval(intervalId);
+  }, [refreshInterval, pagination.current, pagination.pageSize]);
+
+  useEffect(() => {
+    fetchSignUpUsers().then((data) => setSignUpUsers(data));
+  }, []);
 
   const fetchLoginStatus = async () => {
     try {
@@ -647,14 +665,13 @@ const UserAccounts = () => {
     }
     return "";
   };
-  
+
   const handleClose = () => {
     setModalAccessVisible(false);
   };
 
   const handlePermissionsUpdate = () => {
     //console.log("Permissions updated, re-authenticating...");
-
   };
 
   return (
@@ -718,7 +735,7 @@ const UserAccounts = () => {
           title="User Permission"
           visible={isModalAccessVisible}
           footer={null}
-          closable={true} 
+          closable={true}
           onCancel={handleClose}
           width={800}
         >
@@ -727,12 +744,12 @@ const UserAccounts = () => {
               <AccountPermission
                 visible={isAccountPermissionVisible}
                 onClose={handleModalClose}
-                onPermissionsUpdate={handlePermissionsUpdate} 
+                onPermissionsUpdate={handlePermissionsUpdate}
                 userData={{
                   name: selectedAccessUser.name,
                   email: selectedAccessUser.email,
                   division: selectedAccessUser.division,
-                  permission: selectedAccessUser.permission
+                  permission: selectedAccessUser.permission,
                 }}
               />
             </div>

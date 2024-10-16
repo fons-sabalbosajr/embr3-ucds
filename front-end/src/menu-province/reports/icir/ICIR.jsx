@@ -550,7 +550,6 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
     include: !!value, // set include to true if value is not empty
   }));
 
-  // Prioritize rows with non-empty values
   data.sort((a, b) => {
     if (!!a.value && !b.value) return -1;
     if (!a.value && !!b.value) return 1;

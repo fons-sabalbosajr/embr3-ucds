@@ -1,74 +1,38 @@
 import React, { useEffect, useState } from "react";
 import { Table, Button, Modal, Input } from "antd";
+import { InfoCircleOutlined } from '@ant-design/icons';
 import axios from "axios";
-import {
-  EyeFilled,
-  PlusCircleFilled,
-  EditFilled,
-  ToTopOutlined,
-  QuestionCircleOutlined,
-  DatabaseFilled,
-} from "@ant-design/icons";
 import { format } from "date-fns";
 import "./history.css";
 
 const History = () => {
-  const [logs, setLogs] = useState([]);
+  const [ucdsLogs, setUcdsLogs] = useState([]);
+  const [surveyLogs, setSurveyLogs] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalData, setModalData] = useState(null);
-  const [usernames, setUsernames] = useState({});
   const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
-    const permission = localStorage.getItem("permission").replace(/"/g, "");
-    const username = localStorage.getItem("username").replace(/"/g, "");
-    //console.log("Current user permission:", permission);
-    //console.log("Current username:", username);
+    const fetchUcdsLogs = async () => {
+      try {
+        const ucdsLogsResponse = await axios.get("http://localhost:8081/api/ucds-log");
+        setUcdsLogs(ucdsLogsResponse.data);
+      } catch (error) {
+        console.error("Error fetching ucds logs:", error);
+      }
+    };
 
-    if (permission === "admin" || permission === "developer") {
-      const fetchLogs = async () => {
-        try {
-          //console.log("Fetching all logs");
+    const fetchSurveyLogs = async () => {
+      try {
+        const surveyLogsResponse = await axios.get("http://localhost:8081/api/survey-log");
+        setSurveyLogs(surveyLogsResponse.data);
+      } catch (error) {
+        console.error("Error fetching survey logs:", error);
+      }
+    };
 
-          const logsResponse = await axios.get(
-            "http://localhost:8081/api/logs?all=true",
-            {
-              withCredentials: true,
-            }
-          );
-
-          setLogs(logsResponse.data);
-        } catch (error) {
-          console.error("Error fetching logs:", error);
-          throw error; // re-throw the error to propagate it up the call stack
-        }
-      };
-
-      fetchLogs();
-    } else if (permission === "viewer" || permission === "contributor") {
-      const fetchLogs = async () => {
-        try {
-          //console.log(`Fetching logs for ${username}`);
-
-          const logsResponse = await axios.get(
-            `http://localhost:8081/api/logs?username=${username}`,
-            {
-              withCredentials: true,
-            }
-          );
-
-          setLogs(logsResponse.data);
-        } catch (error) {
-          console.error("Error fetching logs:", error);
-          throw error; // re-throw the error to propagate it up the call stack
-        }
-      };
-
-      fetchLogs();
-    } else {
-      console.log("You do not have permission to view logs");
-      setLogs([]);
-    }
+    fetchUcdsLogs();
+    fetchSurveyLogs();
   }, []);
 
   const showModal = (record) => {
@@ -85,91 +49,44 @@ const History = () => {
     setSearchText(e.target.value);
   };
 
-  const filteredLogs = logs.filter((log) => {
+  const combinedLogs = [...ucdsLogs, ...surveyLogs];
+
+  const filteredLogs = combinedLogs.filter((log) => {
     return Object.values(log).some((value) =>
       value.toString().toLowerCase().includes(searchText.toLowerCase())
     );
   });
 
-  const getIcon = (actionType) => {
+  const recentLogs = filteredLogs.slice(0, 3);
+
+  const getTagClass = (actionType) => {
     switch (actionType) {
-      case "Update Data":
-        return (
-          <EditFilled
-            style={{ color: "orange", fontSize: "20px", marginLeft: "-10px" }}
-          />
-        );
-      case "Added Data":
-        return (
-          <PlusCircleFilled
-            style={{ color: "green", fontSize: "20px", marginLeft: "-10px" }}
-          />
-        );
-      case "Patch":
-        return (
-          <ToTopOutlined
-            style={{ color: "purple", fontSize: "20px", marginLeft: "-10px" }}
-          />
-        );
-      case "Unknown Action":
-        return (
-          <QuestionCircleOutlined
-            style={{ color: "red", fontSize: "20px", marginLeft: "-10px" }}
-          />
-        );
-      case "View Data":
-        return (
-          <EyeFilled
-            style={{ color: "blue", fontSize: "20px", marginLeft: "-10px" }}
-          />
-        );
-      case "Generic Action":
-        return (
-          <DatabaseFilled
-            style={{ color: "gray", fontSize: "20px", marginLeft: "-10px" }}
-          />
-        );
+      case "Create":
+        return "tag-create";
+      case "Initial Data":
+        return "tag-add";
+      case "Modified":
+        return "tag-update";
+      case "Delete":
+        return "tag-delete";
       default:
-        return null;
+        return "";
     }
   };
 
   const columns = [
     {
-      title: null,
-      dataIndex: "message",
-      key: "message",
+      title: "Action",
+      dataIndex: "actionType",
+      key: "actionType",
       align: "left",
-      width: 230,
-      render: (text, record) => (
-        <div className="card-container">
-          <div className="card-header">
-            {getIcon(record.actionType)}{" "}
-            <span className="timestamp-container">
-              {new Date(record.timestamp).toLocaleString("en-US", {
-                month: "2-digit",
-                day: "2-digit",
-                year: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true,
-              })}
-            </span>
-          </div>
-          <div className="card-body">
-            <strong>{record.actionType}</strong>
-            <div className="card-subtext">
-              {record.username && (
-                <div>
-                  {usernames[record.username] || record.username} •{" "}
-                  {record.actionType === "Update"
-                    ? record.requestData.project_title
-                    : formatActionLabel(record.actionLabel)}
-                </div>
-              )}
-            </div>
-          </div>
+      width: 200,
+      render: (text , record) => (
+        <div>
+          <span className={getTagClass(record.actionType)}>{record.actionType}</span>
+          <div>{format(new Date(record.dateActed), "MMMM dd, yyyy hh:mm a")}</div>
+          <div>{record.referenceNo}</div>
+          <div>by {record.userActed}</div>
         </div>
       ),
     },
@@ -179,9 +96,12 @@ const History = () => {
       width: 50,
       render: (text, record) => (
         <div className="actions-container">
-          <Button type="link" onClick={() => showModal(record)}>
-            <EyeFilled className="view-details" />
-          </Button>
+          <Button 
+            type="link" 
+            icon={<InfoCircleOutlined />} 
+            onClick={() => showModal(record)} 
+            style={{ padding: 0 }}
+          />
         </div>
       ),
     },
@@ -209,11 +129,15 @@ const History = () => {
     const fieldsToExclude = ["_id", "userId", "method", "path", "actionLabel"];
 
     const fieldMappings = {
-      timestamp: "Date Modified",
-      username: "Name",
-      actionType: "Action Type",
-      requestData: "Update Details",
-    };
+      transactionID: "Transaction ID", 
+      transactionDate: "Date",
+      actionType: "Type of Action",
+      oldValue: "Old Value",
+      newValue: "New Value",
+      userActed: "Modified by",
+      dateActed: "Date last modified",
+      ecc_cnc: "Reference No.",
+  };
 
     const removeCurlyBraces = (str) => {
       let obj;
@@ -235,7 +159,7 @@ const History = () => {
 
         if (key === "actionLabel") {
           displayValue = formatActionLabel(value);
-        } else if (key === "timestamp") {
+        } else if ( key === "timestamp") {
           displayValue = format(new Date(value), "MMMM dd, yyyy hh:mm a");
         } else if (key === "requestData" && typeof value === "object") {
           displayValue = removeCurlyBraces(JSON.stringify(value));
@@ -291,17 +215,17 @@ const History = () => {
       <div className="summary-container">
         <Table
           columns={columns}
-          dataSource={filteredLogs}
+          dataSource={recentLogs}
           rowKey={(record) => record._id}
           pagination={false}
           className="log-table custom-pagination"
-          showHeader={false}
+          showHeader={true}
           style={{ width: "100%" }}
           scroll={{ y: 520 }}
         />
         {modalData && (
           <Modal
-            title="Recent Changes Details"
+            title={<span className="modal-title">Recent Changes Details</span>}
             visible={isModalVisible}
             onCancel={handleCancel}
             footer={null}
@@ -309,9 +233,10 @@ const History = () => {
           >
             <Table
               columns={modalColumns}
-              dataSource={getModalData(modalData)} // No need for `await` here
+              dataSource={getModalData(modalData)} 
               pagination={false}
               size="small"
+              className="modal-table"
             />
           </Modal>
         )}

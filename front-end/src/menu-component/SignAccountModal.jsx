@@ -87,7 +87,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
           }
         );
 
-        console.log("User saved response:", userResponse.data);
+        //console.log("User saved response:", userResponse.data);
 
         // Step 2: Update status in 'sign-up' collection
         const updateResponse = await axios.put(

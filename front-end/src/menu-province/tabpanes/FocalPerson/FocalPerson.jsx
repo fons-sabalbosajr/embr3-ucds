@@ -42,7 +42,6 @@ function calculateWeekdayDiff(startDate, endDate) {
 }
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
-  
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
       // Handle Excel date numeric value
@@ -109,17 +108,17 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
 
   const calculateBOD = (empNoTotal, wwtfType) => {
     let bod = 0;
-  
+
     const wwtfTypeValues = {
-      "WWTF": 0.6,
+      WWTF: 0.6,
       "SEPTIC TANK": 0.25,
       "DIRECT DISCHARGE": 1,
       "N/A": 0, // assuming N/A means 0
     };
-  
+
     const v1 = wwtfTypeValues[wwtfType.toUpperCase()];
     const v2 = Number(empNoTotal);
-  
+
     if (v2 === 0) {
       bod = "";
     } else if (wwtfType.toUpperCase() === "DIRECT DISCHARGE") {
@@ -127,7 +126,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
     } else {
       bod = (v2 * 0.0378 * (1 - v1)).toFixed(4); // round to 4 decimal points
     }
-  
+
     return bod + " kg/day"; // add " kg/day" to the result
   };
 
@@ -163,6 +162,13 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
         handleChange("bod", 0);
       }
     }
+  };
+
+  const handleValueChange = (field, newValue) => {
+    const oldValue = editedRecord[field]; // Capture the old value
+    console.log(
+      `Field: ${field}, Old Value: ${oldValue}, New Value: ${newValue}`
+    );
   };
 
   return (
@@ -298,6 +304,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             </Paragraph>
           </Col>
         </Row>
+
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
@@ -431,15 +438,21 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               </Paragraph>
               <Paragraph>
                 <Checkbox
-                  checked={editedRecord?.pismu_tracking === "✔"}
+                  checked={editedRecord?.pismu_tracking === "Report Tracked (received/routed to Planning Unit)"}
                   disabled={!isEditing}
-                  onChange={(e) =>
-                    handleChange("pismu_tracking", e.target.checked ? "✔" : "")
-                  }
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked
+                      ? "Report Tracked (received/routed to Planning Unit)"
+                      : "Report Untracked (not yet received/routed to Planning Unit)";
+                    handleValueChange("pismu_tracking", newValue); // Log and handle the value change
+                    handleChange("pismu_tracking", newValue); // Keep the existing handleChange for parent component
+                  }}
                   style={{ fontSize: "12px" }}
                 >
-                  {editedRecord?.pismu_tracking === "✔" ? "" : ""}
+                  <span className="permit-label"></span>
                 </Checkbox>
+
                 <strong>Tracking of Reports (Received by Planning Unit)</strong>
               </Paragraph>
             </Card>

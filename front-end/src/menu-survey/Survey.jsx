@@ -627,7 +627,7 @@ const Survey = ({ theme, currentUser }) => {
     switch (unit.toUpperCase()) {
       case "PEMU_AURORA":
       case "PEMU_Aurora":
-        return "transparent"; // No color
+        return "#F0F3FF";
 
       case "PEMU_BATAAN":
       case "PEMU_Bataan":

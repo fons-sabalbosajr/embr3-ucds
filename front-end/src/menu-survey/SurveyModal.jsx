@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Tabs, Button, message } from "antd";
+import { Tabs, Button, message, Modal } from "antd";
 import { EditOutlined, SaveOutlined } from "@ant-design/icons";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -8,6 +8,8 @@ import FocalPerson from "./tabspanes/FocalPerson/FocalPerson";
 import LegalUnit from "./tabspanes/LegalUnit/LegalUnit";
 import MBU from "./tabspanes/MBU/MBU";
 import Transaction from "./tabspanes/TransactionLog/Transaction";
+import SurveyReport from "./reports/SurveyReport/SurveyReport";
+import SVR from "./reports/SVR/SVR"
 import "./surveymodal.css";
 
 const { TabPane } = Tabs;
@@ -23,7 +25,10 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
     return storedValue ? JSON.parse(storedValue) : {};
   });
   const [previousRecord, setPreviousRecord] = useState(null);
-
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [loadingICIR, setLoadingICIR] = useState(false);
+  const [loadingPDF, setLoadingPDF] = useState(false);
+  const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now());
 
   useEffect(() => {
     localStorage.setItem("isLogChecked", JSON.stringify(isLogChecked));
@@ -116,7 +121,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
       }
 
       const logData = {
-        transactionID: `TRX-${String(transactionCounter).padStart(4, "0")}`,
+        transactionID: `TRXS-${String(transactionCounter).padStart(4, "0")}`,
         transactionDate: transactionDate,
         actionType: "Initial Data",
         oldValue: "-",
@@ -214,7 +219,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
                       actionType: "Modified",
                       oldValue: auditLog.changes
                         .map((change) => `${change.old_value}`)
-                        .join("\n"), 
+                        .join("\n"),
                       newValue: `${auditLog.iis_no} \n${auditLog.changes
                         .map((change) => `${change.new_value}`)
                         .join("\n")}`,
@@ -298,7 +303,18 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
     });
   };
 
+  const handleopenModal = () => {
+    setIsModalVisible(true);
+    setLoadingICIR(true);
+  };
 
+  const handleModalOk = () => {
+    setIsModalVisible(false);
+  };
+
+  const handleModalCancel = () => {
+    setIsModalVisible(false);
+  };
 
   return (
     <div className="modal-container">
@@ -351,13 +367,55 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
           tab={<span className="custom-tab-history">History</span>}
           key="5"
         >
-          <Transaction editedRecord={editedRecord} currentUser={currentUser}/>
+          <Transaction editedRecord={editedRecord} currentUser={currentUser} />
         </TabPane>
       </Tabs>
 
-      <div className="action-buttons-container">
-        {activeTab !== "5" && (
-          <div>
+      <Modal
+        title="Generate Report"
+        visible={isModalVisible}
+        onOk={handleModalOk}
+        onCancel={handleModalCancel}
+        width={1200}
+        footer={null}
+      >
+        <div className="report-modal-container">
+          <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={5}>
+            <TabPane
+              tab={<span className="tabpane-title">Survey Report</span>}
+              key="1"
+            >
+              <SurveyReport
+                editedRecord={editedRecord}
+                onIncludeChange={() => {}}
+                resetCheckboxesKey={resetCheckboxesKey}
+              />
+            </TabPane>
+            <TabPane
+              tab={<span className="tabpane-title">SVR</span>}
+              key="2"
+            >
+              <SVR
+                editedRecord={editedRecord}
+                onIncludeChange={() => {}}
+              />
+            </TabPane>
+          </Tabs>
+        </div>
+      </Modal>
+
+      {activeTab !== "5" && (
+        <>
+          <Button
+            className="button-generate"
+            type="primary"
+            onClick={handleopenModal}
+            disabled={loadingPDF}
+          >
+            {loadingPDF ? "Generating PDF..." : "Generate Report"}
+          </Button>
+
+          <div className="action-buttons-container">
             {isEditing ? (
               <div>
                 <Button onClick={handleCancelEdit} className="btn-cancel-right">
@@ -381,8 +439,8 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
               </Button>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 };

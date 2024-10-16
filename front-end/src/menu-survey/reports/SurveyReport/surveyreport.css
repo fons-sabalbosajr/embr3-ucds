@@ -1,0 +1,118 @@
+.survey-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.survey-header {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.survey-header-left {
+  flex: 2;
+  text-align: left;
+}
+
+.survey-header-center {
+  text-align: right;
+  margin-top: 5px;
+}
+
+.survey-header-right {
+  flex: 1;
+  text-align: right;
+  max-width: max-content;
+}
+
+.skyblue-row {
+  background-color: #add1f9 !important;
+}
+
+.orange-row {
+  background-color: #ffd0a1 !important;
+}
+
+.yellow-row {
+  background-color: #f3f0ca !important;
+}
+
+.green-row {
+  background-color: #d4ed9e !important;
+}
+
+.blue-row {
+  background-color: #adc0f9 !important;
+}
+
+.gray-row {
+  background-color: #e4e4e4 !important;
+}
+
+.dropdown-container {
+  display: flex;
+  justify-content: flex-start; /* Aligns items to the start of the container */
+  margin-bottom: 20px; /* Optional: adjust the margin as needed */
+  margin-left: 680px;
+}
+
+.drop-down-select {
+  width: 300px; /* Optional: adjust width as needed */
+  text-align: left; /* Ensures the content inside is aligned to the left */
+}
+
+.button-gen-pdf {
+  margin-right: 10px;
+}
+
+.button-gen-draft {
+  background-color: green;
+}
+
+.table-rows thead th {
+  height: 20px; /* reduce the height of the header cells */
+  font-size: 12px; /* reduce the font size of the header text */
+  padding: 4px; /* adjust the padding to your liking */
+}
+
+.table-rows td {
+  font-size: 11px;
+  padding: 3px;
+  height: 20px;
+}
+
+.table-rows tr {
+  height: 20px; /* set a fixed height for each row */
+}
+
+.info-icon {
+  margin-right: 10px;
+}
+
+.data-container {
+  display: flex;
+  flex-wrap: wrap;
+  background-color: #ededed;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+.data-ul {
+  flex: 1;
+  margin-right: 20px;
+  font-size: 10px;
+}
+
+.data-p {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 1098px) {
+  .button-gen-draft {
+    margin-right: 10px;
+    margin-top: 10px;
+  }
+}

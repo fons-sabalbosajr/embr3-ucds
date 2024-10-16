@@ -8,15 +8,54 @@ import Provinces from "../../../components/Autocomplete/Province";
 import Municipalities from "../../../components/Autocomplete/Municipalities";
 import Barangays from "../../../components/Autocomplete/Barangay";
 import "./geninfo.css";
+import axios from "axios";
 
 const { Paragraph } = Typography;
 
 const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
   const [localRecord, setLocalRecord] = useState(editedRecord || {});
+  const [projectData, setProjectData] = useState({});
 
   useEffect(() => {
     setLocalRecord(editedRecord);
   }, [editedRecord]);
+
+  useEffect(() => {
+    const fetchProjectData = async () => {
+      if (!localRecord?.industry_class) {
+        // If industry_class is blank, clear the related fields
+        setProjectData({});
+        handleInputChange("pisc_code", "");
+        handleInputChange("project_type", "");
+        handleInputChange("project_subtype", "");
+        return;
+      }
+
+      // Fetch project data when industry_class is not blank
+      try {
+        const response = await axios.get(
+          `http://localhost:8081/api/project_type?industry_class=${localRecord.industry_class}`
+        );
+        if (response.data) {
+          const { psic_code, project_type, project_subtype } = response.data;
+          setProjectData({
+            psic_code: psic_code,
+            project_type: project_type,
+            project_subtype: project_subtype,
+          });
+
+          // Automatically update fields based on project data
+          handleInputChange("pisc_code", psic_code || "");
+          handleInputChange("project_type", project_type || "");
+          handleInputChange("project_subtype", project_subtype || "");
+        }
+      } catch (error) {
+        console.error("Error fetching project data:", error);
+      }
+    };
+
+    fetchProjectData();
+  }, [localRecord?.industry_class]);
 
   const handleInputChange = (field, value) => {
     const updatedRecord = { ...localRecord, [field]: value };
@@ -95,32 +134,57 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
           </Paragraph>
 
           <Paragraph>
-            <strong>Project Type</strong>
-            <IndustryType
-              value={localRecord.project_type || ""}
-              disabled={!isEditing}
-              placeholder="No data"
-              onChange={(value) => handleInputChange("project_type", value)}
-            />
-          </Paragraph>
-
-          <Paragraph className="paragraph-margin-top">
-            <strong>Project Sub-Type</strong>
-            <IndustrySubType
-              value={localRecord.project_subtype || ""}
-              disabled={!isEditing}
-              placeholder="No data"
-              onChange={(value) => handleInputChange("project_subtype", value)}
-            />
-          </Paragraph>
-
-          <Paragraph className="paragraph-margin-top">
             <strong>Industry Classification</strong>
             <IndustryClass
               value={localRecord.industry_class || ""}
               disabled={!isEditing}
               placeholder="No data"
               onChange={(value) => handleInputChange("industry_class", value)}
+            />
+          </Paragraph>
+
+          <Paragraph className="paragraph-margin-top">
+            <strong>Project Type</strong>
+            <Input
+              value={
+                projectData
+                  ? projectData.project_type
+                  : localRecord.project_type || ""
+              }
+              disabled={!isEditing}
+              placeholder="No data"
+              className="textbox-label disabled-input"
+              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
+            />
+          </Paragraph>
+
+          <Paragraph>
+            <strong>Project Sub-Type</strong>
+            <Input
+              value={
+                projectData
+                  ? projectData.project_subtype
+                  : localRecord.project_subtype || ""
+              }
+              disabled={!isEditing}
+              placeholder="No data"
+              className="textbox-label disabled-input"
+              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
+            />
+          </Paragraph>
+
+          <Paragraph>
+            <strong>PSIC Code</strong>
+            <Input
+              value={
+                projectData
+                  ? projectData.psic_code
+                  : localRecord.psic_code || ""
+              }
+              disabled={!isEditing}
+              placeholder="No data"
+              className="textbox-label disabled-input"
+              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
             />
           </Paragraph>
 
@@ -134,17 +198,6 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               onChange={(e) =>
                 handleInputChange("other_project_type", e.target.value)
               }
-            />
-          </Paragraph>
-
-          <Paragraph>
-            <strong>PSIC Code</strong>
-            <Input
-              value={localRecord.pisc_code || ""}
-              disabled={!isEditing}
-              placeholder="No data"
-              className="textbox-label disabled-input"
-              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
             />
           </Paragraph>
         </Col>
