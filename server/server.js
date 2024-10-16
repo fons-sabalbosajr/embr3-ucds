@@ -41,7 +41,7 @@ function generateRandomPassword(length) {
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://frabjous-pavlova-2e33fc.netlify.app",
+  "https://luxury-ganache-c8d8aa.netlify.app",
 ];
 
 // MongoDB connection setup
