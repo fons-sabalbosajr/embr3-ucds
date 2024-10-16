@@ -62,7 +62,7 @@ const ProvinceModal = ({
     try {
       const ecc_cnc = record.ecc_cnc;
       const response = await axios.get(
-        `http://localhost:8081/api/ucds-log?ecc_cnc=${ecc_cnc}`
+        `https://embr3-ucds.onrender.com/api/ucds-log?ecc_cnc=${ecc_cnc}`
       );
       const existingLogs = response.data;
 
@@ -97,7 +97,7 @@ const ProvinceModal = ({
     ).padStart(2, "0")}`;
 
     try {
-      const response = await axios.get("http://localhost:8081/api/ucds-log");
+      const response = await axios.get("https://embr3-ucds.onrender.com/api/ucds-log");
       const transactions = response.data;
 
       const existingLog = transactions.find(
@@ -149,7 +149,7 @@ const ProvinceModal = ({
 
       try {
         const response = await axios.post(
-          "http://localhost:8081/api/ucds-log",
+          "https://embr3-ucds.onrender.com/api/ucds-log",
           logData
         );
       } catch (error) {
@@ -196,7 +196,7 @@ const ProvinceModal = ({
           };
   
           const response = await axios.put(
-            `http://localhost:8081/api/update-data/${editedRecord.id_no}`,
+            `https://embr3-ucds.onrender.com/api/update-data/${editedRecord.id_no}`,
             updatedRecord
           );
   
@@ -213,7 +213,7 @@ const ProvinceModal = ({
             handleReload();
   
             // Get the latest transaction ID from the ucds-log collection
-            const logResponse = await axios.get("http://localhost:8081/api/ucds-log");
+            const logResponse = await axios.get("https://embr3-ucds.onrender.com/api/ucds-log");
             const transactions = logResponse.data;
   
             let transactionCounter = 1;
@@ -258,7 +258,7 @@ const ProvinceModal = ({
   
             // Save the log entry to the ucds-log collection
             try {
-              await axios.post("http://localhost:8081/api/ucds-log", logData);
+              await axios.post("https://embr3-ucds.onrender.com/api/ucds-log", logData);
               console.log("Log entry created successfully");
             } catch (error) {
               console.error("Error creating log entry:", error);

@@ -8,7 +8,7 @@ const ProtectedRoute = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await axios.get('http://localhost:8081/auth/check', { withCredentials: true });
+        const response = await axios.get('https://embr3-ucds.onrender.com/auth/check', { withCredentials: true });
         setIsAuthenticated(response.data.isAuthenticated);
       } catch (error) {
         setIsAuthenticated(false);

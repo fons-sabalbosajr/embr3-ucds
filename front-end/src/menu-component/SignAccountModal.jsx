@@ -35,7 +35,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
   const fetchPassword = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:8081/api/generate-password"
+        "https://embr3-ucds.onrender.com/api/generate-password"
       );
       const { password } = response.data;
       setGeneratePassword(password);
@@ -76,7 +76,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
 
         // Step 1: Add user to 'users' collection
         const userResponse = await axios.post(
-          "http://localhost:8081/api/newusers",
+          "https://embr3-ucds.onrender.com/api/newusers",
           {
             name,
             email,
@@ -91,7 +91,7 @@ const SignAccountModal = ({ user, visible, onCancel }) => {
 
         // Step 2: Update status in 'sign-up' collection
         const updateResponse = await axios.put(
-          `http://localhost:8081/api/status/${user._id}`
+          `https://embr3-ucds.onrender.com/api/status/${user._id}`
         );
 
         console.log(

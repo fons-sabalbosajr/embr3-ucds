@@ -41,7 +41,7 @@ const Universe = () => {
   const [userHandle, setUserHandle] = useState(null);
   const [division, setDivision] = useState("");
 
-  const backendUrl = "http://localhost:8081";
+  const backendUrl = "https://embr3-ucds.onrender.com";
   const navigate = useNavigate();
 
   const checkAuth = async () => {

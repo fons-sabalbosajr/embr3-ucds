@@ -39,7 +39,10 @@ function generateRandomPassword(length) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-const allowedOrigins = ["http://localhost:5173"];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://frabjous-pavlova-2e33fc.netlify.app",
+];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -695,7 +698,6 @@ app.post(
     }
   }
 );
-
 
 // Update color for a specific survey record
 app.post(
