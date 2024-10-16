@@ -72,6 +72,7 @@ app.use(
       secure: process.env.NODE_ENV === "production", // Serve secure cookies in production
       httpOnly: true, // Prevent client-side JS from accessing the cookie
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
+      sameSite: 'None',
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -355,24 +356,35 @@ app.get("/auth/check", (req, res) => {
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
+  // Check if both username and password are provided
   if (!username || !password) {
-    return res
-      .status(400)
-      .json({ error: "Username and password are required." });
+    console.log("Username or password missing.");
+    return res.status(400).json({ error: "Username and password are required." });
   }
 
   try {
+    // Log the received username for debugging
+    console.log("Received login request for username:", username);
+
+    // Find the user by username
     const user = await userCollection.findOne({ username });
 
+    // Check if the user exists
     if (!user) {
+      console.log("User not found:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
+    // Check if the password matches
     const passwordMatch = await bcrypt.compare(password, user.password);
-
+    
     if (!passwordMatch) {
+      console.log("Password mismatch for user:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
+
+    // Log successful login attempt
+    console.log("Login successful for user:", username);
 
     // Create a session for the user
     req.session.user = {
@@ -382,12 +394,13 @@ app.post("/login", async (req, res) => {
       division: user.division,
       permission: user.permission,
       avatar: user.avatar,
-      canGenerateData: user.canGenerateData || false, // Include permissions
+      canGenerateData: user.canGenerateData || false,
       canManageData: user.canManageData || false,
       canViewAdminPanel: user.canViewAdminPanel || false,
       canViewDataHistory: user.canViewDataHistory || false,
     };
 
+    // Update login status in the database
     await loginStatusCollection.updateOne(
       { userId: user._id },
       {
@@ -404,17 +417,21 @@ app.post("/login", async (req, res) => {
       { upsert: true }
     );
 
-    // Send response with user information
-    res.status(200).json({
+    // Log session creation
+    console.log("Session created for user:", req.session.user);
+
+    // Send the success response with user information
+    return res.status(200).json({
       status: "success",
       username: user.username,
       permission: user.permission,
-      canGenerateData: user.canGenerateData || false, // Send permissions
+      canGenerateData: user.canGenerateData || false,
       canManageData: user.canManageData || false,
       canViewAdminPanel: user.canViewAdminPanel || false,
       canViewDataHistory: user.canViewDataHistory || false,
     });
   } catch (error) {
+    // Log the error for debugging purposes
     console.error("Error during login:", error);
     return res.status(500).json({ error: "An unexpected error occurred." });
   }

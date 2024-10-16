@@ -28,7 +28,7 @@ const Login = () => {
         }
       );
   
-      //console.log("API Response:", response.data);
+      console.log("API Response:", response.data);
   
       if (response.data.status === "success") {
         localStorage.setItem("username", response.data.username);
