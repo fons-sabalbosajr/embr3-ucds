@@ -39,11 +39,6 @@ function generateRandomPassword(length) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://luxury-ganache-c8d8aa.netlify.app",
-];
-
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
 const client = new MongoClient(mongoUri, {
@@ -67,20 +62,21 @@ app.use(
   session({
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: false, // Only create sessions when necessary
+    saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Serve secure cookies in production
-      httpOnly: true, // Prevent client-side JS from accessing the cookie
-      maxAge: 1000 * 60 * 60 * 24, // 24 hours
-      sameSite: 'None',
+      secure: process.env.NODE_ENV === 'production',  // Secure cookies in production (Netlify)
+      httpOnly: true,  // Prevent JavaScript from accessing cookies
+      maxAge: 1000 * 60 * 60 * 24,  // 24 hours
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', // 'None' for cross-site cookies in production
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
-      collectionName: "sessions",
-      ttl: 14 * 24 * 60 * 60, // 14 days
+      collectionName: 'sessions',
+      ttl: 14 * 24 * 60 * 60,  // 14 days
     }),
   })
 );
+
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -127,11 +123,16 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-// Apply CORS middleware
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://luxury-ganache-c8d8aa.netlify.app",
+];
+
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -344,14 +345,6 @@ const authenticateSession = (req, res, next) => {
   console.log("User not authenticated:", req.session);
   res.status(401).json({ message: "User not authenticated" });
 };
-
-app.get("/auth/check", (req, res) => {
-  if (req.session && req.session.user) {
-    res.status(200).json({ isAuthenticated: true });
-  } else {
-    res.status(401).json({ isAuthenticated: false });
-  }
-});
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
