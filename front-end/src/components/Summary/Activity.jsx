@@ -14,7 +14,7 @@ const Activity = () => {
   // Function to fetch user details by username
   const fetchUserByUsername = async (username) => {
     try {
-      const response = await axios.get(`https://embr3-ucds.onrender.com/api/users`, {
+      const response = await axios.get(`http://localhost:8081/api/users`, {
         params: { username }, // This sends the username as a query parameter
       });
       return response.data.length > 0 ? response.data[0] : null; // Return the first user or null if not found
@@ -27,7 +27,7 @@ const Activity = () => {
   // Function to fetch UCDS data by ID
   const fetchUCDSDataByECC = async (ecc_cnc) => {
     try {
-      const response = await axios.get(`https://embr3-ucds.onrender.com/api/ucds`, {
+      const response = await axios.get(`http://localhost:8081/api/ucds`, {
         params: { ecc_cnc }, // Assuming the API can filter by ecc_cnc
       });
       return response.data.length > 0 ? response.data[0] : null;
@@ -40,7 +40,7 @@ const Activity = () => {
   // Function to fetch survey data by IIS number
   const fetchSurveyData = async (iis_no) => {
     try {
-      const response = await axios.get(`https://embr3-ucds.onrender.com/api/surveys`, {
+      const response = await axios.get(`http://localhost:8081/api/surveys`, {
         params: { iis_no },
       });
       return response.data.length > 0 ? response.data[0] : null;
@@ -54,12 +54,12 @@ const Activity = () => {
     const fetchData = async () => {
       try {
         // Fetch firm counts
-        const firmCountResponse = await axios.get("https://embr3-ucds.onrender.com/api/firm-count");
+        const firmCountResponse = await axios.get("http://localhost:8081/api/firm-count");
         setEncodedFirms(firmCountResponse.data.count); // Set the total count of documents
   
         // Fetch recent activity data
-        const ucdsResponse = await axios.get("https://embr3-ucds.onrender.com/api/ucds-log");
-        const surveyResponse = await axios.get("https://embr3-ucds.onrender.com/api/survey-log");
+        const ucdsResponse = await axios.get("http://localhost:8081/api/ucds-log");
+        const surveyResponse = await axios.get("http://localhost:8081/api/survey-log");
   
         // Count the number of modified records in ucds-log and survey-log
         const modifiedUcdsCount = ucdsResponse.data.filter((log) => log.actionType === "Modified").length;

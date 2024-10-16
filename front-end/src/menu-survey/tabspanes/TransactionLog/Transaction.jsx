@@ -37,7 +37,7 @@ const Transaction = ({ editedRecord, currentUser }) => {
       if (editedRecord?.iis_no) {
         try {
           const response = await axios.get(
-            "https://embr3-ucds.onrender.com/api/survey-log",
+            "http://localhost:8081/api/survey-log",
             {
               params: { iis_no: editedRecord.iis_no },
             }
@@ -77,7 +77,7 @@ const Transaction = ({ editedRecord, currentUser }) => {
 
   const fetchUserByUsername = async (username) => {
     try {
-      const response = await axios.get(`https://embr3-ucds.onrender.com/api/users`, {
+      const response = await axios.get(`http://localhost:8081/api/users`, {
         params: { username }, // This sends the username as a query parameter
       });
       return response.data.length > 0 ? response.data[0] : null; // Return the first user or null if not found
@@ -106,7 +106,7 @@ const Transaction = ({ editedRecord, currentUser }) => {
   const handleDeleteTransaction = async (transactionID) => {
     try {
       const response = await fetch(
-        `https://embr3-ucds.onrender.com/api/survey-transaction/${transactionID}`, // Use transactionID instead of ID
+        `http://localhost:8081/api/survey-transaction/${transactionID}`, // Use transactionID instead of ID
         {
           method: "DELETE",
           credentials: "include", // Include credentials if necessary

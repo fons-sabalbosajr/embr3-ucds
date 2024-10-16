@@ -12,7 +12,7 @@ const UserStatus = ({ avatar, name, userName }) => {
     const fetchOnlineUsers = async () => {
       try {
         const response = await axios.get(
-          "https://embr3-ucds.onrender.com/api/online_users"
+          "http://localhost:8081/api/online_users"
         );
         const allUsers = response.data.onlineUsers;
 

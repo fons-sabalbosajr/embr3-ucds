@@ -109,7 +109,7 @@ const SurveyReport = ({
 
   useEffect(() => {
     axios
-      .get(`https://embr3-ucds.onrender.com/api/survey-data/${editedRecord.id_no}`)
+      .get(`http://localhost:8081/api/survey-data/${editedRecord.id_no}`)
       .then((response) => {
         setUcdsData(response.data);
       })
@@ -196,7 +196,7 @@ const SurveyReport = ({
 
       // Call the API to generate PDF
       const response = await axios.get(
-        `https://embr3-ucds.onrender.com/generate-custom-survey-report/${editedRecord.id_no}`,
+        `http://localhost:8081/generate-custom-survey-report/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -250,7 +250,7 @@ const SurveyReport = ({
       setLoadingPDF(true);
       document.body.style.cursor = "wait";
 
-      const userResponse = await axios.get("https://embr3-ucds.onrender.com/check-auth", {
+      const userResponse = await axios.get("http://localhost:8081/check-auth", {
         withCredentials: true,
         headers: {
           Accept: "application/json",
@@ -288,7 +288,7 @@ const SurveyReport = ({
         }, {});
 
       response = await axios.get(
-        `https://embr3-ucds.onrender.com/generate-custom-survey-report/${editedRecord.id_no}`,
+        `http://localhost:8081/generate-custom-survey-report/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -316,7 +316,7 @@ const SurveyReport = ({
       console.log([...formData.entries()]);
 
       await axios.post(
-        "https://embr3-ucds.onrender.com/save-draft-report-survey",
+        "http://localhost:8081/save-draft-report-survey",
         formData
       );
 

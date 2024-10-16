@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
-import axios from 'axios';
+import React, { useEffect, useState } from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import axios from "axios";
 
 const ProtectedRoute = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -8,9 +8,17 @@ const ProtectedRoute = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await axios.get('https://embr3-ucds.onrender.com/auth/check', { withCredentials: true });
-        setIsAuthenticated(response.data.isAuthenticated);
+        const response = await axios.get(
+          "http://localhost:8081/check-auth", // Updated endpoint
+          { withCredentials: true }
+        );
+
+        // Assuming that a successful response means the user is authenticated
+        if (response.status === 200) {
+          setIsAuthenticated(true); // User is authenticated
+        }
       } catch (error) {
+        // If there's an error, the user is not authenticated
         setIsAuthenticated(false);
       }
     };

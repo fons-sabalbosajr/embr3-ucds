@@ -38,12 +38,9 @@ function generateRandomPassword(length) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://luxury-ganache-c8d8aa.netlify.app",
 ];
-
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -70,19 +67,18 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',  // Secure cookies in production (Netlify)
-      httpOnly: true,  // Prevent JavaScript from accessing cookies
-      maxAge: 1000 * 60 * 60 * 24,  // 24 hours
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', // 'None' for cross-site cookies in production
+      secure: process.env.NODE_ENV === "production" ? true : false,
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24,
+      sameSite: 'None',
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
-      collectionName: 'sessions',
-      ttl: 14 * 24 * 60 * 60,  // 14 days
+      collectionName: "sessions",
+      ttl: 14 * 24 * 60 * 60, // 14 days
     }),
   })
 );
-
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -133,8 +129,6 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
-
-
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -341,6 +335,7 @@ module.exports = logActivity;
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const authenticateSession = (req, res, next) => {
+  console.log("Current session:", req.session);
   if (req.session && req.session.user) {
     return next();
   }
@@ -348,13 +343,23 @@ const authenticateSession = (req, res, next) => {
   res.status(401).json({ message: "User not authenticated" });
 };
 
+app.get("/auth/check", (req, res) => {
+  if (req.session && req.session.user) {
+    res.status(200).json({ isAuthenticated: true });
+  } else {
+    res.status(401).json({ isAuthenticated: false });
+  }
+});
+
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   // Check if both username and password are provided
   if (!username || !password) {
     console.log("Username or password missing.");
-    return res.status(400).json({ error: "Username and password are required." });
+    return res
+      .status(400)
+      .json({ error: "Username and password are required." });
   }
 
   try {
@@ -372,7 +377,7 @@ app.post("/login", async (req, res) => {
 
     // Check if the password matches
     const passwordMatch = await bcrypt.compare(password, user.password);
-    
+
     if (!passwordMatch) {
       console.log("Password mismatch for user:", username);
       return res.status(401).json({ error: "Invalid username or password." });
@@ -484,6 +489,7 @@ app.get("/protected-route", authenticateSession, (req, res) => {
 });
 
 app.get("/check-auth", authenticateSession, (req, res) => {
+  console.log("Session data on check-auth:", req.session);
   res.status(200).json({
     status: "Success",
     userId: req.session.user.userId,
