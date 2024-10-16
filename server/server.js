@@ -39,6 +39,12 @@ function generateRandomPassword(length) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://luxury-ganache-c8d8aa.netlify.app",
+];
+
+
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
 const client = new MongoClient(mongoUri, {
@@ -128,10 +134,6 @@ app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://luxury-ganache-c8d8aa.netlify.app",
-];
 
 
 // Public Routes (e.g., Registration Route)
