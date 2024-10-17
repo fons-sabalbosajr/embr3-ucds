@@ -40,7 +40,6 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://luxury-ganache-c8d8aa.netlify.app",
 ];
 
 // MongoDB connection setup
@@ -68,10 +67,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Ensure this is true in production
+      secure: true,   
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24,
-      sameSite: "None", // This should be fine for cross-origin requests
+      sameSite: 'None',
+      maxAge: 1000 * 60 * 60 * 24,  // 1 day
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -80,6 +79,7 @@ app.use(
     }),
   })
 );
+console.log('Cookie set:', res.getHeaders()['set-cookie']);
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -130,7 +130,7 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
-app.set("trust proxy", 1);
+app.set('trust proxy', 1);
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -345,7 +345,7 @@ const authenticateSession = (req, res, next) => {
   res.status(401).json({ message: "User not authenticated" });
 };
 
-app.get("/auth-check", (req, res) => {
+app.get("/auth/check", (req, res) => {
   if (req.session && req.session.user) {
     res.status(200).json({ isAuthenticated: true });
   } else {
