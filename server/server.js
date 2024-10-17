@@ -40,7 +40,7 @@ function generateRandomPassword(length) {
 //////////////////////////////////////////////////////////////////////////////////////////
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://luxury-ganache-c8d8aa.netlify.app",
+  "https://silver-empanada-6084c3.netlify.app",
 ];
 
 // MongoDB connection setup
@@ -346,12 +346,16 @@ const authenticateSession = (req, res, next) => {
 };
 
 app.get("/auth-check", (req, res) => {
+  console.log("Received request to /auth-check");
   if (req.session && req.session.user) {
+    console.log("User is authenticated");
     res.status(200).json({ isAuthenticated: true });
   } else {
+    console.log("User is not authenticated");
     res.status(401).json({ isAuthenticated: false });
   }
 });
+
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
