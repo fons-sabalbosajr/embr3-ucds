@@ -370,7 +370,7 @@ app.post("/login", async (req, res) => {
 
   try {
     // Log the received username for debugging
-    console.log("Received login request for username:", username);
+    //console.log("Received login request for username:", username);
 
     // Find the user by username
     const user = await userCollection.findOne({ username });
@@ -390,7 +390,7 @@ app.post("/login", async (req, res) => {
     }
 
     // Log successful login attempt
-    console.log("Login successful for user:", username);
+    //console.log("Login successful for user:", username);
 
     // Create a session for the user
     req.session.user = {
@@ -424,7 +424,7 @@ app.post("/login", async (req, res) => {
     );
 
     // Log session creation
-    console.log("Session created for user:", req.session.user);
+    //console.log("Session created for user:", req.session.user);
 
     // Send the success response with user information
     return res.status(200).json({
