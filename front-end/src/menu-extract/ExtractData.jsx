@@ -42,7 +42,7 @@ const ExtractData = () => {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          "https://embr3-ucds.onrender.com/api/extract-province-data",
+          "http://localhost:8081/api/extract-province-data",
           {
             method: "GET",
             params: {
@@ -237,7 +237,7 @@ const ExtractData = () => {
       }
 
       const response = await fetch(
-        `https://embr3-ucds.onrender.com/api/extract-province-data?${queryParams.toString()}`,
+        `http://localhost:8081/api/extract-province-data?${queryParams.toString()}`,
         {
           method: "GET",
         }

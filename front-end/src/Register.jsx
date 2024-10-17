@@ -50,7 +50,7 @@ const Register = () => {
 
     try {
       const response = await axios.post(
-        "https://embr3-ucds.onrender.com/register",
+        "http://localhost:8081/register",
         {
           name: values.name,
           division: values.division,

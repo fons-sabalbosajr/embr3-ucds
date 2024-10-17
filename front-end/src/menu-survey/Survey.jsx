@@ -62,7 +62,7 @@ const Survey = ({ theme, currentUser }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await fetch("https://embr3-ucds.onrender.com/api/surveys", {
+      const response = await fetch("http://localhost:8081/api/surveys", {
         method: "GET",
         credentials: "include",
       });
@@ -348,7 +348,7 @@ const Survey = ({ theme, currentUser }) => {
     setLoading(true);
     try {
       const promises = ids.map((id) => {
-        return fetch(`https://embr3-ucds.onrender.com/api/surveys/${id}`, {
+        return fetch(`http://localhost:8081/api/surveys/${id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -501,7 +501,7 @@ const Survey = ({ theme, currentUser }) => {
 
       // Call the API using _id
       const response = await axios.put(
-        `https://embr3-ucds.onrender.com/api/survey/${record._id}`,
+        `http://localhost:8081/api/survey/${record._id}`,
         payload
       );
 
