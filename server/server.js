@@ -38,9 +38,7 @@ function generateRandomPassword(length) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-const allowedOrigins = [
-  "http://localhost:5173",
-];
+const allowedOrigins = ["http://localhost:5173"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -67,10 +65,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production" ? true : false,
+      secure: false,  // Set to false during development (use true in production with HTTPS)
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24,
-      sameSite: 'None',
+      sameSite: 'Lax',  // 'Lax' during local development; 'None' with 'Secure' in production
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -343,18 +341,9 @@ const authenticateSession = (req, res, next) => {
   res.status(401).json({ message: "User not authenticated" });
 };
 
-app.get("/auth/check", (req, res) => {
-  if (req.session && req.session.user) {
-    res.status(200).json({ isAuthenticated: true });
-  } else {
-    res.status(401).json({ isAuthenticated: false });
-  }
-});
-
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
-  // Check if both username and password are provided
   if (!username || !password) {
     console.log("Username or password missing.");
     return res
@@ -363,30 +352,21 @@ app.post("/login", async (req, res) => {
   }
 
   try {
-    // Log the received username for debugging
     console.log("Received login request for username:", username);
-
-    // Find the user by username
     const user = await userCollection.findOne({ username });
 
-    // Check if the user exists
     if (!user) {
-      console.log("User not found:", username);
+      console.log("User  not found:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    // Check if the password matches
     const passwordMatch = await bcrypt.compare(password, user.password);
-
     if (!passwordMatch) {
       console.log("Password mismatch for user:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    // Log successful login attempt
     console.log("Login successful for user:", username);
-
-    // Create a session for the user
     req.session.user = {
       userId: user._id.toString(),
       name: user.name,
@@ -400,7 +380,9 @@ app.post("/login", async (req, res) => {
       canViewDataHistory: user.canViewDataHistory || false,
     };
 
-    // Update login status in the database
+    // Log session creation
+    console.log("Session created for user:", req.session);
+
     await loginStatusCollection.updateOne(
       { userId: user._id },
       {
@@ -417,10 +399,6 @@ app.post("/login", async (req, res) => {
       { upsert: true }
     );
 
-    // Log session creation
-    console.log("Session created for user:", req.session.user);
-
-    // Send the success response with user information
     return res.status(200).json({
       status: "success",
       username: user.username,
@@ -431,9 +409,18 @@ app.post("/login", async (req, res) => {
       canViewDataHistory: user.canViewDataHistory || false,
     });
   } catch (error) {
-    // Log the error for debugging purposes
     console.error("Error during login:", error);
     return res.status(500).json({ error: "An unexpected error occurred." });
+  }
+});
+
+app.get("/auth-check", (req, res) => {
+  if (req.session && req.session.user) {
+    console.log("User  is authenticated:", req.session.user);
+    res.status(200).json({ isAuthenticated: true });
+  } else {
+    console.log("User  is not authenticated.");
+    res.status(401).json({ isAuthenticated: false });
   }
 });
 

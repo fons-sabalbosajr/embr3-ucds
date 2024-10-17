@@ -91,8 +91,15 @@ const Universe = () => {
   };
 
   useEffect(() => {
-    checkAuth(); // Initial call to check authentication
+    checkAuth();
   }, []);
+
+  const handleRetry = () => {
+    setRetrying(true);
+    checkAuth();
+    setRetrying(false);
+  };
+
 
   const currentUser = {
     name,
@@ -105,6 +112,8 @@ const Universe = () => {
   if (loading) {
     return <Z_CustomSpinner />;
   }
+
+
 
   if (!auth) {
     return (
