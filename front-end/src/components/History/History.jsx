@@ -15,7 +15,7 @@ const History = () => {
   useEffect(() => {
     const fetchUcdsLogs = async () => {
       try {
-        const ucdsLogsResponse = await axios.get("http://localhost:8081/api/ucds-log");
+        const ucdsLogsResponse = await axios.get("https://embr3-ucds.onrender.com/api/ucds-log");
         setUcdsLogs(ucdsLogsResponse.data);
       } catch (error) {
         console.error("Error fetching ucds logs:", error);
@@ -24,7 +24,7 @@ const History = () => {
 
     const fetchSurveyLogs = async () => {
       try {
-        const surveyLogsResponse = await axios.get("http://localhost:8081/api/survey-log");
+        const surveyLogsResponse = await axios.get("https://embr3-ucds.onrender.com/api/survey-log");
         setSurveyLogs(surveyLogsResponse.data);
       } catch (error) {
         console.error("Error fetching survey logs:", error);

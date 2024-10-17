@@ -29,7 +29,7 @@ const Profile = () => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/current-user");
+        const response = await axios.get("https://embr3-ucds.onrender.com/current-user");
         setUser(response.data);
         form.setFieldsValue(response.data);
       } catch (error) {
@@ -46,7 +46,7 @@ const Profile = () => {
   const handleProfileUpdate = async (values) => {
     try {
       await axios.put(
-        `http://localhost:8081/api/profile/update/${user._id}`,
+        `https://embr3-ucds.onrender.com/api/profile/update/${user._id}`,
         values
       );
       message.success("Profile updated successfully");
@@ -87,7 +87,7 @@ const Profile = () => {
 
     try {
       await axios.post(
-        `http://localhost:8081/api/profile/upload-avatar/${user._id}`,
+        `https://embr3-ucds.onrender.com/api/profile/upload-avatar/${user._id}`,
         formData,
         {
           headers: {
@@ -106,7 +106,7 @@ const Profile = () => {
   // Fetch user function (for reloading updated data)
   const fetchUser = async () => {
     try {
-      const response = await axios.get("http://localhost:8081/current-user");
+      const response = await axios.get("https://embr3-ucds.onrender.com/current-user");
       setUser(response.data);
       form.setFieldsValue(response.data);
     } catch (error) {

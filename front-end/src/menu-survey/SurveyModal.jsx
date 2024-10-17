@@ -45,7 +45,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
     try {
       const iisNo = record.iis_no;
       const response = await axios.get(
-        `http://localhost:8081/api/survey-log?iis_no=${iisNo}`
+        `https://embr3-ucds.onrender.com/api/survey-log?iis_no=${iisNo}`
       );
       const existingLogs = response.data;
 
@@ -94,7 +94,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
     ).padStart(2, "0")}`;
 
     try {
-      const response = await axios.get("http://localhost:8081/api/survey-log");
+      const response = await axios.get("https://embr3-ucds.onrender.com/api/survey-log");
       const transactions = response.data;
 
       // Check if the iis_no already exists in the survey-log collection
@@ -132,7 +132,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
 
       try {
         const response = await axios.post(
-          "http://localhost:8081/api/survey-log",
+          "https://embr3-ucds.onrender.com/api/survey-log",
           logData
         );
         // if (response.status === 200) {
@@ -181,7 +181,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
           };
 
           const response = await axios.put(
-            `http://localhost:8081/api/update-survey-data/${editedRecord.id_no}`,
+            `https://embr3-ucds.onrender.com/api/update-survey-data/${editedRecord.id_no}`,
             updatedRecord // Send the updated record
           );
 
@@ -194,7 +194,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
 
                 // Get the latest transaction ID from the survey-log collection
                 axios
-                  .get("http://localhost:8081/api/survey-log")
+                  .get("https://embr3-ucds.onrender.com/api/survey-log")
                   .then((response) => {
                     const transactions = response.data;
 
@@ -230,7 +230,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
                     // Save the survey log entry to the survey-log collection
                     axios
                       .post(
-                        "http://localhost:8081/api/survey-log",
+                        "https://embr3-ucds.onrender.com/api/survey-log",
                         surveyLogEntry
                       )
                       .then((response) => {

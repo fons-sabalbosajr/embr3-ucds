@@ -57,7 +57,7 @@ const UserAccounts = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get("http://localhost:8081/api/users", {
+      const response = await axios.get("https://embr3-ucds.onrender.com/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -96,7 +96,7 @@ const UserAccounts = () => {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get(" http://localhost:8081/api/users", {
+      const response = await axios.get(" https://embr3-ucds.onrender.com/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -111,7 +111,7 @@ const UserAccounts = () => {
 
   const fetchSignUpUsers = async () => {
     try {
-      const response = await axios.get(" http://localhost:8081/api/sign-up", {
+      const response = await axios.get(" https://embr3-ucds.onrender.com/api/sign-up", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -139,7 +139,7 @@ const UserAccounts = () => {
   const fetchLoginStatus = async () => {
     try {
       const response = await axios.get(
-        " http://localhost:8081/api/online_users"
+        " https://embr3-ucds.onrender.com/api/online_users"
       );
       const allStatuses = response.data.onlineUsers;
 
@@ -204,7 +204,7 @@ const UserAccounts = () => {
     if (result.isConfirmed) {
       try {
         const response = await axios.delete(
-          `http://localhost:8081/api/remove-user/${record._id}`
+          `https://embr3-ucds.onrender.com/api/remove-user/${record._id}`
         );
 
         if (response.data.message === "User removed successfully") {
@@ -515,7 +515,7 @@ const UserAccounts = () => {
           if (result.isConfirmed) {
             try {
               const response = await axios.put(
-                ` http://localhost:8081/api/status/${record._id}`,
+                ` https://embr3-ucds.onrender.com/api/status/${record._id}`,
                 { status: value }
               );
               if (

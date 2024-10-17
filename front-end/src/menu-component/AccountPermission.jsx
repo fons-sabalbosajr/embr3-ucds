@@ -51,7 +51,7 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
   useEffect(() => {
     const fetchUserAvatar = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/api/users");
+        const response = await axios.get("https://embr3-ucds.onrender.com/api/users");
         const users = response.data;
         const currentUser = users.find((user) => user.email === userData.email);
 
@@ -123,7 +123,7 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       try {
         // Send the updated permissions to the API
         const response = await axios.patch(
-          `http://localhost:8081/api/users/${userData.email}/permissions`,
+          `https://embr3-ucds.onrender.com/api/users/${userData.email}/permissions`,
           updatedPermissions
         );
         //console.log("Updated User Data:", response.data);

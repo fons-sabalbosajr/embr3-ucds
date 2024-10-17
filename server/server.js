@@ -67,10 +67,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production" ? true : false,
+      secure: true,   
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24,
       sameSite: 'None',
+      maxAge: 1000 * 60 * 60 * 24,  // 1 day
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -79,6 +79,7 @@ app.use(
     }),
   })
 );
+console.log('Cookie set:', res.getHeaders()['set-cookie']);
 
 // Connect to MongoDB once when the server starts
 async function connectToMongo() {
@@ -129,6 +130,7 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
+app.set('trust proxy', 1);
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {

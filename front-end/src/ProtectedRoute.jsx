@@ -9,7 +9,7 @@ const ProtectedRoute = () => {
     const checkAuth = async () => {
       try {
         const response = await axios.get(
-          "http://localhost:8081/check-auth", // Updated endpoint
+          "https://embr3-ucds.onrender.com/check-auth", // Updated endpoint
           { withCredentials: true }
         );
 

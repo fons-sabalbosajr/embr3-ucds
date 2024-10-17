@@ -12,7 +12,7 @@ const ReportDrafts = () => {
 
   const fetchCurrentUser = async () => {
     try {
-      const response = await axios.get("http://localhost:8081/check-auth", {
+      const response = await axios.get("https://embr3-ucds.onrender.com/check-auth", {
         withCredentials: true,
       });
       setCurrentUser(response.data);
@@ -38,7 +38,7 @@ const ReportDrafts = () => {
   const fetchDraftReports = async () => {
     try {
       const response = await fetchWithRetry(
-        "http://localhost:8081/api/draft-report",
+        "https://embr3-ucds.onrender.com/api/draft-report",
         { withCredentials: true }
       );
   
@@ -62,7 +62,7 @@ const ReportDrafts = () => {
           address: draft.reportInfo?.address || "No Address Available",
           fileName: draft.fileName || "No filename available",
           pdfUrl: draft.pdfUrl
-            ? `http://localhost:8081/api/files/${draft.fileName}`
+            ? `https://embr3-ucds.onrender.com/api/files/${draft.fileName}`
             : "No URL Available",
         };
       });
