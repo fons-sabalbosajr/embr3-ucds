@@ -3,19 +3,22 @@ import { Form, Input, Button } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import CryptoJS from "crypto-js"; // Import the crypto-js library
 import "./login.css";
 import homelogo from "./assets/emblogomenu.png";
-
 
 const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  // Access the encryption key using Vite's import.meta.env
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
+
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
-  
+
     try {
       const response = await axios.post(
         "http://localhost:8081/login",
@@ -27,13 +30,23 @@ const Login = () => {
           withCredentials: true,
         }
       );
-  
-      console.log("API Response:", response.data);
-  
+
       if (response.data.status === "success") {
-        localStorage.setItem("username", response.data.username);
-        localStorage.setItem("permission", JSON.stringify(response.data.permission));
-  
+        // Encrypt the username and permission before saving to localStorage
+        const encryptedUsername = CryptoJS.AES.encrypt(
+          response.data.username,
+          encryptionKey
+        ).toString();
+
+        const encryptedPermission = CryptoJS.AES.encrypt(
+          JSON.stringify(response.data.permission),
+          encryptionKey
+        ).toString();
+
+        // Save encrypted values in localStorage
+        localStorage.setItem("username", encryptedUsername);
+        localStorage.setItem("permission", encryptedPermission);
+
         // Navigate to the /universe page
         navigate("/universe");
       } else {

@@ -5,18 +5,19 @@ import UserStatus from "../components/UserStatus/UserStatus";
 import Bulletin from "../components/Bulletin/Bulletin";
 import Calendar from "../components/Calendar/SystemCalendar";
 import Summary from "../components/History/History";
-import Activity from "../components/Summary/Activity"; // Updated import name
+import Activity from "../components/Summary/Activity";
+
 
 const Dashboard = ({ avatar, name }) => {
   return (
     <div className="dashboard-container">
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={19}>
+        <Col xs={24} lg={17}>
           <div className="card">
             <Bulletin />
           </div>
         </Col>
-        <Col xs={24} lg={5}>
+        <Col xs={24} lg={7}>
           <div className="card">
             <UserStatus avatar={avatar} name={name} />
           </div>
@@ -30,7 +31,7 @@ const Dashboard = ({ avatar, name }) => {
         </Col>
         <Col xs={24} lg={7} className="right-column">
           <div className="card-bottom">
-            <Activity />
+            {/* <Activity /> */}
           </div>
           <div className="card-changes">
             <Summary />

@@ -333,11 +333,11 @@ module.exports = logActivity;
 //////////////////////////////////////////////////////////////////////////////////////////
 
 const authenticateSession = (req, res, next) => {
-  console.log("Current session:", req.session);
+  //console.log("Current session:", req.session);
   if (req.session && req.session.user) {
     return next();
   }
-  console.log("User not authenticated:", req.session);
+  //console.log("User not authenticated:", req.session);
   res.status(401).json({ message: "User not authenticated" });
 };
 
@@ -352,7 +352,7 @@ app.post("/login", async (req, res) => {
   }
 
   try {
-    console.log("Received login request for username:", username);
+    //console.log("Received login request for username:", username);
     const user = await userCollection.findOne({ username });
 
     if (!user) {
@@ -366,7 +366,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    console.log("Login successful for user:", username);
+    //console.log("Login successful for user:", username);
     req.session.user = {
       userId: user._id.toString(),
       name: user.name,
@@ -378,10 +378,11 @@ app.post("/login", async (req, res) => {
       canManageData: user.canManageData || false,
       canViewAdminPanel: user.canViewAdminPanel || false,
       canViewDataHistory: user.canViewDataHistory || false,
+      canAccessRangePicker: user.canAccessRangePicker || false,
     };
 
     // Log session creation
-    console.log("Session created for user:", req.session);
+    //console.log("Session created for user:", req.session);
 
     await loginStatusCollection.updateOne(
       { userId: user._id },
@@ -407,6 +408,7 @@ app.post("/login", async (req, res) => {
       canManageData: user.canManageData || false,
       canViewAdminPanel: user.canViewAdminPanel || false,
       canViewDataHistory: user.canViewDataHistory || false,
+      canAccessRangePicker: user.canAccessRangePicker || false,
     });
   } catch (error) {
     console.error("Error during login:", error);
@@ -416,10 +418,10 @@ app.post("/login", async (req, res) => {
 
 app.get("/auth-check", (req, res) => {
   if (req.session && req.session.user) {
-    console.log("User  is authenticated:", req.session.user);
+    //console.log("User  is authenticated:", req.session.user);
     res.status(200).json({ isAuthenticated: true });
   } else {
-    console.log("User  is not authenticated.");
+    //console.log("User  is not authenticated.");
     res.status(401).json({ isAuthenticated: false });
   }
 });
@@ -476,7 +478,7 @@ app.get("/protected-route", authenticateSession, (req, res) => {
 });
 
 app.get("/check-auth", authenticateSession, (req, res) => {
-  console.log("Session data on check-auth:", req.session);
+  //console.log("Session data on check-auth:", req.session);
   res.status(200).json({
     status: "Success",
     userId: req.session.user.userId,
@@ -489,6 +491,7 @@ app.get("/check-auth", authenticateSession, (req, res) => {
     canManageData: req.session.user.canManageData,
     canViewAdminPanel: req.session.user.canViewAdminPanel,
     canViewDataHistory: req.session.user.canViewDataHistory,
+    canAccessRangePicker: req.session.user.canAccessRangePicker
   });
 });
 
@@ -2005,6 +2008,28 @@ app.get("/api/project_type", async (req, res) => {
   }
 });
 
+// Endpoint to get longitude and latitude data from ucdsCollection
+app.get("/api/ucds", async (req, res) => {
+  try {
+    const data = await ucdsCollection.find({}, { projection: { lat: 1, long: 1, name: 1, _id: 0 } }).toArray();
+    res.json(data);
+  } catch (error) {
+    console.error("Error fetching data from ucdsCollection:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// API endpoint to get the total count of UCDs
+app.get('/api/ucds/count', async (req, res) => {
+  try {
+    const count = await ucdsCollection.countDocuments(); // Get the total count of documents
+    res.json(count); // Send the count as a JSON response
+  } catch (error) {
+    console.error("Error fetching UCD count:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 //////////////////////////////////////////////////////////////////////////////////////////
 
 //Update the data per provinces
@@ -2351,6 +2376,7 @@ app.patch("/api/users/:email/permissions", async (req, res) => {
     canViewDataHistory,
     canManageData,
     canGenerateData,
+    canAccessRangePicker
   } = req.body; // Destructure the privilege values from the request body
 
   try {
@@ -2362,7 +2388,8 @@ app.patch("/api/users/:email/permissions", async (req, res) => {
           canViewAdminPanel: canViewAdminPanel, // Update Admin Panel permission
           canViewDataHistory: canViewDataHistory, // Update Data History permission
           canManageData: canManageData, // Update Manage Data permission
-          canGenerateData: canGenerateData, // Update Generate Data permission
+          canGenerateData: canGenerateData,
+          canAccessRangePicker : canAccessRangePicker // Update Generate Data permission
         },
       }
     );

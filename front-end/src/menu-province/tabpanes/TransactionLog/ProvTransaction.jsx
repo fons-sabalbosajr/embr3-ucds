@@ -8,6 +8,7 @@ import {
 import moment from "moment";
 import axios from "axios";
 import Swal from "sweetalert2";
+import CryptoJS from "crypto-js";
 import "./provtransaction.css";
 
 const ProvTransaction = ({ editedRecord, currentUser }) => {
@@ -19,12 +20,23 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [revertRecord, setRevertRecord] = useState(null);
 
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
+
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
   const canGenerateData = permissions[0];
   const canManageData = permissions[1];
   const canViewAdminPanel = permissions[2];
   const canViewDataHistory = permissions[3];
+
+  const decryptUsername = (encryptedUsername) => {
+    const decryptedBytes = CryptoJS.AES.decrypt(
+      encryptedUsername,
+      encryptionKey
+    );
+    const decryptedUsername = decryptedBytes.toString(CryptoJS.enc.Utf8);
+    return decryptedUsername;
+  };
 
   useEffect(() => {
     if (editedRecord && editedRecord.ecc_cnc) {
@@ -77,6 +89,19 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
     };
   }, [editedRecord]);
 
+
+
+  // Fetch and decrypt the username from local storage
+  const fetchUsername = () => {
+    const encryptedUsername = localStorage.getItem("username");
+    if (encryptedUsername) {
+      const username = decryptUsername(encryptedUsername);
+      //console.log("Decrypted Username:", username);
+      return username;
+    }
+    return null; // Return null if not found
+  };
+
   const fetchUserByUsername = async (username) => {
     try {
       const response = await axios.get(`http://localhost:8081/api/users`, {
@@ -90,15 +115,16 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
   };
 
   useEffect(() => {
-    const username = localStorage.getItem("username"); // Get username from local storage
+    const username = fetchUsername();
     if (username) {
-      fetchUserByUsername(username).then((user) => {
-        if (user) {
-          setUserData(user); // Store user data
-        }
-      });
+      const fetchUser = async () => {
+        const user = await fetchUserByUsername(username);
+        setUserData(user);
+      };
+      fetchUser();
     }
   }, []);
+
 
   const handleTableChange = (pagination) => {
     setCurrentPage(pagination.current);
@@ -177,7 +203,17 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       title: <span className="table-header">Date</span>,
       dataIndex: "transactionDate",
       key: "transactionDate",
-      render: (date) => moment(date).format("MM/DD/yyyy \n hh:mm A"),
+      render: (date) => {
+        const formattedDate = moment(date).format("MM/DD/yyyy");
+        const formattedTime = moment(date).format("hh:mm A");
+        return (
+          <>
+            {formattedDate}
+            <br />
+            {formattedTime}
+          </>
+        );
+      },
       align: "center",
     },
     {
@@ -244,15 +280,16 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       key: "userActed",
       align: "center",
       render: () =>
-        userData ? `${userData.name} \n ${userData.division}` : "Loading...", // Display the full name
-    },
-    {
-      title: <span className="table-header">Date Acted</span>,
-      dataIndex: "dateActed",
-      key: "dateActed",
-      render: (date) => moment(date).format("MM/DD/yyyy \n hh:mm A"),
-      align: "center",
-    },
+        userData ? (
+          <>
+            {userData.name}
+            <br />
+            {userData.division}
+          </>
+        ) : (
+          "Loading..."
+        ),
+    },    
   ].concat(
     canManageData
       ? [

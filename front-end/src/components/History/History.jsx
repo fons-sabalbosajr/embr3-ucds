@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Table, Button, Modal, Input } from "antd";
-import { InfoCircleOutlined } from '@ant-design/icons';
+import { InfoCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
 import { format } from "date-fns";
 import "./history.css";
@@ -15,7 +15,9 @@ const History = () => {
   useEffect(() => {
     const fetchUcdsLogs = async () => {
       try {
-        const ucdsLogsResponse = await axios.get("http://localhost:8081/api/ucds-log");
+        const ucdsLogsResponse = await axios.get(
+          "http://localhost:8081/api/ucds-log"
+        );
         setUcdsLogs(ucdsLogsResponse.data);
       } catch (error) {
         console.error("Error fetching ucds logs:", error);
@@ -24,7 +26,9 @@ const History = () => {
 
     const fetchSurveyLogs = async () => {
       try {
-        const surveyLogsResponse = await axios.get("http://localhost:8081/api/survey-log");
+        const surveyLogsResponse = await axios.get(
+          "http://localhost:8081/api/survey-log"
+        );
         setSurveyLogs(surveyLogsResponse.data);
       } catch (error) {
         console.error("Error fetching survey logs:", error);
@@ -81,10 +85,14 @@ const History = () => {
       key: "actionType",
       align: "left",
       width: 200,
-      render: (text , record) => (
+      render: (text, record) => (
         <div>
-          <span className={getTagClass(record.actionType)}>{record.actionType}</span>
-          <div>{format(new Date(record.dateActed), "MMMM dd, yyyy hh:mm a")}</div>
+          <span className={getTagClass(record.actionType)}>
+            {record.actionType}
+          </span>
+          <div>
+            {format(new Date(record.dateActed), "MMMM dd, yyyy hh:mm a")}
+          </div>
           <div>{record.referenceNo}</div>
           <div>by {record.userActed}</div>
         </div>
@@ -96,10 +104,10 @@ const History = () => {
       width: 50,
       render: (text, record) => (
         <div className="actions-container">
-          <Button 
-            type="link" 
-            icon={<InfoCircleOutlined />} 
-            onClick={() => showModal(record)} 
+          <Button
+            type="link"
+            icon={<InfoCircleOutlined />}
+            onClick={() => showModal(record)}
             style={{ padding: 0 }}
           />
         </div>
@@ -129,7 +137,7 @@ const History = () => {
     const fieldsToExclude = ["_id", "userId", "method", "path", "actionLabel"];
 
     const fieldMappings = {
-      transactionID: "Transaction ID", 
+      transactionID: "Transaction ID",
       transactionDate: "Date",
       actionType: "Type of Action",
       oldValue: "Old Value",
@@ -137,7 +145,7 @@ const History = () => {
       userActed: "Modified by",
       dateActed: "Date last modified",
       ecc_cnc: "Reference No.",
-  };
+    };
 
     const removeCurlyBraces = (str) => {
       let obj;
@@ -159,7 +167,7 @@ const History = () => {
 
         if (key === "actionLabel") {
           displayValue = formatActionLabel(value);
-        } else if ( key === "timestamp") {
+        } else if (key === "timestamp") {
           displayValue = format(new Date(value), "MMMM dd, yyyy hh:mm a");
         } else if (key === "requestData" && typeof value === "object") {
           displayValue = removeCurlyBraces(JSON.stringify(value));
@@ -233,7 +241,7 @@ const History = () => {
           >
             <Table
               columns={modalColumns}
-              dataSource={getModalData(modalData)} 
+              dataSource={getModalData(modalData)}
               pagination={false}
               size="small"
               className="modal-table"

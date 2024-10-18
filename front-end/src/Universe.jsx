@@ -49,7 +49,7 @@ const Universe = () => {
       const response = await axios.get(`${backendUrl}/check-auth`, {
         withCredentials: true,
       });
-
+  
       if (response.data.status === "Success") {
         const {
           name,
@@ -61,19 +61,38 @@ const Universe = () => {
           canManageData,
           canViewAdminPanel,
           canViewDataHistory,
+          canAccessRangePicker,
         } = response.data;
-
+  
+        // Log full server response
+        //console.log("Full server response:", response.data);
+  
         setName(name);
         setAvatar(avatar || "default-avatar-url");
-        setPermissions(
-          permissions || [
-            canGenerateData,
-            canManageData,
-            canViewAdminPanel,
-            canViewDataHistory,
-          ]
-        );
+  
+        const finalPermissions = permissions && permissions.length > 0
+          ? permissions
+          : [
+              canGenerateData || false,
+              canManageData || false,
+              canViewAdminPanel || false,
+              canViewDataHistory || false,
+              canAccessRangePicker || false,
+            ];
+        
 
+        // // Log the permissions to the console
+        // console.log("Permissions from server:", permissions);
+        // console.log("Final Permissions:", finalPermissions);
+        // console.log("Individual Permissions:");
+        // console.log("Can Generate Data:", canGenerateData);
+        // console.log("Can Manage Data:", canManageData);
+        // console.log("Can View Admin Panel:", canViewAdminPanel);
+        // console.log("Can View Data History:", canViewDataHistory);
+        // console.log("Can Access Range Picker:", canAccessRangePicker);
+  
+        setPermissions(finalPermissions);
+  
         setUserHandle(username);
         setDivision(division || "");
         setAuth(true);
@@ -83,12 +102,16 @@ const Universe = () => {
       }
     } catch (error) {
       console.error("Error during authentication check:", error);
-      setErrorMessage("Authentication failed. Please check your credentials and try again.");
+      setErrorMessage(
+        "Authentication failed. Please check your credentials and try again."
+      );
       setAuth(false);
     } finally {
       setLoading(false);
     }
   };
+  
+  
 
   useEffect(() => {
     checkAuth();
@@ -99,7 +122,6 @@ const Universe = () => {
     checkAuth();
     setRetrying(false);
   };
-
 
   const currentUser = {
     name,
@@ -112,8 +134,6 @@ const Universe = () => {
   if (loading) {
     return <Z_CustomSpinner />;
   }
-
-
 
   if (!auth) {
     return (
@@ -232,8 +252,14 @@ const Universe = () => {
                   path="dashboard"
                   element={<Dashboard avatar={avatar} name={name} />}
                 />
-                <Route path="/province/:provinceName" element={<Province currentUser={currentUser} />} />
-                <Route path="survey" element={<Survey currentUser={currentUser} />} />
+                <Route
+                  path="/province/:provinceName"
+                  element={<Province currentUser={currentUser} />}
+                />
+                <Route
+                  path="survey"
+                  element={<Survey currentUser={currentUser} />}
+                />
                 <Route path="mbu" element={<MBU />} />
                 <Route path="eswm-database" element={<ESWM />} />
                 {permissions.includes("admin") && (

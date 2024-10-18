@@ -12,7 +12,7 @@ import Permit from "./tabpanes/PermitsInfo/Permits";
 import Legal from "./tabpanes/LegalInfo/LegalUnit";
 import MBU from "./tabpanes/MBUInfo/MBUnit";
 import ProvTransactionLog from "./tabpanes/TransactionLog/ProvTransaction";
-
+import CryptoJS from "crypto-js";
 import ICIR from "./reports/icir/ICIR";
 import IC from "./reports/ic/formIC";
 import CIC from "./reports/cic/formCIC";
@@ -40,16 +40,35 @@ const ProvinceModal = ({
   const [loadingICIR, setLoadingICIR] = useState(false);
   const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now());
   const [activeTab, setActiveTab] = useState("1");
-  const [isLogChecked, setIsLogChecked] = useState(() => {
-    const storedValue = localStorage.getItem("isLogChecked");
-    return storedValue ? JSON.parse(storedValue) : {};
-  });
+  const [isLogChecked, setIsLogChecked] = useState({});
   const [previousRecord, setPreviousRecord] = useState(null);
-  
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
+
+  // Load the checked log state from localStorage
+  useEffect(() => {
+    const storedValue = localStorage.getItem("isLogChecked");
+    if (storedValue) {
+      try {
+        const decryptedBytes = CryptoJS.AES.decrypt(storedValue, encryptionKey);
+        const decryptedValue = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        setIsLogChecked(JSON.parse(decryptedValue)); // Set the state with the decrypted value
+      } catch (error) {
+        console.error("Error decrypting isLogChecked:", error);
+      }
+    }
+  }, [encryptionKey]);
 
   useEffect(() => {
-    localStorage.setItem("isLogChecked", JSON.stringify(isLogChecked));
-  }, [isLogChecked]);
+    try {
+      const encryptedValue = CryptoJS.AES.encrypt(
+        JSON.stringify(isLogChecked),
+        encryptionKey
+      ).toString();
+      localStorage.setItem("isLogChecked", encryptedValue);
+    } catch (error) {
+      console.error("Error encrypting isLogChecked:", error);
+    }
+  }, [isLogChecked, encryptionKey]);
 
   useEffect(() => {
     if (record && JSON.stringify(record) !== JSON.stringify(previousRecord)) {
@@ -88,32 +107,28 @@ const ProvinceModal = ({
   const logInitialData = async (record) => {
     if (isLogging) return;
     isLogging = true;
-
+  
     const now = new Date();
-    const transactionDate = `${
-      now.getMonth() + 1
-    }/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(
-      now.getMinutes()
-    ).padStart(2, "0")}`;
-
+    const transactionDate = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+  
     try {
       const response = await axios.get("http://localhost:8081/api/ucds-log");
       const transactions = response.data;
-
+  
       const existingLog = transactions.find(
         (log) =>
           log.ecc_cnc === record.ecc_cnc &&
           log.newValue === `${record.ecc_cnc} \n ${record.title}`
       );
-
+  
       if (existingLog) {
         console.log("Initial data already logged for ecc_cnc:", record.ecc_cnc);
         isLogging = false;
         return;
       }
-
+  
       let transactionCounter = 1;
-
+  
       if (!transactions || transactions.length === 0) {
         console.log("No transactions found");
       } else {
@@ -124,29 +139,36 @@ const ProvinceModal = ({
           if (lastTransaction.transactionID) {
             const lastTransactionID = lastTransaction.transactionID;
             const lastTransactionNumber = parseInt(
-              lastTransactionID.replace("TRX-", "")
+              lastTransactionID.replace("TRXM-", "")
             );
             transactionCounter = lastTransactionNumber + 1;
           } else {
             console.error("Last transaction ID is undefined");
-            // You can set a default transaction ID or handle it accordingly
-            // For example:
-            // transactionCounter = 1;
           }
         }
       }
-
+  
+      // Decrypt the username
+      const encryptedUsername = localStorage.getItem("username");
+      const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY; // Get the encryption key from your environment variable
+      let username = null;
+  
+      if (encryptedUsername) {
+        const bytes = CryptoJS.AES.decrypt(encryptedUsername, encryptionKey);
+        username = bytes.toString(CryptoJS.enc.Utf8);
+      }
+  
       const logData = {
         transactionID: `TRXM-${String(transactionCounter).padStart(4, "0")}`,
         transactionDate: transactionDate,
         actionType: "Initial Data",
         oldValue: "-",
         newValue: `${record.ecc_cnc} \n ${record.title}`,
-        userActed: localStorage.getItem("username"),
+        userActed: username, // Use the decrypted username
         dateActed: transactionDate,
         ecc_cnc: record.ecc_cnc,
       };
-
+  
       try {
         const response = await axios.post(
           "http://localhost:8081/api/ucds-log",
@@ -187,22 +209,22 @@ const ProvinceModal = ({
       if (result.isConfirmed) {
         try {
           const { _id, ...recordToUpdate } = editedRecord;
-  
+
           const currentUsername = localStorage.getItem("username");
           const updatedRecord = {
             ...recordToUpdate,
             ecc_cnc: editedRecord.ecc_cnc,
             updated_by: currentUsername, // Add the username to the request body
           };
-  
+
           const response = await axios.put(
             `http://localhost:8081/api/update-data/${editedRecord.id_no}`,
             updatedRecord
           );
-  
+
           if (response.status === 200) {
             const auditLog = response.data; // Assuming this contains audit log information
-  
+
             if (showNotification) {
               Swal.fire("Success", "Changes saved successfully!", "success");
             }
@@ -211,11 +233,13 @@ const ProvinceModal = ({
             }
             setIsEditing(false);
             handleReload();
-  
+
             // Get the latest transaction ID from the ucds-log collection
-            const logResponse = await axios.get("http://localhost:8081/api/ucds-log");
+            const logResponse = await axios.get(
+              "http://localhost:8081/api/ucds-log"
+            );
             const transactions = logResponse.data;
-  
+
             let transactionCounter = 1;
             if (transactions.length > 0) {
               const lastTransaction = transactions[transactions.length - 1];
@@ -225,9 +249,9 @@ const ProvinceModal = ({
               );
               transactionCounter = lastTransactionNumber + 1;
             }
-  
+
             const transactionDate = new Date().toLocaleString();
-  
+
             // Safely handle missing or empty changes
             const changes = auditLog.changes || []; // Default to empty array if changes is undefined
             const oldValues = changes.length
@@ -238,15 +262,18 @@ const ProvinceModal = ({
                   .map((change) => `${change.new_value}`)
                   .join("\n")}`
               : `${auditLog.ecc_cnc || editedRecord.ecc_cnc}`; // Use ecc_cnc directly if no changes
-  
+
             // Ensure the updated_at field is valid before converting to string
             const updatedAt = auditLog.updated_at
               ? new Date(auditLog.updated_at).toLocaleString()
               : new Date().toLocaleString(); // Use current date if updated_at is invalid
-  
+
             // Create the log entry based on the audit log returned from the server
             const logData = {
-              transactionID: `TRX-${String(transactionCounter).padStart(4, "0")}`,
+              transactionID: `TRX-${String(transactionCounter).padStart(
+                4,
+                "0"
+              )}`,
               transactionDate: transactionDate,
               actionType: "Modified",
               oldValue: oldValues,
@@ -255,7 +282,7 @@ const ProvinceModal = ({
               dateActed: updatedAt,
               ecc_cnc: auditLog.ecc_cnc || editedRecord.ecc_cnc, // Fallback to the editedRecord ecc_cnc
             };
-  
+
             // Save the log entry to the ucds-log collection
             try {
               await axios.post("http://localhost:8081/api/ucds-log", logData);
@@ -273,7 +300,6 @@ const ProvinceModal = ({
       }
     });
   };
-  
 
   const handleCancelEdit = () => {
     Swal.fire({

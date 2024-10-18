@@ -30,6 +30,7 @@ import axios from "axios";
 import Highlighter from "react-highlight-words";
 import debounce from "lodash.debounce";
 import SurveyModal from "./SurveyModal";
+import CryptoJS from "crypto-js";
 
 const Survey = ({ theme, currentUser }) => {
   const [data, setData] = useState([]);
@@ -42,8 +43,6 @@ const Survey = ({ theme, currentUser }) => {
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [selectedColor, setSelectedColor] = useState(null);
   const [colorMenuVisible, setColorMenuVisible] = useState(false);
-  const storedColors = localStorage.getItem("rowColors");
-  const rowColors = storedColors ? JSON.parse(storedColors) : {};
   const [selectedRowColors, setSelectedRowColors] = useState({});
   const [filterValue, setFilterValue] = useState("");
   const [industryClasses, setIndustryClasses] = useState([]);
@@ -54,6 +53,8 @@ const Survey = ({ theme, currentUser }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [viewedRecord, setViewedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
   const formatNumber = (number) => {
     return new Intl.NumberFormat("en-US").format(number);
@@ -130,13 +131,45 @@ const Survey = ({ theme, currentUser }) => {
     setFilteredData(filteredData);
   }, [selectedKeys, data]);
 
+  // Decrypt rowColors from localStorage
+  useEffect(() => {
+    const storedColors = localStorage.getItem("rowColors");
+    //console.log("Stored Colors:", storedColors); // Log the stored colors
+
+    if (storedColors) {
+      try {
+        // Decrypt the stored colors
+        const decryptedBytes = CryptoJS.AES.decrypt(
+          storedColors,
+          encryptionKey
+        );
+        const decryptedColors = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        //console.log("Decrypted Colors:", decryptedColors); // Log decrypted colors
+
+        // Parse the decrypted string into a JavaScript object
+        const rowColors = JSON.parse(decryptedColors);
+        setSelectedRowColors(rowColors); // Store the colors in state
+      } catch (error) {
+        console.error("Error decrypting or parsing rowColors:", error);
+        setSelectedRowColors({}); // Reset if there's an error
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (data && data.length > 0) {
       const rowColors = {};
       data.forEach((row) => {
         rowColors[row.id_no] = row.color;
       });
-      localStorage.setItem("rowColors", JSON.stringify(rowColors));
+
+      // Encrypt the rowColors object before storing it in localStorage
+      const encryptedRowColors = CryptoJS.AES.encrypt(
+        JSON.stringify(rowColors),
+        encryptionKey
+      ).toString();
+
+      localStorage.setItem("rowColors", encryptedRowColors);
     }
   }, [data]);
 

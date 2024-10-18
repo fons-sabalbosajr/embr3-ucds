@@ -6,10 +6,11 @@ import {
   InfoCircleFilled,
   HistoryOutlined,
   ExportOutlined,
+  SearchOutlined
 } from "@ant-design/icons";
 import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
-import Swal from "sweetalert2"; // Import SweetAlert2
+import Swal from "sweetalert2";
 import "./accountpermission.css";
 
 const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
@@ -20,7 +21,7 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       accessName: "Admin Panel",
       description: "Grants access to the administrative features.",
       icon: <EyeOutlined />,
-      isGranted: false, // Initial value, will be updated in useEffect
+      isGranted: false,
     },
     {
       key: "canViewDataHistory",
@@ -41,6 +42,13 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       accessName: "Generate Data",
       description: "Allows user to generate and edit data.",
       icon: <ExportOutlined />,
+      isGranted: false,
+    },
+    {
+      key: "canAccessRangePicker", // New permission for RangePicker access
+      accessName: "Access RangePicker",
+      description: "Grants access to the date range selection feature.",
+      icon: <SearchOutlined />, // You can choose a different icon if needed
       isGranted: false,
     },
   ]);

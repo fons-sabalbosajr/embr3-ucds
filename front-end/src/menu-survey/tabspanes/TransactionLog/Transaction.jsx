@@ -9,6 +9,7 @@ import moment from "moment";
 import "./transaction.css";
 import axios from "axios";
 import Swal from "sweetalert2";
+import CryptoJS from "crypto-js";
 
 const Transaction = ({ editedRecord, currentUser }) => {
   const [transactions, setTransactions] = useState([]);
@@ -75,28 +76,37 @@ const Transaction = ({ editedRecord, currentUser }) => {
     };
   }, [editedRecord]);
 
-  const fetchUserByUsername = async (username) => {
-    try {
-      const response = await axios.get(`http://localhost:8081/api/users`, {
-        params: { username }, // This sends the username as a query parameter
-      });
-      return response.data.length > 0 ? response.data[0] : null; // Return the first user or null if not found
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      return null; // Return null on error
-    }
-  };
+ // Decrypt username and fetch user data
+ const fetchUserByUsername = async (username) => {
+  try {
+    const response = await axios.get(`http://localhost:8081/api/users`, {
+      params: { username }, // This sends the username as a query parameter
+    });
+    return response.data.length > 0 ? response.data[0] : null; // Return the first user or null if not found
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return null; // Return null on error
+  }
+};
 
-  useEffect(() => {
-    const username = localStorage.getItem("username"); // Get username from local storage
-    if (username) {
-      fetchUserByUsername(username).then((user) => {
-        if (user) {
-          setUserData(user); // Store user data
-        }
-      });
-    }
-  }, []);
+useEffect(() => {
+  const encryptedUsername = localStorage.getItem("username"); // Get encrypted username from local storage
+  if (encryptedUsername) {
+    // Decrypt the username
+    const decryptedBytes = CryptoJS.AES.decrypt(
+      encryptedUsername,
+      import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY
+    );
+    const decryptedUsername = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+    // Fetch user data using the decrypted username
+    fetchUserByUsername(decryptedUsername).then((user) => {
+      if (user) {
+        setUserData(user); // Store user data
+      }
+    });
+  }
+}, []);
 
   const handleTableChange = (pagination) => {
     setCurrentPage(pagination.current);
@@ -154,7 +164,17 @@ const Transaction = ({ editedRecord, currentUser }) => {
       title: <span className="table-header">Date</span>,
       dataIndex: "transactionDate",
       key: "transactionDate",
-      render: (date) => moment(date).format("MM/DD/yyyy \n hh:mm A"),
+      render: (date) => {
+        const formattedDate = moment(date).format("MM/DD/yyyy");
+        const formattedTime = moment(date).format("hh:mm A");
+        return (
+          <>
+            {formattedDate}
+            <br />
+            {formattedTime}
+          </>
+        );
+      },
       align: "center",
     },
     {
@@ -206,14 +226,15 @@ const Transaction = ({ editedRecord, currentUser }) => {
       key: "userActed",
       align: "center",
       render: () =>
-        userData ? `${userData.name} \n ${userData.division}` : "Loading...", // Display the full name
-    },
-    {
-      title: <span className="table-header">Date Acted</span>,
-      dataIndex: "dateActed",
-      key: "dateActed",
-      render: (date) => moment(date).format("MM/DD/yyyy \n hh:mm A"),
-      align: "center",
+        userData ? (
+          <>
+            {userData.name}
+            <br />
+            {userData.division}
+          </>
+        ) : (
+          "Loading..."
+        ), // Display the full name with line break
     },
   ].concat(
     canManageData

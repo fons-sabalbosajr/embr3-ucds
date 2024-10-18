@@ -721,7 +721,6 @@ const UserAccounts = () => {
             showSizeChanger: true,
             pageSizeOptions: ["10", "50", "100"],
           }}
-          loading={loading}
           onChange={handlePaginationChange}
         />
 

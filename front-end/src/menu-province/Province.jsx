@@ -4,15 +4,15 @@ import {
   Table,
   Button,
   Spin,
-  notification,
   Input,
   Space,
   Tooltip,
   Tag,
   Modal,
-  Select,
   Pagination,
   Popover,
+  DatePicker,
+  ConfigProvider,
 } from "antd";
 import {
   ReloadOutlined,
@@ -28,10 +28,10 @@ import {
 import { DataContext } from "./DataContext";
 import ProvinceModal from "./ProvinceModal";
 import Highlighter from "react-highlight-words";
-import { TweenOneGroup } from "rc-tween-one";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import CryptoJS from "crypto-js";
 import "./province.css";
 
 const capitalizeFirstLetter = (str) => {
@@ -39,12 +39,12 @@ const capitalizeFirstLetter = (str) => {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
 
+const { RangePicker } = DatePicker;
+
 const tourContent = (
   <div style={{ maxWidth: "300px" }}>
     <h4>Delisting Instructions</h4>
-    <p>
-      To delist a record, select any duplicate record from the table below.
-    </p>
+    <p>To delist a record, select any duplicate record from the table below.</p>
     <p>
       Click the "Delist" button to proceed. If you wish to cancel, click
       "Cancel."
@@ -52,7 +52,7 @@ const tourContent = (
   </div>
 );
 
-const Province = ({ theme, currentUser  }) => {
+const Province = ({ theme, currentUser }) => {
   const { provinceName } = useParams();
   const { data, error, fetchData, setCurrentProvince } =
     useContext(DataContext);
@@ -76,7 +76,18 @@ const Province = ({ theme, currentUser  }) => {
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
   const [duplicateRecords, setDuplicateRecords] = useState([]);
   const [selectedDuplicateRowKeys, setSelectedDuplicateRowKeys] = useState([]);
-  const [filterDuplicates, setFilterDuplicates] = useState(false); 
+  const [filterDuplicates, setFilterDuplicates] = useState(false);
+  const [searchedColumn, setSearchedColumn] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [dateRange, setDateRange] = useState([null, null]);
+
+  // Extract permissions from currentUser
+  const permissions = currentUser?.permissions || [];
+  const canGenerateData = permissions[0];
+  const canManageData = permissions[1];
+  const canViewAdminPanel = permissions[2];
+  const canViewDataHistory = permissions[3];
+  const canAccessRangePicker = permissions[4];
 
   useEffect(() => {
     const fetchDataOnProvinceChange = async () => {
@@ -97,142 +108,161 @@ const Province = ({ theme, currentUser  }) => {
     fetchDataOnProvinceChange();
   }, [provinceName, capitalizedProvinceName, fetchData]);
 
+  const filterData = () => {
+    if (!data || data.length === 0) return [];
+
+    // Filter based on the tags, inputValue, and dateRange
+    return data.filter((record) => {
+      const searchableFields = [
+        record.id_no,
+        record.title,
+        record.name,
+        record.address,
+        record.ecc_cnc,
+        record.industry_class,
+        record.remarks_recommendations,
+        record.industry_type,
+        record.industry_subtype,
+        record.psic_code,
+        record.proj_type,
+        record.mbu_area,
+        record.waterbody,
+        record.long,
+        record.lat,
+        record.cong_district,
+        record.street,
+        record.brgy,
+        record.city,
+        record.province,
+        record.emp_no_total,
+        record.wwtftype,
+        record.bod,
+        record.fmr_section_incharged,
+        record.section_incharge,
+        record.handler,
+        record.monitoring_sched,
+        record.iis_no,
+        record.insp_type,
+        record.report_type,
+        record.date_monitored,
+        record.date_routed,
+        record.date_signed,
+        record.days_dmds,
+        record.days_dsdrs,
+        record.pismu_tracking,
+        record.pd1586,
+        record.permit_process,
+        record.date_amend,
+        record.date_approved,
+        record.ra8749,
+        record.pto_code,
+        record.pto_issued,
+        record.pto_expiration,
+        record.ra9275,
+        record.wwdp_code,
+        record.wwdp_issued,
+        record.wwdp_expiration,
+        record.ra6969,
+        record.haz_id,
+        record.haz_issued,
+        record.tsd_required,
+        record.tsd,
+        record.tp_trc_required,
+        record.tsd_ref_no,
+        record.tsd_expiration,
+        record.tp_trc,
+        record.tp_trc_ref_no,
+        record.tp_trc_expiration,
+        record.chemical_permit_required,
+        record.chemical_permit,
+        record.chemical_permit_type,
+        record.chemical_permit_sub_type,
+        record.chem_permit_issued,
+        record.chem_permit_exp,
+        record.pco,
+        record.pco_no,
+        record.pco_name,
+        record.pco_tel_no,
+        record.pco_validity,
+        record.docket_no,
+        record.denr_pab_case_no,
+        record.date_forwarded,
+        record.date_approved_clegal,
+        record.days_dfda,
+        record.service_mode,
+        record.nov_released,
+        record.v_pd1586,
+        record.v_ra9275,
+        record.v_ra8749,
+        record.v_haz,
+        record.v_tchem,
+        record.tc_date_sched,
+        record.tc_date_actual,
+        record.time,
+        record.legal_officer,
+        record.tc_commitment,
+        record.pos_paper,
+        record.penalty,
+        record.amount,
+        record.or_number,
+        record.tc_order_compliance,
+        record.remarks,
+        record.resolution,
+        record.order,
+        record.order_status,
+        record.mbu_priority,
+        record.mbu_survey,
+        record.mbu_survey_request,
+        record.dp_universe,
+        record.color,
+      ].map((field) => (typeof field === "string" ? field : "").toLowerCase()); // Normalize fields to lowercase
+
+      // Check if all tags match cumulatively
+      const isMatchingTags =
+        tags.length === 0 ||
+        tags.every((tag) =>
+          searchableFields.some((field) => field.includes(tag.toLowerCase()))
+        );
+
+      // Check if input value matches any record detail cumulatively
+      const isMatchingInput =
+        !inputValue || // If no inputValue, consider it a match
+        searchableFields.some((field) =>
+          field.includes(inputValue.toLowerCase())
+        );
+
+      const isMatchingPismuTracking =
+        inputValue &&
+        (inputValue.toLowerCase().includes("received") ||
+          inputValue.toLowerCase().includes("pismu") ||
+          inputValue.toLowerCase().includes("planning")) &&
+        record.pismu_tracking === "✔"; // Check if pismu_tracking is marked
+
+      const isMatchingDateSigned =
+        inputValue.toLowerCase() === "date signed" && record.date_signed; // Ensure date_signed exists
+
+      const dateSigned = new Date(record.date_signed);
+
+      // Check if the date_signed is within the selected date range
+      const isMatchingDateRange =
+        !dateRange[0] ||
+        !dateRange[1] || // If no date range, consider it a match
+        (dateSigned >= dateRange[0] && dateSigned <= dateRange[1]);
+
+      return (
+        isMatchingTags &&
+        (isMatchingInput || isMatchingPismuTracking || isMatchingDateSigned) &&
+        isMatchingDateRange // Combine filters
+      );
+    });
+  };
+
   useEffect(() => {
-    const filterData = () => {
-      if (!data || data.length === 0) return []; // Return empty array if no data
-
-      // Filter based on the tags and inputValue
-      return data.filter((record) => {
-        // Aggregate all searchable fields into a single array
-        const searchableFields = [
-          record.id_no,
-          record.title,
-          record.name,
-          record.address,
-          record.ecc_cnc,
-          record.industry_class,
-          record.remarks_recommendations,
-          record.industry_type,
-          record.industry_subtype,
-          record.psic_code,
-          record.proj_type,
-          record.mbu_area,
-          record.waterbody,
-          record.long,
-          record.lat,
-          record.cong_district,
-          record.street,
-          record.brgy,
-          record.city,
-          record.province,
-          record.emp_no_total,
-          record.wwtftype,
-          record.bod,
-          record.fmr_section_incharged,
-          record.section_incharge,
-          record.handler,
-          record.monitoring_sched,
-          record.iis_no,
-          record.insp_type,
-          record.report_type,
-          record.date_monitored,
-          record.date_routed,
-          record.date_signed,
-          record.days_dmds,
-          record.days_dsdrs,
-          record.pismu_tracking,
-          record.pd1586,
-          record.permit_process,
-          record.date_amend,
-          record.date_approved,
-          record.ra8749,
-          record.pto_code,
-          record.pto_issued,
-          record.pto_expiration,
-          record.ra9275,
-          record.wwdp_code,
-          record.wwdp_issued,
-          record.wwdp_expiration,
-          record.ra6969,
-          record.haz_id,
-          record.haz_issued,
-          record.tsd_required,
-          record.tsd,
-          record.tp_trc_required,
-          record.tsd_ref_no,
-          record.tsd_expiration,
-          record.tp_trc,
-          record.tp_trc_ref_no,
-          record.tp_trc_expiration,
-          record.chemical_permit_required,
-          record.chemical_permit,
-          record.chemical_permit_type,
-          record.chemical_permit_sub_type,
-          record.chem_permit_issued,
-          record.chem_permit_exp,
-          record.pco,
-          record.pco_no,
-          record.pco_name,
-          record.pco_tel_no,
-          record.pco_validity,
-          record.docket_no,
-          record.denr_pab_case_no,
-          record.date_forwarded,
-          record.date_approved_clegal,
-          record.days_dfda,
-          record.service_mode,
-          record.nov_released,
-          record.v_pd1586,
-          record.v_ra9275,
-          record.v_ra8749,
-          record.v_haz,
-          record.v_tchem,
-          record.tc_date_sched,
-          record.tc_date_actual,
-          record.time,
-          record.legal_officer,
-          record.tc_commitment,
-          record.pos_paper,
-          record.penalty,
-          record.amount,
-          record.or_number,
-          record.tc_order_compliance,
-          record.remarks,
-          record.resolution,
-          record.order,
-          record.order_status,
-          record.mbu_priority,
-          record.mbu_survey,
-          record.mbu_survey_request,
-          record.dp_universe,
-          record.color,
-        ].map((field) =>
-          (typeof field === "string" ? field : "").toLowerCase()
-        ); // Normalize fields to lowercase
-
-        // Check if all tags match cumulatively
-        const isMatchingTags =
-          tags.length === 0 ||
-          tags.every((tag) =>
-            searchableFields.some((field) => field.includes(tag.toLowerCase()))
-          );
-
-        // Check if input value matches any record detail cumulatively
-        const isMatchingInput =
-          !inputValue || // If no inputValue, consider it a match
-          searchableFields.some((field) =>
-            field.includes(inputValue.toLowerCase())
-          );
-
-        return isMatchingTags && isMatchingInput; // Return true if all tags match and input matches
-      });
-    };
-
     setLoading(true);
     const filtered = filterData();
     setFilteredData(filtered);
     setLoading(false);
-  }, [data, tags, inputValue]);
+  }, [data, tags, inputValue, dateRange]);
 
   useEffect(() => {
     if (inputVisible) {
@@ -268,6 +298,10 @@ const Province = ({ theme, currentUser  }) => {
       setDuplicates(duplicateECC);
     }
   }, [data]);
+
+  const handleDateChange = (dates) => {
+    setDateRange(dates);
+  };
 
   const onRowClick = (record) => {
     const selectedIndex = selectedRowKeys.indexOf(record.id_no);
@@ -333,25 +367,31 @@ const Province = ({ theme, currentUser  }) => {
       <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
     ),
     onFilter: (value, record) => {
-      // Handle filtering for "Industry Details" with duplicates
-      if (dataIndex === "industryDetails") {
-        const industryText = `${record.title} ${record.name} ${record.address} ${record.ecc_cnc}`;
+      const lowerValue = value.toLowerCase();
 
-        // If the search value is 'duplicate', filter based on ecc_cnc duplicates
-        if (value.toLowerCase() === "duplicate") {
-          return duplicates[record.ecc_cnc]; // Return true for duplicates
-        }
+      // Handle filtering for "pismu_tracking"
+      if (dataIndex === "pismu_tracking") {
+        return (
+          (record.pismu_tracking === "✔" &&
+            (lowerValue.includes("received") ||
+              lowerValue.includes("pismu"))) ||
+          (record.pismu_tracking !== "✔" && !lowerValue.includes("received"))
+        );
+      }
 
-        // Check if the industry text includes the search value
-        return industryText.toLowerCase().includes(value.toLowerCase());
+      // Handle filtering for date fields (partial match)
+      if (
+        ["date_monitored", "date_routed", "date_signed"].includes(dataIndex)
+      ) {
+        return (
+          record[dataIndex] &&
+          record[dataIndex].toLowerCase().includes(lowerValue)
+        );
       }
 
       // Handle other simple text columns
       return record[dataIndex]
-        ? record[dataIndex]
-            .toString()
-            .toLowerCase()
-            .includes(value.toLowerCase())
+        ? record[dataIndex].toString().toLowerCase().includes(lowerValue)
         : "";
     },
     onFilterDropdownOpenChange: (visible) => {
@@ -376,11 +416,151 @@ const Province = ({ theme, currentUser  }) => {
     confirm();
     setSearchedColumn(dataIndex);
     setSearchText(selectedKeys[0]);
+
+    // Apply filtering logic based on selectedKeys
+    const lowerValue = selectedKeys[0].toLowerCase();
+
+    // Filter the data using the existing filterData logic
+    const filtered = data.filter((record) => {
+      const searchableFields = [
+        record.id_no,
+        record.title,
+        record.name,
+        record.address,
+        record.ecc_cnc,
+        record.industry_class,
+        record.remarks_recommendations,
+        record.industry_type,
+        record.industry_subtype,
+        record.psic_code,
+        record.proj_type,
+        record.mbu_area,
+        record.waterbody,
+        record.long,
+        record.lat,
+        record.cong_district,
+        record.street,
+        record.brgy,
+        record.city,
+        record.province,
+        record.emp_no_total,
+        record.wwtftype,
+        record.bod,
+        record.fmr_section_incharged,
+        record.section_incharge,
+        record.handler,
+        record.monitoring_sched,
+        record.iis_no,
+        record.insp_type,
+        record.report_type,
+        record.date_monitored,
+        record.date_routed,
+        record.date_signed,
+        record.days_dmds,
+        record.days_dsdrs,
+        record.pismu_tracking,
+        record.pd1586,
+        record.permit_process,
+        record.date_amend,
+        record.date_approved,
+        record.ra8749,
+        record.pto_code,
+        record.pto_issued,
+        record.pto_expiration,
+        record.ra9275,
+        record.wwdp_code,
+        record.wwdp_issued,
+        record.wwdp_expiration,
+        record.ra6969,
+        record.haz_id,
+        record.haz_issued,
+        record.tsd_required,
+        record.tsd,
+        record.tp_trc_required,
+        record.tsd_ref_no,
+        record.tsd_expiration,
+        record.tp_trc,
+        record.tp_trc_ref_no,
+        record.tp_trc_expiration,
+        record.chemical_permit_required,
+        record.chemical_permit,
+        record.chemical_permit_type,
+        record.chemical_permit_sub_type,
+        record.chem_permit_issued,
+        record.chem_permit_exp,
+        record.pco,
+        record.pco_no,
+        record.pco_name,
+        record.pco_tel_no,
+        record.pco_validity,
+        record.docket_no,
+        record.denr_pab_case_no,
+        record.date_forwarded,
+        record.date_approved_clegal,
+        record.days_dfda,
+        record.service_mode,
+        record.nov_released,
+        record.v_pd1586,
+        record.v_ra9275,
+        record.v_ra8749,
+        record.v_haz,
+        record.v_tchem,
+        record.tc_date_sched,
+        record.tc_date_actual,
+        record.time,
+        record.legal_officer,
+        record.tc_commitment,
+        record.pos_paper,
+        record.penalty,
+        record.amount,
+        record.or_number,
+        record.tc_order_compliance,
+        record.remarks,
+        record.resolution,
+        record.order,
+        record.order_status,
+        record.mbu_priority,
+        record.mbu_survey,
+        record.mbu_survey_request,
+        record.dp_universe,
+        record.color,
+      ].map((field) => (typeof field === "string" ? field : "").toLowerCase());
+
+      // Check if all tags match cumulatively
+      const isMatchingTags =
+        tags.length === 0 ||
+        tags.every((tag) =>
+          searchableFields.some((field) => field.includes(tag.toLowerCase()))
+        );
+
+      // Check if input value matches any record detail cumulatively
+      const isMatchingInput = searchableFields.some((field) =>
+        field.includes(lowerValue)
+      );
+
+      const isMatchingPismuTracking =
+        (lowerValue.includes("received") ||
+          lowerValue.includes("pismu") ||
+          lowerValue.includes("planning")) &&
+        record.pismu_tracking === "✔";
+
+      const isMatchingDateSigned =
+        lowerValue === "date signed" && record.date_signed;
+
+      return (
+        isMatchingTags &&
+        (isMatchingInput || isMatchingPismuTracking || isMatchingDateSigned)
+      );
+    });
+
+    // Update filteredData state
+    setFilteredData(filtered);
   };
 
   const handleReset = (clearFilters) => {
     clearFilters();
     setSearchText("");
+    setSearchedColumn("");
     setFilteredData(data);
   };
 
@@ -449,7 +629,8 @@ const Province = ({ theme, currentUser  }) => {
   const handleInputConfirm = () => {
     if (inputValue) {
       if (inputValue.toLowerCase() === "duplicate") {
-        setFilterDuplicates(true); // Set the state to filter duplicates
+        setFilterDuplicates(true);
+        setTags([]); // Clear existing tags if "duplicate" is used
       } else if (!tags.includes(inputValue)) {
         setTags((prevTags) => [...prevTags, inputValue]);
         setFilterDuplicates(false); // Reset filter if other keyword is entered
@@ -457,6 +638,10 @@ const Province = ({ theme, currentUser  }) => {
     }
     setInputVisible(false);
     setInputValue("");
+
+    // Re-filter the data after adding the tag or applying filter
+    const filtered = filterData(); // Call your existing filtering function
+    setFilteredData(filtered);
   };
 
   const tagPlusStyle = {
@@ -480,10 +665,10 @@ const Province = ({ theme, currentUser  }) => {
 
   const tagChild = tags.map(forMap);
 
-  const duplicateEccCnc = duplicateRecords.map(record => record.ecc_cnc);
+  const duplicateEccCnc = duplicateRecords.map((record) => record.ecc_cnc);
   const filteredDuplicateData = filterDuplicates
-  ? paginatedData.filter((record) => duplicateEccCnc.includes(record.ecc_cnc))
-  : paginatedData;
+    ? paginatedData.filter((record) => duplicateEccCnc.includes(record.ecc_cnc))
+    : paginatedData;
 
   const handleReload = async () => {
     try {
@@ -508,7 +693,7 @@ const Province = ({ theme, currentUser  }) => {
 
   const handleCloseModal = () => {
     setIsModalVisible(false);
-    setSelectedRecord(null); 
+    setSelectedRecord(null);
   };
 
   // Function to format industry details
@@ -741,7 +926,7 @@ const Province = ({ theme, currentUser  }) => {
   const handleDelist = () => {
     // Perform the delisting action with selectedRowKeys
     console.log("Selected Row Keys for Delisting:", selectedDuplicateRowKeys);
-    
+
     // Implement your delist logic here
     // For example, call an API to delist the selected records
 
@@ -809,14 +994,13 @@ const Province = ({ theme, currentUser  }) => {
     },
   ];
 
-
   const columns = [
     {
       title: "ID No.",
       dataIndex: "id_no",
       key: "id_no",
       align: "left",
-      width: 120,
+      width: 140,
       ...getColumnSearchProps("id_no"),
       render: (text) => <div className="industry-label">{text}</div>,
     },
@@ -856,7 +1040,7 @@ const Province = ({ theme, currentUser  }) => {
         );
       },
       align: "left",
-      width: 900,
+      width: 500,
     },
     {
       title: "Industry Classification",
@@ -866,11 +1050,12 @@ const Province = ({ theme, currentUser  }) => {
         <div className="industry-label">{record.industry_class}</div>
       ),
       align: "left",
+      width: 100,
     },
     {
       title: "Permits/Clearances",
-
       key: "permits_clearances",
+      width: 200,
       render: (text, record) => (
         <div
           className="permits-clearances-container"
@@ -1172,20 +1357,22 @@ const Province = ({ theme, currentUser  }) => {
         );
       },
       align: "left",
+      width: 150,
     },
     {
-      title: "Remarks/Recommendations",
+      title: "Remarks/\nRecommendations",
       key: "remarks_recommendations",
       ...getColumnSearchProps("remarks_recommendations"),
       render: (text, record) => (
         <div className="industry-label">{record.remarks_recommendations}</div>
       ),
       align: "left",
+      width: 100,
     },
     {
-      title: "Monitoring Status",
+      title: <span style={{ fontSize: "12px" }}>Monitoring Status</span>,
       key: "iis_no",
-      ...getColumnSearchProps("iis_no"),
+      ...getColumnSearchProps("iis_no"), // Ensure this is set to the correct dataIndex
       render: (text, record) => (
         <div className="industry-label">
           <a
@@ -1198,7 +1385,6 @@ const Province = ({ theme, currentUser  }) => {
             {record.iis_no || ""}
           </a>
 
-          {/* One-liner for each field */}
           <div>
             {/* Date Monitored */}
             {record.date_monitored && (
@@ -1207,7 +1393,6 @@ const Province = ({ theme, currentUser  }) => {
                   <MonitorOutlined
                     style={{ marginRight: 8, color: "#1890ff" }}
                   />{" "}
-                  {/* Blue */}
                   {record.date_monitored}
                 </Tooltip>
               </div>
@@ -1220,7 +1405,6 @@ const Province = ({ theme, currentUser  }) => {
                   <GlobalOutlined
                     style={{ marginRight: 8, color: "#52c41a" }}
                   />{" "}
-                  {/* Green */}
                   {record.date_routed}
                 </Tooltip>
               </div>
@@ -1233,21 +1417,68 @@ const Province = ({ theme, currentUser  }) => {
                   <CheckCircleFilled
                     style={{ marginRight: 8, color: "#faad14" }}
                   />{" "}
-                  {/* Yellow */}
                   {record.date_signed}
                 </Tooltip>
               </div>
             )}
+
+            {/* PISMU Tracking */}
+            <div>
+              <Tooltip title="PISMU Tracking">
+                {record.pismu_tracking === "✔" ? (
+                  <span>
+                    <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
+                    <span style={{ marginLeft: 8 }}>
+                      Received by Planning Unit
+                    </span>
+                  </span>
+                ) : (
+                  <span></span>
+                )}
+              </Tooltip>
+            </div>
           </div>
         </div>
       ),
       width: 400, // Adjust as needed
       align: "left",
+      onFilter: (value, record) => {
+        const lowerValue = value.toLowerCase();
+
+        // Check if iis_no matches
+        const iisNoMatches =
+          record.iis_no && record.iis_no.toLowerCase().includes(lowerValue);
+
+        // Check if any date matches (partial match allowed)
+        const dateMonitoredMatches =
+          record.date_monitored && record.date_monitored.includes(lowerValue);
+        const dateRoutedMatches =
+          record.date_routed && record.date_routed.includes(lowerValue);
+        const dateSignedMatches =
+          record.date_signed && record.date_signed.includes(lowerValue);
+
+        // Check if pismu_tracking matches based on user input (partial match allowed)
+        const pismuTrackingMatches =
+          (record.pismu_tracking === "✔" &&
+            (lowerValue.includes("received") ||
+              lowerValue.includes("pismu"))) ||
+          (record.pismu_tracking !== "✔" && !lowerValue.includes("received"));
+
+        // Return true if any of the conditions match
+        return (
+          iisNoMatches ||
+          dateMonitoredMatches ||
+          dateRoutedMatches ||
+          dateSignedMatches ||
+          pismuTrackingMatches
+        );
+      },
     },
     {
       title: "Actions",
       key: "actions",
       align: "center",
+      width: 80,
       render: (text, record) => (
         <div>
           <Tooltip title="View Details" style={{ fontSize: "11px" }}>
@@ -1393,13 +1624,12 @@ const Province = ({ theme, currentUser  }) => {
           Please select a record from the table below to delist. You can choose
           any duplicate records associated with the selected ID No.
           <Popover content={tourContent} title="Delisting Help" trigger="click">
-          <Button
-          type="primary"
-          size="small"
-          
-          icon={<InfoCircleOutlined />}
-          style={{ marginLeft: "10px", padding: 0, marginRight: "0"}}
-        />
+            <Button
+              type="primary"
+              size="small"
+              icon={<InfoCircleOutlined />}
+              style={{ marginLeft: "10px", padding: 0, marginRight: "0" }}
+            />
           </Popover>
         </span>
         {selectedDuplicate && (
@@ -1423,59 +1653,83 @@ const Province = ({ theme, currentUser  }) => {
       </Modal>
 
       <div className="table-container">
-        <div
-          className="total-count"
-          style={{ margin: "10px 0", textAlign: "left" }}
+        <ConfigProvider
+          theme={{
+            token: {
+              fontSize: 12,
+            },
+          }}
         >
           <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
+            className="total-count"
+            style={{ margin: "10px 0", textAlign: "left" }}
           >
-            <h4 style={{ marginRight: 16 }}>
-              Industry Count: {filteredData.length}
-            </h4>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {inputVisible ? (
-                <Input
-                  ref={inputRef}
-                  type="primary"
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <h4 style={{ marginRight: 16 }}>
+                  Industry Count: {filteredData.length}
+                </h4>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  {inputVisible ? (
+                    <Input
+                      ref={inputRef}
+                      type="primary"
+                      size="small"
+                      style={{ width: 200, marginRight: 16 }} // Add margin to separate from other elements
+                      value={inputValue}
+                      onChange={handleInputChange}
+                      onBlur={handleInputConfirm}
+                      onPressEnter={handleInputConfirm}
+                      placeholder="enter keyword..."
+                    />
+                  ) : (
+                    <Tag
+                      onClick={() => setInputVisible(true)}
+                      style={tagPlusStyle}
+                      color="#108ee9"
+                    >
+                      <PlusOutlined /> Search keyword here...
+                    </Tag>
+                  )}
+                  {tagChild}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {canAccessRangePicker && (
+                  <>
+                    <span className="date-signed">Date Report Signed:</span>
+                    <RangePicker
+                      style={{ marginLeft: 16 }}
+                      onChange={handleDateChange}
+                      value={dateRange}
+                      format="MM/DD/YYYY" // Set the desired format
+                      placeholder={["Start Date", "End Date"]}
+                    />
+                  </>
+                )}
+
+                <Pagination
+                  simple={{
+                    readOnly: true,
+                  }}
+                  current={currentPage}
+                  total={filteredData.length}
+                  onChange={handlePageChange}
+                  showSizeChanger={false}
+                  pageSize={pageSize}
                   size="small"
-                  style={{ width: 200 }}
-                  value={inputValue}
-                  onChange={handleInputChange}
-                  onBlur={handleInputConfirm}
-                  onPressEnter={handleInputConfirm}
-                  placeholder="enter keyword..."
+                  style={{ marginLeft: 16 }} // Add margin to separate from RangePicker
                 />
-              ) : (
-                <Tag
-                  onClick={() => setInputVisible(true)}
-                  style={tagPlusStyle}
-                  color="#108ee9"
-                >
-                  <PlusOutlined /> Search keyword here...
-                </Tag>
-              )}
-              {tagChild}
-            </div>
-            <div className="pagination-controls" style={{ marginLeft: "auto" }}>
-              <Pagination
-                simple={{
-                  readOnly: true,
-                }}
-                current={currentPage}
-                total={filteredData.length}
-                onChange={handlePageChange}
-                showSizeChanger={false}
-                pageSize={pageSize}
-                size="small"
-              />
+              </div>
             </div>
           </div>
-        </div>
+        </ConfigProvider>
 
         {loading ? (
           <Spin tip="Loading data..." />

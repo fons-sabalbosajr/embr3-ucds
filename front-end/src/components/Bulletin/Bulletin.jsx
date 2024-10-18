@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Typography, Space, Modal, Badge } from 'antd';
-import {
-  CheckCircleOutlined,
-} from "@ant-design/icons";
+import { Table, Button, Typography, Space, Modal, Badge } from "antd";
+import { CheckCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
 import moment from "moment";
 import "./bulletin.css";
@@ -24,7 +22,9 @@ const Bulletin = () => {
         setBulletins(data);
 
         // Check if there is a new announcement and set the state to show the modal
-        const newAnnouncement = data.find((bulletin) => !bulletin.isRead && !dontShowAgainIds.has(bulletin._id));
+        const newAnnouncement = data.find(
+          (bulletin) => !bulletin.isRead && !dontShowAgainIds.has(bulletin._id)
+        );
         if (newAnnouncement) {
           setSelectedBulletin(newAnnouncement);
           setShowModalOnLoad(true);
@@ -45,11 +45,13 @@ const Bulletin = () => {
       align: "left",
       width: 120,
       render: (createdDate, record) => (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
           {!record.isRead && !dontShowAgainIds.has(record._id) && (
             <Badge.Ribbon text="New" color="red" style={{ marginRight: 8 }} />
           )}
-          <span className="data-label">{moment(createdDate).format("MMMM DD, YYYY hh:mm a")}</span>
+          <span className="data-label">
+            {moment(createdDate).format("MMMM DD, YYYY hh:mm a")}
+          </span>
         </div>
       ),
     },
@@ -59,14 +61,16 @@ const Bulletin = () => {
       align: "left",
       render: (_, record) => (
         <div>
-          <Typography.Text 
+          <Typography.Text
             strong={!record.isRead}
             style={{ color: record.isRead ? "gray" : "black" }}
             className="data-title" // Conditional styling
           >
             {record.isRead ? (
               <>
-                <CheckCircleOutlined style={{ color: "green", marginRight: 8 }} />
+                <CheckCircleOutlined
+                  style={{ color: "green", marginRight: 8 }}
+                />
                 {record.title}
               </>
             ) : (
@@ -74,7 +78,9 @@ const Bulletin = () => {
             )}
           </Typography.Text>
           <br />
-          <Typography.Text className="data-label">{record.message}</Typography.Text>
+          <Typography.Text className="data-label">
+            {record.message}
+          </Typography.Text>
         </div>
       ),
     },
@@ -84,7 +90,14 @@ const Bulletin = () => {
       align: "left",
       render: (_, record) => (
         <Space size="middle">
-          <Button type="primary" size="small" className="bulletin-button" onClick={() => handleView(record)}>View</Button>
+          <Button
+            type="primary"
+            size="small"
+            className="bulletin-button"
+            onClick={() => handleView(record)}
+          >
+            View
+          </Button>
         </Space>
       ),
     },
@@ -94,13 +107,22 @@ const Bulletin = () => {
     setSelectedBulletin(record);
     setIsModalVisible(true);
     try {
-      await axios.patch(`http://localhost:8081/api/postings/${record._id}`, { isRead: true });
+      await axios.patch(`http://localhost:8081/api/postings/${record._id}`, {
+        isRead: true,
+      });
       // Update the bulletins state with the read status
-      setBulletins(bulletins.map((bulletin) => bulletin._id === record._id ? { ...bulletin, isRead: true } : bulletin));
+      setBulletins(
+        bulletins.map((bulletin) =>
+          bulletin._id === record._id ? { ...bulletin, isRead: true } : bulletin
+        )
+      );
     } catch (error) {
       console.error("Error marking bulletin as read:", error);
       // Additional logging for debugging
-      console.error("Error details:", error.response ? error.response.data : error.message);
+      console.error(
+        "Error details:",
+        error.response ? error.response.data : error.message
+      );
     }
   };
 
@@ -111,7 +133,10 @@ const Bulletin = () => {
 
   const handleDontShowAgain = async () => {
     try {
-      await axios.patch(`http://localhost:8081/api/postings/${selectedBulletin._id}`, { showAgain: false });
+      await axios.patch(
+        `http://localhost:8081/api/postings/${selectedBulletin._id}`,
+        { showAgain: false }
+      );
       // Add the ID to the set of IDs that should not trigger the modal
       setDontShowAgainIds((prev) => new Set(prev).add(selectedBulletin._id));
       setIsModalVisible(false);
@@ -135,8 +160,12 @@ const Bulletin = () => {
         open={isModalVisible || showModalOnLoad}
         onCancel={handleModalCancel}
         footer={[
-          <Button type="primary" key="dont-show" onClick={handleDontShowAgain}>Don't Show This Message Again</Button>,
-          <Button key="cancel" onClick={handleModalCancel}>Close</Button>,
+          <Button type="primary" key="dont-show" onClick={handleDontShowAgain}>
+            Don't Show This Message Again
+          </Button>,
+          <Button key="cancel" onClick={handleModalCancel}>
+            Close
+          </Button>,
         ]}
       >
         <Typography.Text strong>{selectedBulletin.title}</Typography.Text>

@@ -9,7 +9,9 @@ import LegalUnit from "./tabspanes/LegalUnit/LegalUnit";
 import MBU from "./tabspanes/MBU/MBU";
 import Transaction from "./tabspanes/TransactionLog/Transaction";
 import SurveyReport from "./reports/SurveyReport/SurveyReport";
+import CryptoJS from "crypto-js";
 import SVR from "./reports/SVR/SVR"
+
 import "./surveymodal.css";
 
 const { TabPane } = Tabs;
@@ -20,19 +22,42 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
   const [activeTab, setActiveTab] = useState("1");
   const [penaltyAmounts, setPenaltyAmounts] = useState([]);
   const [penaltyOrNumbers, setPenaltyOrNumbers] = useState([]);
-  const [isLogChecked, setIsLogChecked] = useState(() => {
-    const storedValue = localStorage.getItem("isLogChecked");
-    return storedValue ? JSON.parse(storedValue) : {};
-  });
+  const [isLogChecked, setIsLogChecked] = useState({});
   const [previousRecord, setPreviousRecord] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loadingICIR, setLoadingICIR] = useState(false);
   const [loadingPDF, setLoadingPDF] = useState(false);
   const [resetCheckboxesKey, setResetCheckboxesKey] = useState(Date.now());
 
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
+
+
+   // Load the checked log state from localStorage
+   useEffect(() => {
+    const storedValue = localStorage.getItem("isLogChecked");
+    if (storedValue) {
+      try {
+        const decryptedBytes = CryptoJS.AES.decrypt(storedValue, encryptionKey);
+        const decryptedValue = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        setIsLogChecked(JSON.parse(decryptedValue)); // Set the state with the decrypted value
+      } catch (error) {
+        console.error("Error decrypting isLogChecked:", error);
+      }
+    }
+  }, [encryptionKey]);
+
+
   useEffect(() => {
-    localStorage.setItem("isLogChecked", JSON.stringify(isLogChecked));
-  }, [isLogChecked]);
+    try {
+      const encryptedValue = CryptoJS.AES.encrypt(
+        JSON.stringify(isLogChecked),
+        encryptionKey
+      ).toString();
+      localStorage.setItem("isLogChecked", encryptedValue);
+    } catch (error) {
+      console.error("Error encrypting isLogChecked:", error);
+    }
+  }, [isLogChecked, encryptionKey]);
 
   useEffect(() => {
     if (record && JSON.stringify(record) !== JSON.stringify(previousRecord)) {
@@ -97,27 +122,18 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
       const response = await axios.get("http://localhost:8081/api/survey-log");
       const transactions = response.data;
 
-      // Check if the iis_no already exists in the survey-log collection
-      // const existingTransaction = transactions.find((transaction) => {
-      //   return transaction.newValue.includes(record.iis_no);
-      // });
-
-      // if (existingTransaction) {
-      //   console.log(
-      //     `iis_no ${record.iis_no} already exists in the survey-log collection.`
-      //   );
-      //   isLogging = false;
-      //   return;
-      // }
-
-      let transactionCounter = 1;
+      let transactionCounter = 1; // Default counter if there are no transactions
       if (transactions.length > 0) {
         const lastTransaction = transactions[transactions.length - 1];
         const lastTransactionID = lastTransaction.transactionID;
-        const lastTransactionNumber = parseInt(
-          lastTransactionID.replace("TRX-", "")
-        );
-        transactionCounter = lastTransactionNumber + 1;
+  
+        // Correctly parse the last transaction number
+        const lastTransactionNumber = parseInt(lastTransactionID.replace("TRXS-", "")); // Use "TRXS-" instead of "TRX-"
+        
+        // Check if parsing was successful
+        if (!isNaN(lastTransactionNumber)) {
+          transactionCounter = lastTransactionNumber + 1;
+        }
       }
 
       const logData = {
