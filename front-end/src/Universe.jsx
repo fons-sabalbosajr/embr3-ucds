@@ -35,8 +35,7 @@ const Universe = () => {
   const [permissions, setPermissions] = useState([]);
   const [avatar, setAvatar] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [retrying, setRetrying] = useState(false);
   const [userHandle, setUserHandle] = useState(null);
   const [division, setDivision] = useState("");
@@ -49,7 +48,7 @@ const Universe = () => {
       const response = await axios.get(`${backendUrl}/check-auth`, {
         withCredentials: true,
       });
-  
+
       if (response.data.status === "Success") {
         const {
           name,
@@ -63,23 +62,23 @@ const Universe = () => {
           canViewDataHistory,
           canAccessRangePicker,
         } = response.data;
-  
+
         // Log full server response
         //console.log("Full server response:", response.data);
-  
+
         setName(name);
         setAvatar(avatar || "default-avatar-url");
-  
-        const finalPermissions = permissions && permissions.length > 0
-          ? permissions
-          : [
-              canGenerateData || false,
-              canManageData || false,
-              canViewAdminPanel || false,
-              canViewDataHistory || false,
-              canAccessRangePicker || false,
-            ];
-        
+
+        const finalPermissions =
+          permissions && permissions.length > 0
+            ? permissions
+            : [
+                canGenerateData || false,
+                canManageData || false,
+                canViewAdminPanel || false,
+                canViewDataHistory || false,
+                canAccessRangePicker || false,
+              ];
 
         // // Log the permissions to the console
         // console.log("Permissions from server:", permissions);
@@ -90,9 +89,9 @@ const Universe = () => {
         // console.log("Can View Admin Panel:", canViewAdminPanel);
         // console.log("Can View Data History:", canViewDataHistory);
         // console.log("Can Access Range Picker:", canAccessRangePicker);
-  
+
         setPermissions(finalPermissions);
-  
+
         setUserHandle(username);
         setDivision(division || "");
         setAuth(true);
@@ -110,8 +109,6 @@ const Universe = () => {
       setLoading(false);
     }
   };
-  
-  
 
   useEffect(() => {
     checkAuth();
@@ -216,6 +213,7 @@ const Universe = () => {
                       handleLogout={handleLogout}
                       toggleTheme={toggleTheme}
                       userHandle={userHandle}
+                      userData={userData}
                     />
                   }
                   trigger="click"

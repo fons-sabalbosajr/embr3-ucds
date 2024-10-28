@@ -12,4 +12,10 @@
 
 .label_legal{
     width: 80px;
+    margin-top: 2px;
+    margin-left: 5px;
+}
+
+.disabled-input-legal{
+    margin-top: 10px;
 }

@@ -227,7 +227,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
 
                     // Create the survey log entry based on the audit log returned from the server
                     const surveyLogEntry = {
-                      transactionID: `TRX-${String(transactionCounter).padStart(
+                      transactionID: `TRXS-${String(transactionCounter).padStart(
                         4,
                         "0"
                       )}`,

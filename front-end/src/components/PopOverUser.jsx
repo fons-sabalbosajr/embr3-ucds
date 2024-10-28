@@ -7,7 +7,7 @@ import {
   BulbOutlined,
   LogoutOutlined,
 } from "@ant-design/icons";
-import ProfileSettings from "./Settings/Profile/Profile";
+import Profile from "./Settings/Profile/Profile";
 
 const { Text } = Typography;
 
@@ -28,18 +28,14 @@ const UserPopover = ({
     setIsModalVisible(true);
   };
 
-  const handleOk = () => {
-    setIsModalVisible(false);
-  };
-
-  const handleCancel = () => {
+  const handleCloseModal = () => {
     setIsModalVisible(false);
   };
 
   const renderModalContent = () => {
     switch (modalContent) {
       case "profile":
-        return <ProfileSettings />;
+        return <Profile userHandle={userHandle} />; 
       case "settings":
         return <div>Settings content</div>;
       case "help":
@@ -89,7 +85,7 @@ const UserPopover = ({
       <Modal
         title={
           modalContent === "profile"
-            ? "Profile Setting"
+            ? "Profile Details"
             : modalContent === "settings"
             ? "Settings"
             : modalContent === "help"
@@ -98,12 +94,10 @@ const UserPopover = ({
             ? "Suggest a Feature"
             : ""
         }
-        visible={isModalVisible}
-        onOk={handleOk}
-        onCancel={handleCancel}
-        okText="OK"
-        cancelText="Cancel"
-        width={600}
+        open={isModalVisible}
+        onCancel={handleCloseModal} // Close modal on overlay click or close button
+        footer={null}
+        width={400}
       >
         {renderModalContent()}
       </Modal>

@@ -243,10 +243,10 @@ const Province = ({ theme, currentUser }) => {
 
       const dateSigned = new Date(record.date_signed);
 
-      // Check if the date_signed is within the selected date range
       const isMatchingDateRange =
+        !dateRange || // If dateRange is null or undefined, consider it a match
         !dateRange[0] ||
-        !dateRange[1] || // If no date range, consider it a match
+        !dateRange[1] || // If no specific range is selected, consider it a match
         (dateSigned >= dateRange[0] && dateSigned <= dateRange[1]);
 
       return (
@@ -300,7 +300,12 @@ const Province = ({ theme, currentUser }) => {
   }, [data]);
 
   const handleDateChange = (dates) => {
-    setDateRange(dates);
+    if (!dates) {
+      setDateRange(null);
+      handleReload();
+    } else {
+      setDateRange(dates);
+    }
   };
 
   const onRowClick = (record) => {
@@ -1710,6 +1715,7 @@ const Province = ({ theme, currentUser }) => {
                       value={dateRange}
                       format="MM/DD/YYYY" // Set the desired format
                       placeholder={["Start Date", "End Date"]}
+                      allowClear={true}
                     />
                   </>
                 )}
@@ -1724,7 +1730,7 @@ const Province = ({ theme, currentUser }) => {
                   showSizeChanger={false}
                   pageSize={pageSize}
                   size="small"
-                  style={{ marginLeft: 16 }} // Add margin to separate from RangePicker
+                  style={{ marginLeft: 16 }}
                 />
               </div>
             </div>

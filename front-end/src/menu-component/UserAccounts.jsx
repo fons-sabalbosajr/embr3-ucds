@@ -13,18 +13,14 @@ import {
 import {
   SearchOutlined,
   DownloadOutlined,
-  PlusOutlined,
   EllipsisOutlined,
   UserOutlined,
-  CloseCircleOutlined,
-  CameraOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import "./useraccount.css";
 import UserProfileModal from "./UserAccountModal";
 import SignAccountModal from "./SignAccountModal";
 import Swal from "sweetalert2";
-import NiceAvatar from "react-nice-avatar";
 import AvatarWithName from "../components/AvatarwithName";
 import AccountPermission from "./AccountPermission";
 
@@ -52,34 +48,53 @@ const UserAccounts = () => {
   const [selectedAccessUser, setSelectedAccessUser] = useState(null);
   const [isAccountPermissionVisible, setAccountPermissionVisible] =
     useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(10000);
+  const [refreshInterval, setRefreshInterval] = useState(1000);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const response = await axios.get("http://localhost:8081/api/users", {
-        params: {
-          page: pagination.current,
-          pageSize: pagination.pageSize,
-        },
+        params: { page: pagination.current, pageSize: pagination.pageSize },
       });
-      setUserData(response.data);
-      setPagination((prev) => ({
-        ...prev,
-        total: response.data.length,
-      }));
+
+      const uniquePermissions = new Set(
+        response.data.map((user) => user.permission)
+      );
+      setPermissions(Array.from(uniquePermissions));
+
+      // Sort users by status: online first, then active [x min ago], then offline
+      const sortedData = response.data.sort((a, b) => {
+        if (a.status === "online" && b.status !== "online") {
+          return -1;
+        }
+        if (a.status !== "online" && b.status === "online") {
+          return 1;
+        }
+        if (a.status.includes("active") && b.status === "offline") {
+          return -1;
+        }
+        if (a.status === "offline" && b.status.includes("active")) {
+          return 1;
+        }
+        return 0;
+      });
+
+      setUserData(sortedData);
+      setFilteredUserData(sortedData);
+      setPagination((prev) => ({ ...prev, total: sortedData.length }));
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
+    fetchData();
     const intervalId = setInterval(fetchData, refreshInterval);
     return () => clearInterval(intervalId);
-  }, [refreshInterval, pagination.current, pagination.pageSize]);
-  
+  }, [pagination.current, pagination.pageSize, refreshInterval]);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -96,7 +111,7 @@ const UserAccounts = () => {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get(" http://localhost:8081/api/users", {
+      const response = await axios.get("http://localhost:8081/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -294,14 +309,10 @@ const UserAccounts = () => {
     setSelectedAccessUser(null); // Reset the selected user
   };
 
-  const handleAccountPermissionClose = () => {
-    setAccountPermissionVisible(false);
-  };
-
   const columns = [
     {
       title: "Name",
-      dataIndex: "name", // Assuming `name` is a field in your data
+      dataIndex: "name",
       key: "avatarName",
       render: (name, record) => (
         <AvatarWithName avatar={record.avatar} name={name} />
@@ -661,7 +672,7 @@ const UserAccounts = () => {
 
   const rowClassName = (record) => {
     if (record.status === "approved") {
-      return "disabled-row"; // CSS class to apply to disabled rows
+      return "disabled-row";
     }
     return "";
   };

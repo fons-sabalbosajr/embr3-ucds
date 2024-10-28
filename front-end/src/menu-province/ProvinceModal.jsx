@@ -245,7 +245,7 @@ const ProvinceModal = ({
               const lastTransaction = transactions[transactions.length - 1];
               const lastTransactionID = lastTransaction.transactionID;
               const lastTransactionNumber = parseInt(
-                lastTransactionID.replace("TRX-", "")
+                lastTransactionID.replace("TRXM-", "")
               );
               transactionCounter = lastTransactionNumber + 1;
             }
@@ -270,7 +270,7 @@ const ProvinceModal = ({
 
             // Create the log entry based on the audit log returned from the server
             const logData = {
-              transactionID: `TRX-${String(transactionCounter).padStart(
+              transactionID: `TRXM-${String(transactionCounter).padStart(
                 4,
                 "0"
               )}`,
@@ -361,6 +361,7 @@ const ProvinceModal = ({
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
+            currentUser={currentUser}
           />
         </TabPane>
         <TabPane

@@ -323,7 +323,7 @@ const LegalUnit = ({
                     value={daysDfDa}
                     disabled
                     placeholder="No data"
-                    className="textbox-label disabled-input"
+                    className="textbox-label disabled-input-legal"
                   />
                 </Paragraph>
               </Col>

@@ -12,6 +12,7 @@ const zlib = require("zlib");
 const dotenv = require("dotenv").config();
 const multer = require("multer");
 const MongoStore = require("connect-mongo");
+const cron = require("node-cron");
 
 const app = express();
 const PORT = process.env.PORT || 8081;
@@ -400,6 +401,11 @@ app.post("/login", async (req, res) => {
       { upsert: true }
     );
 
+    await userCollection.updateOne(
+      { username },
+      { $set: { status: "online" } }
+    );
+
     return res.status(200).json({
       status: "success",
       username: user.username,
@@ -426,21 +432,33 @@ app.get("/auth-check", (req, res) => {
   }
 });
 
+// Helper function to calculate time since last activity
+function calculateTimeAgo(date) {
+  const diffMs = Date.now() - new Date(date).getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMins / 60);
+
+  if (diffMins < 60) return `active ${diffMins} min ago`;
+  if (diffHours < 24) return `active ${diffHours} hr ago`;
+  return "offline";
+}
+
 app.post("/logout", async (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ message: "You are not logged in" });
   }
 
   const userId = req.session.user.userId;
-  //console.log(`Logging out user ${userId}`);
 
   try {
-    await loginStatusCollection.updateOne(
-      { userId: new ObjectId(userId) },
-      { $set: { isLoggedIn: false, logoutTime: new Date() } }
+    const logoutTime = new Date();
+    const statusMessage = calculateTimeAgo(logoutTime);
+
+    await userCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { status: statusMessage, lastLogout: logoutTime } }
     );
 
-    // Clear the session and cookies
     req.session.destroy((err) => {
       if (err) {
         console.error("Error destroying session:", err);
@@ -448,14 +466,34 @@ app.post("/logout", async (req, res) => {
       }
 
       res.clearCookie("connect.sid");
-      res.clearCookie("authToken");
-
-      // Send the final response
       res.status(200).json({ message: "Logout successful" });
     });
   } catch (error) {
     console.error("Error during logout:", error);
     res.status(500).json({ message: "An unexpected error occurred." });
+  }
+});
+
+cron.schedule("*/10 * * * *", async () => { // Runs every 10 minutes
+  try {
+    const users = await userCollection.find({ status: { $ne: "online" } }).toArray();
+
+    const bulkOps = users.map((user) => {
+      const updatedStatus = calculateTimeAgo(user.lastLogout);
+      return {
+        updateOne: {
+          filter: { _id: user._id },
+          update: { $set: { status: updatedStatus } },
+        },
+      };
+    });
+
+    if (bulkOps.length > 0) {
+      await userCollection.bulkWrite(bulkOps);
+      console.log("Updated user statuses based on last activity.");
+    }
+  } catch (error) {
+    console.error("Error updating user statuses:", error);
   }
 });
 

@@ -41,7 +41,12 @@ function calculateWeekdayDiff(startDate, endDate) {
   return `${weekdayDiff}${dayString}`;
 }
 
-const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
+const FocalPerson = ({
+  editedRecord,
+  handleChange,
+  isEditing,
+  currentUser,
+}) => {
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
       // Handle Excel date numeric value
@@ -170,6 +175,15 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
       `Field: ${field}, Old Value: ${oldValue}, New Value: ${newValue}`
     );
   };
+
+  // Extract permissions from currentUser
+  const permissions = currentUser?.permissions || [];
+  const canGenerateData = permissions[0];
+  const canManageData = permissions[1];
+  const canViewAdminPanel = permissions[2];
+  const canViewDataHistory = permissions[3];
+
+  const isCardDisabled = !canManageData;
 
   return (
     <Row gutter={[16, 16]}>
@@ -388,7 +402,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       <strong className="label_title">
                         Total No. of Days:
                       </strong>
-                      <p className="label">
+                      <p className="label-focal">
                         (Date Monitored vs. Date Submitted)
                       </p>
                     </span>
@@ -409,7 +423,9 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                       <strong className="label_title">
                         Total No. of Days:
                       </strong>
-                      <p className="label">(Date Submitted vs. Date Signed)</p>
+                      <p className="label-focal">
+                        (Date Submitted vs. Date Signed)
+                      </p>
                     </span>
                     <Input
                       value={daysDsdrs}
@@ -429,7 +445,9 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   value={
                     editedRecord ? editedRecord.remarks_recommendations : ""
                   }
-                  onChange={(e) => handleChange("street", e.target.value)}
+                  onChange={(e) =>
+                    handleChange("remarks_recommendations", e.target.value)
+                  }
                   disabled={!isEditing}
                   placeholder="No data"
                   rows={3}
@@ -438,8 +456,11 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               </Paragraph>
               <Paragraph>
                 <Checkbox
-                  checked={editedRecord?.pismu_tracking === "Report Tracked (received/routed to Planning Unit)"}
-                  disabled={!isEditing}
+                  checked={
+                    editedRecord?.pismu_tracking ===
+                    "Report Tracked (received/routed to Planning Unit)"
+                  }
+                  disabled={isCardDisabled} 
                   onChange={(e) => {
                     const isChecked = e.target.checked;
                     const newValue = isChecked

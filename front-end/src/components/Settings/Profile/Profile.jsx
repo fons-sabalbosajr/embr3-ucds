@@ -1,230 +1,283 @@
 import React, { useEffect, useState } from "react";
 import {
-  Button,
-  Spin,
   Typography,
-  message,
-  Input,
-  Tabs,
   Row,
   Col,
-  Divider,
-  Form,
-  Modal,
-  Upload,
+  Spin,
+  Input,
+  Button,
+  message,
+  Progress,
 } from "antd";
-import { SaveOutlined, CameraOutlined } from "@ant-design/icons";
-import axios from "axios";
-import AvatarWithName from "../../AvatarwithName";
+import {
+  CameraFilled,
+  UploadOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
+import UserAvatar from "./UserAvatar"; // Fixed spacing
 import "./profile.css";
 
-const { TabPane } = Tabs;
+const { Paragraph, Text } = Typography;
 
-const Profile = () => {
+const Profile = ({ userHandle }) => {
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [form] = Form.useForm();
-  const [avatarFile, setAvatarFile] = useState(null);
+  const [error, setError] = useState(null);
+  const [name, setName] = useState("");
+  const [division, setDivision] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [position, setPosition] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [office, setOffice] = useState("");
+  const [region, setRegion] = useState("");
+  const [accountCreated, setAccountCreated] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showUploadButtons, setShowUploadButtons] = useState(false);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserData = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/current-user");
-        setUser(response.data);
-        form.setFieldsValue(response.data);
+        const response = await fetch(
+          `http://localhost:8081/api/users?username=${userHandle}`
+        );
+        if (!response.ok) {
+          throw new Error("User  not found");
+        }
+        const data = await response.json();
+        setUserData(data[0]);
+        setName(data[0].name);
+        setDivision(data[0].division);
+        setEmployeeId(data[0].employeeId);
+        setFullName(data[0].fullName);
+        setEmail(data[0].email);
+        setPosition(data[0].position);
+        setDesignation(data[0].designation);
+        setOffice(data[0].office);
+        setRegion(data[0].region);
+        setAccountCreated(data[0].accountCreated);
       } catch (error) {
-        message.error("Failed to fetch user information");
-        console.error("Error fetching user data:", error);
+        setError(error.message);
+        console.log("Error fetching user data:", error.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUser();
-  }, [form]);
+    fetchUserData();
+  }, [userHandle]);
 
-  const handleProfileUpdate = async (values) => {
-    try {
-      await axios.put(
-        `http://localhost:8081/api/profile/update/${user._id}`,
-        values
-      );
-      message.success("Profile updated successfully");
-
-      // Fetch updated user data after successful update
-      fetchUser(); // Reload the updated data
-    } catch (error) {
-      message.error("Failed to update profile");
-      console.error("Error updating profile:", error);
+  const handlePhotoChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) {
+      const imageUrl = URL.createObjectURL(selectedFile);
+      setPhoto({ file: selectedFile, url: imageUrl });
+      setShowUploadButtons(true);
     }
   };
 
-  const confirmSaveChanges = () => {
-    Modal.confirm({
-      title: "Confirm Changes",
-      content: "Are you sure you want to save these changes?",
-      okText: "Yes",
-      cancelText: "No",
-      onOk: () => {
-        form.submit();
-      },
-    });
-  };
-
-  const handleFileChange = (info) => {
-    if (info.file.status === "done") {
-      message.success("Avatar updated successfully");
-      setAvatarFile(null);
-      fetchUser(); // Reload user data to reflect the new avatar
-    } else if (info.file.status === "error") {
-      message.error("Failed to update avatar");
-    }
-  };
-
-  const handleUpload = async (file) => {
+  const handleUpload = async () => {
     const formData = new FormData();
-    formData.append("avatar", file);
+    formData.append("photo", photo.file);
+
+    setUploading(true);
+    setUploadProgress(0);
 
     try {
-      await axios.post(
-        `http://localhost:8081/api/profile/upload-avatar/${user._id}`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-      message.success("Avatar uploaded successfully");
-      fetchUser(); // Reload user data to reflect the new avatar
+      const response = await fetch(`http://localhost:8081/api/users/update`, {
+        method: "POST",
+        body: formData,
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(percent);
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update user photo");
+      }
+
+      message.success("Profile photo updated successfully!");
+      setShowUploadButtons(false);
+      setPhoto(null);
     } catch (error) {
-      message.error("Failed to upload avatar");
-      console.error("Error uploading avatar:", error);
+      message.error("Error updating photo: " + error.message);
+    } finally {
+      setUploading(false);
     }
   };
 
-  // Fetch user function (for reloading updated data)
-  const fetchUser = async () => {
-    try {
-      const response = await axios.get("http://localhost:8081/current-user");
-      setUser(response.data);
-      form.setFieldsValue(response.data);
-    } catch (error) {
-      message.error("Failed to fetch user information");
-      console.error("Error fetching user data:", error);
-    }
+  const triggerFileInput = () => {
+    document.getElementById("file-input").click();
+  };
+
+  const handleCancel = () => {
+    setPhoto(null);
+    setShowUploadButtons(false);
+    document.getElementById("file-input").value = ""; // Reset the file input
   };
 
   if (loading) {
     return <Spin tip="Loading..." />;
   }
 
-  const [division, designation] = user?.division
-    ? user.division.split("/").map((item) => item.trim())
-    : ["", ""];
+  if (error) {
+    return null;
+  }
+
+  if (!userData) {
+    return <div>No user data available.</div>;
+  }
 
   return (
     <div className="profile-container">
-      <Tabs
-        defaultActiveKey="1"
-        size="large"
-        tabPosition="top"
-        className="profile-tabs"
-      >
-        <TabPane tab="General" key="1">
-          <Row gutter={24} className="profile-header">
-            <Col span={24} md={8} className="profile-avatar-col">
-              <div className="avatar-container">
-                <div className="avatar-wrapper">
-                  {user && <AvatarWithName avatar={user.avatar} size={150} />}
-                  <div className="change-avatar-btn">
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleUpload(file);
-                        return false; // Prevent auto-upload
-                      }}
-                      onChange={handleFileChange}
-                    >
-                      <CameraOutlined />
-                    </Upload>
-                  </div>
-                </div>
-                <Input
-                  id="file-input"
-                  type="file"
-                  style={{ display: "none" }}
-                  onChange={handleFileChange}
-                />
-                <p className="avatar-details">
-                  {user && (
-                    <>
-                      <h2>{user.name}</h2>
-                      <p>{user.designation}</p>
-                      <p>{user.division}</p>
-                    </>
-                  )}
-                </p>
-              </div>
-            </Col>
-            <Col span={24} md={16}>
-              <div className="profile-details">
-                <Form
-                  form={form}
-                  layout="vertical"
-                  onFinish={handleProfileUpdate}
+      <Row gutter={16} justify="center" className="row-avatar">
+        <Col>
+          <div className="avatar-container">
+            {photo ? (
+              <img src={photo.url} alt="Selected Photo " />
+            ) : (
+              <UserAvatar userData={userData} />
+            )}
+          </div>
+        </Col>
+      </Row>
+      <Row gutter={16} justify="center" className="row-avatar">
+        <Col span={24}>
+          <input
+            type="file"
+            accept="image/*"
+            id="file-input"
+            onChange={handlePhotoChange}
+            style={{ display: "none" }}
+          />
+          <div className="button-container">
+            <Button
+              type="primary"
+              onClick={triggerFileInput}
+              className="save-button"
+              size="small"
+              icon={<CameraFilled />}
+            >
+              Update Photo
+            </Button>
+            {showUploadButtons && (
+              <>
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={handleUpload}
+                  loading={uploading}
+                  icon={<UploadOutlined />}
                 >
-                  <Form.Item
-                    label="Name"
-                    name="name"
-                    rules={[{ message: "Please enter your name" }]}
-                  >
-                    <Input placeholder="Enter your name" />
-                  </Form.Item>
-                  <Form.Item
-                    label="Username"
-                    name="username"
-                    rules={[
-                      {
-                        message: "Please enter your username",
-                      },
-                    ]}
-                  >
-                    <Input placeholder="Enter your username" />
-                  </Form.Item>
-                  <Form.Item
-                    label="Division/Designation"
-                    name="division"
-                    rules={[
-                      {
-                        message: "Please enter your division/designation",
-                      },
-                    ]}
-                  >
-                    <Input placeholder="Enter your division and designation" />
-                  </Form.Item>
-                  <Form.Item
-                    label="Email Address"
-                    name="email"
-                    rules={[{ message: "Please enter your email" }]}
-                  >
-                    <Input type="email" placeholder="Enter your email" />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button
-                      type="primary"
-                      icon={<SaveOutlined />}
-                      onClick={confirmSaveChanges}
-                    >
-                      Update
-                    </Button>
-                  </Form.Item>
-                </Form>
-              </div>
-            </Col>
-          </Row>
-        </TabPane>
-      </Tabs>
+                  Upload
+                </Button>
+                <Button
+                  type="primary"
+                  danger
+                  size="small"
+                  onClick={handleCancel}
+                  icon={<DeleteOutlined/>}
+                >
+                  Cancel
+                </Button>
+                {uploading && (
+                  <Progress percent={uploadProgress} size="small" />
+                )}
+              </>
+            )}
+          </div>
+        </Col>
+      </Row>
+      <Row gutter={16} justify="left">
+        <Col span={24}>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Employee ID:</span>
+            <Input
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              className="input-field"
+              placeholder="Employee ID"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Full Name:</span>
+            <Input
+              value={name || "N/A"}
+              onChange={(e) => setFullName(e.target.value)}
+              className="input-field"
+              placeholder="Full Name"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Email:</span>
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input-field"
+              placeholder="Email Address"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Designation:</span>
+            <Input
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              className="input-field"
+              placeholder="Position"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Division:</span>
+            <Input
+              value={division}
+              onChange={(e) => setDesignation(e.target.value)}
+              className="input-field"
+              placeholder="Designation"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Office:</span>
+            <Input
+              value={office}
+              onChange={(e) => setOffice(e.target.value)}
+              className="input-field"
+              placeholder="Office"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Region:</span>
+            <Input
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              className="input-field"
+              placeholder="Region"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Account Created:</span>
+            <Input
+              value={accountCreated}
+              onChange={(e) => setAccountCreated(e.target.value)}
+              className="input-field"
+              placeholder="Account Created"
+              disabled
+            />
+          </Paragraph>
+        </Col>
+      </Row>
     </div>
   );
 };
