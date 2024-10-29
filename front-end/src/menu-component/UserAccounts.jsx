@@ -62,8 +62,7 @@ const UserAccounts = () => {
       );
       setPermissions(Array.from(uniquePermissions));
 
-      // Sort users by status: online first, then active [x min ago], then offline
-      const sortedData = response.data.sort((a, b) => {
+        const sortedData = response.data.sort((a, b) => {
         if (a.status === "online" && b.status !== "online") {
           return -1;
         }

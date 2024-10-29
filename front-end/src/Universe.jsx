@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Layout, Button, Avatar, Spin, Popover, List, message } from "antd";
+import { Layout, Button, Spin, Popover, List, message } from "antd";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
@@ -63,11 +63,11 @@ const Universe = () => {
           canAccessRangePicker,
         } = response.data;
 
-        // Log full server response
-        //console.log("Full server response:", response.data);
-
         setName(name);
-        setAvatar(avatar || "default-avatar-url");
+        // Load avatar using full path if available; otherwise, fallback to default
+        setAvatar(
+          avatar ? `${backendUrl}${avatar}` : "path/to/default-avatar.png"
+        );
 
         const finalPermissions =
           permissions && permissions.length > 0
@@ -80,18 +80,7 @@ const Universe = () => {
                 canAccessRangePicker || false,
               ];
 
-        // // Log the permissions to the console
-        // console.log("Permissions from server:", permissions);
-        // console.log("Final Permissions:", finalPermissions);
-        // console.log("Individual Permissions:");
-        // console.log("Can Generate Data:", canGenerateData);
-        // console.log("Can Manage Data:", canManageData);
-        // console.log("Can View Admin Panel:", canViewAdminPanel);
-        // console.log("Can View Data History:", canViewDataHistory);
-        // console.log("Can Access Range Picker:", canAccessRangePicker);
-
         setPermissions(finalPermissions);
-
         setUserHandle(username);
         setDivision(division || "");
         setAuth(true);
@@ -220,7 +209,7 @@ const Universe = () => {
                   placement="bottomRight"
                 >
                   <div className="avatar-header">
-                    <AvatarWithName avatar={avatar} />
+                  <AvatarWithName userHandle={userHandle} />
                   </div>
                 </Popover>
 

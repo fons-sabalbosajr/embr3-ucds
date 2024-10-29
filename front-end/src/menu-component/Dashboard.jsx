@@ -31,7 +31,7 @@ const Dashboard = ({ avatar, name }) => {
         </Col>
         <Col xs={24} lg={7} className="right-column">
           <div className="card-bottom">
-            {/* <Activity /> */}
+            <Activity />
           </div>
           <div className="card-changes">
             <Summary />

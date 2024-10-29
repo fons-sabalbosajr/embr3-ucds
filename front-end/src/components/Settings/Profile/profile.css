@@ -3,18 +3,29 @@
 }
 
 .avatar-container {
+  width: 100px; /* Set the desired width */
+  height: 100px; /* Set the desired height */
+  border-radius: 50%; /* Make it circular */
+  overflow: hidden; /* Hide overflow to maintain the circular shape */
   display: flex;
   justify-content: center;
   align-items: center;
+  background-color: #f0f0f0; /* Optional: Background color for empty avatar */
 }
 
-.paragraph-input{
+.avatar-container img {
+  width: 100%; /* Make the image take the full width of the container */
+  height: 100%; /* Make the image take the full height of the container */
+  object-fit: cover; /* Ensure the image covers the container */
+}
+
+.paragraph-input {
   display: flex; 
   justify-content: center;
   align-items: center;
 }
 
-.label-title-profile{
+.label-title-profile {
   width: 100px;
   align-items: center;
   font-weight: 500;
@@ -49,7 +60,7 @@
   margin-right: 5px;
 }
 
-.row-avatar{
+.row-avatar {
   margin-bottom: 20px;
 }
 

@@ -87,8 +87,8 @@
 }
 
 .user-status-dot {
-  width: 30px;
-  height: 30px;
+  width: 25px;
+  height: 25px;
   border-radius: 50%;
   background-color: #52c41a; /* Green color for online status */
   position: absolute;
@@ -110,9 +110,6 @@
   display: flex;
   justify-content: space-between;
   position: relative;
-  p {
-    margin-bottom: 8px; /* Adjust margin as needed */
-  }
 }
 
 .user-info-column {
@@ -153,6 +150,19 @@
 
 .button-save{
   margin-right: 10px;
+}
+
+.input-label{
+  font-size: 12px;
+}
+
+.select-permission{
+  width: 120px;
+}
+
+.label-user{
+  font-size: 11px;
+
 }
 
 @media (max-width: 768px) {

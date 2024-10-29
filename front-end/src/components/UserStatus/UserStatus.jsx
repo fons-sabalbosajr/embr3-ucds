@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { List, Avatar, Spin } from "antd";
+import { List } from "antd";
 import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
 import "./userstatus.css";
 
-const UserStatus = ({ avatar, name, userName }) => {
+const UserStatus = () => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,12 +20,8 @@ const UserStatus = ({ avatar, name, userName }) => {
         const online = allUsers.filter((user) => user.isLoggedIn);
         const offline = allUsers.filter((user) => !user.isLoggedIn);
 
-        // Sort online users to the top
-        online.sort((a, b) => {
-          if (a.name > b.name) return 1;
-          if (a.name < b.name) return -1;
-          return 0;
-        });
+        // Sort online users by recent login time (most recent first)
+        online.sort((a, b) => new Date(b.loginTime) - new Date(a.loginTime));
 
         // Sort offline users by recent logout time
         offline.sort((a, b) => {
@@ -75,50 +71,68 @@ const UserStatus = ({ avatar, name, userName }) => {
     <div>
       <h3 className="user-status-title">Online Users</h3>
       {onlineUsers.length > 0 ? (
-        <List
-          itemLayout="horizontal"
-          dataSource={onlineUsers}
-          renderItem={(user) => (
-            <List.Item
-              className="user-status-item"
-              style={{ opacity: user.isLoggedIn ? 1 : 0.75 }}
-            >
-              <div style={{ position: "relative" }}>
-                {user.avatar ? (
-                  <NiceAvatar
-                    style={{ width: "30px", height: "30px" }}
-                    {...user.avatar}
+        <div className="user-status-list-container">
+          <List
+            itemLayout="horizontal"
+            dataSource={onlineUsers}
+            renderItem={(user) => (
+              <List.Item
+                className="user-status-item"
+                style={{ opacity: user.isLoggedIn ? 1 : 0.75 }}
+              >
+                <div style={{ position: "relative" }}>
+                  {user.avatar ? (
+                    typeof user.avatar === "string" ? (
+                      <img
+                        src={`http://localhost:8081${user.avatar}`}
+                        alt="Avatar"
+                        style={{
+                          width: "30px",
+                          height: "30px",
+                          borderRadius: "50%",
+                        }}
+                      />
+                    ) : (
+                      <NiceAvatar
+                        style={{
+                          width: "30px",
+                          height: "30px",
+                          borderRadius: "50%",
+                        }}
+                        {...user.avatar}
+                      />
+                    )
+                  ) : (
+                    <NiceAvatar style={{ width: "30px", height: "30px" }} />
+                  )}
+                  <div
+                    className="user-status-dot"
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      right: 0,
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: user.isLoggedIn ? "#52c41a" : "#d9d9d9",
+                      border: "2px solid white",
+                    }}
                   />
-                ) : (
-                  <NiceAvatar style={{ width: "30px", height: "30px" }} />
-                )}
-                <div
-                  className="user-status-dot"
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    width: "10px",
-                    height: "10px",
-                    borderRadius: "50%",
-                    backgroundColor: user.isLoggedIn ? "#52c41a" : "#d9d9d9",
-                    border: "2px solid white",
-                  }}
+                </div>
+                <List.Item.Meta
+                  title={
+                    <div className="user-status-item-title">{user.name}</div>
+                  }
                 />
-              </div>
-              <List.Item.Meta
-                title={
-                  <div className="user-status-item-title">{user.name}</div>
-                }
-              />
-              {!user.isLoggedIn && (
-                <span className="user-status-item-time">
-                  {calculateTime(user.logoutTime)}
-                </span>
-              )}
-            </List.Item>
-          )}
-        />
+                {!user.isLoggedIn && (
+                  <span className="user-status-item-time">
+                    {calculateTime (user.logoutTime)}
+                  </span>
+                )}
+              </List.Item>
+            )}
+          />
+        </div>
       ) : (
         <p>No online users</p>
       )}

@@ -353,7 +353,6 @@ app.post("/login", async (req, res) => {
   }
 
   try {
-    //console.log("Received login request for username:", username);
     const user = await userCollection.findOne({ username });
 
     if (!user) {
@@ -367,7 +366,6 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    //console.log("Login successful for user:", username);
     req.session.user = {
       userId: user._id.toString(),
       name: user.name,
@@ -382,23 +380,20 @@ app.post("/login", async (req, res) => {
       canAccessRangePicker: user.canAccessRangePicker || false,
     };
 
-    // Log session creation
-    //console.log("Session created for user:", req.session);
-
+    // Update loginStatusCollection
     await loginStatusCollection.updateOne(
       { userId: user._id },
       {
         $set: {
           isLoggedIn: true,
           loginTime: new Date(),
-          userId: user._id,
           name: user.name,
           username: user.username,
           division: user.division,
           permission: user.permission,
         },
       },
-      { upsert: true }
+      { upsert: true } // Create a new document if it doesn't exist
     );
 
     await userCollection.updateOne(
@@ -452,11 +447,16 @@ app.post("/logout", async (req, res) => {
 
   try {
     const logoutTime = new Date();
-    const statusMessage = calculateTimeAgo(logoutTime);
 
-    await userCollection.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { status: statusMessage, lastLogout: logoutTime } }
+    // Update loginStatusCollection to set isLoggedIn to false and record logoutTime
+    await loginStatusCollection.updateOne(
+      { userId: new ObjectId(userId) },
+      {
+        $set: {
+          isLoggedIn: false,
+          logoutTime: logoutTime,
+        },
+      }
     );
 
     req.session.destroy((err) => {
@@ -490,7 +490,7 @@ cron.schedule("*/10 * * * *", async () => { // Runs every 10 minutes
 
     if (bulkOps.length > 0) {
       await userCollection.bulkWrite(bulkOps);
-      console.log("Updated user statuses based on last activity.");
+      //console.log("Updated user statuses based on last activity.");
     }
   } catch (error) {
     console.error("Error updating user statuses:", error);
@@ -874,6 +874,63 @@ app.post("/api/ucds-log", async (req, res) => {
   } catch (error) {
     console.error("Error saving log entry:", error);
     res.status(500).send("Error saving log entry");
+  }
+});
+
+//UPLOADING PROFILE PICTURE
+//////////////////////////////////////////////////////////////////////////////////////////
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// Set up storage for profile photos
+const storagedp = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir); // Directory to save uploaded files
+  },
+  filename: (req, file, cb) => {
+    const uniqueFilename = `${Date.now()}-${file.originalname}`; // Create a unique filename
+    cb(null, uniqueFilename); 
+    console.log('Generated filename:', uniqueFilename);
+  }
+});
+
+const uploaddp = multer({ storage: storagedp });
+
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(uploadsDir));
+
+app.post('/api/users/update', uploaddp.single('photo'), async (req, res) => {
+  //console.log(req.file); // Log the uploaded file
+  //console.log(req.body); // Log the request body
+
+  try {
+    const { username } = req.body; // Get username from request body
+    const user = await userCollection.findOne({ username });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' }); // Handle missing file
+    }
+
+    //console.log('Filename:', req.file.filename); // Check if filename is defined
+
+    // Save the accessible file URL to the user's document
+    const filePath = `/uploads/${req.file.filename}`;
+    //console.log('File path:', filePath); // Log the file path for debugging
+    user.avatar = filePath;
+
+    // Update the user document with the new avatar URL
+    await userCollection.updateOne({ username }, { $set: { avatar: filePath } });
+
+    res.status(200).json(user); // Return the updated user data as JSON
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

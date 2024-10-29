@@ -51,7 +51,7 @@ const Profile = ({ userHandle }) => {
         setUserData(data[0]);
         setName(data[0].name);
         setDivision(data[0].division);
-        setEmployeeId(data[0].employeeId);
+        setEmployeeId(data[0].empid);
         setFullName(data[0].fullName);
         setEmail(data[0].email);
         setPosition(data[0].position);
@@ -71,44 +71,51 @@ const Profile = ({ userHandle }) => {
   }, [userHandle]);
 
   const handlePhotoChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) {
-      const imageUrl = URL.createObjectURL(selectedFile);
-      setPhoto({ file: selectedFile, url: imageUrl });
+    const file = event.target.files[0];
+    if (file) {
+      setPhoto({
+        file,
+        url: URL.createObjectURL(file), // Create a local URL for preview
+      });
       setShowUploadButtons(true);
     }
   };
 
   const handleUpload = async () => {
+    if (!photo || !photo.file) {
+      message.error("Please select an image to upload.");
+      return;
+    }
+
     const formData = new FormData();
-    formData.append("photo", photo.file);
+    formData.append('photo', photo.file);
+    formData.append('username', userHandle);
 
     setUploading(true);
-    setUploadProgress(0);
 
     try {
       const response = await fetch(`http://localhost:8081/api/users/update`, {
         method: "POST",
         body: formData,
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setUploadProgress(percent);
-        },
       });
 
+      const responseBody = await response.json();
       if (!response.ok) {
-        throw new Error("Failed to update user photo");
+        throw new Error(responseBody.message || "Failed to update user photo");
       }
 
+      setUserData((prevData) => ({
+        ...prevData,
+        avatar: responseBody.avatar, // Update avatar URL in user data
+      }));
+      setPhoto(null); // Clear photo state after successful upload
       message.success("Profile photo updated successfully!");
-      setShowUploadButtons(false);
-      setPhoto(null);
     } catch (error) {
+      console.error(error);
       message.error("Error updating photo: " + error.message);
     } finally {
       setUploading(false);
+      setShowUploadButtons(false);
     }
   };
 
@@ -137,12 +144,16 @@ const Profile = ({ userHandle }) => {
   return (
     <div className="profile-container">
       <Row gutter={16} justify="center" className="row-avatar">
-        <Col>
+      <Col>
           <div className="avatar-container">
             {photo ? (
-              <img src={photo.url} alt="Selected Photo " />
+              <img src={photo.url} alt="Selected Photo" className="profile-avatar" />
             ) : (
-              <UserAvatar userData={userData} />
+              <img
+                src={`http://localhost:8081${userData.avatar}`}
+                alt="Profile Avatar"
+                className="profile-avatar"
+              />
             )}
           </div>
         </Col>
@@ -182,7 +193,7 @@ const Profile = ({ userHandle }) => {
                   danger
                   size="small"
                   onClick={handleCancel}
-                  icon={<DeleteOutlined/>}
+                  icon={<DeleteOutlined />}
                 >
                   Cancel
                 </Button>
@@ -229,7 +240,7 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Designation:</span>
             <Input
-              value={position}
+              value={designation}
               onChange={(e) => setPosition(e.target.value)}
               className="input-field"
               placeholder="Position"

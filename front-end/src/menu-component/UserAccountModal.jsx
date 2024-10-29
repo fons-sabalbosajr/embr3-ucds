@@ -7,6 +7,7 @@ import {
   Tabs,
   Table,
   Progress,
+  ConfigProvider,
 } from "antd";
 import "./useraccountmodal.css";
 import { UserOutlined, CameraOutlined } from "@ant-design/icons";
@@ -233,34 +234,78 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
 
         <div className="user-info">
           <div className="user-info-column">
-            <p>Name:</p>
+          <p className="label-user">Employee ID:</p>
+            <Input
+              placeholder="Employee ID"
+              value={editableUser ? editableUser.empid : ""}
+              disabled={!isEditing}
+              onChange={(e) => handleChange("empid", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Name:</p>
             <Input
               placeholder="Enter Name"
               value={editableUser ? editableUser.name : ""}
               disabled={!isEditing}
               onChange={(e) => handleChange("name", e.target.value)}
+              className="input-label"
             />
-            <p>Division/Section:</p>
+            <p className="label-user">Division/Section:</p>
             <Input
-              placeholder="Enter Designation"
+              placeholder="Enter Division/Section"
               value={editableUser ? editableUser.division : ""}
               disabled={!isEditing}
               onChange={(e) => handleChange("division", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Designation:</p>
+            <Input
+              placeholder="Enter Designation"
+              value={editableUser ? editableUser.designation : ""}
+              disabled={!isEditing}
+              onChange={(e) => handleChange("designation", e.target.value)}
+              className="input-label"
             />
           </div>
 
           <div className="user-info-column">
-            <p>Email Address:</p>
+            <p className="label-user">Email Address:</p>
             <Input
               placeholder="Enter Email Address"
               value={editableUser ? editableUser.email : ""}
               disabled={!isEditing}
               onChange={(e) => handleChange("email", e.target.value)}
+              className="input-label"
             />
-            <p>Permission:</p>
-            <Select
+            <p className="label-user">Office:</p>
+            <Input
+              placeholder="Enter Office"
+              value={editableUser ? editableUser.office : ""}
+              disabled={!isEditing}
+              onChange={(e) => handleChange("office", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Region:</p>
+            <Input
+              placeholder="Enter Region"
+              value={editableUser ? editableUser.region : ""}
+              disabled={!isEditing}
+              onChange={(e) => handleChange("region", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Permission:</p>
+            <ConfigProvider
+              theme={{
+                components: {
+                  Select: {
+                    fontSize: 11,
+                  },
+                },
+              }}
+            >
+              <Select
               value={editableUser ? editableUser.permission : "user"}
-              style={{ width: 120 }}
+              className="select-permission"
               disabled={!isEditing}
               onChange={(value) => handleChange("permission", value)}
             >
@@ -269,6 +314,7 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
               <Select.Option value="admin">Admin</Select.Option>
               <Select.Option value="developer">Developer</Select.Option>
             </Select>
+            </ConfigProvider>
           </div>
         </div>
       </div>
