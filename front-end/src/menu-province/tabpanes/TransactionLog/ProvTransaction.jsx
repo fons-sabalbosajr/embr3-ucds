@@ -51,7 +51,7 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       if (editedRecord?.ecc_cnc) {
         try {
           const response = await axios.get(
-            "http://localhost:8081/api/ucds-log",
+            "https://embr3-ucds.onrender.com/api/ucds-log",
             {
               params: { ecc_cnc: editedRecord.ecc_cnc },
             }
@@ -104,7 +104,7 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
 
   const fetchUserByUsername = async (username) => {
     try {
-      const response = await axios.get(`http://localhost:8081/api/users`, {
+      const response = await axios.get(`https://embr3-ucds.onrender.com/api/users`, {
         params: { username },
       });
       return response.data.length > 0 ? response.data[0] : null;
@@ -155,7 +155,7 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
   const handleDeleteTransaction = async (transactionID) => {
     try {
       const response = await fetch(
-        `http://localhost:8081/api/transaction/${transactionID}`, // Use transactionID instead of ID
+        `https://embr3-ucds.onrender.com/api/transaction/${transactionID}`, // Use transactionID instead of ID
         {
           method: "DELETE",
           credentials: "include", // Include credentials if necessary

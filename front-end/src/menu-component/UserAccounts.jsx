@@ -50,37 +50,61 @@ const UserAccounts = () => {
     useState(false);
   const [refreshInterval, setRefreshInterval] = useState(1000);
 
+  const fetchLoginStatuses = async () => {
+    try {
+      const response = await axios.get(
+        "https://embr3-ucds.onrender.com/api/login-status"
+      );
+      return response.data; // Assuming this returns an array of login status objects
+    } catch (error) {
+      console.error("Error fetching login statuses:", error);
+      return []; // Return an empty array in case of error
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get("http://localhost:8081/api/users", {
-        params: { page: pagination.current, pageSize: pagination.pageSize },
+      const [usersResponse, loginStatuses] = await Promise.all([
+        axios.get("https://embr3-ucds.onrender.com/api/users", {
+          params: { page: pagination.current, pageSize: pagination.pageSize },
+        }),
+        fetchLoginStatuses(), // Fetch login statuses separately
+      ]);
+  
+      const users = usersResponse.data;
+  
+      const combinedData = users.map((user) => {
+        const status = loginStatuses.find(
+          (status) => status.username === user.username
+        ); // Match based on username
+        if (status) {
+          if (status.isLoggedIn) {
+            return { ...user, status: "online" };
+          } else {
+            return {
+              ...user,
+              status: getOfflineStatus(status.logoutTime), // Call the function to get the offline status
+            };
+          }
+        }
+        return { ...user, status: "offline" }; // Default to 'offline' if no status found
       });
-
-      const uniquePermissions = new Set(
-        response.data.map((user) => user.permission)
-      );
-      setPermissions(Array.from(uniquePermissions));
-
-        const sortedData = response.data.sort((a, b) => {
+  
+      // Sort the combinedData array: online users first, then offline users
+      combinedData.sort((a, b) => {
         if (a.status === "online" && b.status !== "online") {
-          return -1;
+          return -1; // a comes before b
         }
         if (a.status !== "online" && b.status === "online") {
-          return 1;
+          return 1; // b comes before a
         }
-        if (a.status.includes("active") && b.status === "offline") {
-          return -1;
-        }
-        if (a.status === "offline" && b.status.includes("active")) {
-          return 1;
-        }
-        return 0;
+        return 0; // Keep the order for users with the same status
       });
-
-      setUserData(sortedData);
-      setFilteredUserData(sortedData);
-      setPagination((prev) => ({ ...prev, total: sortedData.length }));
+  
+      setUserData(combinedData);
+      setFilteredUserData(combinedData);
+      setPagination((prev) => ({ ...prev, total: combinedData.length }));
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -110,7 +134,7 @@ const UserAccounts = () => {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get("http://localhost:8081/api/users", {
+      const response = await axios.get("https://embr3-ucds.onrender.com/api/users", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -125,7 +149,7 @@ const UserAccounts = () => {
 
   const fetchSignUpUsers = async () => {
     try {
-      const response = await axios.get(" http://localhost:8081/api/sign-up", {
+      const response = await axios.get(" https://embr3-ucds.onrender.com/api/sign-up", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -153,7 +177,7 @@ const UserAccounts = () => {
   const fetchLoginStatus = async () => {
     try {
       const response = await axios.get(
-        " http://localhost:8081/api/online_users"
+        " https://embr3-ucds.onrender.com/api/online_users"
       );
       const allStatuses = response.data.onlineUsers;
 
@@ -218,7 +242,7 @@ const UserAccounts = () => {
     if (result.isConfirmed) {
       try {
         const response = await axios.delete(
-          `http://localhost:8081/api/remove-user/${record._id}`
+          `https://embr3-ucds.onrender.com/api/remove-user/${record._id}`
         );
 
         if (response.data.message === "User removed successfully") {
@@ -313,9 +337,17 @@ const UserAccounts = () => {
       title: "Name",
       dataIndex: "name",
       key: "avatarName",
-      render: (name, record) => (
-        <AvatarWithName avatar={record.avatar} name={name} />
-      ),
+      render: (name, record) => {
+        return (
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <AvatarWithName
+              userHandle={record.username} // Pass userHandle to fetch avatar
+            />
+            <span style={{ marginLeft: "8px" }}>{name}</span>{" "}
+            {/* Display the name here */}
+          </div>
+        );
+      },
       align: "left",
       width: "200px",
     },
@@ -525,7 +557,7 @@ const UserAccounts = () => {
           if (result.isConfirmed) {
             try {
               const response = await axios.put(
-                ` http://localhost:8081/api/status/${record._id}`,
+                ` https://embr3-ucds.onrender.com/api/status/${record._id}`,
                 { status: value }
               );
               if (
@@ -735,9 +767,12 @@ const UserAccounts = () => {
         />
 
         <UserProfileModal
-          user={selectedUser}
-          visible={isModalVisible}
-          onCancel={handleModalCancel}
+         user={selectedUser  }
+         visible={isModalVisible}
+         onCancel={() => {
+           setSelectedUser(null);
+           setIsModalVisible(false);
+         }}
         />
 
         <Modal

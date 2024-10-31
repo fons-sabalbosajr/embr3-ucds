@@ -39,7 +39,7 @@ function generateRandomPassword(length) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-const allowedOrigins = ["http://localhost:5173"];
+const allowedOrigins = ["https://inspiring-melomakarona-4afd68.netlify.app"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -66,10 +66,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,  // Set to false during development (use true in production with HTTPS)
+      secure: true,  // Set to false during development (use true in production with HTTPS)
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24,
-      sameSite: 'Lax',  // 'Lax' during local development; 'None' with 'Secure' in production
+      sameSite: 'None',  // 'Lax' during local development; 'None' with 'Secure' in production
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -1757,19 +1757,30 @@ app.get("/api/extract-province-data", async (req, res) => {
 
 app.get("/api/users", async (req, res) => {
   const { username } = req.query; // Get the username from the query parameters
+  //console.log("Querying for username:", username); // Log the queried username
   try {
-    // If a username is provided, find the specific user; otherwise, fetch all users
     const query = username ? { username } : {};
-    const users = await userCollection.find(query).toArray(); // Fetch user(s) based on query
+    const users = await userCollection.find(query).toArray();
 
     if (username && users.length === 0) {
-      return res.status(404).json({ message: "User not found" }); // Handle case when no user is found
+      return res.status(404).json({ message: "User  not found" });
     }
 
-    res.json(users); // Return the user(s) as JSON
+    res.json(users);
   } catch (error) {
     console.error("Error fetching user data:", error);
-    res.status(500).json({ error: "Internal Server Error" }); // Return 500 status code for internal server error
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Fetch all login statuses
+app.get("/api/login-status", async (req, res) => {
+  try {
+    const loginStatuses = await loginStatusCollection.find({}).toArray();
+    res.json(loginStatuses);
+  } catch (error) {
+    console.error("Error fetching login statuses:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

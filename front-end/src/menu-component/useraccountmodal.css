@@ -33,6 +33,7 @@
 .avatar-container {
   position: relative;
   display: inline-block;
+  
 }
 
 .avatar-container .ant-avatar {

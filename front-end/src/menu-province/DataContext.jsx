@@ -26,7 +26,7 @@ export const DataProvider = ({ children }) => {
 
       // Append a unique query parameter to force cache busting
       const response = await axios.get(
-        "http://localhost:8081/api/get-province-data",
+        "https://embr3-ucds.onrender.com/api/get-province-data",
         {
           params: { province, _nocache: Date.now() },
         }

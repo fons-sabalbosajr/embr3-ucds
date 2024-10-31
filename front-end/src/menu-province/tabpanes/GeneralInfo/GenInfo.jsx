@@ -32,7 +32,7 @@ const GenInfo = ({
       // Fetch project data when industry_class is not blank
       try {
         const response = await axios.get(
-          `http://localhost:8081/api/project_type?industry_class=${editedRecord.industry_class}`
+          `https://embr3-ucds.onrender.com/api/project_type?industry_class=${editedRecord.industry_class}`
         );
         if (response.data) {
           const { psic_code, project_type, project_subtype } = response.data;

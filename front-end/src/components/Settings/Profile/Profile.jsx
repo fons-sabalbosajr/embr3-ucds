@@ -42,7 +42,7 @@ const Profile = ({ userHandle }) => {
     const fetchUserData = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8081/api/users?username=${userHandle}`
+          `https://embr3-ucds.onrender.com/api/users?username=${userHandle}`
         );
         if (!response.ok) {
           throw new Error("User  not found");
@@ -94,7 +94,7 @@ const Profile = ({ userHandle }) => {
     setUploading(true);
 
     try {
-      const response = await fetch(`http://localhost:8081/api/users/update`, {
+      const response = await fetch(`https://embr3-ucds.onrender.com/api/users/update`, {
         method: "POST",
         body: formData,
       });
@@ -150,7 +150,7 @@ const Profile = ({ userHandle }) => {
               <img src={photo.url} alt="Selected Photo" className="profile-avatar" />
             ) : (
               <img
-                src={`http://localhost:8081${userData.avatar}`}
+                src={`https://embr3-ucds.onrender.com${userData.avatar}`}
                 alt="Profile Avatar"
                 className="profile-avatar"
               />

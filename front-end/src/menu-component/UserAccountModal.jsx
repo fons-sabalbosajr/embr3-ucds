@@ -15,11 +15,19 @@ import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import axios from "axios";
 import AvatarSelectionModal from "../components/AvatarSelectionModalProfile";
-import NiceAvatar from "react-nice-avatar"; // Assuming NiceAvatar is correctly imported
+import AvatarWithName from "../components/AvatarwithName";
+import NiceAvatar from "react-nice-avatar";
+import CryptoJS from "crypto-js";
 
 const { TabPane } = Tabs;
 
-const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
+const UserProfileModal = ({
+  user,
+  visible,
+  onCancel,
+  fetchUserData,
+  userHandle,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editableUser, setEditableUser] = useState(
     user ? { ...user, avatar: user.avatar || null } : null
@@ -28,13 +36,33 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
   const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [newAvatarUrl, setNewAvatarUrl] = useState(null); // To store new avatar URL
 
   useEffect(() => {
     if (user) {
       setEditableUser({ ...user, avatar: user.avatar || null });
     }
-    setOriginalUser({ ...user });
   }, [user]);
+
+  const avatarProps = editableUser?.avatar;
+
+  useEffect(() => {
+    // Retrieve the username from local storage using userHandle
+    const encryptedUsername = localStorage.getItem("encryptedUsername");
+    if (encryptedUsername) {
+      const bytes = CryptoJS.AES.decrypt(
+        encryptedUsername,
+        import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY
+      );
+      const decryptedUsername = bytes.toString(CryptoJS.enc.Utf8);
+
+      // Fetch user data using the decrypted username
+      fetchUserData(decryptedUsername).then((userData) => {
+        setEditableUser(userData);
+        setOriginalUser(userData);
+      });
+    }
+  }, [userHandle]);
 
   const handleEdit = () => {
     setIsEditing(!isEditing);
@@ -44,20 +72,13 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
     try {
       let updatedUserData = { ...editableUser };
 
-      // Check if there's a new avatar selected
-      if (editableUser.avatar && typeof editableUser.avatar === "object") {
-        // If avatar is an object (indicating it's from AvatarSelectionModal), extract its configuration
-        updatedUserData.avatar = { ...editableUser.avatar };
-      } else if (
-        editableUser.avatar &&
-        typeof editableUser.avatar === "string"
-      ) {
-        // If avatar is a string (already saved URL), keep it as it is
-        updatedUserData.avatar = editableUser.avatar;
+      // If a new avatar is set, update the URL
+      if (newAvatarUrl) {
+        updatedUserData.avatar = newAvatarUrl;
       }
 
       const response = await axios.put(
-        `http://localhost:8081/api/users/${editableUser._id}`,
+        `https://embr3-ucds.onrender.com/api/users/${editableUser._id}`,
         updatedUserData,
         {
           headers: {
@@ -69,10 +90,9 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
       if (response.status === 200 && response.data) {
         setOriginalUser({ ...updatedUserData });
         setIsEditing(false);
-
         Swal.fire({
           title: "Success!",
-          text: "User information updated successfully!",
+          text: "User  information updated successfully!",
           icon: "success",
           confirmButtonText: "OK",
         });
@@ -90,7 +110,6 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
         "Error updating user:",
         error.response ? error.response.data : error
       );
-
       Swal.fire({
         title: "Error!",
         text: error.response
@@ -135,27 +154,6 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
       avatar: config,
     });
     setIsAvatarModalVisible(false);
-  };
-
-  const handleUploadAvatar = async (avatarUrl) => {
-    try {
-      setUploading(true);
-      for (let i = 0; i <= 100; i += 20) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        setUploadProgress(i);
-      }
-      setUploadProgress(100);
-      setUploading(false);
-
-      setEditableUser({
-        ...editableUser,
-        avatar: avatarUrl,
-      });
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-      setUploading(false);
-      setUploadProgress(0);
-    }
   };
 
   const recentChangesColumns = [
@@ -203,38 +201,20 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
     >
       <div className="user-details-container">
         <div className="avatar-container">
-          {editableUser && editableUser.avatar ? (
-            <NiceAvatar
-              style={{ width: 150, height: 150 }}
-              {...editableUser.avatar}
-            />
+          {editableUser ? (
+            <AvatarWithName userHandle={editableUser.username} size="100px" />
           ) : (
             <Avatar
-              size={150}
-              className="user-status-item-avatar"
-              style={{
-                fontSize: "50px",
-                backgroundColor: "#f56a00",
-                verticalAlign: "middle",
-              }}
-            >
-              {editableUser && editableUser.name ? editableUser.name[0] : ""}
-            </Avatar>
-          )}
-          <div className="user-status-dot" />
-          {isEditing && (
-            <div
-              className="avatar-edit-button"
-              onClick={() => setIsAvatarModalVisible(true)}
-            >
-              <CameraOutlined className="edit-avatar-icon" />
-            </div>
+              size={100}
+              icon={<UserOutlined />}
+              style={{ verticalAlign: "middle" }}
+            />
           )}
         </div>
 
         <div className="user-info">
           <div className="user-info-column">
-          <p className="label-user">Employee ID:</p>
+            <p className="label-user">Employee ID:</p>
             <Input
               placeholder="Employee ID"
               value={editableUser ? editableUser.empid : ""}
@@ -304,16 +284,16 @@ const UserProfileModal = ({ user, visible, onCancel, fetchUserData }) => {
               }}
             >
               <Select
-              value={editableUser ? editableUser.permission : "user"}
-              className="select-permission"
-              disabled={!isEditing}
-              onChange={(value) => handleChange("permission", value)}
-            >
-              <Select.Option value="viewer">Viewer</Select.Option>
-              <Select.Option value="contributor">Contributor</Select.Option>
-              <Select.Option value="admin">Admin</Select.Option>
-              <Select.Option value="developer">Developer</Select.Option>
-            </Select>
+                value={editableUser ? editableUser.permission : "user"}
+                className="select-permission"
+                disabled={!isEditing}
+                onChange={(value) => handleChange("permission", value)}
+              >
+                <Select.Option value="viewer">Viewer</Select.Option>
+                <Select.Option value="contributor">Contributor</Select.Option>
+                <Select.Option value="admin">Admin</Select.Option>
+                <Select.Option value="developer">Developer</Select.Option>
+              </Select>
             </ConfigProvider>
           </div>
         </div>

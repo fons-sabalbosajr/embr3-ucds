@@ -96,9 +96,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
         newDataSource[index][dataIndex] = e.target.value;
         setDataSource(newDataSource);
       }}
-      autoSize={{ minRows: 1 }}
-      bordered={false}
-      style={{ borderColor: "transparent" }}
+      autoSize={{ minRows: 7 }}
       size="small"
     />
   );
