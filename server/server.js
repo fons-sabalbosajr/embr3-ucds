@@ -39,7 +39,7 @@ function generateRandomPassword(length) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-const allowedOrigins = ["http://localhost:5173","https://inspiring-melomakarona-4afd68.netlify.app"];
+const allowedOrigins = ["http://localhost:5173","https://embr3-ucds-7d8e.onrender.com"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
