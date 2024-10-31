@@ -12,7 +12,7 @@ const UserStatus = () => {
     const fetchOnlineUsers = async () => {
       try {
         const response = await axios.get(
-          "https://embr3-ucds.onrender.com/api/online_users"
+          "http://localhost:8081/api/online_users"
         );
         const allUsers = response.data.onlineUsers;
 
@@ -84,7 +84,7 @@ const UserStatus = () => {
                   {user.avatar ? (
                     typeof user.avatar === "string" ? (
                       <img
-                        src={`https://embr3-ucds.onrender.com${user.avatar}`}
+                        src={`http://localhost:8081${user.avatar}`}
                         alt="Avatar"
                         style={{
                           width: "30px",

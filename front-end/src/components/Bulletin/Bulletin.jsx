@@ -15,7 +15,7 @@ const Bulletin = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("https://embr3-ucds.onrender.com/api/postings");
+        const response = await axios.get("http://localhost:8081/api/postings");
         const data = response.data;
         // Sort bulletins by date from newest to oldest
         data.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
@@ -107,7 +107,7 @@ const Bulletin = () => {
     setSelectedBulletin(record);
     setIsModalVisible(true);
     try {
-      await axios.patch(`https://embr3-ucds.onrender.com/api/postings/${record._id}`, {
+      await axios.patch(`http://localhost:8081/api/postings/${record._id}`, {
         isRead: true,
       });
       // Update the bulletins state with the read status
@@ -134,7 +134,7 @@ const Bulletin = () => {
   const handleDontShowAgain = async () => {
     try {
       await axios.patch(
-        `https://embr3-ucds.onrender.com/api/postings/${selectedBulletin._id}`,
+        `http://localhost:8081/api/postings/${selectedBulletin._id}`,
         { showAgain: false }
       );
       // Add the ID to the set of IDs that should not trigger the modal

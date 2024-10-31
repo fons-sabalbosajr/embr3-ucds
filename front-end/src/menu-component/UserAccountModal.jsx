@@ -78,7 +78,7 @@ const UserProfileModal = ({
       }
 
       const response = await axios.put(
-        `https://embr3-ucds.onrender.com/api/users/${editableUser._id}`,
+        `http://localhost:8081/api/users/${editableUser._id}`,
         updatedUserData,
         {
           headers: {

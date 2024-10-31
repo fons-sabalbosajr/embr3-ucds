@@ -39,7 +39,7 @@ function generateRandomPassword(length) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-const allowedOrigins = ["http://localhost:5173","https://inspiring-melomakarona-4afd68.netlify.app"];
+const allowedOrigins = ["http://localhost:5173"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -66,10 +66,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Ensure this is true in production
+      secure: false, // Ensure this is true in production
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24,
-      sameSite: "None",  // 'Lax' during local development; 'None' with 'Secure' in production
+      sameSite: "Lax",  // 'Lax' during local development; 'None' with 'Secure' in production
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,

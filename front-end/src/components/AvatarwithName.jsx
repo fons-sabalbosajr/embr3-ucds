@@ -12,7 +12,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         const fetchUserData = async () => {
             try {
                 const response = await fetch(
-                    `https://embr3-ucds.onrender.com/api/users?username=${userHandle}`
+                    `http://localhost:8081/api/users?username=${userHandle}`
                 );
                 if (!response.ok) {
                     throw new Error("User not found");
@@ -61,7 +61,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         <div style={{ display: "flex", alignItems: "center" }}>
             {typeof avatar === 'string' ? (
                 <Avatar
-                    src={`https://embr3-ucds.onrender.com${avatar}`}
+                    src={`http://localhost:8081${avatar}`}
                     alt="Profile Picture"
                     style={{ width: size, height: size, marginRight: "8px" }}
                 />
