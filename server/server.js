@@ -39,7 +39,7 @@ function generateRandomPassword(length) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-const allowedOrigins = ["https://inspiring-melomakarona-4afd68.netlify.app"];
+const allowedOrigins = ["http://localhost:5173","https://inspiring-melomakarona-4afd68.netlify.app"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -66,10 +66,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,  // Set to false during development (use true in production with HTTPS)
+      secure: process.env.NODE_ENV === "production", // Ensure this is true in production
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24,
-      sameSite: 'None',  // 'Lax' during local development; 'None' with 'Secure' in production
+      sameSite: "None",  // 'Lax' during local development; 'None' with 'Secure' in production
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -128,6 +128,7 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
+app.set("trust proxy", 1);
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
