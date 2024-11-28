@@ -11,6 +11,8 @@ import {
 import Logo from "./Logo";
 import "./sidemenu.css";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useContext } from "react";
+import { DataContext } from "./../menu-province/DataContext"
 
 const { Sider } = Layout;
 const { SubMenu } = Menu;
@@ -18,34 +20,31 @@ const { SubMenu } = Menu;
 const SideMenu = ({ theme, currentUser }) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
+  const { setCurrentProvince } = useContext(DataContext);
+  
+  //console.log("Current User in SideMenu:", currentUser);
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
-  const canGenerateData = permissions[0];
-  const canManageData = permissions[1];
-  const canViewAdminPanel = permissions[2];
-  const canViewDataHistory = permissions[3];
+  const visibleProvinces = [
+    { key: "Aurora", visible: permissions[4] },
+    { key: "Bataan", visible: permissions[5] },
+    { key: "Bulacan", visible: permissions[6] },
+    { key: "Nueva_Ecija", visible: permissions[7] },
+    { key: "Pampanga", visible: permissions[8] },
+    { key: "Tarlac", visible: permissions[9] },
+    { key: "Zambales", visible: permissions[10] },
+  ]
+    .filter((province) => province.visible) // Show only visible provinces
+    .map((province) => province.key);
 
-  // useEffect(() => {
-  //   if (currentUser) {
-  //     console.log("Can Generate Data:", canGenerateData);
-  //     console.log("Can Manage Data Data:", canManageData);
-  //     console.log("Can View Admin Panel:", canViewAdminPanel);
-  //     console.log("Can View Data History:", canViewDataHistory);
-  //   }
-  // }, [currentUser]);
-
+  const canViewAdminPanel = permissions[2]; // Example permission
   const onCollapse = (collapsed) => {
     setCollapsed(collapsed);
   };
 
-  const isMenuSelected = (path) => {
-    return location.pathname.includes(path);
-  };
-
-  const handleExportDataClick = () => {
-    navigate("/universe/exportdata"); 
+  const handleProvinceSelect = (province) => {
+    setCurrentProvince(province); // Update currentProvince in DataContext
   };
 
   return (
@@ -88,31 +87,17 @@ const SideMenu = ({ theme, currentUser }) => {
               Dashboard
             </Link>
           </Menu.Item>
-
-          <SubMenu
+          <Menu.SubMenu
             key="r3-monitoring"
             icon={<CheckCircleFilled />}
             title="R3 Monitoring Plan"
           >
-            {[
-              "Aurora",
-              "Bataan",
-              "Bulacan",
-              "Nueva_Ecija",
-              "Pampanga",
-              "Tarlac",
-              "Zambales",
-            ].map((province) => (
-              <Menu.Item key={`/universe/province/${province.toLowerCase()}`}>
-                <Link
-                  to={`/universe/province/${province.toLowerCase()}`}
-                  className="link-menu"
-                >
-                  {province}
-                </Link>
+            {visibleProvinces.map((province) => (
+              <Menu.Item key={`/universe/province/${province}`} onClick={() => handleProvinceSelect(province)}>
+                <Link to={`/universe/province/${province}`}>{province}</Link>
               </Menu.Item>
             ))}
-          </SubMenu>
+          </Menu.SubMenu>
 
           <SubMenu key="reports" icon={<PushpinFilled />} title="Reports">
             <>

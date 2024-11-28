@@ -24,6 +24,7 @@ import Swal from "sweetalert2";
 import AvatarWithName from "../components/AvatarwithName";
 import AccountPermission from "./AccountPermission";
 
+
 const { Option } = Select;
 
 const UserAccounts = () => {
@@ -620,7 +621,7 @@ const UserAccounts = () => {
                 <Button
                   type="text"
                   size="small"
-                  onClick={() => handleViewSignUpUser(record)}
+                  onClick={() => handleViewSignUpUser (record)} // Open modal on click
                 >
                   Approve
                 </Button>
@@ -635,7 +636,7 @@ const UserAccounts = () => {
                   type="text"
                   size="small"
                   danger
-                  onClick={() => handleRemoveUser(record)}
+                  onClick={() => handleRemoveUser (record)} // Assuming this function exists
                 >
                   Remove
                 </Button>
@@ -647,7 +648,7 @@ const UserAccounts = () => {
           <Button icon={<EllipsisOutlined />} />
         </Popover>
       ),
-    },
+    }
   ];
 
   const handlePaginationChange = (pagination) => {
@@ -676,9 +677,14 @@ const UserAccounts = () => {
     setFilteredUserData(filteredData);
   };
 
-  const handleViewSignUpUser = (record) => {
-    setSelectedSignUpUser(record);
-    setIsSignUpModalVisible(true);
+  const handleViewSignUpUser  = (record) => {
+    setSelectedSignUpUser (record); // Set the selected user
+    setIsSignUpModalVisible(true); // Open the modal
+  };
+
+  const handleSignUpModalCancel = () => {
+    setIsSignUpModalVisible(false); // Close the modal
+    setSelectedSignUpUser (null); // Clear selected user
   };
 
   const handleExport = () => {
@@ -696,10 +702,6 @@ const UserAccounts = () => {
     setIsModalVisible(false); // Hide the modal
   };
 
-  const handleSignUpModalCancel = () => {
-    setSelectedSignUpUser(null);
-    setIsSignUpModalVisible(false);
-  };
 
   const rowClassName = (record) => {
     if (record.status === "approved") {
@@ -794,6 +796,7 @@ const UserAccounts = () => {
                   email: selectedAccessUser.email,
                   division: selectedAccessUser.division,
                   permission: selectedAccessUser.permission,
+                  username: selectedAccessUser.username,
                 }}
               />
             </div>

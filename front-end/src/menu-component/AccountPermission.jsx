@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Table, Switch, Row, Col, message, Button } from "antd";
+import { Table, Switch, Row, Col, message, Button, Tabs } from "antd";
 import {
   EyeOutlined,
   DatabaseOutlined,
   InfoCircleFilled,
   HistoryOutlined,
   ExportOutlined,
-  SearchOutlined
+  SearchOutlined,
 } from "@ant-design/icons";
 import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
 import Swal from "sweetalert2";
+import AvatarWithName from "../components/AvatarwithName";
 import "./accountpermission.css";
+
+const { TabPane } = Tabs;
 
 const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
   const [avatarData, setAvatarData] = useState(null);
@@ -45,35 +48,62 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       isGranted: false,
     },
     {
-      key: "canAccessRangePicker", // New permission for RangePicker access
+      key: "canAccessRangePicker",
       accessName: "Access RangePicker",
       description: "Grants access to the date range selection feature.",
-      icon: <SearchOutlined />, // You can choose a different icon if needed
+      icon: <SearchOutlined />,
       isGranted: false,
     },
   ]);
-
   const [initialAccessList, setInitialAccessList] = useState([]);
-  const [hasChanges, setHasChanges] = useState(false); // Track changes
+  const [hasChanges, setHasChanges] = useState(false);
+  const [provinceAccessList, setProvinceAccessList] = useState([
+    { key: "aurora", name: "Aurora", isGranted: false },
+    { key: "bataan", name: "Bataan", isGranted: false },
+    { key: "bulacan", name: "Bulacan", isGranted: false },
+    { key: "nuevaEcija", name: "Nueva Ecija", isGranted: false },
+    { key: "pampanga", name: "Pampanga", isGranted: false },
+    { key: "tarlac", name: "Tarlac", isGranted: false },
+    { key: "zambales", name: "Zambales", isGranted: false },
+  ]);
+
+  const [initialProvinceAccessList, setInitialProvinceAccessList] = useState(
+    []
+  );
 
   useEffect(() => {
+    if (!userData || !userData.username) {
+      console.error("Username not provided in userData:", userData);
+      return;
+    }
+
     const fetchUserAvatar = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/api/users");
+        const response = await axios.get(
+          `http://localhost:8081/api/users?username=${userData.username}`
+        );
         const users = response.data;
-        const currentUser = users.find((user) => user.email === userData.email);
+        const currentUser = users[0];
 
         if (currentUser) {
-          setAvatarData(currentUser.avatar);
+          const avatar = currentUser.avatar;
+          setAvatarData(avatar);
           const updatedAccessList = accessList.map((item) => ({
             ...item,
-            isGranted: currentUser[item.key] || false, // Set isGranted based on user data
+            isGranted: currentUser[item.key] || false,
           }));
-          //console.log("Updated Access List:", updatedAccessList); // Log updated access list
           setAccessList(updatedAccessList);
-          setInitialAccessList(updatedAccessList); // Set the initial access list
+          setInitialAccessList(updatedAccessList);
+
+          // Set initial province access list
+          const updatedProvinceAccessList = provinceAccessList.map((item) => ({
+            ...item,
+            isGranted: currentUser[item.key] || false,
+          }));
+          setProvinceAccessList(updatedProvinceAccessList);
+          setInitialProvinceAccessList(updatedProvinceAccessList);
         } else {
-          message.error("User not found");
+          message.error("User  not found");
         }
       } catch (error) {
         message.error("Error fetching user data");
@@ -82,19 +112,32 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
     };
 
     fetchUserAvatar();
-  }, [userData.email]);
+  }, [userData.username]);
 
   const toggleAccess = (key) => {
     setAccessList((prevList) => {
       const updatedList = prevList.map((item) => {
         if (item.key === key) {
-          const updatedItem = { ...item, isGranted: !item.isGranted }; // Toggle the specific access
-          //console.log(`Toggled ${key}: ${updatedItem.isGranted}`); // Log the toggle action
+          const updatedItem = { ...item, isGranted: !item.isGranted };
           return updatedItem;
         }
         return item;
       });
-      checkForChanges(updatedList); // Check if there are changes after updating
+      checkForChanges(updatedList);
+      return updatedList;
+    });
+  };
+
+  const toggleProvinceAccess = (key) => {
+    setProvinceAccessList((prevList) => {
+      const updatedList = prevList.map((item) => {
+        if (item.key === key) {
+          const updatedItem = { ...item, isGranted: !item.isGranted };
+          return updatedItem;
+        }
+        return item;
+      });
+      checkForProvinceChanges(updatedList);
       return updatedList;
     });
   };
@@ -108,15 +151,28 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
     setHasChanges(isChanged); // Update hasChanges based on comparison
   };
 
+  const checkForProvinceChanges = (updatedList) => {
+    const isChanged = updatedList.some((item, index) => {
+      const initialItem = initialProvinceAccessList[index];
+      return initialItem && item.isGranted !== initialItem.isGranted;
+    });
+    setHasChanges(isChanged);
+  };
+
   const applyChanges = async () => {
     const updatedPermissions = accessList.reduce((acc, item) => {
-      acc[item.key] = item.isGranted; // Map accessList to permissions object
+      acc[item.key] = item.isGranted;
       return acc;
     }, {});
-  
-    
-    //console.log("Permissions to apply:", updatedPermissions);
-  
+
+    const updatedProvincePermissions = provinceAccessList.reduce(
+      (acc, item) => {
+        acc[item.key] = item.isGranted;
+        return acc;
+      },
+      {}
+    );
+
     const result = await Swal.fire({
       title: "Are you sure?",
       text: "You are about to apply these changes!",
@@ -126,31 +182,35 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       cancelButtonColor: "#d33",
       confirmButtonText: "Yes, apply changes!",
     });
-  
+
     if (result.isConfirmed) {
       try {
-        // Send the updated permissions to the API
-        const response = await axios.patch(
+        // Send permissions to the main permissions endpoint
+        await axios.patch(
           `http://localhost:8081/api/users/${userData.email}/permissions`,
           updatedPermissions
         );
-        //console.log("Updated User Data:", response.data);
-  
-        // Show success message using SweetAlert2
+
+        // Send province permissions to the province permissions endpoint
+        await axios.patch(
+          `http://localhost:8081/api/users/${userData.email}/province-permissions`,
+          updatedProvincePermissions
+        );
+
         await Swal.fire({
           icon: "success",
           title: "Success!",
-          text: "User permissions updated successfully.",
+          text: "User  permissions updated successfully.",
           confirmButtonText: "OK",
         });
-  
-        setHasChanges(true);
+
+        setHasChanges(false);
         if (onPermissionsUpdate) {
-          onPermissionsUpdate(); // Make sure the function is available
+          onPermissionsUpdate();
         }
         setInitialAccessList(updatedPermissions);
+        setInitialProvinceAccessList(updatedProvincePermissions);
       } catch (error) {
-        // Show error message using SweetAlert2
         await Swal.fire({
           icon: "error",
           title: "Error!",
@@ -161,7 +221,20 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       }
     }
   };
-  
+
+  const isInitialState = () => {
+    const accessChanged = accessList.some((item, index) => {
+      const initialItem = initialAccessList[index];
+      return initialItem && item.isGranted !== initialItem.isGranted;
+    });
+
+    const provinceChanged = provinceAccessList.some((item, index) => {
+      const initialItem = initialProvinceAccessList[index];
+      return initialItem && item.isGranted !== initialItem.isGranted;
+    });
+
+    return !accessChanged && !provinceChanged; // Return true if neither has changed
+  };
 
   const columns = [
     {
@@ -195,34 +268,33 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
     },
   ];
 
-  const isInitialState = () => {
-    return accessList.every((item, index) => {
-      const initialItem = initialAccessList[index];
-      return initialItem && item.isGranted === initialItem.isGranted; // Ensure initialItem is defined
-    });
-  };
-
-  useEffect(() => {
-    if (isInitialState()) {
-      setHasChanges(false);
-      //console.log("State matches initial state. OK button enabled."); // Log state check
-    } else {
-      //console.log("State has changed. OK button disabled."); // Log state change
-    }
-  }, [accessList]);
+  const provinceColumns = [
+    {
+      title: "Province",
+      dataIndex: "name",
+      key: "name",
+      align: "left",
+    },
+    {
+      title: "Granted",
+      dataIndex: "isGranted",
+      key: "isGranted",
+      align: "center",
+      render: (isGranted, record) => (
+        <Switch
+          checked={isGranted}
+          onChange={() => toggleProvinceAccess(record.key)}
+          size="small"
+        />
+      ),
+    },
+  ];
 
   return (
     <div style={{ padding: "20px" }}>
       <Row style={{ marginBottom: "20px", alignItems: "center" }}>
         <Col span={3}>
-          {avatarData ? (
-            <NiceAvatar
-              style={{ width: "70px", height: "70px" }}
-              {...avatarData}
-            />
-          ) : (
-            <NiceAvatar style={{ width: "70px", height: "70px" }} />
-          )}
+          <AvatarWithName userHandle={userData.username} size="70px" />
         </Col>
         <Col span={15}>
           <h3 style={{ margin: 0, fontWeight: 600 }}>{userData.name}</h3>
@@ -270,7 +342,18 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
         </p>
       </div>
 
-      <Table dataSource={accessList} columns={columns} pagination={false} />
+      <Tabs defaultActiveKey="1">
+        <TabPane tab="Access Settings" key="1">
+          <Table dataSource={accessList} columns={columns} pagination={false} />
+        </TabPane>
+        <TabPane tab="Province Access" key="2">
+          <Table
+            dataSource={provinceAccessList}
+            columns={provinceColumns}
+            pagination={false}
+          />
+        </TabPane>
+      </Tabs>
 
       <div
         style={{

@@ -1,74 +1,40 @@
 .modal-content {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start; /* Align items to the top */
 }
 
 .avatar-section {
   display: flex;
-  align-items: flex-start; /* Align items to top */
-}
-
-.avatar-section {
-  display: flex;
-  align-items: center;
+  flex-direction: column; /* Stack avatar and button vertically */
+  align-items: center; /* Center items horizontally */
+  margin-right: 20px; /* Space between avatar section and user details */
 }
 
 .avatar {
-  margin-right: 16px;
-  position: relative;
-  margin-top: -80px;
-}
-
-.avatar-wrapper {
-  position: relative;
-  margin-bottom: 16px; /* Space between avatar and buttons */
+  margin-bottom: 8px;
 }
 
 .change-avatar-btn {
-  position: absolute;
-  margin-left: 1rem;
-  top: 40%;
+  margin-top: 8px; /* Space between button and avatar */
 }
 
 .user-details {
-  flex: 1;
-  gap: 10px;
-  font-weight: 400;
-  margin-left: 20px;
-}
-
-.section-divider {
-  margin: 20px 0;
-}
-
-.generate-section {
+  flex: 1; /* Allow user details to take remaining space */
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.generate-username-input {
-  width: 200px; /* Adjust width as needed */
-}
-
-.generate-password-input {
-  width: 200px; /* Adjust width as needed */
-  margin-left: 4px;
-  margin-right: 8px; /* Provide spacing between input and button */
-}
-
-.generate-password-btn {
-  width: fit-content; /* Adjust button width based on content */
+  flex-direction: column; /* Stack user detail fields vertically */
+  gap: 10px; /* Space between each input field */
 }
 
 .details-label {
-  margin-bottom: 5px;
-  margin-top: 5px;
   font-weight: 500;
+  margin-bottom: 5px; /* Adjust spacing for labels */
+  display: block; /* Ensure label takes full width */
 }
 
-.credential-label {
-  font-weight: 500;
-  margin-bottom: 10px;
+.create-user-section{
+  margin-left: 20px;
+}
+
+.generate-password-btn{
+  margin-top: 10px;
 }

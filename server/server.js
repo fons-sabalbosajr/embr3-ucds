@@ -69,7 +69,7 @@ app.use(
       secure: false, // Ensure this is true in production
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24,
-      sameSite: "Lax",  // 'Lax' during local development; 'None' with 'Secure' in production
+      sameSite: "Lax", // 'Lax' during local development; 'None' with 'Secure' in production
     },
     store: MongoStore.create({
       mongoUrl: mongoUri,
@@ -357,7 +357,7 @@ app.post("/login", async (req, res) => {
     const user = await userCollection.findOne({ username });
 
     if (!user) {
-      console.log("User  not found:", username);
+      console.log("User not found:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
@@ -367,6 +367,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
+    // Set user session
     req.session.user = {
       userId: user._id.toString(),
       name: user.name,
@@ -379,7 +380,16 @@ app.post("/login", async (req, res) => {
       canViewAdminPanel: user.canViewAdminPanel || false,
       canViewDataHistory: user.canViewDataHistory || false,
       canAccessRangePicker: user.canAccessRangePicker || false,
+      aurora: user.aurora || false,
+      bataan: user.bataan || false,
+      bulacan: user.bulacan || false,
+      nuevaEcija: user.nuevaEcija || false,
+      pampanga: user.pampanga || false,
+      tarlac: user.tarlac || false,
+      zambales: user.zambales || false,
     };
+
+    //console.log("Session data after setting user:", req.session.user);
 
     // Update loginStatusCollection
     await loginStatusCollection.updateOne(
@@ -397,11 +407,13 @@ app.post("/login", async (req, res) => {
       { upsert: true } // Create a new document if it doesn't exist
     );
 
+    // Update user's online status
     await userCollection.updateOne(
       { username },
       { $set: { status: "online" } }
     );
 
+    // Send success response
     return res.status(200).json({
       status: "success",
       username: user.username,
@@ -411,6 +423,13 @@ app.post("/login", async (req, res) => {
       canViewAdminPanel: user.canViewAdminPanel || false,
       canViewDataHistory: user.canViewDataHistory || false,
       canAccessRangePicker: user.canAccessRangePicker || false,
+      aurora: user.aurora || false,
+      bataan: user.bataan || false,
+      bulacan: user.bulacan || false,
+      nuevaEcija: user.nuevaEcija || false,
+      pampanga: user.pampanga || false,
+      tarlac: user.tarlac || false,
+      zambales: user.zambales || false,
     });
   } catch (error) {
     console.error("Error during login:", error);
@@ -475,9 +494,12 @@ app.post("/logout", async (req, res) => {
   }
 });
 
-cron.schedule("*/10 * * * *", async () => { // Runs every 10 minutes
+cron.schedule("*/10 * * * *", async () => {
+  // Runs every 10 minutes
   try {
-    const users = await userCollection.find({ status: { $ne: "online" } }).toArray();
+    const users = await userCollection
+      .find({ status: { $ne: "online" } })
+      .toArray();
 
     const bulkOps = users.map((user) => {
       const updatedStatus = calculateTimeAgo(user.lastLogout);
@@ -530,82 +552,15 @@ app.get("/check-auth", authenticateSession, (req, res) => {
     canManageData: req.session.user.canManageData,
     canViewAdminPanel: req.session.user.canViewAdminPanel,
     canViewDataHistory: req.session.user.canViewDataHistory,
-    canAccessRangePicker: req.session.user.canAccessRangePicker
+    canAccessRangePicker: req.session.user.canAccessRangePicker,
+    aurora: req.session.user.aurora,
+    bataan: req.session.user.bataan,
+    bulacan: req.session.user.bulacan,
+    nuevaEcija: req.session.user.nuevaEcija,
+    pampanga: req.session.user.pampanga,
+    tarlac: req.session.user.tarlac,
+    zambales: req.session.user.zambales,
   });
-});
-
-// POST /api/newusers - Create a new user with password encryption
-app.post("/api/newusers", async (req, res) => {
-  console.log("Received request:", req.body);
-
-  const { name, email, division, status, password, username } = req.body;
-
-  // Input validation
-  if (!name || !email || !division || !status || !password || !username) {
-    console.log("Validation error: Missing required fields");
-    return res.status(400).json({
-      error:
-        "Required fields: name, email, division, status, password, username",
-    });
-  }
-
-  try {
-    // Check for existing email
-    const existingUser = await userCollection.findOne({ email });
-    if (existingUser) {
-      console.log("Validation error: Email already exists");
-      return res.status(400).json({ error: "Email already exists" });
-    }
-
-    // Check for existing username
-    const existingUsername = await userCollection.findOne({ username });
-    if (existingUsername) {
-      console.log("Validation error: Username already exists");
-      return res.status(400).json({ error: "Username already exists" });
-    }
-
-    // Hash password securely
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user object with hashed password and provided username
-    const newUser = {
-      name,
-      username,
-      email,
-      password: hashedPassword,
-      division,
-      permission: "viewer", // Default permission
-      status,
-    };
-
-    // Insert the new user document into MongoDB
-    const insertResult = await userCollection.insertOne(newUser);
-
-    if (insertResult.acknowledged && insertResult.insertedId) {
-      console.log("User created successfully:", newUser);
-      return res.status(201).json({
-        message: "User created successfully",
-        user: newUser,
-      });
-    } else {
-      console.error("Error inserting user:", insertResult);
-      return res.status(500).json({ error: "Failed to create user" });
-    }
-  } catch (error) {
-    console.error("Error creating user:", error);
-
-    // Provide more informative error message based on the error type
-    let errorMessage = "Failed to create user";
-    if (error.name === "MongoError") {
-      errorMessage = "Database error occurred";
-    } else if (error.name === "BcryptError") {
-      errorMessage = "Error during password hashing";
-    } else if (error.message.includes("duplicate key error")) {
-      errorMessage = "Duplicate key error occurred";
-    }
-
-    return res.status(500).json({ error: errorMessage });
-  }
 });
 
 app.post("/api/posting", logActivity, async (req, res) => {
@@ -880,7 +835,7 @@ app.post("/api/ucds-log", async (req, res) => {
 
 //UPLOADING PROFILE PICTURE
 //////////////////////////////////////////////////////////////////////////////////////////
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
@@ -892,17 +847,28 @@ const storagedp = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueFilename = `${Date.now()}-${file.originalname}`; // Create a unique filename
-    cb(null, uniqueFilename); 
-    console.log('Generated filename:', uniqueFilename);
-  }
+    cb(null, uniqueFilename);
+    console.log("Generated filename:", uniqueFilename);
+  },
+});
+
+const storagenewdp = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); // Specify the directory to save the uploaded files
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + file.originalname; // Create a unique filename
+    cb(null, uniqueSuffix); // Save the file with the unique name
+  },
 });
 
 const uploaddp = multer({ storage: storagedp });
+const uploadnewdp = multer({ storage: storagenewdp });
 
 // Serve static files from the uploads directory
-app.use('/uploads', express.static(uploadsDir));
+app.use("/uploads", express.static(uploadsDir));
 
-app.post('/api/users/update', uploaddp.single('photo'), async (req, res) => {
+app.post("/api/users/update", uploaddp.single("photo"), async (req, res) => {
   //console.log(req.file); // Log the uploaded file
   //console.log(req.body); // Log the request body
 
@@ -911,11 +877,11 @@ app.post('/api/users/update', uploaddp.single('photo'), async (req, res) => {
     const user = await userCollection.findOne({ username });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' }); // Handle missing file
+      return res.status(400).json({ message: "No file uploaded" }); // Handle missing file
     }
 
     //console.log('Filename:', req.file.filename); // Check if filename is defined
@@ -926,14 +892,87 @@ app.post('/api/users/update', uploaddp.single('photo'), async (req, res) => {
     user.avatar = filePath;
 
     // Update the user document with the new avatar URL
-    await userCollection.updateOne({ username }, { $set: { avatar: filePath } });
+    await userCollection.updateOne(
+      { username },
+      { $set: { avatar: filePath } }
+    );
 
     res.status(200).json(user); // Return the updated user data as JSON
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: "Internal server error" });
   }
 });
+
+// Route to handle new user creation with file upload
+app.post("/api/newusers", uploadnewdp.single("avatar"), async (req, res) => {
+  const { name, email, division, status, password, username } = req.body;
+  const avatarPath = req.file ? `/uploads/${req.file.filename}` : null; // Get the file path if uploaded
+
+  // Input validation
+  if (!name || !email || !division || !status || !password || !username) {
+    //console.log("Validation error: Missing required fields");
+    return res.status(400).json({
+      error:
+        "Required fields: name, email, division, status, password, username",
+    });
+  }
+
+  try {
+    // Check for existing email
+    const existingUser = await userCollection.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
+    // Check for existing username
+    const existingUsername = await userCollection.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({ error: "Username already exists" });
+    }
+
+    // Hash password securely
+    const password = await bcrypt.hash(password, 10);
+
+    // Create user object with hashed password and provided username
+    const newUser = {
+      name,
+      username,
+      email,
+      password, // Ensure to hash the password before saving
+      division,
+      permission: "viewer", // Default permission
+      status: status || "offline", // Default status
+      avatar: avatarPath,
+      canAccessRangePicker: false,
+      canGenerateData: false,
+      canManageData: false,
+      canViewAdminPanel: false,
+      canViewDataHistory: false,
+      designation: "n/a",
+      office: "n/a",
+      region: "n/a",
+    };
+
+    // Insert the new user document into MongoDB
+    const insertResult = await userCollection.insertOne(newUser);
+
+    if (insertResult.acknowledged && insertResult.insertedId) {
+      return res.status(201).json({
+        message: "User  created successfully",
+        user: newUser,
+      });
+    } else {
+      console.error("Error inserting user:", insertResult);
+      return res.status(500).json({ error: "Failed to create user" });
+    }
+  } catch (error) {
+    console.error("Error creating user:", error);
+    return res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
+app.use("/uploads", express.static(uploadsDir));
 
 // app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1490,8 +1529,6 @@ app.get("/api/get-province-data", async (req, res) => {
       address: doc.address,
       ecc_cnc: doc.ecc_cnc,
       industry_class: doc.industry_class,
-      remarks_recommendations: doc.remarks_recommendations,
-      industry_class: doc.industry_class || "",
       remarks_recommendations: doc.remarks_recommendations || "",
       industry_type: doc.industry_type || "",
       industry_subtype: doc.industry_subtype || "",
@@ -2118,7 +2155,9 @@ app.get("/api/project_type", async (req, res) => {
 // Endpoint to get longitude and latitude data from ucdsCollection
 app.get("/api/ucds", async (req, res) => {
   try {
-    const data = await ucdsCollection.find({}, { projection: { lat: 1, long: 1, name: 1, _id: 0 } }).toArray();
+    const data = await ucdsCollection
+      .find({}, { projection: { lat: 1, long: 1, name: 1, _id: 0 } })
+      .toArray();
     res.json(data);
   } catch (error) {
     console.error("Error fetching data from ucdsCollection:", error);
@@ -2127,7 +2166,7 @@ app.get("/api/ucds", async (req, res) => {
 });
 
 // API endpoint to get the total count of UCDs
-app.get('/api/ucds/count', async (req, res) => {
+app.get("/api/ucds/count", async (req, res) => {
   try {
     const count = await ucdsCollection.countDocuments(); // Get the total count of documents
     res.json(count); // Send the count as a JSON response
@@ -2477,40 +2516,80 @@ app.patch("/api/surveys/:id", async (req, res) => {
 
 // Update user privileges API using email
 app.patch("/api/users/:email/permissions", async (req, res) => {
-  const { email } = req.params; // Get the user's email from the URL
+  const { email } = req.params;
+  // console.log("Received email:", email);
+  // console.log("Request body:", req.body);
+
   const {
     canViewAdminPanel,
     canViewDataHistory,
     canManageData,
     canGenerateData,
-    canAccessRangePicker
-  } = req.body; // Destructure the privilege values from the request body
+    canAccessRangePicker,
+  } = req.body;
 
   try {
-    // Find the user by email and update the permissions
+    // Check if the user exists
+    const user = await userCollection.findOne({ email: email });
+    if (!user) {
+      return res.status(404).json({ message: "User  not found" });
+    }
+
+    // Update the permissions
     const result = await userCollection.updateOne(
-      { email: email }, // Match the document by email
+      { email: email },
       {
         $set: {
-          canViewAdminPanel: canViewAdminPanel, // Update Admin Panel permission
-          canViewDataHistory: canViewDataHistory, // Update Data History permission
-          canManageData: canManageData, // Update Manage Data permission
-          canGenerateData: canGenerateData,
-          canAccessRangePicker : canAccessRangePicker // Update Generate Data permission
+          canViewAdminPanel,
+          canViewDataHistory,
+          canManageData,
+          canGenerateData,
+          canAccessRangePicker,
         },
       }
     );
 
     // Check if any document was modified
     if (result.modifiedCount === 0) {
-      return res
-        .status(404)
-        .json({ message: "User not found or no changes applied" });
+      return res.status(204).send(); // No content if no changes were made
     }
 
-    res.status(200).json({ message: "User permissions updated successfully" });
+    res.status(200).json({ message: "User  permissions updated successfully" });
   } catch (error) {
     console.error("Error updating user permissions:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.patch("/api/users/:email/province-permissions", async (req, res) => {
+  const { email } = req.params;
+  const provincePermissions = req.body;
+
+  try {
+    // Check if the user exists
+    const user = await userCollection.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User  not found" });
+    }
+
+    // Update the province permissions
+    const result = await userCollection.updateOne(
+      { email },
+      {
+        $set: provincePermissions, // Dynamically apply the provinces
+      }
+    );
+
+    // Check if any document was modified
+    if (result.modifiedCount === 0) {
+      return res.status(204).json({ message: "No changes applied." });
+    }
+
+    res
+      .status(200)
+      .json({ message: "Province permissions updated successfully." });
+  } catch (error) {
+    console.error("Error updating province permissions:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });

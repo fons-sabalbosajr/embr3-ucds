@@ -61,6 +61,13 @@ const Universe = () => {
           canViewAdminPanel,
           canViewDataHistory,
           canAccessRangePicker,
+          aurora,
+          bataan,
+          bulacan,
+          nuevaEcija,
+          pampanga,
+          tarlac,
+          zambales
         } = response.data;
 
         setName(name);
@@ -78,6 +85,13 @@ const Universe = () => {
                 canViewAdminPanel || false,
                 canViewDataHistory || false,
                 canAccessRangePicker || false,
+                aurora || false,
+                bataan || false,
+                bulacan || false,
+                nuevaEcija || false,
+                pampanga || false,
+                tarlac || false,
+                zambales || false
               ];
 
         setPermissions(finalPermissions);
@@ -109,13 +123,15 @@ const Universe = () => {
     setRetrying(false);
   };
 
-  const currentUser = {
+  const currentUser  = {
     name,
     username: userHandle,
     avatar,
     division,
-    permissions,
+    permissions: permissions,
   };
+
+  //console.log("Current User in Universe.jsx:", currentUser);
 
   if (loading) {
     return <Z_CustomSpinner />;
@@ -165,72 +181,72 @@ const Universe = () => {
   );
 
   return (
-    <Layout className="layout-container">
-      <SideMenu
-        theme={theme}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        permissions={permissions}
-        currentUser={currentUser}
-      />
+    <DataProvider>
+      <Layout className="layout-container">
+        <SideMenu
+          theme={theme}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          permissions={permissions}
+          currentUser ={currentUser }
+        />
 
-      <Layout>
-        {auth && (
-          <Header
-            className={`header-container ${
-              theme === "dark" ? "dark-theme" : "light-theme"
-            }`}
-          >
-            <div className="header-content">
-              <div className="profile_container">
-                <span
-                  className={`user-name ${
-                    theme === "dark" ? "dark-theme" : "light-theme"
-                  }`}
-                >
-                  {name} | {division}
-                </span>
-                <NotificationsPopover
-                  popoverContent={popoverContent}
-                  theme={theme}
-                  notifications={notifications}
-                />
-                <Popover
-                  content={
-                    <UserPopover
-                      name={name}
-                      handleLogout={handleLogout}
-                      toggleTheme={toggleTheme}
-                      userHandle={userHandle}
-                      userData={userData}
-                    />
-                  }
-                  trigger="click"
-                  placement="bottomRight"
-                >
-                  <div className="avatar-header">
-                  <AvatarWithName userHandle={userHandle} />
-                  </div>
-                </Popover>
-
-                <div
-                  className={`theme-switch ${
-                    theme === "light" ? "light-theme-icon" : "dark-theme-icon"
-                  }`}
-                >
-                  <Button
-                    className="theme-button"
-                    type="text"
-                    onClick={toggleTheme}
-                    icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
+        <Layout>
+          {auth && (
+            <Header
+              className={`header-container ${
+                theme === "dark" ? "dark-theme" : "light-theme"
+              }`}
+            >
+              <div className="header-content">
+                <div className="profile_container">
+                  <span
+                    className={`user-name ${
+                      theme === "dark" ? "dark-theme" : "light-theme"
+                    }`}
+                  >
+                    {name} | {division}
+                  </span>
+                  <NotificationsPopover
+                    popoverContent={popoverContent}
+                    theme={theme}
+                    notifications={notifications}
                   />
+                  <Popover
+                    content={
+                      <UserPopover
+                        name={name}
+                        handleLogout={handleLogout}
+                        toggleTheme={toggleTheme}
+                        userHandle={userHandle}
+                        userData={userData}
+                      />
+                    }
+                    trigger="click"
+                    placement="bottomRight"
+                  >
+                    <div className="avatar-header">
+                      <AvatarWithName userHandle={userHandle} />
+                    </div>
+                  </Popover>
+
+                  <div
+                    className={`theme-switch ${
+                      theme === "light" ? "light-theme-icon" : "dark-theme-icon"
+                    }`}
+                  >
+                    <Button
+                      className="theme-button"
+                      type="text"
+                      onClick={toggleTheme}
+                      icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          </Header>
-        )}
+            </Header>
+          )}
 
-        <DataProvider>
           {auth && (
             <Content className="content-container">
               <Routes>
@@ -241,11 +257,11 @@ const Universe = () => {
                 />
                 <Route
                   path="/province/:provinceName"
-                  element={<Province currentUser={currentUser} />}
+                  element={<Province currentUser ={currentUser } />}
                 />
                 <Route
                   path="survey"
-                  element={<Survey currentUser={currentUser} />}
+                  element={<Survey currentUser ={currentUser } />}
                 />
                 <Route path="mbu" element={<MBU />} />
                 <Route path="eswm-database" element={<ESWM />} />
@@ -261,9 +277,9 @@ const Universe = () => {
               </Routes>
             </Content>
           )}
-        </DataProvider>
+        </Layout>
       </Layout>
-    </Layout>
+    </DataProvider>
   );
 };
 

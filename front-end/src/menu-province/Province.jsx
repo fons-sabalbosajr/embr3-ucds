@@ -31,7 +31,7 @@ import Highlighter from "react-highlight-words";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
-import CryptoJS from "crypto-js";
+import SectionDetailsModal from "./sectiondetails/SectionDetailsModal";
 import "./province.css";
 
 const capitalizeFirstLetter = (str) => {
@@ -60,7 +60,6 @@ const Province = ({ theme, currentUser }) => {
   const [pageSize, setPageSize] = useState(10);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const capitalizedProvinceName = capitalizeFirstLetter(provinceName);
-  const [filteredData, setFilteredData] = useState(data);
   const [tags, setTags] = useState([]);
   const [inputVisible, setInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -80,6 +79,14 @@ const Province = ({ theme, currentUser }) => {
   const [searchedColumn, setSearchedColumn] = useState("");
   const [searchText, setSearchText] = useState("");
   const [dateRange, setDateRange] = useState([null, null]);
+  const [filteredData, setFilteredData] = useState(originalData);
+  const [sectionCounts, setSectionCounts] = useState({});
+  const [isDateRangeApplied, setIsDateRangeApplied] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSection, setSelectedSection] = useState("");
+  const [sectionDetails, setSectionDetails] = useState([]);
+  const [selectedSectionData, setSelectedSectionData] = useState([]);
+  const [sectionDetailsLoading, setSectionDetailsLoading] = useState(false);
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
@@ -90,23 +97,48 @@ const Province = ({ theme, currentUser }) => {
   const canAccessRangePicker = permissions[4];
 
   useEffect(() => {
-    const fetchDataOnProvinceChange = async () => {
+    const fetchDataForProvince = async () => {
       if (provinceName) {
-        setLoading(true);
         setCurrentProvince(capitalizedProvinceName);
+        setLoading(true);
         try {
           const fetchedData = await fetchData(capitalizedProvinceName);
-          setOriginalData(fetchedData); // Store the complete dataset
-        } catch (error) {
-          console.error("Error fetching data:", error);
+          if (fetchedData) {
+            setOriginalData(fetchedData);
+            setFilteredData(fetchedData);
+            setSectionCounts(calculateSectionCounts(fetchedData));
+          }
+        } catch (err) {
+          console.error("Error fetching data:", err);
         } finally {
           setLoading(false);
         }
       }
     };
 
-    fetchDataOnProvinceChange();
-  }, [provinceName, capitalizedProvinceName, fetchData]);
+    fetchDataForProvince();
+  }, [provinceName, capitalizedProvinceName, setCurrentProvince]);
+
+  const handleReload = async () => {
+    setLoading(true); // Start loading animation
+    setSectionCounts({}); // Clear previous section counts to trigger animation
+
+    try {
+      const fetchedData = await fetchData(capitalizedProvinceName);
+      if (fetchedData) {
+        setFilteredData(fetchedData);
+        setCurrentPage(1); // Reset to the first page after reload
+
+        // Recalculate the section counts based on the new fetched data
+        const newSectionCounts = calculateSectionCounts(fetchedData);
+        setSectionCounts(newSectionCounts); // Update section counts
+      }
+    } catch (error) {
+      console.error("Error reloading data:", error);
+    } finally {
+      setLoading(false); // End loading animation
+    }
+  };
 
   const filterData = () => {
     if (!data || data.length === 0) return [];
@@ -261,6 +293,12 @@ const Province = ({ theme, currentUser }) => {
     setLoading(true);
     const filtered = filterData();
     setFilteredData(filtered);
+
+    const counts = calculateSectionCounts(filtered);
+    setSectionCounts(counts);
+
+    //console.log("Section Counts:", counts);
+
     setLoading(false);
   }, [data, tags, inputValue, dateRange]);
 
@@ -299,12 +337,95 @@ const Province = ({ theme, currentUser }) => {
     }
   }, [data]);
 
+  const calculateSectionCounts = (data) => {
+    const counts = {};
+    data.forEach((record) => {
+      const sections = record.section_incharge
+        ? record.section_incharge.split(",").map((s) => s.trim())
+        : ["NoSectionIncharged"];
+      sections.forEach((section) => {
+        counts[section] = counts[section] ? counts[section] + 1 : 1;
+      });
+    });
+    return counts;
+  };
+
+  const handleSectionClick = async (section, sectionData) => {
+    setSectionDetailsLoading(true); // Set loading to true when the modal opens
+  
+    setSelectedSection(section);
+    setSelectedSectionData(sectionData);
+  
+    try {
+      if (sectionData && sectionData.length > 0) {
+        const { id_no } = sectionData[0];
+        const response = await fetch(
+          `http://localhost:8081/api/ucds-data/${id_no}`
+        );
+        const data = await response.json();
+  
+        if (response.ok) {
+          setSectionDetails(data); // Set the detailed data in state
+        } else {
+          console.error("Error fetching detailed data:", data.error);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      // Ensure that loading is set to false after the fetch completes
+      setSectionDetailsLoading(false);
+      setIsModalOpen(true); // Open the modal after the fetch is completed
+    }
+  };
+  
+  
+
+  const handleCloseSectionModal = () => {
+    setIsModalOpen(false);
+    setSelectedSection("");
+    setSelectedSectionData([]);
+    setSectionDetails([]);
+  };
+
+  const filteredSectionData = (section) => {
+    return filteredData.filter((item) => {
+      const sections = item.section_incharge
+        ? item.section_incharge.split(",").map((s) => s.trim())
+        : ["NoSectionIncharged"];
+      return sections.includes(section);
+    });
+  };
+
+  const calculateFilteredSectionCounts = (data) => {
+    const sectionCounts = {};
+    data.forEach((item) => {
+      const section = item.section || "NoSectionIncharged";
+      sectionCounts[section] = (sectionCounts[section] || 0) + 1;
+    });
+    return sectionCounts;
+  };
+
   const handleDateChange = (dates) => {
-    if (!dates) {
-      setDateRange(null);
-      handleReload();
+    setDateRange(dates);
+
+    if (dates[0] && dates[1]) {
+      setIsDateRangeApplied(true); // Date range is applied
+      const filteredByDate = originalData.filter((record) => {
+        const dateSigned = new Date(record.date_signed); // Assuming date_signed is in a valid format
+        return dateSigned >= dates[0] && dateSigned <= dates[1];
+      });
+
+      setFilteredData(filteredByDate);
+
+      // Calculate section counts for filtered data
+      const counts = calculateSectionCounts(filteredByDate);
+      setSectionCounts(counts);
     } else {
-      setDateRange(dates);
+      setIsDateRangeApplied(false); // Resetting date range
+      setFilteredData(originalData); // Reset to original data if no date range
+      setSectionCounts(calculateSectionCounts(originalData)); // Reset section counts
+      console.log("No date range selected. Resetting to original data.");
     }
   };
 
@@ -374,13 +495,26 @@ const Province = ({ theme, currentUser }) => {
     onFilter: (value, record) => {
       const lowerValue = value.toLowerCase();
 
+      // Only search within the filtered data
+      // Check if the record is in the filtered data
+      const isInFilteredData = filteredData.includes(record);
+
+      if (dataIndex === "section_incharge") {
+        return (
+          isInFilteredData &&
+          record.section_incharge &&
+          record.section_incharge.toLowerCase().includes(lowerValue)
+        );
+      }
+
       // Handle filtering for "pismu_tracking"
       if (dataIndex === "pismu_tracking") {
         return (
-          (record.pismu_tracking === "✔" &&
+          isInFilteredData &&
+          ((record.pismu_tracking === "✔" &&
             (lowerValue.includes("received") ||
               lowerValue.includes("pismu"))) ||
-          (record.pismu_tracking !== "✔" && !lowerValue.includes("received"))
+            (record.pismu_tracking !== "✔" && !lowerValue.includes("received")))
         );
       }
 
@@ -389,15 +523,16 @@ const Province = ({ theme, currentUser }) => {
         ["date_monitored", "date_routed", "date_signed"].includes(dataIndex)
       ) {
         return (
+          isInFilteredData &&
           record[dataIndex] &&
           record[dataIndex].toLowerCase().includes(lowerValue)
         );
       }
 
       // Handle other simple text columns
-      return record[dataIndex]
+      return isInFilteredData && record[dataIndex]
         ? record[dataIndex].toString().toLowerCase().includes(lowerValue)
-        : "";
+        : false;
     },
     onFilterDropdownOpenChange: (visible) => {
       if (visible) {
@@ -420,7 +555,7 @@ const Province = ({ theme, currentUser }) => {
   const handleSearch = (selectedKeys, confirm, dataIndex) => {
     confirm();
     setSearchedColumn(dataIndex);
-    setSearchText(selectedKeys[0]);
+    setSearchText(selectedKeys[0] || "");
 
     // Apply filtering logic based on selectedKeys
     const lowerValue = selectedKeys[0].toLowerCase();
@@ -560,6 +695,7 @@ const Province = ({ theme, currentUser }) => {
 
     // Update filteredData state
     setFilteredData(filtered);
+    setSearchedColumn(dataIndex);
   };
 
   const handleReset = (clearFilters) => {
@@ -592,6 +728,7 @@ const Province = ({ theme, currentUser }) => {
 
       case "PEMU_Nueva Ecija":
       case "PEMU_NUEVA ECIJA":
+      case "PEMU_NUEVA_ECIJA":
         return "#FFE225"; // Yellow
 
       case "PEMU_Pampanga":
@@ -617,6 +754,9 @@ const Province = ({ theme, currentUser }) => {
       case "AWECMES":
       case "awecmes":
         return "#c8e6c9";
+
+      case "TCHWMS/MBU":
+        return "linear-gradient(to right, #936DDF, #FF9B3E)"; // Dual tone color for TCHWMS/MBU
 
       default:
         return "transparent"; // Default transparent background
@@ -644,9 +784,11 @@ const Province = ({ theme, currentUser }) => {
     setInputVisible(false);
     setInputValue("");
 
-    // Re-filter the data after adding the tag or applying filter
-    const filtered = filterData(); // Call your existing filtering function
+    // Re-filter the data and update section counts
+    const filtered = filterData();
     setFilteredData(filtered);
+    const filteredSectionCounts = calculateFilteredSectionCounts(filtered);
+    setSectionCounts(filteredSectionCounts); // Update section counts for filtered data
   };
 
   const tagPlusStyle = {
@@ -674,18 +816,6 @@ const Province = ({ theme, currentUser }) => {
   const filteredDuplicateData = filterDuplicates
     ? paginatedData.filter((record) => duplicateEccCnc.includes(record.ecc_cnc))
     : paginatedData;
-
-  const handleReload = async () => {
-    try {
-      setLoading(true); // Start loading
-      await fetchData(provinceName);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("Error reloading data:", error);
-    } finally {
-      setLoading(false); // End loading
-    }
-  };
 
   const handleToggleEdit = () => {
     setIsEditing(!isEditing);
@@ -937,6 +1067,47 @@ const Province = ({ theme, currentUser }) => {
 
     // Reset the selectedRowKeys after delisting
     setSelectedDuplicateRowKeys([]);
+  };
+
+  const normalizeSectionName = (section) => {
+    // Normalize section names by converting to uppercase and removing spaces (to handle variations)
+    return section.replace(/\s+/g, "_").toUpperCase(); // Replace spaces with underscores and convert to uppercase
+  };
+
+  const mergeSections = (sectionCounts) => {
+    const mergedSections = {};
+
+    Object.entries(sectionCounts).forEach(([section, count]) => {
+      // Normalize section names
+      const normalizedSection = normalizeSectionName(section);
+
+      if (normalizedSection) {
+        if (mergedSections[normalizedSection]) {
+          // Merge counts if section is the same after normalization
+          mergedSections[normalizedSection] += count;
+        } else {
+          // New section, just add the count
+          mergedSections[normalizedSection] = count;
+        }
+      } else {
+        // If section name is empty or blank, treat it as "No Section Incharged"
+        if (mergedSections["NoSectionIncharged"]) {
+          mergedSections["NoSectionIncharged"] += count; // Merge counts if blank
+        } else {
+          mergedSections["NoSectionIncharged"] = count; // Initialize "No Section Incharged"
+        }
+      }
+    });
+
+    // Sort the sections from highest to lowest based on the counts
+    const sortedSections = Object.entries(mergedSections)
+      .sort((a, b) => b[1] - a[1]) // Sort by the second item (count) in descending order
+      .reduce((acc, [key, value]) => {
+        acc[key] = value;
+        return acc;
+      }, {});
+
+    return sortedSections;
   };
 
   const duplicateColumns = [
@@ -1667,7 +1838,7 @@ const Province = ({ theme, currentUser }) => {
         >
           <div
             className="total-count"
-            style={{ margin: "10px 0", textAlign: "left" }}
+            style={{ margin: "5px 0", textAlign: "left" }}
           >
             <div
               style={{
@@ -1680,6 +1851,7 @@ const Province = ({ theme, currentUser }) => {
                 <h4 style={{ marginRight: 16 }}>
                   Industry Count: {filteredData.length}
                 </h4>
+
                 <div style={{ display: "flex", alignItems: "center" }}>
                   {inputVisible ? (
                     <Input
@@ -1705,6 +1877,7 @@ const Province = ({ theme, currentUser }) => {
                   {tagChild}
                 </div>
               </div>
+
               <div style={{ display: "flex", alignItems: "center" }}>
                 {canAccessRangePicker && (
                   <>
@@ -1734,6 +1907,101 @@ const Province = ({ theme, currentUser }) => {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="section-result">
+            {loading ? (
+              // Display a spinner or placeholder during loading
+              <div className="loading-placeholder">
+                <div className="loading-spinner"></div>
+                <p className="loading-label">Loading section counts...</p>
+              </div>
+            ) : isDateRangeApplied &&
+              sectionCounts &&
+              Object.keys(sectionCounts).length > 0 ? (
+              <div className="section-breakdown">
+                {Object.entries(sectionCounts).map(([section, count]) => (
+                  <div
+                    key={section}
+                    onClick={() =>
+                      handleSectionClick(filteredSectionData(section))
+                    }
+                    className="section-item"
+                    style={{
+                      backgroundColor:
+                        section === "NoSectionIncharged"
+                          ? "gray"
+                          : sectionBackgroundColor(section),
+                    }}
+                  >
+                    <span className="section-label">
+                      {section === "NoSectionIncharged" || section === ""
+                        ? "No Section Incharged"
+                        : section}
+                      :
+                    </span>
+                    <span className="section-count">{count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="section-breakdown">
+                {Object.entries(sectionCounts).length > 0 ? (
+                  Object.entries(sectionCounts).map(([section, count]) => {
+                    // Check if the section is blank or "No Section Incharged"
+                    const displaySection =
+                      section === "NoSectionIncharged" || !section
+                        ? "No Section Incharged"
+                        : section;
+
+                    return (
+                      <div
+                        key={section || "NoSectionIncharged"} // Use a fallback key for blank sections
+                        onClick={() =>
+                          handleSectionClick(
+                            displaySection,
+                            filteredSectionData(section)
+                          )
+                        }
+                        className="section-item"
+                        style={{
+                          backgroundColor:
+                            section === "NoSectionIncharged" || !section
+                              ? "gray"
+                              : sectionBackgroundColor(section), // Gray for blank or "No Section Incharged"
+                        }}
+                      >
+                        <span className="section-label">{displaySection}:</span>
+                        <span className="section-count">{count}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div
+                    className="no-sections-message"
+                    style={{
+                      backgroundColor: "gray",
+                      color: "white",
+                      padding: "10px",
+                      borderRadius: "5px",
+                      textAlign: "center",
+                      fontSize: "10px",
+                    }}
+                  >
+                    Processing...
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SectionDetails Modal */}
+            <SectionDetailsModal
+              visible={isModalOpen}
+              section={selectedSection}
+              data={selectedSectionData}
+              onClose={handleCloseSectionModal}
+              loading={sectionDetailsLoading} // Use a separate loading state for modal
+            />
           </div>
         </ConfigProvider>
 

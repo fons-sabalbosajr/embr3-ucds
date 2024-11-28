@@ -988,7 +988,6 @@ const Survey = ({ theme, currentUser }) => {
                   <CheckCircleFilled
                     style={{ marginRight: 8, color: "#faad14" }}
                   />{" "}
-                  {/* Yellow */}
                   {record.date_signed}
                 </Tooltip>
               </div>
@@ -1013,6 +1012,7 @@ const Survey = ({ theme, currentUser }) => {
             aria-label="View"
             size="small"
             className="btn-action"
+            type="primary"
           />
           <Button
             type="primary"

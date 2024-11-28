@@ -287,6 +287,90 @@
   font-weight: 500;
 }
 
+.section-result {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.section-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.section-item {
+  padding: 5px 10px;
+  border-radius: 5px;
+  margin: 2px 5px;
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.section-label {
+  margin-right: 5px;
+}
+
+.section-count {
+  font-weight: bold;
+}
+
+
+/* Spinning animation */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Placeholder for loading state */
+.loading-placeholder {
+  text-align: center;
+  padding: 5px;
+  display: flex;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 4px solid #ccc;
+  border-top-color: #007bff; /* Accent color */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  align-items: center;
+}
+
+.no-sections-message {
+  background-color: gray;
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  text-align: center;
+  font-size: 10px;
+}
+
+.loading-label{
+  text-align: left;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.section-item {
+  cursor: pointer; /* Change cursor to hand pointer on hover */
+  transition: background-color 0.3s ease; /* Smooth transition for background color change */
+}
+
+.section-item:hover {
+  background-color: #dcdcdc; /* Lighter color when hovered */
+}
+
+
+
+
+
 ///ROW COLORS===================================================
 :root {
   --color-e8dff5: #e8dff5;
