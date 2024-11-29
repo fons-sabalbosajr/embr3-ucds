@@ -352,10 +352,10 @@ const Province = ({ theme, currentUser }) => {
 
   const handleSectionClick = async (section, sectionData) => {
     setSectionDetailsLoading(true); // Set loading to true when the modal opens
-  
+
     setSelectedSection(section);
     setSelectedSectionData(sectionData);
-  
+
     try {
       if (sectionData && sectionData.length > 0) {
         const { id_no } = sectionData[0];
@@ -363,7 +363,7 @@ const Province = ({ theme, currentUser }) => {
           `http://localhost:8081/api/ucds-data/${id_no}`
         );
         const data = await response.json();
-  
+
         if (response.ok) {
           setSectionDetails(data); // Set the detailed data in state
         } else {
@@ -378,8 +378,6 @@ const Province = ({ theme, currentUser }) => {
       setIsModalOpen(true); // Open the modal after the fetch is completed
     }
   };
-  
-  
 
   const handleCloseSectionModal = () => {
     setIsModalOpen(false);
@@ -1069,46 +1067,48 @@ const Province = ({ theme, currentUser }) => {
     setSelectedDuplicateRowKeys([]);
   };
 
-  const normalizeSectionName = (section) => {
-    // Normalize section names by converting to uppercase and removing spaces (to handle variations)
-    return section.replace(/\s+/g, "_").toUpperCase(); // Replace spaces with underscores and convert to uppercase
+  const normalizeSectionName = (sectionName) => {
+    if (!sectionName) return "No Section Incharged"; // Handle blank or undefined section names
+    return sectionName.trim().toLowerCase().replace(/[^a-z0-9]/gi, ""); // Normalize by trimming, converting to lowercase, and removing symbols
   };
-
+  
   const mergeSections = (sectionCounts) => {
     const mergedSections = {};
-
+    
     Object.entries(sectionCounts).forEach(([section, count]) => {
-      // Normalize section names
       const normalizedSection = normalizeSectionName(section);
-
+      
       if (normalizedSection) {
         if (mergedSections[normalizedSection]) {
-          // Merge counts if section is the same after normalization
-          mergedSections[normalizedSection] += count;
+          mergedSections[normalizedSection].count += count;
         } else {
-          // New section, just add the count
-          mergedSections[normalizedSection] = count;
+          mergedSections[normalizedSection] = {
+            count: count,
+            originalName: section, // Store the original section name
+          };
         }
       } else {
-        // If section name is empty or blank, treat it as "No Section Incharged"
-        if (mergedSections["NoSectionIncharged"]) {
-          mergedSections["NoSectionIncharged"] += count; // Merge counts if blank
+        if (mergedSections["No Section Incharged"]) {
+          mergedSections["No Section Incharged"].count += count;
         } else {
-          mergedSections["NoSectionIncharged"] = count; // Initialize "No Section Incharged"
+          mergedSections["No Section Incharged"] = {
+            count: count,
+            originalName: "No Section Incharged",
+          };
         }
       }
     });
-
-    // Sort the sections from highest to lowest based on the counts
-    const sortedSections = Object.entries(mergedSections)
-      .sort((a, b) => b[1] - a[1]) // Sort by the second item (count) in descending order
-      .reduce((acc, [key, value]) => {
-        acc[key] = value;
-        return acc;
+  
+    return Object.entries(mergedSections)
+      .sort(([, { count: countA }], [, { count: countB }]) => countB - countA) // Sort descending by count
+      .reduce((sorted, [key, value]) => {
+        sorted[value.originalName] = value.count; // Use the original name as the key
+        return sorted;
       }, {});
-
-    return sortedSections;
   };
+
+  // Assuming sectionCounts is the original data you provided
+  const mergedSectionCounts = mergeSections(sectionCounts);
 
   const duplicateColumns = [
     {
@@ -1858,7 +1858,7 @@ const Province = ({ theme, currentUser }) => {
                       ref={inputRef}
                       type="primary"
                       size="small"
-                      style={{ width: 200, marginRight: 16 }} // Add margin to separate from other elements
+                      style={{ width: 200, marginRight: 16 }}
                       value={inputValue}
                       onChange={handleInputChange}
                       onBlur={handleInputConfirm}
@@ -1920,7 +1920,7 @@ const Province = ({ theme, currentUser }) => {
               sectionCounts &&
               Object.keys(sectionCounts).length > 0 ? (
               <div className="section-breakdown">
-                {Object.entries(sectionCounts).map(([section, count]) => (
+                {Object.entries(mergedSectionCounts).map(([section, count]) => (
                   <div
                     key={section}
                     onClick={() =>
@@ -1929,13 +1929,13 @@ const Province = ({ theme, currentUser }) => {
                     className="section-item"
                     style={{
                       backgroundColor:
-                        section === "NoSectionIncharged"
+                        section === "nosectionincharged" // normalized version
                           ? "gray"
                           : sectionBackgroundColor(section),
                     }}
                   >
                     <span className="section-label">
-                      {section === "NoSectionIncharged" || section === ""
+                      {section === "nosectionincharged" || section === ""
                         ? "No Section Incharged"
                         : section}
                       :
@@ -1946,36 +1946,39 @@ const Province = ({ theme, currentUser }) => {
               </div>
             ) : (
               <div className="section-breakdown">
-                {Object.entries(sectionCounts).length > 0 ? (
-                  Object.entries(sectionCounts).map(([section, count]) => {
-                    // Check if the section is blank or "No Section Incharged"
-                    const displaySection =
-                      section === "NoSectionIncharged" || !section
-                        ? "No Section Incharged"
-                        : section;
+                {Object.entries(mergedSectionCounts).length > 0 ? (
+                  Object.entries(mergedSectionCounts).map(
+                    ([section, count]) => {
+                      const displaySection =
+                        section === "nosectionincharged" || !section
+                          ? "No Section Incharged"
+                          : section;
 
-                    return (
-                      <div
-                        key={section || "NoSectionIncharged"} // Use a fallback key for blank sections
-                        onClick={() =>
-                          handleSectionClick(
-                            displaySection,
-                            filteredSectionData(section)
-                          )
-                        }
-                        className="section-item"
-                        style={{
-                          backgroundColor:
-                            section === "NoSectionIncharged" || !section
-                              ? "gray"
-                              : sectionBackgroundColor(section), // Gray for blank or "No Section Incharged"
-                        }}
-                      >
-                        <span className="section-label">{displaySection}:</span>
-                        <span className="section-count">{count}</span>
-                      </div>
-                    );
-                  })
+                      return (
+                        <div
+                          key={section || "No Section Incharged"}
+                          onClick={() =>
+                            handleSectionClick(
+                              displaySection,
+                              filteredSectionData(section)
+                            )
+                          }
+                          className="section-item"
+                          style={{
+                            backgroundColor:
+                              section === "NoSectionIncharged" || !section
+                                ? "gray"
+                                : sectionBackgroundColor(section),
+                          }}
+                        >
+                          <span className="section-label">
+                            {displaySection}:
+                          </span>
+                          <span className="section-count">{count}</span>
+                        </div>
+                      );
+                    }
+                  )
                 ) : (
                   <div
                     className="no-sections-message"

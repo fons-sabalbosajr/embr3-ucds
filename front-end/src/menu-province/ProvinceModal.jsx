@@ -232,7 +232,7 @@ const ProvinceModal = ({
               setShouldRefreshTable(true);
             }
             setIsEditing(false);
-            handleReload();
+            //handleReload();
 
             // Get the latest transaction ID from the ucds-log collection
             const logResponse = await axios.get(
