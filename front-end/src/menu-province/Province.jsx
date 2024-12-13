@@ -120,18 +120,20 @@ const Province = ({ theme, currentUser }) => {
   }, [provinceName, capitalizedProvinceName, setCurrentProvince]);
 
   const handleReload = async () => {
-    setLoading(true); // Start loading animation
-    setSectionCounts({}); // Clear previous section counts to trigger animation
+    setLoading(true);
+    setSectionCounts({});
 
     try {
       const fetchedData = await fetchData(capitalizedProvinceName);
       if (fetchedData) {
         setFilteredData(fetchedData);
-        setCurrentPage(1); // Reset to the first page after reload
+        setCurrentPage(1);
 
         // Recalculate the section counts based on the new fetched data
         const newSectionCounts = calculateSectionCounts(fetchedData);
         setSectionCounts(newSectionCounts); // Update section counts
+
+        setIsDateRangeApplied(false);
       }
     } catch (error) {
       console.error("Error reloading data:", error);
@@ -351,10 +353,15 @@ const Province = ({ theme, currentUser }) => {
   };
 
   const handleSectionClick = async (section, sectionData) => {
-    setSectionDetailsLoading(true); // Set loading to true when the modal opens
+    if (isDateRangeApplied) {
+      console.log("Cannot click on section because date range is applied");
+      return; // Prevent further action
+    }
 
+    const validSectionData = Array.isArray(sectionData) ? sectionData : [];
+    //console.log("Section Data on Click:", validSectionData);
     setSelectedSection(section);
-    setSelectedSectionData(sectionData);
+    setSelectedSectionData(validSectionData);
 
     try {
       if (sectionData && sectionData.length > 0) {
@@ -365,7 +372,7 @@ const Province = ({ theme, currentUser }) => {
         const data = await response.json();
 
         if (response.ok) {
-          setSectionDetails(data); // Set the detailed data in state
+          setSectionDetails(data);
         } else {
           console.error("Error fetching detailed data:", data.error);
         }
@@ -373,9 +380,7 @@ const Province = ({ theme, currentUser }) => {
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
-      // Ensure that loading is set to false after the fetch completes
-      setSectionDetailsLoading(false);
-      setIsModalOpen(true); // Open the modal after the fetch is completed
+      setIsModalOpen(true);
     }
   };
 
@@ -405,26 +410,35 @@ const Province = ({ theme, currentUser }) => {
   };
 
   const handleDateChange = (dates) => {
-    setDateRange(dates);
-
-    if (dates[0] && dates[1]) {
-      setIsDateRangeApplied(true); // Date range is applied
-      const filteredByDate = originalData.filter((record) => {
-        const dateSigned = new Date(record.date_signed); // Assuming date_signed is in a valid format
-        return dateSigned >= dates[0] && dateSigned <= dates[1];
-      });
-
-      setFilteredData(filteredByDate);
-
-      // Calculate section counts for filtered data
-      const counts = calculateSectionCounts(filteredByDate);
-      setSectionCounts(counts);
-    } else {
-      setIsDateRangeApplied(false); // Resetting date range
+    // Check if dates is valid and contains two elements
+    if (
+      !dates ||
+      !Array.isArray(dates) ||
+      dates.length < 2 ||
+      !dates[0] ||
+      !dates[1]
+    ) {
+      setIsDateRangeApplied(false); // Date range is not applied
       setFilteredData(originalData); // Reset to original data if no date range
       setSectionCounts(calculateSectionCounts(originalData)); // Reset section counts
-      console.log("No date range selected. Resetting to original data.");
+      console.log("No valid date range selected. Resetting to original data.");
+      return; // Exit early if dates are invalid
     }
+
+    // Proceed with filtering if dates are valid
+    setDateRange(dates);
+    setIsDateRangeApplied(true); // Date range is applied
+
+    const filteredByDate = originalData.filter((record) => {
+      const dateSigned = new Date(record.date_signed); // Assuming date_signed is in a valid format
+      return dateSigned >= dates[0] && dateSigned <= dates[1];
+    });
+
+    setFilteredData(filteredByDate);
+
+    // Calculate section counts for filtered data
+    const counts = calculateSectionCounts(filteredByDate);
+    setSectionCounts(counts);
   };
 
   const onRowClick = (record) => {
@@ -1069,15 +1083,18 @@ const Province = ({ theme, currentUser }) => {
 
   const normalizeSectionName = (sectionName) => {
     if (!sectionName) return "No Section Incharged"; // Handle blank or undefined section names
-    return sectionName.trim().toLowerCase().replace(/[^a-z0-9]/gi, ""); // Normalize by trimming, converting to lowercase, and removing symbols
+    return sectionName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/gi, ""); // Normalize by trimming, converting to lowercase, and removing symbols
   };
-  
+
   const mergeSections = (sectionCounts) => {
     const mergedSections = {};
-    
+
     Object.entries(sectionCounts).forEach(([section, count]) => {
       const normalizedSection = normalizeSectionName(section);
-      
+
       if (normalizedSection) {
         if (mergedSections[normalizedSection]) {
           mergedSections[normalizedSection].count += count;
@@ -1098,7 +1115,7 @@ const Province = ({ theme, currentUser }) => {
         }
       }
     });
-  
+
     return Object.entries(mergedSections)
       .sort(([, { count: countA }], [, { count: countB }]) => countB - countA) // Sort descending by count
       .reduce((sorted, [key, value]) => {
@@ -1923,15 +1940,20 @@ const Province = ({ theme, currentUser }) => {
                 {Object.entries(mergedSectionCounts).map(([section, count]) => (
                   <div
                     key={section}
-                    onClick={() =>
-                      handleSectionClick(filteredSectionData(section))
+                    onClick={
+                      () =>
+                        !isDateRangeApplied &&
+                        handleSectionClick(filteredSectionData(section)) // Only allow click if date range is not applied
                     }
-                    className="section-item"
+                    className={`section-item ${
+                      isDateRangeApplied ? "disabled" : ""
+                    }`}
                     style={{
                       backgroundColor:
                         section === "nosectionincharged" // normalized version
                           ? "gray"
                           : sectionBackgroundColor(section),
+                      cursor: isDateRangeApplied ? "not-allowed" : "pointer", // Change cursor if disabled
                     }}
                   >
                     <span className="section-label">
@@ -1957,18 +1979,25 @@ const Province = ({ theme, currentUser }) => {
                       return (
                         <div
                           key={section || "No Section Incharged"}
-                          onClick={() =>
-                            handleSectionClick(
-                              displaySection,
-                              filteredSectionData(section)
-                            )
+                          onClick={
+                            () =>
+                              !isDateRangeApplied &&
+                              handleSectionClick(
+                                displaySection,
+                                filteredSectionData(section)
+                              ) // Only allow click if date range is not applied
                           }
-                          className="section-item"
+                          className={`section-item ${
+                            isDateRangeApplied ? "disabled" : ""
+                          }`}
                           style={{
                             backgroundColor:
                               section === "NoSectionIncharged" || !section
                                 ? "gray"
                                 : sectionBackgroundColor(section),
+                            cursor: isDateRangeApplied
+                              ? "not-allowed"
+                              : "pointer", // Change cursor if disabled
                           }}
                         >
                           <span className="section-label">

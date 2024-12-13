@@ -367,6 +367,20 @@
   background-color: #dcdcdc; /* Lighter color when hovered */
 }
 
+/* CSS for disabling section clicks when the date range filter is applied */
+.disabled {
+  opacity: 0.5;
+  pointer-events: none; /* Prevent interaction */
+  background-color: #f0f0f0; /* Light grey background */
+}
+
+.section-item {
+  cursor: pointer;
+}
+
+.section-item.disabled {
+  cursor: not-allowed;
+}
 
 
 

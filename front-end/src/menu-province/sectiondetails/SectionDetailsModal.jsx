@@ -1,6 +1,15 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Modal, Table, Button, Tooltip, Pagination, Spin, Input } from "antd"; // Import Ant Design components
+import {
+  Modal,
+  Table,
+  Button,
+  Tooltip,
+  Pagination,
+  Spin,
+  Input,
+  Checkbox, DatePicker, Select
+} from "antd"; // Import Ant Design components
 import {
   ReloadOutlined,
   ExportOutlined,
@@ -15,6 +24,9 @@ import {
 } from "@ant-design/icons";
 import "./sectiondetailsmodal.css";
 import ProvinceModal from "../ProvinceModal";
+import moment from "moment"; // For date comparison
+
+const { RangePicker } = DatePicker;
 
 const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -23,7 +35,52 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [filteredData, setFilteredData] = useState(data);
+  const [filteredData, setFilteredData] = useState(data); // Filtered data based on checkbox and dates
+  const [originalData, setOriginalData] = useState(data); // Store the original dataset
+  const [isChecked, setIsChecked] = useState(false); // Checkbox state
+  const [dateRange, setDateRange] = useState([null, null]); // Date range for filtering (start, end)
+  const [pismuTrackingFilter, setPismuTrackingFilter] = useState(null); 
+
+  // Filter the records based on the selected filters
+  useEffect(() => {
+    setOriginalData(data); // Ensure we always have the original data to work with
+    filterRecords();
+  }, [data]);
+
+  // Filtering function
+  const filterRecords = () => {
+    let filtered = [...originalData]; // Work with a copy of the original data
+
+    // Filter by Pismu Tracking (if checked)
+    if (isChecked) {
+      filtered = filtered.filter((record) => record.pismu_tracking === "✔");
+    }
+
+    // Filter by Date Range (date_monitored, date_routed, date_signed)
+    if (dateRange[0] && dateRange[1]) {
+      const start = moment(dateRange[0]).startOf("day");
+      const end = moment(dateRange[1]).endOf("day");
+      filtered = filtered.filter((record) => {
+        const dateMonitored = record.date_monitored ? moment(record.date_monitored) : null;
+        const dateRouted = record.date_routed ? moment(record.date_routed) : null;
+        const dateSigned = record.date_signed ? moment(record.date_signed) : null;
+
+        return (
+          (dateMonitored && dateMonitored.isBetween(start, end, null, "[]")) ||
+          (dateRouted && dateRouted.isBetween(start, end, null, "[]")) ||
+          (dateSigned && dateSigned.isBetween(start, end, null, "[]"))
+        );
+      });
+    }
+
+    // Filter by pismu_tracking
+    if (pismuTrackingFilter !== null) {
+      filtered = filtered.filter((record) => (pismuTrackingFilter ? record.pismu_tracking === "✔" : record.pismu_tracking !== "✔"));
+    }
+
+    setFilteredData(filtered);
+  };
+  
 
   const getColumnSearchProps = (dataIndex) => ({
     filterDropdown: ({
@@ -61,10 +118,13 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         >
           Search
         </Button>
-        <Button onClick={() => {
-          clearFilters();
-          setFilteredData(data); // Reset filtered data to original data
-        }} size="small">
+        <Button
+          onClick={() => {
+            clearFilters();
+            setFilteredData(data); // Reset filtered data to original data
+          }}
+          size="small"
+        >
           Reset
         </Button>
       </div>
@@ -172,11 +232,26 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
     setPageSize(pageSize); // Update the page size when changed
   };
 
-  // Calculate the data to display based on current page and page size
-  const paginatedData = data.slice(
+  // Paginate data (for the current page and page size)
+  const paginatedData = filteredData.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+
+  useEffect(() => {
+    if (isChecked) {
+      // Filter records where pismu_tracking is "✔"
+      setFilteredData(data.filter((record) => record.pismu_tracking === "✔"));
+    } else {
+      // If checkbox is unchecked, show all records
+      setFilteredData(data);
+    }
+  }, [isChecked, data]);
+
+  // Checkbox change handler
+  const handleCheckboxChange = (e) => {
+    setIsChecked(e.target.checked);
+  };
 
   const columns = [
     {
@@ -297,7 +372,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         );
       },
       align: "center",
-      width: 150,
+      width: 200,
     },
     {
       title: "Monitoring Status",
@@ -307,42 +382,105 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
       render: (text, record) => (
         <div>
           <p className="monitoring-label">
-            <a
-              href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                record.iis_no
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {record.iis_no ? record.iis_no : ""}
-            </a>
-          </p>
-          <p className="monitoring-label">
             <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
             Date Monitored:{" "}
             {record.date_monitored ? record.date_monitored : "N/A"}
           </p>
-
+    
           <p className="monitoring-label">
             <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
             Date Routed: {record.date_routed ? record.date_routed : "N/A"}
           </p>
+    
           <p className="monitoring-label">
             <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
             Date Signed: {record.date_signed ? record.date_signed : "N/A"}
           </p>
-
-          {/* Conditionally Render Received by Planning Unit */}
-          {record.pismu_tracking === "✔" ? (
-            <span className="monitoring-label">
-              <CheckCircleFilled style={{ color: "#0D92F4" }} />
-              <span style={{ marginLeft: 8 }}>Received by Planning Unit</span>
-            </span>
-          ) : (
-            <span></span>
-          )}
         </div>
       ),
+      filterDropdown: ({
+        setSelectedKeys,
+        selectedKeys,
+        confirm,
+        clearFilters,
+      }) => {
+        // Local state for managing the selected date field
+        const [dateField, setDateField] = useState("date_monitored"); // Default to date_monitored
+        const [dateRange, setDateRange] = useState([null, null]); // Local date range state
+    
+        // Handle date range change
+        const handleDateRangeChange = (dates) => {
+          setDateRange(dates);
+          setSelectedKeys(dates && dates.length ? [dates] : []); // Update Ant Design's filter state
+        };
+    
+        // Apply the selected date range filter
+        const handleFilter = () => {
+          if (dateRange && dateRange[0] && dateRange[1]) {
+            confirm(); // Apply the filter
+          }
+        };
+    
+        return (
+          <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: "8px" }}>
+            {/* Dropdown to select the date field */}
+            <Select
+              size="small"
+              defaultValue="date_monitored"
+              style={{ width: 200 }}
+              onChange={(value) => setDateField(value)}
+            >
+              <Select.Option value="date_monitored">Date Monitored</Select.Option>
+              <Select.Option value="date_routed">Date Routed</Select.Option>
+              <Select.Option value="date_signed">Date Signed</Select.Option>
+            </Select>
+    
+            {/* Date Range Picker */}
+            <DatePicker.RangePicker
+              size="small"
+              style={{ width: 200 }}
+              value={dateRange}
+              onChange={handleDateRangeChange}
+            />
+    
+            {/* Action Buttons */}
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <Button
+                type="primary"
+                onClick={handleFilter}
+                icon={<SearchOutlined />}
+                size="small"
+                style={{ width: 90 }}
+              >
+                Search
+              </Button>
+              <Button
+                onClick={() => {
+                  clearFilters(); // Clear Ant Design's filter state
+                  setDateRange([null, null]); // Clear local date range
+                  setFilteredData(data); // Reset filtered data to original data
+                }}
+                size="small"
+              >
+                Reset
+              </Button>
+            </div>
+          </div>
+        );
+      },
+      onFilter: (value, record) => {
+        // Ensure value is an array
+        if (!Array.isArray(value) || value.length !== 2) {
+          return true; // No filter applied if value is not a valid array
+        }
+      
+        const [start, end] = value; // Safely destructure start and end
+        if (!start || !end) return true; // Skip filtering if dates are not set
+      
+        const selectedField = dateField || "date_monitored"; // Default to date_monitored
+        const recordDate = record[selectedField] ? moment(record[selectedField]) : null;
+        return recordDate && recordDate.isBetween(start, end, "days", "[]");
+      },      
     },
     {
       title: "Actions",
@@ -396,17 +534,24 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         zIndex={1050}
       >
         {selectedRecord && (
-      <ProvinceModal
-        visible={isModalVisible}
-        record={selectedRecord}
-        zIndex={1060} // Set a higher zIndex for the ProvinceModal so it stays above the SectionDetailsModal
-      />
-    )}
+          <ProvinceModal
+            visible={isModalVisible}
+            record={selectedRecord}
+            zIndex={1060} // Set a higher zIndex for the ProvinceModal so it stays above the SectionDetailsModal
+          />
+        )}
       </Modal>
 
       <Modal
-         title={
-          <div className="modal-title-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        title={
+          <div
+            className="modal-title-container"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <span className="modal-title" style={{ whiteSpace: "normal" }}>
               Result Details for {section}
             </span>
@@ -416,10 +561,9 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
                 whiteSpace: "normal",
                 textAlign: "right",
                 fontSize: "12px", // adjust size if needed
-                
               }}
             >
-              Records Found: {data ? data.length : 0}
+              Records Found: {filteredData ? filteredData.length : 0}
             </span>
           </div>
         }
@@ -442,7 +586,18 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
           </div>
         ) : (
           <>
-            {data && data.length > 0 ? (
+            {/* Checkbox for filtering by "Received by Planning" */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
+            <Checkbox
+              checked={isChecked}
+              onChange={handleCheckboxChange}
+            >
+              Received by Planning Unit
+            </Checkbox>
+          </div>
+
+            {/* Table to display filtered records */}
+            {filteredData && filteredData.length > 0 ? (
               <>
                 <Table
                   columns={columns}
@@ -450,9 +605,10 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
                   rowKey="id_no"
                   pagination={false}
                   bordered
+                 
                 />
                 <Pagination
-                  total={data.length}
+                  total={filteredData.length}
                   current={currentPage}
                   pageSize={pageSize}
                   onChange={handlePageChange}

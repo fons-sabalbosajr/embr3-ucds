@@ -21,11 +21,15 @@ const GenInfo = ({
   useEffect(() => {
     const fetchProjectData = async () => {
       if (!editedRecord?.industry_class) {
-        // If industry_class is blank, clear the related fields
-        setProjectData({});
-        handleChange("psic_code", "");
-        handleChange("industry_type", "");
-        handleChange("industry_subtype", "");
+        // If industry_class is blank, clear the related fields and set default values
+        setProjectData({
+          psic_code: "N/A",
+          industry_type: "N/A",
+          industry_subtype: "N/A",
+        });
+        handleChange("psic_code", "N/A");
+        handleChange("industry_type", "N/A");
+        handleChange("industry_subtype", "N/A");
         return;
       }
 
@@ -36,18 +40,28 @@ const GenInfo = ({
         );
         if (response.data) {
           const { psic_code, project_type, project_subtype } = response.data;
+          // If no valid data from the API, fallback to "N/A"
           setProjectData({
-            psic_code: psic_code,
-            industry_type: project_type,
-            industry_subtype: project_subtype,
+            psic_code: psic_code || "N/A",
+            industry_type: project_type || "N/A",
+            industry_subtype: project_subtype || "N/A",
           });
-          // Automatically update fields based on project data
-          handleChange("psic_code", psic_code || ""); // Default to empty string if undefined
-          handleChange("industry_type", project_type || "");
-          handleChange("industry_subtype", project_subtype || "");
+    
+          // Update fields with fetched data, fallback to "N/A" if data is missing
+          handleChange("psic_code", psic_code || "N/A");
+          handleChange("industry_type", project_type || "N/A");
+          handleChange("industry_subtype", project_subtype || "N/A");
         }
       } catch (error) {
         console.error("Error fetching project data:", error);
+        setProjectData({
+          psic_code: "N/A",
+          industry_type: "N/A",
+          industry_subtype: "N/A",
+        });
+        handleChange("psic_code", "N/A");
+        handleChange("industry_type", "N/A");
+        handleChange("industry_subtype", "N/A");
       }
     };
 
