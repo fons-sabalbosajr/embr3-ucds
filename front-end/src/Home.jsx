@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Button } from "antd";
 import { MenuOutlined, CloseOutlined } from "@ant-design/icons";
 import homelogo from "./assets/emblogomenu.png";
@@ -19,37 +19,51 @@ const Home = () => {
         <div className="logo_container">
           <img src={homelogo} alt="Logo" className="logo" />
         </div>
-        <div className="menu_icon" onClick={toggleMenu}>
+        <button
+          className="menu_icon"
+          onClick={toggleMenu}
+          aria-label="Toggle menu"
+        >
           {menuOpen ? <CloseOutlined /> : <MenuOutlined />}
-        </div>
+        </button>
         <ul className={`menu_container ${menuOpen ? "open" : ""}`}>
           <li>
-            <a href="https://embr3-ucds.netlify.app" className="menu_item">About EMB-UCDS</a>
+            <NavLink to="https://embr3-ucds.netlify.app" className="menu_item" activeClassName="active">
+              About EMB-UCDS
+            </NavLink>
           </li>
           <li>
-            <a href="https://embr3-ucds.netlify.app" className="menu_item">Programs</a>
+            <NavLink to="https://embr3-ucds.netlify.app" className="menu_item" activeClassName="active">
+              Programs
+            </NavLink>
           </li>
           <li>
-            <a href="https://embr3-ucds.netlify.app" className="menu_item">Contacts</a>
+            <NavLink to="https://embr3-ucds.netlify.app" className="menu_item" activeClassName="active">
+              Contacts
+            </NavLink>
           </li>
           <li>
-            <a href="/login" className="menu_item signup">Log in</a>
+            <NavLink to="/login" className="menu_item signup" activeClassName="active">
+              Log in
+            </NavLink>
           </li>
         </ul>
       </nav>
 
       <div className="home-content">
         <div className="text-content">
-          <h1>Universe <span className="highlight">Centralized Database System</span></h1>
+          <h1>
+            Universe <span className="highlight">Centralized Database System</span>
+          </h1>
           <p className="subheading">
             A harmonization of different firms and industries within DENR-EMB Region III Monitoring Plan.
           </p>
           <div className="button_container">
-            <Link to="/login">
+            <NavLink to="/login">
               <Button type="primary" className="btn-learn-more">
                 Get Started
               </Button>
-            </Link>
+            </NavLink>
           </div>
         </div>
         <div className="image-content">

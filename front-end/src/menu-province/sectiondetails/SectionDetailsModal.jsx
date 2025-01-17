@@ -8,7 +8,9 @@ import {
   Pagination,
   Spin,
   Input,
-  Checkbox, DatePicker, Select
+  Checkbox,
+  DatePicker,
+  Select,
 } from "antd"; // Import Ant Design components
 import {
   ReloadOutlined,
@@ -39,7 +41,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
   const [originalData, setOriginalData] = useState(data); // Store the original dataset
   const [isChecked, setIsChecked] = useState(false); // Checkbox state
   const [dateRange, setDateRange] = useState([null, null]); // Date range for filtering (start, end)
-  const [pismuTrackingFilter, setPismuTrackingFilter] = useState(null); 
+  const [pismuTrackingFilter, setPismuTrackingFilter] = useState(null);
 
   // Filter the records based on the selected filters
   useEffect(() => {
@@ -61,9 +63,15 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
       const start = moment(dateRange[0]).startOf("day");
       const end = moment(dateRange[1]).endOf("day");
       filtered = filtered.filter((record) => {
-        const dateMonitored = record.date_monitored ? moment(record.date_monitored) : null;
-        const dateRouted = record.date_routed ? moment(record.date_routed) : null;
-        const dateSigned = record.date_signed ? moment(record.date_signed) : null;
+        const dateMonitored = record.date_monitored
+          ? moment(record.date_monitored)
+          : null;
+        const dateRouted = record.date_routed
+          ? moment(record.date_routed)
+          : null;
+        const dateSigned = record.date_signed
+          ? moment(record.date_signed)
+          : null;
 
         return (
           (dateMonitored && dateMonitored.isBetween(start, end, null, "[]")) ||
@@ -75,12 +83,15 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
 
     // Filter by pismu_tracking
     if (pismuTrackingFilter !== null) {
-      filtered = filtered.filter((record) => (pismuTrackingFilter ? record.pismu_tracking === "✔" : record.pismu_tracking !== "✔"));
+      filtered = filtered.filter((record) =>
+        pismuTrackingFilter
+          ? record.pismu_tracking === "✔"
+          : record.pismu_tracking !== "✔"
+      );
     }
 
     setFilteredData(filtered);
   };
-  
 
   const getColumnSearchProps = (dataIndex) => ({
     filterDropdown: ({
@@ -386,12 +397,12 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
             Date Monitored:{" "}
             {record.date_monitored ? record.date_monitored : "N/A"}
           </p>
-    
+
           <p className="monitoring-label">
             <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
             Date Routed: {record.date_routed ? record.date_routed : "N/A"}
           </p>
-    
+
           <p className="monitoring-label">
             <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
             Date Signed: {record.date_signed ? record.date_signed : "N/A"}
@@ -407,22 +418,29 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         // Local state for managing the selected date field
         const [dateField, setDateField] = useState("date_monitored"); // Default to date_monitored
         const [dateRange, setDateRange] = useState([null, null]); // Local date range state
-    
+
         // Handle date range change
         const handleDateRangeChange = (dates) => {
           setDateRange(dates);
           setSelectedKeys(dates && dates.length ? [dates] : []); // Update Ant Design's filter state
         };
-    
+
         // Apply the selected date range filter
         const handleFilter = () => {
           if (dateRange && dateRange[0] && dateRange[1]) {
             confirm(); // Apply the filter
           }
         };
-    
+
         return (
-          <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div
+            style={{
+              padding: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
             {/* Dropdown to select the date field */}
             <Select
               size="small"
@@ -430,11 +448,13 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
               style={{ width: 200 }}
               onChange={(value) => setDateField(value)}
             >
-              <Select.Option value="date_monitored">Date Monitored</Select.Option>
+              <Select.Option value="date_monitored">
+                Date Monitored
+              </Select.Option>
               <Select.Option value="date_routed">Date Routed</Select.Option>
               <Select.Option value="date_signed">Date Signed</Select.Option>
             </Select>
-    
+
             {/* Date Range Picker */}
             <DatePicker.RangePicker
               size="small"
@@ -442,7 +462,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
               value={dateRange}
               onChange={handleDateRangeChange}
             />
-    
+
             {/* Action Buttons */}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Button
@@ -473,14 +493,16 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         if (!Array.isArray(value) || value.length !== 2) {
           return true; // No filter applied if value is not a valid array
         }
-      
+
         const [start, end] = value; // Safely destructure start and end
         if (!start || !end) return true; // Skip filtering if dates are not set
-      
+
         const selectedField = dateField || "date_monitored"; // Default to date_monitored
-        const recordDate = record[selectedField] ? moment(record[selectedField]) : null;
+        const recordDate = record[selectedField]
+          ? moment(record[selectedField])
+          : null;
         return recordDate && recordDate.isBetween(start, end, "days", "[]");
-      },      
+      },
     },
     {
       title: "Actions",
@@ -587,14 +609,17 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         ) : (
           <>
             {/* Checkbox for filtering by "Received by Planning" */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
-            <Checkbox
-              checked={isChecked}
-              onChange={handleCheckboxChange}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginBottom: "10px",
+              }}
             >
-              Received by Planning Unit
-            </Checkbox>
-          </div>
+              <Checkbox checked={isChecked} onChange={handleCheckboxChange}>
+                Received by Planning Unit
+              </Checkbox>
+            </div>
 
             {/* Table to display filtered records */}
             {filteredData && filteredData.length > 0 ? (
@@ -605,7 +630,6 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
                   rowKey="id_no"
                   pagination={false}
                   bordered
-                 
                 />
                 <Pagination
                   total={filteredData.length}

@@ -392,7 +392,12 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
             </Row>
           </Card>
 
-          <Card
+          
+        </Col>
+
+        <Col xs={24} sm={24} md={12} lg={12}>
+
+        <Card
             style={{
               width: 500,
               marginBottom: 10,
@@ -454,144 +459,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
               </Col>
             </Row>
           </Card>
-        </Col>
-
-        <Col xs={24} sm={24} md={12} lg={12}>
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={
-                    editedRecord?.tsd_required ===
-                    "REQUIRED TSD CLEARANCE/PERMIT"
-                  }
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED TSD CLEARANCE/PERMIT"
-                      : "NOT REQUIRED TSD CLEARANCE/PERMIT";
-                    handleValueChange("tsd_required", newValue); // Log and handle the value change
-                    handleChange("tsd_required", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.tsd_required === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">TSD Permit</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>TSD Reference No.</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.tsd : ""}
-                    onChange={(e) => handleChange("tsd", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={1}
-                    className="text-area-permit"
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>TSD Date of Expiration</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.tsd_expiration : ""}
-                    onChange={(e) =>
-                      handleChange("tsd_expiration", e.target.value)
-                    }
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={1}
-                    className="text-area-permit"
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={
-                    editedRecord?.tp_trc_required === "REQUIRED TP/TRC PERMIT"
-                  }
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED TP/TRC PERMIT"
-                      : "NOT REQUIRED TP/TRC PERMIT";
-                    handleValueChange("tp_trc_required", newValue); // Log and handle the value change
-                    handleChange("tp_trc_required", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.tp_trc_required === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">TP/TRC Permit</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>TP/TRC Reference No. </strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.tp_trc : ""}
-                    onChange={(e) => handleChange("tp_trc", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={2}
-                    className="text-area-permit"
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>TP/TRC Date of Expiration </strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.tp_trc_expiration : ""}
-                    onChange={(e) =>
-                      handleChange("tp_trc_expiration", e.target.value)
-                    }
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={2}
-                    className="text-area-permit"
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-
+         
           <Card
             style={{
               width: 500,
@@ -685,54 +553,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
             </Row>
           </Card>
 
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={
-                    editedRecord?.chemical_permit_required ===
-                    "REQUIRED CHEMICAL PERMIT"
-                  }
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED CHEMICAL PERMIT"
-                      : "NOT REQUIRED CHEMICAL PERMIT";
-                    handleValueChange("chemical_permit_required", newValue); // Log and handle the value change
-                    handleChange("chemical_permit_required", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.chemical_permit_required === "REQUIRED"
-                    ? ""
-                    : ""} */}
-                  <span className="permit-label">Chemical Permits</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Button
-              type="default"
-              size="small"
-              className="btn-chemical-viewmore"
-              onClick={showModal}
-              disabled={!isEditing}
-            >
-              View Chemical Permits...
-            </Button>
-          </Card>
+         
         </Col>
 
         <Modal

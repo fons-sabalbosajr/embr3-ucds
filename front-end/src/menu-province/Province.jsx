@@ -1622,7 +1622,7 @@ const Province = ({ theme, currentUser }) => {
                   <span>
                     <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
                     <span style={{ marginLeft: 8 }}>
-                      Received by Planning Unit
+                      Planning Unit
                     </span>
                   </span>
                 ) : (

@@ -90,7 +90,7 @@ const SideMenu = ({ theme, currentUser }) => {
           <Menu.SubMenu
             key="r3-monitoring"
             icon={<CheckCircleFilled />}
-            title="R3 Monitoring Plan"
+            title="Monitoring Plan"
           >
             {visibleProvinces.map((province) => (
               <Menu.Item key={`/universe/province/${province}`} onClick={() => handleProvinceSelect(province)}>
@@ -103,6 +103,12 @@ const SideMenu = ({ theme, currentUser }) => {
             <>
               <Menu.Item key="/universe/survey">
                 <Link to="/universe/survey">Survey List</Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/healthcare">
+                <Link to="/universe/healthcare">Healthcare Permits</Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/chemicals">
+                <Link to="/universe/chemicals">Chemical Permits</Link>
               </Menu.Item>
               <Menu.Item key="/universe/mbu">
                 <Link to="/universe/mbu">MBU Pipeline</Link>

@@ -359,12 +359,18 @@
 }
 
 .section-item {
-  cursor: pointer; /* Change cursor to hand pointer on hover */
-  transition: background-color 0.3s ease; /* Smooth transition for background color change */
+  transition: background-color 0.3s, transform 0.3s;
 }
 
 .section-item:hover {
-  background-color: #dcdcdc; /* Lighter color when hovered */
+  filter: brightness(1.2);
+  transform: scale(1.05);
+}
+
+.section-item.disabled:hover {
+  background-color: gray; /* Keep the background color gray if disabled */
+  transform: none; /* No transform if disabled */
+  cursor: not-allowed; /* Keep the cursor not-allowed if disabled */
 }
 
 /* CSS for disabling section clicks when the date range filter is applied */
