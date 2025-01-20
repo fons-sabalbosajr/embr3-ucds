@@ -1027,6 +1027,126 @@ app.get("/api/ucds", async (req, res) => {
   }
 });
 
+app.get("/api/ucds/next-id", async (req, res) => {
+  try {
+    const surveys = await ucdsCollection.find({}).toArray();
+    const maxIdNo = surveys.reduce((max, survey) => {
+      const idNo = parseInt(survey.id_no, 10);
+      return idNo > max ? idNo : max;
+    }, 0);
+    const nextIdNo = maxIdNo + 1;
+    res.status(200).json({ nextIdNo });
+  } catch (error) {
+    console.error("Error fetching next id_no:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+
+
+
+
+
+// Search by name
+app.get("/api/ucds/search-name", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ name: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique name
+    const nameCounts = results.reduce((acc, item) => {
+      const name = item.name.toString();
+      if (acc[name]) {
+        acc[name]++;
+      } else {
+        acc[name] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniqueNames = Object.keys(nameCounts).map((key) => ({
+      keyword: key,
+      count: nameCounts[key],
+    }));
+
+    res.status(200).json(uniqueNames);
+  } catch (error) {
+    console.error("Error searching names:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Search by title
+app.get("/api/ucds/search-title", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ title: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique title
+    const titleCounts = results.reduce((acc, item) => {
+      const title = item.title.toString();
+      if (acc[title]) {
+        acc[title]++;
+      } else {
+        acc[title] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniqueTitles = Object.keys(titleCounts).map((key) => ({
+      keyword: key,
+      count: titleCounts[key],
+    }));
+
+    res.status(200).json(uniqueTitles);
+  } catch (error) {
+    console.error("Error searching titles:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Search by industry class
+app.get("/api/ucds/search-industry-class", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ industry_class: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique industry class
+    const industryClassCounts = results.reduce((acc, item) => {
+      const industry_class = item.industry_class.toString();
+      if (acc[industry_class]) {
+        acc[industry_class]++;
+      } else {
+        acc[industry_class] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniqueIndustryClasses = Object.keys(industryClassCounts).map((key) => ({
+      keyword: key,
+      count: industryClassCounts[key],
+    }));
+
+    res.status(200).json(uniqueIndustryClasses);
+  } catch (error) {
+    console.error("Error searching industry classes:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+
+
+
+
+
+
+
 app.get("/api/survey/:id_no", async (req, res) => {
   const id_no = req.params.id_no;
   const surveyRecord = await surveyCollection.findOne({ id_no });

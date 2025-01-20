@@ -407,6 +407,21 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
             <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
             Date Signed: {record.date_signed ? record.date_signed : "N/A"}
           </p>
+
+          <p>
+            <Tooltip title="PISMU Tracking of Report">
+              {record.pismu_tracking === "✔" ? (
+                <span>
+                  <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
+                  <span className="pismu-tracking-text">
+                    Received by Planning Unit
+                  </span>
+                </span>
+              ) : (
+                <span></span>
+              )}
+            </Tooltip>
+          </p>
         </div>
       ),
       filterDropdown: ({

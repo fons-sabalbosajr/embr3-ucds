@@ -25,6 +25,7 @@ const InspectionType = ({ value, disabled, onChange }) => {
         style={{
           width: "100%",
           fontSize: "11px",
+          marginTop: "4px",
         }}
         dropdownStyle={{
           boxShadow: "none",

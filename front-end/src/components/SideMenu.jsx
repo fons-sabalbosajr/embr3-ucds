@@ -27,13 +27,13 @@ const SideMenu = ({ theme, currentUser }) => {
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
   const visibleProvinces = [
-    { key: "Aurora", visible: permissions[4] },
-    { key: "Bataan", visible: permissions[5] },
-    { key: "Bulacan", visible: permissions[6] },
-    { key: "Nueva_Ecija", visible: permissions[7] },
-    { key: "Pampanga", visible: permissions[8] },
-    { key: "Tarlac", visible: permissions[9] },
-    { key: "Zambales", visible: permissions[10] },
+    { key: "Aurora", visible: permissions[5] },
+    { key: "Bataan", visible: permissions[6] },
+    { key: "Bulacan", visible: permissions[7] },
+    { key: "Nueva_Ecija", visible: permissions[8] },
+    { key: "Pampanga", visible: permissions[9] },
+    { key: "Tarlac", visible: permissions[10] },
+    { key: "Zambales", visible: permissions[11] },
   ]
     .filter((province) => province.visible) // Show only visible provinces
     .map((province) => province.key);
@@ -102,7 +102,10 @@ const SideMenu = ({ theme, currentUser }) => {
           <SubMenu key="reports" icon={<PushpinFilled />} title="Reports">
             <>
               <Menu.Item key="/universe/survey">
-                <Link to="/universe/survey">Survey List</Link>
+                <Link to="/universe/survey">Survey List 2024</Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/survey2025">
+                <Link to="/universe/survey2025">Survey List 2025</Link>
               </Menu.Item>
               <Menu.Item key="/universe/healthcare">
                 <Link to="/universe/healthcare">Healthcare Permits</Link>

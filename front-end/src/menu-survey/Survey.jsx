@@ -1047,7 +1047,7 @@ const Survey = ({ theme, currentUser }) => {
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
-        <h3 className="header-title">Survey Template</h3>
+        <h3 className="header-title">Survey Template 2024</h3>
         <Tooltip title="Reload Table">
           <Button
             type="primary"

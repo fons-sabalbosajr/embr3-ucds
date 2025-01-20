@@ -32,6 +32,7 @@ import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import SectionDetailsModal from "./sectiondetails/SectionDetailsModal";
+import AddProvinceModal from "./actions/AddProvinceModal";
 import "./province.css";
 
 const capitalizeFirstLetter = (str) => {
@@ -67,6 +68,7 @@ const Province = ({ theme, currentUser }) => {
   const searchInput = useRef(null);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isModalVisibleAdd, setIsModalVisibleAdd] = useState(false);
   const [isModalDuplicateVisible, setIsModalDuplicateVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -87,6 +89,7 @@ const Province = ({ theme, currentUser }) => {
   const [sectionDetails, setSectionDetails] = useState([]);
   const [selectedSectionData, setSelectedSectionData] = useState([]);
   const [sectionDetailsLoading, setSectionDetailsLoading] = useState(false);
+  const [buttonColor, setButtonColor] = useState("primary");
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
@@ -1124,6 +1127,16 @@ const Province = ({ theme, currentUser }) => {
       }, {});
   };
 
+  const showModalAdd = () => {
+    setIsModalVisibleAdd(true);
+    setButtonColor("secondary");
+  };
+
+  const handleCancelAdd = () => {
+    setIsModalVisibleAdd(false);
+    setButtonColor("primary");
+  };
+
   // Assuming sectionCounts is the original data you provided
   const mergedSectionCounts = mergeSections(sectionCounts);
 
@@ -1617,12 +1630,12 @@ const Province = ({ theme, currentUser }) => {
 
             {/* PISMU Tracking */}
             <div>
-              <Tooltip title="PISMU Tracking">
+              <Tooltip title="PISMU Tracking of Report">
                 {record.pismu_tracking === "✔" ? (
                   <span>
                     <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
                     <span style={{ marginLeft: 8 }}>
-                      Planning Unit
+                      Received by Planning Unit
                     </span>
                   </span>
                 ) : (
@@ -1710,9 +1723,21 @@ const Province = ({ theme, currentUser }) => {
           title="Export Data"
         />
 
-        <Button type="primary" className="add-industry-button">
+        <Button
+          type="primary"
+          className="add-industry-button"
+          style={{
+            backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
+          }}
+          onClick={showModalAdd}
+        >
           Add Industry
         </Button>
+
+        <AddProvinceModal
+          visible={isModalVisibleAdd}
+          onCancel={handleCancelAdd}
+        />
       </div>
 
       <Modal

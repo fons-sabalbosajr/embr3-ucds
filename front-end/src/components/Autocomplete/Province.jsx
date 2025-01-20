@@ -46,7 +46,7 @@ const Province = ({ value, disabled, onChange, editedRecord, handleChange, isEdi
         height: "29px",
         padding: "4px 8px",
       }}
-      placeholder="Select industry classification"
+      placeholder="Select province"
       placeholderStyle={{
         fontSize: "9px",
       }}

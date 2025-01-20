@@ -8,6 +8,7 @@ import {
   Card,
   DatePicker,
   ConfigProvider,
+  Select,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
@@ -18,8 +19,11 @@ import Month from "../../../components/Autocomplete/Month";
 import ReportType from "../../../components/Autocomplete/ReportType";
 import InspectionType from "../../../components/Autocomplete/InspectionType";
 import WWTFType from "../../../components/Autocomplete/WWTFType";
+import ProjectStatus from "../../../components/Autocomplete/ProjectStatus";
 
 const { Paragraph } = Typography;
+
+const { Option } = Select;
 
 function calculateWeekdayDiff(startDate, endDate) {
   const startDayjs = dayjs(startDate);
@@ -241,24 +245,7 @@ const FocalPerson = ({
               />
             </Paragraph>
           </Col>
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
-              <strong>Other Section/Unit-In-Charge</strong>
-              <SectionInCharged
-                value={editedRecord ? editedRecord.fmr_section_incharged : ""}
-                onChange={(value) =>
-                  handleChange("fmr_section_incharged", value)
-                }
-                disabled={!isEditing}
-                placeholder="No data"
-              />
-            </Paragraph>
-          </Col>
-        </Row>
-
-        <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
+          <Paragraph>
               <strong>Inspector/Handler</strong>
               <Inspector
                 value={editedRecord ? editedRecord.handler : ""}
@@ -267,12 +254,27 @@ const FocalPerson = ({
                 placeholder="No data"
               />
             </Paragraph>
+        </Row>
+
+        <Row gutter={[16, 16]} className="row-auto">
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+           
 
             <Paragraph>
               <strong>Schedule of Monitoring</strong>
               <Month
                 value={editedRecord ? editedRecord.monitoring_sched : ""}
                 onChange={(value) => handleChange("monitoring_sched", value)}
+                disabled={!isEditing}
+                placeholder="No data"
+              />
+            </Paragraph>
+
+            <Paragraph>
+              <strong>Project Status</strong>
+              <ProjectStatus
+                value={editedRecord ? editedRecord.project_status : ""}
+                onChange={(value) => handleChange("project_status", value)}
                 disabled={!isEditing}
                 placeholder="No data"
               />
@@ -460,7 +462,7 @@ const FocalPerson = ({
                     editedRecord?.pismu_tracking ===
                     "Report Tracked (received/routed to Planning Unit)"
                   }
-                  disabled={isCardDisabled} 
+                  disabled={isCardDisabled}
                   onChange={(e) => {
                     const isChecked = e.target.checked;
                     const newValue = isChecked
