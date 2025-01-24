@@ -1,0 +1,51 @@
+.healthcare-header-panel {
+    padding: 16px;
+    background-color: #f5f5f5;
+  }
+  
+  .healthcare-header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .healthcare-header-title {
+    font-size: 24px;
+    font-weight: bold;
+  }
+  
+  .healthcare-refresh-button {
+    margin-left: 8px;
+  }
+  
+  .healthcare-add-industry-button {
+    margin-left: 8px;
+  }
+  
+  .healthcare-table-header {
+    margin-bottom: 16px;
+    font-size: 16px;
+    font-weight: bold;
+  }
+  
+  .healthcare-custom-filter-dropdown {
+    padding: 8px;
+  }
+  
+  .healthcare-custom-filter-input {
+    margin-bottom: 8px;
+    display: block;
+  }
+  
+  .healthcare-custom-filter-button {
+    width: 90px;
+  }
+
+  .healthcare-tag-plus {
+    cursor: pointer;
+    border: 1px dashed #108ee9;
+  }
+
+  .healthcare-search-keyword {
+    margin-left: 8px;
+  }

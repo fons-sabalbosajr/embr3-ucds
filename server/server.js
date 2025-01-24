@@ -1140,10 +1140,185 @@ app.get("/api/ucds/search-industry-class", async (req, res) => {
   }
 });
 
+app.get("/api/ucds/search-ecc-cnc", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ ecc_cnc: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique ECC CNC
+    const eccCncCounts = results.reduce((acc, item) => {
+      const ecc_cnc = item.ecc_cnc.toString();
+      if (acc[ecc_cnc]) {
+        acc[ecc_cnc]++;
+      } else {
+        acc[ecc_cnc] = 1;
+      }
+      return acc;
+    }, {});
 
+    // Convert the map to an array of objects
+    const uniqueEccCncs = Object.keys(eccCncCounts).map((key) => ({
+      keyword: key,
+      count: eccCncCounts[key],
+    }));
 
+    res.status(200).json(uniqueEccCncs);
+  } catch (error) {
+    console.error("Error searching ECC CNCs:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
+app.get("/api/ucds/search-pto-code", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ pto_code: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique PTO code
+    const ptoCodeCounts = results.reduce((acc, item) => {
+      const pto_code = item.pto_code.toString();
+      if (acc[pto_code]) {
+        acc[pto_code]++;
+      } else {
+        acc[pto_code] = 1;
+      }
+      return acc;
+    }, {});
 
+    // Convert the map to an array of objects
+    const uniquePtoCodes = Object.keys(ptoCodeCounts).map((key) => ({
+      keyword: key,
+      count: ptoCodeCounts[key],
+    }));
+
+    res.status(200).json(uniquePtoCodes);
+  } catch (error) {
+    console.error("Error searching PTO codes:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds/search-wwdp-code", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ wwdp_code: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique WWDP code
+    const wwdpCodeCounts = results.reduce((acc, item) => {
+      const wwdp_code = item.wwdp_code.toString();
+      if (acc[wwdp_code]) {
+        acc[wwdp_code]++;
+      } else {
+        acc[wwdp_code] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniqueWwdpCodes = Object.keys(wwdpCodeCounts).map((key) => ({
+      keyword: key,
+      count: wwdpCodeCounts[key],
+    }));
+
+    res.status(200).json(uniqueWwdpCodes);
+  } catch (error) {
+    console.error("Error searching WWDP codes:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds/search-haz-id", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ haz_id: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique HAZ ID
+    const hazIdCounts = results.reduce((acc, item) => {
+      const haz_id = item.haz_id.toString();
+      if (acc[haz_id]) {
+        acc[haz_id]++;
+      } else {
+        acc[haz_id] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniqueHazIds = Object.keys(hazIdCounts).map((key) => ({
+      keyword: key,
+      count: hazIdCounts[key],
+    }));
+
+    res.status(200).json(uniqueHazIds);
+  } catch (error) {
+    console.error("Error searching HAZ IDs:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds/search-pco-no", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ pco_no: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique PCO number
+    const pcoNoCounts = results.reduce((acc, item) => {
+      const pco_no = item.pco_no.toString();
+      if (acc[pco_no]) {
+        acc[pco_no]++;
+      } else {
+        acc[pco_no] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniquePcoNos = Object.keys(pcoNoCounts).map((key) => ({
+      keyword: key,
+      count: pcoNoCounts[key],
+    }));
+
+    res.status(200).json(uniquePcoNos);
+  } catch (error) {
+    console.error("Error searching PCO numbers:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds/search-pco-name", async (req, res) => {
+  const query = req.query.query;
+  try {
+    const regex = new RegExp(query, "i"); // Case-insensitive search
+    const results = await ucdsCollection.find({ pco_name: regex }).toArray();
+    
+    // Create a map to count occurrences of each unique PCO name
+    const pcoNameCounts = results.reduce((acc, item) => {
+      const pco_name = item.pco_name.toString();
+      if (acc[pco_name]) {
+        acc[pco_name]++;
+      } else {
+        acc[pco_name] = 1;
+      }
+      return acc;
+    }, {});
+
+    // Convert the map to an array of objects
+    const uniquePcoNames = Object.keys(pcoNameCounts).map((key) => ({
+      keyword: key,
+      count: pcoNameCounts[key],
+    }));
+
+    res.status(200).json(uniquePcoNames);
+  } catch (error) {
+    console.error("Error searching PCO names:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 
 

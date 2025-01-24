@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Tabs, Spin } from "antd";
+import { Modal, Tabs, Spin, Button } from "antd";
+import Swal from "sweetalert2";
 import GenInfoAdd from "./tabpanes/geninfo/GenInfoAdd";
 import FocalPersonAdd from "./tabpanes/focalperson/FocalPersonAdd";
+import PermitsAdd from "./tabpanes/permits/PermitsAdd";
+import LegalUnitAdd from "./tabpanes/legalunit/LegalUnitAdd";
 import "./addprovincemodal.css";
 
 const { TabPane } = Tabs;
 
 const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
-  const [nextIdNo, setNextIdNo] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [nextIdNo, setNextIdNo] = useState(null);
 
   useEffect(() => {
     if (visible) {
@@ -29,9 +33,41 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
     }
   };
 
-  const handleOk = () => {
-    // Handle the OK button click
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    setIsEditing(false);
     onCreate();
+  };
+
+  const handleCancel = () => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, cancel adding!',
+      cancelButtonText: 'No, keep editing',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setIsEditing(false);
+        //onCancel();
+        clearFields();
+        Swal.fire(
+          'Cancelled!',
+          'Your changes have been discarded.',
+          'success'
+        );
+      }
+    });
+  };
+
+  const clearFields = () => {
+    // Clear all fields in the tab panes
+    // You can implement this function to reset the state of each tab pane component
   };
 
   return (
@@ -45,28 +81,47 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
             alignItems: "center",
           }}
         >
-          <span>Add New Province</span>
+          <span>Add New Establishment/Company</span>
           {loading ? (
             <div className="id-no">
-            <Spin size="small" /> loading...
-          </div>
+              <Spin size="small" /> loading...
+            </div>
           ) : (
             nextIdNo && <span className="id-no">ID No: {nextIdNo}</span>
           )}
         </div>
       }
-      okText="Create"
-      cancelText="Cancel"
+      footer={[
+        isEditing ? (
+          <Button type="primary" key="save" onClick={handleSave}>
+            Add Establishment
+          </Button>
+        ) : (
+          <Button type="primary" key="edit" onClick={handleEdit}>
+            Start Adding
+          </Button>
+        ),
+        isEditing && (
+          <Button type="primary" danger key="cancel" onClick={handleCancel}>
+            Cancel
+          </Button>
+        ),
+      ]}
       onCancel={onCancel}
-      onOk={handleOk}
       width={1000}
     >
       <Tabs defaultActiveKey="1">
         <TabPane tab="General Information" key="1">
-          <GenInfoAdd nextIdNo={nextIdNo} />
+          <GenInfoAdd isEditing={isEditing} />
         </TabPane>
-        <TabPane tab="Focal Person" key="2">
-          <FocalPersonAdd />
+        <TabPane tab="Monitoring Data" key="2">
+          <FocalPersonAdd isEditing={isEditing} />
+        </TabPane>
+        <TabPane tab="Permits" key="3">
+          <PermitsAdd isEditing={isEditing} />
+        </TabPane>
+        <TabPane tab="Legal Unit" key="4">
+          <LegalUnitAdd isEditing={isEditing} />
         </TabPane>
       </Tabs>
     </Modal>

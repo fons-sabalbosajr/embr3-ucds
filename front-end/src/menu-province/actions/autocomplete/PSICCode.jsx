@@ -12,7 +12,7 @@ const PSICCode = ({ selectedIndustryClass, onIndustryTypeChange }) => {
     const loadPsicCodeMap = async () => {
       const map = await parsePSICCode("/data/psiccode.csv");
       setPsicCodeMap(map);
-      console.log("PSIC Code Map Loaded:", map);
+      //console.log("PSIC Code Map Loaded:", map);
     };
 
     loadPsicCodeMap();

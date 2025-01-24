@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { AutoComplete, Spin, Input, ConfigProvider } from "antd";
 import "./autocompletestyles.css";
 
-const ProjectName = () => {
+const ProjectName = ({ isEditing }) => {
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -74,6 +74,7 @@ const ProjectName = () => {
           ) : null
         }
         allowClear={true}
+        disabled={!isEditing}
       >
         <Input
           style={{
@@ -82,6 +83,7 @@ const ProjectName = () => {
             padding: "4px 8px",
           }}
           placeholder="Enter Project Name"
+          disabled={!isEditing}
         />
       </AutoComplete>
     </ConfigProvider>

@@ -9,7 +9,7 @@ const WWTFOptions = [
     { value: "DIRECT DISCHARGE" },
   ];
 
-const WWTFType = ({ value, disabled, onChange }) => {
+const WWTFType = ({ value, disabled, onChange, isEditing }) => {
   return (
     <ConfigProvider
     theme={{
