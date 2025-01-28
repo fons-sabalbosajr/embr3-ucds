@@ -44,8 +44,9 @@
   .healthcare-tag-plus {
     cursor: pointer;
     border: 1px dashed #108ee9;
+    font-weight: 400;
   }
 
   .healthcare-search-keyword {
-    margin-left: 8px;
+    margin-left: 2px;
   }

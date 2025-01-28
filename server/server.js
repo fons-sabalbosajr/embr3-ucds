@@ -13,6 +13,8 @@ const dotenv = require("dotenv").config();
 const multer = require("multer");
 const MongoStore = require("connect-mongo");
 const cron = require("node-cron");
+const nodemailer = require("nodemailer"); // Nodemailer for sending emails
+const crypto = require("crypto"); // Crypto for generating a reset token
 
 const app = express();
 const PORT = process.env.PORT || 8081;
@@ -38,6 +40,10 @@ function generateRandomPassword(length) {
   return password;
 }
 
+
+
+
+
 //////////////////////////////////////////////////////////////////////////////////////////
 const allowedOrigins = ["http://localhost:5173"];
 
@@ -59,6 +65,7 @@ let surveyCollection;
 let activityLogsCollection;
 let surveyLogCollection;
 let ucdsLogCollection;
+let healthcareCollection;
 
 app.use(
   session({
@@ -97,6 +104,7 @@ async function connectToMongo() {
     surveyLogCollection = db.collection("survey-log");
     ucdsLogCollection = db.collection("ucds-log");
     projectTypeCollection = db.collection("project_type");
+    healthcareCollection = db.collection("ucds-data-healthcare");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error;
@@ -357,13 +365,13 @@ app.post("/login", async (req, res) => {
     const user = await userCollection.findOne({ username });
 
     if (!user) {
-      console.log("User not found:", username);
+      //console.log("User not found:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
-      console.log("Password mismatch for user:", username);
+      //console.log("Password mismatch for user:", username);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
@@ -434,6 +442,186 @@ app.post("/login", async (req, res) => {
   } catch (error) {
     console.error("Error during login:", error);
     return res.status(500).json({ error: "An unexpected error occurred." });
+  }
+});
+
+// Password reset request endpoint
+app.post("/request-password-reset", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Email is required." });
+  }
+
+  try {
+    // Find user by email
+    const user = await userCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(20).toString("hex");
+
+    // Update user with reset token and expiration
+    await userCollection.updateOne(
+      { email },
+      {
+        $set: {
+          resetToken,
+          resetTokenExpiration: Date.now() + 3600000, // 1 hour expiration
+        },
+      }
+    );
+
+    // Create the reset link
+    const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587, 
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER, // Sender's email (same as the one in .env)
+        pass: process.env.EMAIL_PASS, // Sender's password (same as the one in .env)
+      },
+      tls: {
+        rejectUnauthorized: false, // Allow TLS
+      },
+    });
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER, // Sender's email (same as the one in .env)
+      to: user.email, // User's email to send the reset link
+      subject: "Password Reset Request",
+      html: `
+        <html>
+          <head>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                padding: 20px;
+              }
+              .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #fff;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+              }
+              .header {
+                text-align: center;
+                margin-bottom: 20px;
+              }
+              .header img {
+                width: 100px;
+                height: 100px;
+              }
+              .content {
+                font-size: 16px;
+                color: #333;
+                line-height: 1.6;
+              }
+              .content p {
+                margin-bottom: 10px;
+              }
+              .reset-link {
+                display: inline-block;
+                background-color: #ccc;
+                color: white;
+                padding: 10px 20px;
+                font-size: 16px;
+                border-radius: 5px;
+                text-decoration: none;
+                margin-top: 20px;
+              }
+              .footer {
+                text-align: center;
+                margin-top: 40px;
+                font-size: 12px;
+                color: #888;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <img src="cid:logo" alt="Logo" />
+              </div>
+              <div class="content">
+                <p>Hello ${user.name},</p>
+                <p>We received a request to reset your password. Please click the button below to reset your password.</p>
+                <a href="${resetLink}" class="reset-link">Reset Your Password</a>
+                <p>If you did not request a password reset, please ignore this email.</p>
+              </div>
+              <div class="footer">
+                <p>Environmental Management Bureau Region III</p>
+                <p>Universe Central Database System</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+      attachments: [{
+        filename: 'UCDSInformation.png',
+        path: path.join(__dirname, 'assets', 'UCDSInformation.png'),
+        cid: 'logo', // same cid value as in the html img src
+        contentDisposition: 'inline', // ensures the image is embedded
+        encoding: 'base64', // optional: helps with encoding the image correctly
+      }]
+    };
+    // Send the email
+    await transporter.sendMail(mailOptions);
+
+    // Send success response
+    return res.status(200).json({
+      message: "Password reset email sent successfully.",
+      status: "success",
+      resetLink: `http://localhost:5173/reset-password?token=${resetToken}`, // Optionally, you can include the reset link for easy access
+    });    
+  } catch (error) {
+    console.error("Error during password reset request:", error);
+    return res.status(500).json({ error: "An error occurred." });
+  }
+});
+
+app.post("/reset-password", async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: "Token and new password are required." });
+  }
+
+  try {
+    // Find user by reset token
+    const user = await userCollection.findOne({
+      resetToken: token,
+      resetTokenExpiration: { $gt: Date.now() } // Ensure the token has not expired
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired token." });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user's password and remove reset token
+    await userCollection.updateOne(
+      { _id: user._id },
+      {
+        $set: { password: hashedPassword },
+        $unset: { resetToken: "", resetTokenExpiration: "" }
+      }
+    );
+
+    return res.status(200).json({ message: "Password reset successful." });
+  } catch (error) {
+    console.error("Error during password reset:", error);
+    return res.status(500).json({ error: "An error occurred during password reset." });
   }
 });
 
@@ -1042,18 +1230,13 @@ app.get("/api/ucds/next-id", async (req, res) => {
   }
 });
 
-
-
-
-
-
 // Search by name
 app.get("/api/ucds/search-name", async (req, res) => {
   const query = req.query.query;
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ name: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique name
     const nameCounts = results.reduce((acc, item) => {
       const name = item.name.toString();
@@ -1084,7 +1267,7 @@ app.get("/api/ucds/search-title", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ title: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique title
     const titleCounts = results.reduce((acc, item) => {
       const title = item.title.toString();
@@ -1114,8 +1297,10 @@ app.get("/api/ucds/search-industry-class", async (req, res) => {
   const query = req.query.query;
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
-    const results = await ucdsCollection.find({ industry_class: regex }).toArray();
-    
+    const results = await ucdsCollection
+      .find({ industry_class: regex })
+      .toArray();
+
     // Create a map to count occurrences of each unique industry class
     const industryClassCounts = results.reduce((acc, item) => {
       const industry_class = item.industry_class.toString();
@@ -1128,10 +1313,12 @@ app.get("/api/ucds/search-industry-class", async (req, res) => {
     }, {});
 
     // Convert the map to an array of objects
-    const uniqueIndustryClasses = Object.keys(industryClassCounts).map((key) => ({
-      keyword: key,
-      count: industryClassCounts[key],
-    }));
+    const uniqueIndustryClasses = Object.keys(industryClassCounts).map(
+      (key) => ({
+        keyword: key,
+        count: industryClassCounts[key],
+      })
+    );
 
     res.status(200).json(uniqueIndustryClasses);
   } catch (error) {
@@ -1145,7 +1332,7 @@ app.get("/api/ucds/search-ecc-cnc", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ ecc_cnc: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique ECC CNC
     const eccCncCounts = results.reduce((acc, item) => {
       const ecc_cnc = item.ecc_cnc.toString();
@@ -1175,7 +1362,7 @@ app.get("/api/ucds/search-pto-code", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ pto_code: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique PTO code
     const ptoCodeCounts = results.reduce((acc, item) => {
       const pto_code = item.pto_code.toString();
@@ -1205,7 +1392,7 @@ app.get("/api/ucds/search-wwdp-code", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ wwdp_code: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique WWDP code
     const wwdpCodeCounts = results.reduce((acc, item) => {
       const wwdp_code = item.wwdp_code.toString();
@@ -1235,7 +1422,7 @@ app.get("/api/ucds/search-haz-id", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ haz_id: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique HAZ ID
     const hazIdCounts = results.reduce((acc, item) => {
       const haz_id = item.haz_id.toString();
@@ -1265,7 +1452,7 @@ app.get("/api/ucds/search-pco-no", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ pco_no: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique PCO number
     const pcoNoCounts = results.reduce((acc, item) => {
       const pco_no = item.pco_no.toString();
@@ -1295,7 +1482,7 @@ app.get("/api/ucds/search-pco-name", async (req, res) => {
   try {
     const regex = new RegExp(query, "i"); // Case-insensitive search
     const results = await ucdsCollection.find({ pco_name: regex }).toArray();
-    
+
     // Create a map to count occurrences of each unique PCO name
     const pcoNameCounts = results.reduce((acc, item) => {
       const pco_name = item.pco_name.toString();
@@ -1319,8 +1506,6 @@ app.get("/api/ucds/search-pco-name", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
-
 
 app.get("/api/survey/:id_no", async (req, res) => {
   const id_no = req.params.id_no;
@@ -2470,6 +2655,17 @@ app.get("/api/ucds/count", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+app.get("/api/healthcare", async (req, res) => {
+  try {
+    const healthcareData = await healthcareCollection.find({}).toArray();
+    res.status(200).json(healthcareData);
+  } catch (error) {
+    console.error("Error fetching healthcare data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 
 //////////////////////////////////////////////////////////////////////////////////////////
 

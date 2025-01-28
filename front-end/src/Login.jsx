@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import CryptoJS from "crypto-js"; // Import the crypto-js library
 import "./login.css";
-import homelogo from "./assets/emblogomenu.png";
+import homelogo from "./assets/UCDSInformation.png";
 
 const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +94,7 @@ const Login = () => {
               label="Password"
               rules={[{ required: true, message: "Password is required" }]}
             >
-              <Input.Password placeholder="Enter Password" size="large" />
+              <Input.Password placeholder="Enter Password" size="large" className="password-login" />
             </Form.Item>
 
             <Form.Item>
@@ -109,10 +109,14 @@ const Login = () => {
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </Form.Item>
+
             <Link to="/register">
-              <Button block size="large">
-                Create Account
-              </Button>
+              <Button block size="large">Create Account</Button>
+            </Link>
+
+            {/* Added Forgot Password Button */}
+            <Link to="/forgot-password">
+              <Button type="link" block>Forgot Password?</Button>
             </Link>
           </Form>
         </div>

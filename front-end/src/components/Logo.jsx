@@ -1,6 +1,6 @@
 import React from "react";
 import "./logo.css";
-import embLogo from "../../src/assets/emblogomenu.png";
+import embLogo from "../../src/assets/UCDSInformation.png";
 
 const Logo = ({ theme, collapsed }) => {
   return (

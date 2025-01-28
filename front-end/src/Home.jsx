@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Button } from "antd";
 import { MenuOutlined, CloseOutlined } from "@ant-design/icons";
-import homelogo from "./assets/emblogomenu.png";
+import homelogo from "./assets/UCDSInformation.png";
 import databaseImage from "./assets/picbghome.png";
 import "./home.css";
 

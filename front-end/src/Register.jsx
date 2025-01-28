@@ -5,7 +5,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import emailjs from "emailjs-com";
-import homelogo from "./assets/emblogomenu.png";
+import homelogo from "./assets/UCDSInformation.png";
 import { LoadingOutlined } from "@ant-design/icons";
 import "./register.css";
 

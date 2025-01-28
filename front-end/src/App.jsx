@@ -5,6 +5,8 @@ import Register from './Register';
 import Login from './Login'
 import Universe from  './Universe';
 import ProtectedRoute from './ProtectedRoute';
+import HomeForgotPassword from './HomeForgotPassword'
+import HomeResetPassword from './HomeResetPassword';
 import axios from 'axios';
 
 // Ensure axios sends credentials with requests
@@ -18,7 +20,8 @@ function App() {
           <Route path='/register' element={<Register />} />
           <Route path='/home' element={<Home />} />
           <Route path='/login' element={<Login />} />
-          
+          <Route path='/forgot-password' element={<HomeForgotPassword />} />
+          <Route path='/reset-password' element={<HomeResetPassword />} />
           <Route element={<ProtectedRoute />}> 
             <Route path='/universe/*' element={<Universe />} />
           </Route>

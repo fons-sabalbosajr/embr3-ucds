@@ -60,3 +60,7 @@ body {
 .centered{
     text-align: center;
 }
+
+.password-login{
+    font-size: 13px;
+}

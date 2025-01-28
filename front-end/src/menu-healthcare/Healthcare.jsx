@@ -36,58 +36,172 @@ const Healthcare = ({ theme, currentUser }) => {
   const [inputVisible, setInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [filteredData, setFilteredData] = useState([]);
+  const [tags, setTags] = useState([]); // State to store tags
+  const [initialState, setInitialState] = useState(new Map()); // Define initialState and setInitialState
   const searchInput = useRef(null);
   const inputRef = useRef(null);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch("http://localhost:8081/api/healthcare", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText);
+        }
+
+        const result = await response.json();
+        const sortedResult = result.sort((a, b) => {
+          if (a.name && b.name) {
+            return a.name.localeCompare(b.name);
+          }
+          return 0;
+        }); // Sort by name
+        setFilteredData(sortedResult);
+
+        // Store initial states
+        const stateMap = new Map();
+        sortedResult.forEach((item) => {
+          stateMap.set(item._id, {
+            name: item.name,
+            age: item.age,
+            address: item.address,
+          });
+        });
+        setInitialState(stateMap);
+      } catch (error) {
+        console.error("Error fetching healthcare data:", error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   const handleReload = async () => {
     setLoading(true);
-    // Fetch data logic here
-    setLoading(false); // End loading animation
+    try {
+      const response = await fetch("http://localhost:8081/api/healthcare", {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+
+      const result = await response.json();
+      const sortedResult = result.sort((a, b) => {
+        if (a.name && b.name) {
+          return a.name.localeCompare(b.name);
+        }
+        return 0;
+      }); // Sort by name
+      setFilteredData(sortedResult);
+    } catch (error) {
+      console.error("Error fetching healthcare data:", error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSearch = (selectedKeys, confirm, dataIndex) => {
     confirm();
     setSearchText(selectedKeys[0]);
     setSearchedColumn(dataIndex);
+    if (selectedKeys[0]) {
+      setTags((prevTags) => [...prevTags, selectedKeys[0]]);
+      const filtered = filteredData.filter((item) =>
+        Object.values(item).some((val) =>
+          String(val).toLowerCase().includes(selectedKeys[0].toLowerCase())
+        )
+      );
+      setFilteredData(filtered);
+    }
   };
 
   const handleReset = (clearFilters) => {
     clearFilters();
     setSearchText("");
+    setTags([]);
+    handleReload();
   };
 
   const handleInputChange = (e) => {
-    setInputValue(e.target.value);
+    const value = e.target.value;
+    setInputValue(value);
+
+    const filtered = filteredData.filter((item) =>
+      tags
+        .concat(value)
+        .some((tag) =>
+          Object.values(item).some((val) =>
+            String(val).toLowerCase().includes(tag.toLowerCase())
+          )
+        )
+    );
+    setFilteredData(filtered);
   };
 
   const handleInputConfirm = () => {
     if (inputValue) {
-      const filtered = data.filter((item) =>
-        Object.values(item).some((val) =>
-          String(val).toLowerCase().includes(inputValue.toLowerCase())
-        )
+      // Add the input value as a tag
+      setTags((prevTags) => [...prevTags, inputValue]);
+
+      const filtered = filteredData.filter((item) =>
+        tags
+          .concat(inputValue)
+          .some((tag) =>
+            Object.values(item).some((val) =>
+              String(val).toLowerCase().includes(tag.toLowerCase())
+            )
+          )
       );
       setFilteredData(filtered);
     } else {
-      setFilteredData(data);
+      handleReload();
     }
     setInputVisible(false);
     setInputValue("");
   };
 
-  const handleRemoveKeyword = () => {
-    setFilteredData(data);
-    setInputValue("");
+  const handleRemoveKeyword = (tagToRemove) => {
+    const newTags = tags.filter((tag) => tag !== tagToRemove);
+    setTags(newTags);
+
+    const filtered = filteredData.filter((item) =>
+      newTags.some((tag) =>
+        Object.values(item).some((val) =>
+          String(val).toLowerCase().includes(tag.toLowerCase())
+        )
+      )
+    );
+    setFilteredData(filtered.length > 0 ? filtered : filteredData);
   };
 
   const getColumnSearchProps = (dataIndex) => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+    filterDropdown: ({
+      setSelectedKeys,
+      selectedKeys,
+      confirm,
+      clearFilters,
+    }) => (
       <div className="healthcare-custom-filter-dropdown">
         <Input
           ref={searchInput}
           placeholder={`Search ${dataIndex}`}
           value={selectedKeys[0]}
-          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onChange={(e) => {
+            setSelectedKeys(e.target.value ? [e.target.value] : []);
+            handleInputChange(e);
+          }}
           onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
           className="healthcare-custom-filter-input"
         />
@@ -101,7 +215,11 @@ const Healthcare = ({ theme, currentUser }) => {
           >
             Search
           </Button>
-          <Button onClick={() => handleReset(clearFilters)} size="small" className="healthcare-custom-filter-button">
+          <Button
+            onClick={() => handleReset(clearFilters)}
+            size="small"
+            className="healthcare-custom-filter-button"
+          >
             Reset
           </Button>
         </Space>
@@ -112,7 +230,10 @@ const Healthcare = ({ theme, currentUser }) => {
     ),
     onFilter: (value, record) =>
       record[dataIndex]
-        ? record[dataIndex].toString().toLowerCase().includes(value.toLowerCase())
+        ? record[dataIndex]
+            .toString()
+            .toLowerCase()
+            .includes(value.toLowerCase())
         : "",
     onFilterDropdownVisibleChange: (visible) => {
       if (visible) {
@@ -134,51 +255,77 @@ const Healthcare = ({ theme, currentUser }) => {
 
   const columns = [
     {
-      title: "Name",
-      dataIndex: "name",
-      key: "name",
-      ...getColumnSearchProps("name"),
+      title: "ID No",
+      dataIndex: "id_no",
+      key: "id_no",
     },
     {
-      title: "Age",
-      dataIndex: "age",
-      key: "age",
-      ...getColumnSearchProps("age"),
+      title: "Project Details",
+      key: "project_details",
+      align: "left",
+      render: (text, record) => (
+        <div>
+          <div>{record.name}</div>
+          <div style={{ fontWeight: "bold" }}>{record.title}</div>
+          <div>
+            <a href={record.ecc_cnc} target="_blank" rel="noopener noreferrer">
+              {record.ecc_cnc}
+            </a>
+          </div>
+          <div>{record.address}</div>
+        </div>
+      ),
     },
     {
-      title: "Address",
-      dataIndex: "address",
-      key: "address",
-      ...getColumnSearchProps("address"),
+      title: "Industry Classification",
+      dataIndex: "industry_class",
+      key: "industry_class",
+      align: "left",
     },
-    // Add more columns as needed
+    {
+      title: "Permit/Clearances",
+      key: "permit_clearances",
+      render: (text, record) => (
+        <div>
+          {record.ecc_value && "ECC "}
+          {record.cnc_value && "CNC "}
+          {record.pto_code && "PTO "}
+          {record.wwdp_code && "WWDP "}
+          {record.haz_id && "HAZWASTE "}
+          {record.pco_np && "PCO "}
+        </div>
+      ),
+    },
+    {
+      title: "Monitoring Status",
+      key: "monitoring_status",
+      render: (text, record) => (
+        <div>
+          <a href={record.iis_no} target="_blank" rel="noopener noreferrer">
+            {record.iis_no}
+          </a>
+          <div>{record.date_monitored}</div>
+          <div>{record.date_routed}</div>
+          <div>{record.date_signed}</div>
+          <div>{record.pismu_tracking}</div>
+        </div>
+      ),
+    },
+    {
+      title: "Remarks/Recommendations",
+      dataIndex: "remarks",
+      key: "remarks",
+    },
+    {
+      title: "Action",
+      key: "action",
+      render: (text, record) => (
+        <Button type="primary" icon={<EyeOutlined />}>
+          View
+        </Button>
+      ),
+    },
   ];
-
-  const data = [
-    {
-      key: "1",
-      name: "John Brown",
-      age: 32,
-      address: "New York No. 1 Lake Park",
-    },
-    {
-      key: "2",
-      name: "Jim Green",
-      age: 42,
-      address: "London No. 1 Lake Park",
-    },
-    {
-      key: "3",
-      name: "Joe Black",
-      age: 32,
-      address: "Sidney No. 1 Lake Park",
-    },
-    // Add more data as needed
-  ];
-
-  useEffect(() => {
-    setFilteredData(data);
-  }, []);
 
   return (
     <div className={`header-panel ${theme}`}>
@@ -214,7 +361,9 @@ const Healthcare = ({ theme, currentUser }) => {
 
       <div className="healthcare-table-header">
         <span>Total Rows: {filteredData.length}</span>
-        <div style={{ display: "flex", alignItems: "center", marginLeft: "16px" }}>
+        <div
+          style={{ display: "flex", alignItems: "center", marginLeft: "5px" }}
+        >
           {inputVisible ? (
             <Input
               ref={inputRef}
@@ -236,16 +385,17 @@ const Healthcare = ({ theme, currentUser }) => {
               <PlusOutlined /> Search keyword here...
             </Tag>
           )}
-          {inputValue && (
+          {tags.map((tag) => (
             <Tag
+              key={tag}
               closable
-              onClose={handleRemoveKeyword}
+              onClose={() => handleRemoveKeyword(tag)}
               className="healthcare-search-keyword"
               color="blue"
             >
-              {inputValue}
+              {tag}
             </Tag>
-          )}
+          ))}
         </div>
       </div>
 
