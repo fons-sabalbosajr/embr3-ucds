@@ -70,7 +70,7 @@ const Universe = () => {
           nuevaEcija,
           pampanga,
           tarlac,
-          zambales
+          zambales,
         } = response.data;
 
         setName(name);
@@ -94,7 +94,7 @@ const Universe = () => {
                 nuevaEcija || false,
                 pampanga || false,
                 tarlac || false,
-                zambales || false
+                zambales || false,
               ];
 
         setPermissions(finalPermissions);
@@ -126,7 +126,7 @@ const Universe = () => {
     setRetrying(false);
   };
 
-  const currentUser  = {
+  const currentUser = {
     name,
     username: userHandle,
     avatar,
@@ -185,13 +185,17 @@ const Universe = () => {
 
   return (
     <DataProvider>
-      <Layout className="layout-container">
+      <Layout
+        className={`layout-container ${
+          theme === "dark" ? "dark-theme" : "light-theme"
+        }`}
+      >
         <SideMenu
           theme={theme}
           collapsed={collapsed}
           setCollapsed={setCollapsed}
           permissions={permissions}
-          currentUser ={currentUser }
+          currentUser={currentUser}
         />
 
         <Layout>
@@ -242,7 +246,9 @@ const Universe = () => {
                       className="theme-button"
                       type="text"
                       onClick={toggleTheme}
-                      icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
+                      icon={
+                        theme === "dark" ? <SunOutlined /> : <MoonOutlined />
+                      }
                     />
                   </div>
                 </div>
@@ -260,15 +266,15 @@ const Universe = () => {
                 />
                 <Route
                   path="/province/:provinceName"
-                  element={<Province currentUser ={currentUser } />}
+                  element={<Province currentUser={currentUser} />}
                 />
                 <Route
                   path="survey"
-                  element={<Survey currentUser ={currentUser } />}
+                  element={<Survey currentUser={currentUser} />}
                 />
                 <Route
                   path="survey2025"
-                  element={<Survey2025 currentUser ={currentUser } />}
+                  element={<Survey2025 currentUser={currentUser} />}
                 />
                 <Route path="healthcare" element={<Healthcare />} />
                 <Route path="chemicals" element={<Chemicals />} />

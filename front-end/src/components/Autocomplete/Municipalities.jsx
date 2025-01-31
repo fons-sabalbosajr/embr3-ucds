@@ -61,7 +61,7 @@ const Municipality = ({ value, disabled, onChange, editedRecord, handleChange, i
       <Input
         style={{
           fontSize: "11px",
-          height: "29px",
+          height: "27px",
           padding: "4px 8px",
         }}
         placeholder="Select municipality"

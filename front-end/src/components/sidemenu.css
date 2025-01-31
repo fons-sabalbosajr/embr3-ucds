@@ -71,11 +71,6 @@
   font-size: 12px; /* Set font size for links */
 }
 
-.link-menu-hover:hover {
-  color: #1890ff;
-  
-}
-
 .logo.collapsed .logo-icon-text {
   opacity: 0; /* Hide text when collapsed */
   margin-left: 0; /* Adjusted margin when collapsed */
@@ -93,9 +88,12 @@
   filter: invert(0%);
 }
 
-
-.menu-container .ant-menu-item,
+.menu-container,
 .menu-container .ant-menu-submenu-title,
 .menu-container .link-menu-hover {
   font-size: 12px;
+}
+
+.ant-menu-item {
+  font-size: 11px; /* Adjust the font size as needed */
 }

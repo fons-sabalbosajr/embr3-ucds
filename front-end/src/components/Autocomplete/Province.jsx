@@ -41,9 +41,9 @@ const Province = ({ value, disabled, onChange, editedRecord, handleChange, isEdi
     allowClear={true}
   >
    <Input
-      style={{
+       style={{
         fontSize: "11px",
-        height: "29px",
+        height: "27px",
         padding: "4px 8px",
       }}
       placeholder="Select province"

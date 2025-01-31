@@ -2735,6 +2735,71 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
   }
 });
 
+app.put("/api/update-healthcare/:id", logActivity, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newData = req.body; // This should contain the updated data
+    const updatedBy = req.body.updated_by; // Assuming the user who updated the data is passed
+
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data-healthcare");
+
+    // Fetch the existing document before updating
+    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
+
+    if (!oldDocument) {
+      return res.status(404).json({ error: "Healthcare data not found" });
+    }
+
+    // Perform the update operation
+    const result = await collection.updateOne(
+      { id_no: parseInt(id) },
+      { $set: newData }
+    );
+
+    if (result.modifiedCount === 1) {
+      // If the update was successful, create an audit log
+      const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+
+      // Create an audit log to track changes
+      const auditLog = {
+        updated_by: updatedBy,
+        updated_at: new Date(),
+        changes: [],
+      };
+
+      // Compare old and new data to find changes
+      Object.keys(newData).forEach((key) => {
+        if (oldDocument[key] !== newData[key]) {
+          auditLog.changes.push({
+            field: key,
+            old_value: oldDocument[key],
+            new_value: newData[key],
+          });
+        }
+      });
+
+      // Save audit log into a separate collection (optional)
+      const auditCollection = database.collection("audit-log");
+      await auditCollection.insertOne(auditLog);
+
+      res.status(200).json({ message: "Healthcare data updated successfully", auditLog });
+    } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
+      res.status(200).json({ message: "No changes were made to the healthcare data" });
+    } else {
+      res.status(404).json({ error: "Healthcare data not found or no changes were made" });
+    }
+  } catch (error) {
+    console.error("Error updating healthcare data:", error);
+    res.status(500).json({ error: "Failed to update healthcare data. Please try again later." });
+  }
+});
+
 // Update users data from admin panel
 app.put("/api/users/:id", logActivity, async (req, res) => {
   try {

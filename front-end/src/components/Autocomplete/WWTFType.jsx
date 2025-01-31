@@ -44,7 +44,7 @@ const WWTFType = ({ value, disabled, onChange, isEditing }) => {
       <Input
         style={{
           fontSize: "11px",
-          height: "30px",
+          height: "27px",
           padding: "4px 8px",
         }}
         placeholder="Select WWTF Type"
