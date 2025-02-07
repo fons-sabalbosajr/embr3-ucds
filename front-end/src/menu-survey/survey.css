@@ -68,31 +68,31 @@
   width: 100px;
 }
 
-.checkbox-wrapper.eia {
+.checkbox-wrapper.survey_eia {
   background-color: #aab4f2;
   font-size: 11px;
   font-weight: 600;
 }
 
-.checkbox-wrapper.air {
+.checkbox-wrapper.survey_air {
   background-color: #c7cace;
   font-size: 11px;
   font-weight: 600;
 }
 
-.checkbox-wrapper.water {
+.checkbox-wrapper.survey_water {
   background-color: #72dfe9;
   font-size: 11px;
   font-weight: 600;
 }
 
-.checkbox-wrapper.haz {
+.checkbox-wrapper.survey_haz {
   background-color: #ffc568;
   font-size: 11px;
   font-weight: 600;
 }
 
-.checkbox-wrapper.chem {
+.checkbox-wrapper.survey_chem {
   background-color: #95e05f;
   font-size: 11px;
   font-weight: 600;
@@ -140,6 +140,13 @@
   padding-bottom: 5px;
 }
 
+.survey-dropdown {
+  margin-bottom: 10px;
+  width: 180px;
+  text-align: left;
+  font-weight: 500;
+}
+
 .dark-theme {
   background-color: #001529 !important;
   color: #fff;
@@ -156,4 +163,9 @@
 
 .light-theme-icon {
   color: #000;
+}
+
+.modal-iis{
+  font-size: 14px;
+  margin-right: 20px;
 }

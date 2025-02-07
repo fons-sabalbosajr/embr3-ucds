@@ -600,7 +600,7 @@ const LegalUnit = ({
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={24} lg={24}>
                 <Paragraph style={{ display: "flex", flexDirection: "column" }}>
-                  <strong>TC Commitment/Deadline of Compliance:</strong>
+                  <strong>Position Paper:</strong>
                   <span className="paste-here">
                     <i> &nbsp; (Paste Link Here)</i>
                   </span>

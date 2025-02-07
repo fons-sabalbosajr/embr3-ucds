@@ -56,11 +56,7 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
         setIsEditing(false);
         //onCancel();
         clearFields();
-        Swal.fire(
-          'Cancelled!',
-          'Your changes have been discarded.',
-          'success'
-        );
+
       }
     });
   };

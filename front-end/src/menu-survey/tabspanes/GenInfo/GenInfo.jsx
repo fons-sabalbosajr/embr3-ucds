@@ -126,7 +126,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               disabled={!isEditing}
               placeholder="No data"
               rows={2}
-              className="textbox-label disabled-input"
+              className="textbox-label"
               onChange={(e) =>
                 handleInputChange("project_title", e.target.value)
               }

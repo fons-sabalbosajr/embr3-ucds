@@ -30,6 +30,7 @@ import axios from "axios";
 import Highlighter from "react-highlight-words";
 import debounce from "lodash.debounce";
 import SurveyModal from "./SurveyModal";
+import AddSurvey from "./actions/AddSurvey";
 import CryptoJS from "crypto-js";
 
 const Survey = ({ theme, currentUser }) => {
@@ -53,6 +54,9 @@ const Survey = ({ theme, currentUser }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [viewedRecord, setViewedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedSurvey, setSelectedSurvey] = useState("Survey 2024");
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [buttonColor, setButtonColor] = useState("primary");
 
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
@@ -60,13 +64,16 @@ const Survey = ({ theme, currentUser }) => {
     return new Intl.NumberFormat("en-US").format(number);
   };
 
-  const fetchData = async () => {
+  const fetchData = async (year) => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8081/api/surveys", {
-        method: "GET",
-        credentials: "include",
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/surveys/${year}`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -74,10 +81,63 @@ const Survey = ({ theme, currentUser }) => {
       }
 
       const result = await response.json();
-      const sortedResult = result.sort((a, b) => a.id_no - b.id_no); // Sort by id_no
+
+      // Normalize data: Ensure consistency between Survey 2024 and Survey 2025
+      const normalizedResult = result.map((item) => ({
+        id_no: item.id_no ?? null,
+        survey_eia: item.survey_eia === true ? "✔" : item.survey_eia || "",
+        survey_air: item.survey_air === true ? "✔" : item.survey_air || "",
+        survey_water:
+          item.survey_water === true ? "✔" : item.survey_water || "",
+        survey_haz: item.survey_haz === true ? "✔" : item.survey_haz || "",
+        survey_chem: item.survey_chem === true ? "✔" : item.survey_chem || "",
+        project_title: item.project_title ?? "N/A",
+        project_type: item.project_type ?? "N/A",
+        project_subtype: item.project_subtype ?? "N/A",
+        industry_class: item.industry_class ?? "N/A",
+        psic_code: item.psic_code ?? "N/A",
+        mbu_area: item.mbu_area === true ? "✔" : item.mbu_area || "",
+        employee_no: item.employee_no ?? "N/A",
+        bod: item.bod ?? "N/A",
+        waterbody: item.waterbody ?? "N/A",
+        long: item.long ?? "N/A",
+        lat: item.lat ?? "N/A",
+        cong_district: item.cong_district ?? "N/A",
+        address: item.address ?? "N/A",
+        street: item.street ?? "N/A",
+        brgy: item.brgy ?? "N/A",
+        city: item.city ?? "N/A",
+        province: item.province ?? "N/A",
+        resp_unit: item.resp_unit ?? "N/A",
+        handler: item.handler ?? "N/A",
+        iis_no: item.iis_no ?? "N/A",
+        date_surveyed: item.date_surveyed ?? "N/A",
+        date_routed: item.date_routed ?? "N/A",
+        date_signed: item.date_signed ?? item.date_report_signed ?? "N/A",
+        total_days: item.total_days ?? "N/A",
+        track_report_unit:
+          item.track_report_unit === true ? "✔" : item.track_report_unit || "",
+        track_report_planning:
+          item.track_report_planning === true
+            ? "✔"
+            : item.track_report_planning || "",
+        remarks: item.remarks ?? "N/A",
+        docket_no: item.docket_no ?? "N/A",
+        date_approved_legal: item.date_approved_legal ?? "N/A",
+        v_pd1586: item.v_pd1586 ?? "N/A",
+        penalty_amount: item.penalty_amount ?? "N/A",
+        penalty_or_number: item.penalty_or_number ?? "N/A",
+        daysDfDa: item.daysDfDa ?? "N/A",
+        updated_by: item.updated_by ?? "N/A",
+        color: item.color ?? "#ffffff", // Default to white
+      }));
+
+      const sortedResult = normalizedResult.sort((a, b) => a.id_no - b.id_no);
+
       setData(sortedResult);
       setFilteredData(sortedResult);
 
+      // Extract unique responsible units
       const uniqueUnits = [
         ...new Set(sortedResult.map((item) => item.resp_unit)),
       ];
@@ -91,11 +151,11 @@ const Survey = ({ theme, currentUser }) => {
           survey_water: item.survey_water,
           survey_haz: item.survey_haz,
           survey_chem: item.survey_chem,
-          color: item.color, // Include the color field
+          color: item.color,
         });
       });
-      setInitialState(stateMap);
 
+      setInitialState(stateMap);
       setUniqueUnits(uniqueUnits);
       setSelectedKeys([]);
     } catch (error) {
@@ -106,8 +166,11 @@ const Survey = ({ theme, currentUser }) => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (selectedSurvey) {
+      const year = selectedSurvey.replace("Survey ", ""); // Extract year
+      fetchData(year);
+    }
+  }, [selectedSurvey]);
 
   useEffect(() => {
     const filteredData = data.filter((record) => {
@@ -732,6 +795,14 @@ const Survey = ({ theme, currentUser }) => {
       .slice(1)}`;
   };
 
+  const showAddModal = () => {
+    setIsAddModalVisible(true);
+  };
+
+  const handleAddCancel = () => {
+    setIsAddModalVisible(false);
+  };
+
   // Define table columns
   const columns = [
     {
@@ -745,108 +816,39 @@ const Survey = ({ theme, currentUser }) => {
     },
     {
       title: "Applicable Laws",
-      dataIndex: "applicable_laws",
       key: "applicable_laws",
-      align: "left",
-      width: 100,
-      render: (text, record) => {
-        // Function to log checkbox states
-        const logCheckboxStates = (field, checked) => {
-          const logMessage = {
-            ID_No: record.id_no,
-            EIA: record.survey_eia,
-            AIR: record.survey_air,
-            WATER: record.survey_water,
-            HAZ: record.survey_haz,
-            CHEMICAL: record.survey_chem,
-            [field]: checked,
-          };
-          //console.log(logMessage);
-        };
-
-        const isAnyChecked = () => {
-          return Object.values(record).some((value) => {
-            return (
-              [
-                "survey_eia",
-                "survey_air",
-                "survey_water",
-                "survey_haz",
-                "survey_chem",
-              ].includes(field) && value === "✔"
-            );
-          });
-        };
-
+      align: "center",
+      width: 150,
+      render: (_, record) => {
         const handleCheckboxChange = (field, checked) => {
-          record[field] = checked ? "✔" : ""; // Mark as checked or unchecked
-          //console.log(`record: ${JSON.stringify(record)}`);
-          const allUnchecked = Object.values(record).every((value) => {
-            return (
-              ![
-                "survey_eia",
-                "survey_air",
-                "survey_water",
-                "survey_haz",
-                "survey_chem",
-              ].includes(field) || value !== "✔"
-            );
-          }); // Check if all checkboxes are unchecked
-          record.modifiedApplicableLaws = allUnchecked ? false : true; // Update the modified flag
-          logCheckboxStates(field, checked); // Log the checkbox state
+          record[field] = checked ? "✔" : "";
           setModifiedRows((prev) => ({
             ...prev,
-            [record.id_no]: record.modifiedApplicableLaws,
-          })); // Update modified rows state
+            [record.id_no]: true,
+          }));
         };
 
         return (
           <div className="checkbox-container">
-            <div className={`checkbox-wrapper eia`}>
-              <Checkbox
-                checked={record.survey_eia === "✔"}
-                onChange={(e) =>
-                  handleCheckboxChange("survey_eia", e.target.checked)
-                }
-              />
-              <span className="checkbox-label">EIA</span>
-            </div>
-            <div className={`checkbox-wrapper air`}>
-              <Checkbox
-                checked={record.survey_air === "✔"}
-                onChange={(e) =>
-                  handleCheckboxChange("survey_air", e.target.checked)
-                }
-              />
-              <span className="checkbox-label">AIR</span>
-            </div>
-            <div className={`checkbox-wrapper water`}>
-              <Checkbox
-                checked={record.survey_water === "✔"}
-                onChange={(e) =>
-                  handleCheckboxChange("survey_water", e.target.checked)
-                }
-              />
-              <span className="checkbox-label">WATER</span>
-            </div>
-            <div className={`checkbox-wrapper haz`}>
-              <Checkbox
-                checked={record.survey_haz === "✔"}
-                onChange={(e) =>
-                  handleCheckboxChange("survey_haz", e.target.checked)
-                }
-              />
-              <span className="checkbox-label">HAZ</span>
-            </div>
-            <div className={`checkbox-wrapper chem`}>
-              <Checkbox
-                checked={record.survey_chem === "✔"}
-                onChange={(e) =>
-                  handleCheckboxChange("survey_chem", e.target.checked)
-                }
-              />
-              <span className="checkbox-label">CHEMICAL</span>
-            </div>
+            {[
+              "survey_eia",
+              "survey_air",
+              "survey_water",
+              "survey_haz",
+              "survey_chem",
+            ].map((field) => (
+              <div key={field} className={`checkbox-wrapper ${field}`}>
+                <Checkbox
+                  checked={record[field] === "✔" || record[field] === true}
+                  onChange={(e) =>
+                    handleCheckboxChange(field, e.target.checked)
+                  }
+                />
+                <span className="checkbox-label">
+                  {field.replace("survey_", "").toUpperCase()}
+                </span>
+              </div>
+            ))}
           </div>
         );
       },
@@ -854,28 +856,28 @@ const Survey = ({ theme, currentUser }) => {
     {
       title: "Project Title",
       dataIndex: "project_title",
-      ...getColumnSearchProps("project_title"),
       key: "project_title",
+      ...getColumnSearchProps("project_title"),
       align: "left",
       width: 300,
       fixed: "left",
       render: (text, record) => (
         <div>
-          <strong className="industry-label">{text}</strong>
+          <strong className="industry-label">{text || "N/A"}</strong>
           <div className="industry-label">
-            <p style={{ fontStyle: "italic" }}>{record.address}</p>
-            <p>Date Surveyed: {record.date_surveyed}</p>
-            <p>Responsible Unit: {record.resp_unit}</p>
+            <p style={{ fontStyle: "italic" }}>{record.address || "N/A"}</p>
+            <p>Date Surveyed: {record.date_surveyed || "N/A"}</p>
+            <p>Responsible Unit: {record.resp_unit || "N/A"}</p>
             <p>
               IIS No.:{" "}
               <a
                 href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                  record.iis_no
+                  record.iis_no || ""
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {record.iis_no || ""}
+                {record.iis_no || "N/A"}
               </a>
             </p>
           </div>
@@ -908,18 +910,18 @@ const Survey = ({ theme, currentUser }) => {
         const backgroundColor = responsibleUnitBackgroundColor(
           record.resp_unit
         );
-        const textWidth = measureTextWidth(record.resp_unit); // Measure the text width
-        const darkerBackgroundColor = darkenColor(backgroundColor, -50); // Darker shade
+        const textWidth = measureTextWidth(record.resp_unit);
+        const darkerBackgroundColor = darkenColor(backgroundColor, -50);
 
         return (
           <Tooltip
             title={
               <div style={{ fontSize: "12px" }}>
-                <div>Responsible Unit: {record.resp_unit}</div>
+                <div>Responsible Unit: {record.resp_unit || "N/A"}</div>
                 <div>Handler: {record.handler || "N/A"}</div>
               </div>
             }
-            color={darkerBackgroundColor} // Tooltip background color (slightly darker)
+            color={darkerBackgroundColor}
           >
             <div
               style={{
@@ -927,13 +929,13 @@ const Survey = ({ theme, currentUser }) => {
                 padding: "5px",
                 borderRadius: "4px",
                 color: backgroundColor !== "transparent" ? "black" : "inherit",
-                width: `${textWidth + 10}px`, // Set the width dynamically based on the text length
-                display: "inline-block", // Ensure the width is applied properly
-                whiteSpace: "nowrap", // Prevent text from wrapping
-                cursor: "pointer", // Change cursor to pointer on hover
+                width: `${textWidth + 10}px`,
+                display: "inline-block",
+                whiteSpace: "nowrap",
+                cursor: "pointer",
               }}
             >
-              {record.resp_unit}
+              {record.resp_unit || "N/A"}
             </div>
           </Tooltip>
         );
@@ -951,51 +953,43 @@ const Survey = ({ theme, currentUser }) => {
       title: "Survey Status",
       key: "date_surveyed",
       ...getColumnSearchProps("date_surveyed"),
-      render: (text, record) => (
+      render: (_, record) => (
         <div className="industry-label">
-          {/* One-liner for each field */}
           <div>
-            {/* Date Monitored */}
             {record.date_surveyed && (
               <div>
                 <Tooltip title="Date Surveyed">
                   <MonitorOutlined
                     style={{ marginRight: 8, color: "#1890ff" }}
-                  />{" "}
-                  {/* Blue */}
-                  {record.date_surveyed}
+                  />
+                  {record.date_surveyed || "N/A"}
                 </Tooltip>
               </div>
             )}
-
-            {/* Date Routed */}
             {record.date_routed && (
               <div>
                 <Tooltip title="Date Routed to IIS">
                   <GlobalOutlined
                     style={{ marginRight: 8, color: "#52c41a" }}
-                  />{" "}
-                  {/* Green */}
-                  {record.date_routed}
+                  />
+                  {record.date_routed || "N/A"}
                 </Tooltip>
               </div>
             )}
-
-            {/* Date Signed */}
             {record.date_signed && (
               <div>
                 <Tooltip title="Date Report Signed">
                   <CheckCircleFilled
                     style={{ marginRight: 8, color: "#faad14" }}
-                  />{" "}
-                  {record.date_signed}
+                  />
+                  {record.date_signed || "N/A"}
                 </Tooltip>
               </div>
             )}
           </div>
         </div>
       ),
-      width: 150, // Adjust as needed
+      width: 150,
       align: "left",
     },
     {
@@ -1004,7 +998,7 @@ const Survey = ({ theme, currentUser }) => {
       align: "left",
       width: 100,
       fixed: "right",
-      render: (text, record) => (
+      render: (_, record) => (
         <div style={{ display: "flex", alignItems: "center" }}>
           <Button
             icon={<EyeOutlined />}
@@ -1020,11 +1014,11 @@ const Survey = ({ theme, currentUser }) => {
             size="small"
             onClick={() => handleSave(record)}
             className="btn-modify"
-            disabled={!record.modifiedApplicableLaws} // Disable if not modified
+            disabled={!record.modifiedApplicableLaws}
           >
             <span style={{ position: "relative", display: "inline-block" }}>
               <SaveOutlined />
-              {record.modifiedApplicableLaws ? (
+              {record.modifiedApplicableLaws && (
                 <span
                   style={{
                     position: "absolute",
@@ -1036,7 +1030,7 @@ const Survey = ({ theme, currentUser }) => {
                     borderRadius: "50%",
                   }}
                 />
-              ) : null}
+              )}
             </span>
           </Button>
         </div>
@@ -1047,7 +1041,18 @@ const Survey = ({ theme, currentUser }) => {
   return (
     <div className={`header-panel ${theme}`}>
       <div className="header-content">
-        <h3 className="header-title">Survey Template 2024</h3>
+        <Select
+          value={selectedSurvey}
+          onChange={(value) => {
+            setSelectedSurvey(value);
+            fetchData(value.replace("Survey ", "")); // Ensure only the year is passed
+          }}
+          className="survey-dropdown"
+          style={{ width: 180 }}
+        >
+          <Option value="Survey 2025">Survey 2025</Option>
+          <Option value="Survey 2024">Survey 2024</Option>
+        </Select>
         <Tooltip title="Reload Table">
           <Button
             type="primary"
@@ -1079,9 +1084,17 @@ const Survey = ({ theme, currentUser }) => {
             />
           </Dropdown>
         </Tooltip>
-        <Button type="primary" className="add-industry-button">
+        <Button
+          type="primary"
+          className="add-industry-button"
+          style={{
+            backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
+          }}
+          onClick={showAddModal}
+        >
           Add Industry
         </Button>
+        <AddSurvey visible={isAddModalVisible} onCancel={handleAddCancel} />
       </div>
 
       <div className="filter-container">
@@ -1137,7 +1150,7 @@ const Survey = ({ theme, currentUser }) => {
             <span className="modal-title">
               {viewedRecord?.project_title || ""}
             </span>
-            <span className="modal-title">
+            <span className="modal-iis">
               <a
                 href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
                   viewedRecord?.iis_no

@@ -1,0 +1,55 @@
+/* GenInfo.css */
+
+/* Customize the textbox label style */
+.textbox-label {
+  width: 100%;
+  padding: 8px;
+  height: 29px;
+}
+
+
+.applicable-laws-container {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start; /* align the checkboxes to the right */
+}
+
+/* Custom styling for Paragraphs */
+.paragraph-margin {
+  margin-bottom: 16px;
+}
+
+.label-industry-type {
+  margin-bottom: 8px;
+}
+
+.congress {
+  margin-bottom: 16px;
+}
+
+/* Customize the input field when disabled */
+.disabled-input {
+  background-color: #f0f0f0;
+}
+
+.ant-input {
+  font-size: 12px;
+}
+
+.label-checkbox{
+  font-weight: 500;
+  font-size: 10px;
+}
+
+.gen-info-row{
+  margin-top: 5px;
+}
+
+.paragraph-street{
+  margin-top: -5px;
+}

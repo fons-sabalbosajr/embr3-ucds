@@ -40,10 +40,6 @@ function generateRandomPassword(length) {
   return password;
 }
 
-
-
-
-
 //////////////////////////////////////////////////////////////////////////////////////////
 const allowedOrigins = ["http://localhost:5173"];
 
@@ -64,6 +60,7 @@ let reportdraftCollection;
 let surveyCollection;
 let activityLogsCollection;
 let surveyLogCollection;
+let survey2025Collection;
 let ucdsLogCollection;
 let healthcareCollection;
 
@@ -99,7 +96,8 @@ async function connectToMongo() {
     dailyNoticesCollection = db.collection("ucds-data");
     postingCollection = db.collection("postings");
     reportdraftCollection = db.collection("draft-reports");
-    surveyCollection = db.collection("survey-data");
+    surveyCollection = db.collection("survey-data-2024");
+    survey2025Collection = db.collection("survey-data-2025");
     activityLogsCollection = db.collection("app-logs");
     surveyLogCollection = db.collection("survey-log");
     ucdsLogCollection = db.collection("ucds-log");
@@ -479,8 +477,8 @@ app.post("/request-password-reset", async (req, res) => {
     const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
 
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587, 
+      host: "smtp.gmail.com",
+      port: 587,
       secure: false,
       auth: {
         user: process.env.EMAIL_USER, // Sender's email (same as the one in .env)
@@ -565,13 +563,15 @@ app.post("/request-password-reset", async (req, res) => {
           </body>
         </html>
       `,
-      attachments: [{
-        filename: 'UCDSInformation.png',
-        path: path.join(__dirname, 'assets', 'UCDSInformation.png'),
-        cid: 'logo', // same cid value as in the html img src
-        contentDisposition: 'inline', // ensures the image is embedded
-        encoding: 'base64', // optional: helps with encoding the image correctly
-      }]
+      attachments: [
+        {
+          filename: "UCDSInformation.png",
+          path: path.join(__dirname, "assets", "UCDSInformation.png"),
+          cid: "logo", // same cid value as in the html img src
+          contentDisposition: "inline", // ensures the image is embedded
+          encoding: "base64", // optional: helps with encoding the image correctly
+        },
+      ],
     };
     // Send the email
     await transporter.sendMail(mailOptions);
@@ -581,7 +581,7 @@ app.post("/request-password-reset", async (req, res) => {
       message: "Password reset email sent successfully.",
       status: "success",
       resetLink: `http://localhost:5173/reset-password?token=${resetToken}`, // Optionally, you can include the reset link for easy access
-    });    
+    });
   } catch (error) {
     console.error("Error during password reset request:", error);
     return res.status(500).json({ error: "An error occurred." });
@@ -592,14 +592,16 @@ app.post("/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
 
   if (!token || !newPassword) {
-    return res.status(400).json({ error: "Token and new password are required." });
+    return res
+      .status(400)
+      .json({ error: "Token and new password are required." });
   }
 
   try {
     // Find user by reset token
     const user = await userCollection.findOne({
       resetToken: token,
-      resetTokenExpiration: { $gt: Date.now() } // Ensure the token has not expired
+      resetTokenExpiration: { $gt: Date.now() }, // Ensure the token has not expired
     });
 
     if (!user) {
@@ -614,14 +616,16 @@ app.post("/reset-password", async (req, res) => {
       { _id: user._id },
       {
         $set: { password: hashedPassword },
-        $unset: { resetToken: "", resetTokenExpiration: "" }
+        $unset: { resetToken: "", resetTokenExpiration: "" },
       }
     );
 
     return res.status(200).json({ message: "Password reset successful." });
   } catch (error) {
     console.error("Error during password reset:", error);
-    return res.status(500).json({ error: "An error occurred during password reset." });
+    return res
+      .status(500)
+      .json({ error: "An error occurred during password reset." });
   }
 });
 
@@ -1021,7 +1025,6 @@ app.post("/api/ucds-log", async (req, res) => {
   }
 });
 
-//UPLOADING PROFILE PICTURE
 //////////////////////////////////////////////////////////////////////////////////////////
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -1162,7 +1165,6 @@ app.post("/api/newusers", uploadnewdp.single("avatar"), async (req, res) => {
 
 app.use("/uploads", express.static(uploadsDir));
 
-// app.use(logActivity);
 //////////////////////////////////////////////////////////////////////////////////////////
 
 app.get("/api/draft-report", async (req, res) => {
@@ -1195,12 +1197,59 @@ app.get("/api/firm-count", async (req, res) => {
   }
 });
 
-app.get("/api/surveys", async (req, res) => {
+// API for loading surveys based on the year (e.g., /api/surveys/2025)
+app.get("/api/surveys/:year", async (req, res) => {
   try {
-    const surveys = await surveyCollection.find({}).toArray();
+    const { year } = req.params; // Get year from URL parameter
+    let collection;
+    
+    // Only allow valid years: 2024 or 2025
+    if (year === "2024") {
+      collection = db.collection("survey-data-2024");
+    } else if (year === "2025") {
+      collection = db.collection("survey-data-2025");
+    } else {
+      return res.status(400).json({ error: "Invalid survey year" });
+    }
+
+    // Fetch all surveys from the selected year
+    const surveys = await collection.find({}).toArray();
     res.status(200).json(surveys);
   } catch (error) {
     console.error("Error fetching survey data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/surveys/last-id/:year", async (req, res) => {
+  try {
+    const { year } = req.params;
+
+    let collection;
+    if (year === "2024") {
+      collection = db.collection("survey-data-2024");
+    } else if (year === "2025") {
+      collection = db.collection("survey-data-2025");
+    } else {
+      console.error("Invalid survey year requested:", year);
+      return res.status(400).json({ error: "Invalid survey year" });
+    }
+
+    // Fetch the last record sorted by id_no in descending order
+    const lastSurvey = await collection
+      .find({})
+      .sort({ id_no: -1 }) // Sort by id_no in descending order
+      .limit(1) // Get only the last record
+      .toArray();
+
+    if (lastSurvey.length === 0) {
+      return res.status(404).json({ error: "No survey data found" });
+    }
+
+    // Send the id_no of the last survey
+    res.status(200).json({ lastIdNo: lastSurvey[0].id_no });
+  } catch (error) {
+    console.error("Error fetching last id_no:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -2666,9 +2715,6 @@ app.get("/api/healthcare", async (req, res) => {
   }
 });
 
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
 //Update the data per provinces
 app.put("/api/update-data/:id", logActivity, async (req, res) => {
   try {
@@ -2788,15 +2834,23 @@ app.put("/api/update-healthcare/:id", logActivity, async (req, res) => {
       const auditCollection = database.collection("audit-log");
       await auditCollection.insertOne(auditLog);
 
-      res.status(200).json({ message: "Healthcare data updated successfully", auditLog });
+      res
+        .status(200)
+        .json({ message: "Healthcare data updated successfully", auditLog });
     } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
-      res.status(200).json({ message: "No changes were made to the healthcare data" });
+      res
+        .status(200)
+        .json({ message: "No changes were made to the healthcare data" });
     } else {
-      res.status(404).json({ error: "Healthcare data not found or no changes were made" });
+      res
+        .status(404)
+        .json({ error: "Healthcare data not found or no changes were made" });
     }
   } catch (error) {
     console.error("Error updating healthcare data:", error);
-    res.status(500).json({ error: "Failed to update healthcare data. Please try again later." });
+    res.status(500).json({
+      error: "Failed to update healthcare data. Please try again later.",
+    });
   }
 });
 

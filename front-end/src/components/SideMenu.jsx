@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { ConfigProvider, Layout, Menu, Button } from "antd";
 import {
-  DashboardTwoTone,
-  CheckCircleTwoTone,
-  PushpinTwoTone,
-  SettingTwoTone,
-  MedicineBoxTwoTone,
-  ReconciliationTwoTone,
-  EnvironmentTwoTone,
-  DatabaseTwoTone,
+  DashboardFilled,
+  CheckCircleFilled,
+  PushpinFilled,
+  SettingFilled,
+  MedicineBoxFilled,
+  ReconciliationFilled,
+  EnvironmentFilled,
+  DatabaseFilled,
   MenuUnfoldOutlined,
   MenuFoldOutlined,
 } from "@ant-design/icons";
@@ -85,7 +85,7 @@ const SideMenu = ({ theme, currentUser }) => {
           >
             <Menu.Item
               key="/universe/dashboard"
-              icon={<DashboardTwoTone />}
+              icon={<DashboardFilled />}
               className="menu-bar-item"
             >
               <Link to="/universe/dashboard" className="link-menu">
@@ -95,7 +95,7 @@ const SideMenu = ({ theme, currentUser }) => {
 
             <Menu.SubMenu
               key="r3-monitoring"
-              icon={<CheckCircleTwoTone />}
+              icon={<CheckCircleFilled />}
               title="Monitoring Plan"
             >
               {visibleProvinces.map((province) => (
@@ -110,7 +110,7 @@ const SideMenu = ({ theme, currentUser }) => {
 
             <SubMenu
               key="healthcare"
-              icon={<MedicineBoxTwoTone />}
+              icon={<MedicineBoxFilled />}
               title="Healthcare"
             >
               <Menu.Item key="/universe/healthcare">
@@ -123,26 +123,26 @@ const SideMenu = ({ theme, currentUser }) => {
               </Menu.Item>
             </SubMenu>
 
-            <Menu.Item key="/universe/survey" icon={<ReconciliationTwoTone />}>
+            <Menu.Item key="/universe/survey" icon={<ReconciliationFilled/>}>
               <Link to="/universe/survey" className="link-menu">Survey</Link>
             </Menu.Item>
 
-            <Menu.Item key="/universe/mbu" icon={<EnvironmentTwoTone />}>
+            <Menu.Item key="/universe/mbu" icon={<EnvironmentFilled />}>
               <Link to="/universe/mbu" className="link-menu">Manila Bay Pipeline</Link>
             </Menu.Item>
 
-            <Menu.Item key="/universe/eswm-database" icon={<DatabaseTwoTone />}>
+            <Menu.Item key="/universe/eswm-database" icon={<DatabaseFilled />}>
               <Link to="/universe/eswm-database" className="link-menu">ESWM Database</Link>
             </Menu.Item>
 
-            <SubMenu key="reports" icon={<PushpinTwoTone />} title="Reports">
+            <SubMenu key="reports" icon={<PushpinFilled />} title="Reports">
               <Menu.Item key="/universe/extract">
                 <Link to="/universe/extract">Extract Data</Link>
               </Menu.Item>
             </SubMenu>
 
             {canViewAdminPanel && (
-              <SubMenu key="admin" icon={<SettingTwoTone />} title="Admin">
+              <SubMenu key="admin" icon={<SettingFilled />} title="Admin">
                 <Menu.Item key="/universe/accounts">
                   <Link to="/universe/accounts">User Accounts</Link>
                 </Menu.Item>

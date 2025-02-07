@@ -209,7 +209,7 @@ const GenInfoAdd = ({isEditing}) => {
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={24} md={24} lg={24} className="modalcol">
             <Paragraph>
-              <strong>Full Address</strong>
+              <strong>Complete Address</strong>
               <ConfigProvider
                 theme={{
                   components: {

@@ -6,7 +6,6 @@ import axios from "axios";
 import Dashboard from "./menu-component/Dashboard";
 import Province from "./menu-province/Province";
 import Survey from "./menu-survey/Survey";
-import Survey2025 from "./menu-survey/Survey2025";
 import Healthcare from "./menu-healthcare/Healthcare";
 import Chemicals from "./menu-chemicals/Chemicals";
 import MBU from "./menu-mbu/MBU";
@@ -271,10 +270,6 @@ const Universe = () => {
                 <Route
                   path="survey"
                   element={<Survey currentUser={currentUser} />}
-                />
-                <Route
-                  path="survey2025"
-                  element={<Survey2025 currentUser={currentUser} />}
                 />
                 <Route path="healthcare" element={<Healthcare />} />
                 <Route path="chemicals" element={<Chemicals />} />

@@ -865,10 +865,11 @@ const Healthcare = ({ theme, currentUser, data }) => {
           }}
           setIsEditing={setIsEditing}
           setIsModalVisible={setIsModalVisible}
-          isModalVisible={isModalVisible} // Pass this prop
+          isModalVisible={isModalVisible}
           setOriginalRecord={setOriginalRecord}
           setCurrentRecord={setCurrentRecord}
           originalRecord={originalRecord}
+          handleReload={handleReload}
         />
       )}
     </div>
