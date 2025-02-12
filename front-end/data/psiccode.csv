@@ -145,7 +145,7 @@ Poultry Farm,14,Resource Extractive Industries,Livestock Animal Industries
 Power Generation,35100,Infrastructure Projects,Power plants
 Power Transmission,35100,Infrastructure Projects,Power plants
 Printing,18110,Infrastructure Projects,"Building including Housing, Storage, and other Structures"
-"Processing of fish, crustaceans and mollusks",1020,Heavy and other processing/manufacturing industries,"Agricultural, Food and related Industries"
+Processing of fish, crustaceans and mollusks,1020,Heavy and other processing/manufacturing industries,"Agricultural, Food and related Industries"
 Processing of fruits and vegetables,1030,Heavy and other processing/manufacturing industries,"Agricultural, Food and related Industries"
 Processing of seaweeds,10205,Heavy and other processing/manufacturing industries,"Agricultural, Food and related Industries"
 Production processing of meat,10120,Heavy and other processing/manufacturing industries,"Agricultural, Food and related Industries"
@@ -162,7 +162,7 @@ Remediation activities and other waste management services,39000,Infrastructure 
 Research and experimental development,7210,Infrastructure Projects,Reclamation and other land Restoration Projects
 Resort,55,Golft Course and other Tourism Projects,Resort and other tourism/leisure projects
 Restaurant,56,Infrastructure Projects,"Building including Housing, Storage, and other Structures"
-Retailer of Fuel,"47300, 4661",Heavy and other processing/manufacturing industries,Petroleum and Petrochemical Industries
+Retailer of Fuel,47300,4661,"Heavy and other processing/manufacturing industries", "Petroleum and Petrochemical Industries"
 Rice milling,10610,Heavy and other processing/manufacturing industries,"Agricultural, Food and related Industries"
 Roads and Bridges,681,Infrastructure Projects,"Building including Housing, Storage, and other Structures"
 Rock phosphate mining,8914,Resource Extractive Industries,Mining and Quarrying Projects

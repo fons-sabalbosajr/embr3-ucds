@@ -78,7 +78,7 @@ const GenInfo = ({
             onChange={(e) => handleChange("title", e.target.value)}
             disabled={!isEditing}
             placeholder="No data"
-            className="textbox-label disabled-input"
+            className="textbox-label"
           />
         </Paragraph>
         <Paragraph>

@@ -246,20 +246,18 @@ const FocalPerson = ({
             </Paragraph>
           </Col>
           <Paragraph>
-              <strong>Inspector/Handler</strong>
-              <Inspector
-                value={editedRecord ? editedRecord.handler : ""}
-                onChange={(value) => handleChange("handler", value)}
-                disabled={!isEditing}
-                placeholder="No data"
-              />
-            </Paragraph>
+            <strong>Inspector/Handler</strong>
+            <Inspector
+              value={editedRecord ? editedRecord.handler : ""}
+              onChange={(value) => handleChange("handler", value)}
+              disabled={!isEditing}
+              placeholder="No data"
+            />
+          </Paragraph>
         </Row>
 
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-           
-
             <Paragraph>
               <strong>Schedule of Monitoring</strong>
               <Month
@@ -325,64 +323,100 @@ const FocalPerson = ({
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Monitored</strong>
-              <DatePicker
-                value={
-                  formattedDateMonitored
-                    ? dayjs(formattedDateMonitored, "MM/DD/YYYY")
-                    : null
-                }
-                onChange={(date) => {
-                  const newDate = date ? date.format("MM/DD/YYYY") : "";
-                  handleChange("date_monitored", newDate);
+              <ConfigProvider
+                theme={{
+                  components: {
+                    DatePicker: {
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                    },
+                  },
                 }}
-                disabled={!isEditing}
-                format="MM/DD/YYYY"
-                placeholder="MM/DD/YYYY"
-                className="custom-date-picker"
-                style={{ width: "100%" }}
-              />
+              >
+                <DatePicker
+                  value={
+                    formattedDateMonitored
+                      ? dayjs(formattedDateMonitored, "MM/DD/YYYY")
+                      : null
+                  }
+                  onChange={(date) => {
+                    const newDate = date ? date.format("MM/DD/YYYY") : "";
+                    handleChange("date_monitored", newDate);
+                  }}
+                  disabled={!isEditing}
+                  format="MM/DD/YYYY"
+                  placeholder="MM/DD/YYYY"
+                  className="custom-date-picker"
+                  style={{ width: "100%" }}
+                />
+              </ConfigProvider>
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Routed (IIS)</strong>
-              <DatePicker
-                value={
-                  formattedDateRouted
-                    ? dayjs(formattedDateRouted, "MM/DD/YYYY")
-                    : null
-                }
-                onChange={(date) => {
-                  const newDate = date ? date.format("MM/DD/YYYY") : "";
-                  handleChange("date_routed", newDate);
+              <ConfigProvider
+                theme={{
+                  components: {
+                    DatePicker: {
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                    },
+                  },
                 }}
-                disabled={!isEditing}
-                format="MM/DD/YYYY"
-                placeholder="MM/DD/YYYY"
-                className="custom-date-picker"
-                style={{ width: "100%" }}
-              />
+              >
+                <DatePicker
+                  value={
+                    formattedDateRouted
+                      ? dayjs(formattedDateRouted, "MM/DD/YYYY")
+                      : null
+                  }
+                  onChange={(date) => {
+                    const newDate = date ? date.format("MM/DD/YYYY") : "";
+                    handleChange("date_routed", newDate);
+                  }}
+                  disabled={!isEditing}
+                  format="MM/DD/YYYY"
+                  placeholder="MM/DD/YYYY"
+                  className="custom-date-picker"
+                  style={{ width: "100%" }}
+                />
+              </ConfigProvider>
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
             <Paragraph>
               <strong>Date Signed</strong>
-              <DatePicker
-                value={
-                  formattedDateSigned
-                    ? dayjs(formattedDateSigned, "MM/DD/YYYY")
-                    : null
-                }
-                onChange={(date) => {
-                  const newDate = date ? date.format("MM/DD/YYYY") : "";
-                  handleChange("date_signed", newDate);
+              <ConfigProvider
+                theme={{
+                  components: {
+                    DatePicker: {
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                    },
+                  },
                 }}
-                disabled={!isEditing}
-                format="MM/DD/YYYY"
-                placeholder="MM/DD/YYYY"
-                className="custom-date-picker"
-                style={{ width: "100%" }}
-              />
+              >
+                <DatePicker
+                  value={
+                    formattedDateSigned
+                      ? dayjs(formattedDateSigned, "MM/DD/YYYY")
+                      : null
+                  }
+                  onChange={(date) => {
+                    const newDate = date ? date.format("MM/DD/YYYY") : "";
+                    handleChange("date_signed", newDate);
+                  }}
+                  disabled={!isEditing}
+                  format="MM/DD/YYYY"
+                  placeholder="MM/DD/YYYY"
+                  className="custom-date-picker"
+                  style={{ width: "100%" }}
+                />
+              </ConfigProvider>
             </Paragraph>
           </Col>
         </Row>
@@ -477,6 +511,23 @@ const FocalPerson = ({
                 </Checkbox>
 
                 <strong>Tracking of Reports (Received by Planning Unit)</strong>
+              </Paragraph>
+              <Paragraph>
+                <Checkbox
+                  checked={editedRecord?.with_nov === "✔"}
+                  disabled={isCardDisabled}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const newValue = isChecked ? "✔" : "✘";
+                    handleValueChange("with_nov", newValue);
+                    handleChange("with_nov", newValue);
+                  }}
+                  style={{ fontSize: "12px" }}
+                >
+                  <span className="permit-label"></span>
+                </Checkbox>
+
+                <strong>With previously issued NOV?</strong>
               </Paragraph>
             </Card>
           </Col>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Input,
   Row,
@@ -6,7 +6,7 @@ import {
   Checkbox,
   Typography,
   Card,
-  TimePicker,
+  Button,
   DatePicker,
   ConfigProvider,
 } from "antd";
@@ -24,7 +24,6 @@ const customToken = {
     fontSizeSM: 9,
   },
 };
-
 
 const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
   const handleDateChange = (dateString) => {
@@ -77,6 +76,22 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
     editedRecord.date_approved_clegal
   );
   const formattedDatePenalty = convertToMMDDYYYY(editedRecord.penalty);
+  const [fields, setFields] = useState([
+    { id: 1, penalty: "", amount: "", or_number: "" },
+  ]);
+
+  const addFieldSet = () => {
+    setFields([
+      ...fields,
+      { id: Date.now(), penalty: "", amount: "", or_number: "" },
+    ]);
+  };
+
+  const removeFieldSet = () => {
+    if (fields.length > 1) {
+      setFields(fields.slice(0, -1));
+    }
+  };
 
   return (
     <div>
@@ -95,7 +110,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                 <Paragraph className="paragraph-container">
                   <strong>Docket No.</strong>
                   <Input
-                   value={editedRecord ? editedRecord.docket_no : ""}
+                    value={editedRecord ? editedRecord.docket_no : ""}
                     onChange={(e) => handleChange("docket_no", e.target.value)}
                     disabled={!isEditing}
                     placeholder="No data"
@@ -124,22 +139,34 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
                   <strong>Date Forwarded to Legal Staff</strong>
-                  <DatePicker
-                    value={
-                      formattedDateLegalForwarded
-                        ? dayjs(formattedDateLegalForwarded, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("date_forwarded", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateLegalForwarded
+                          ? dayjs(formattedDateLegalForwarded, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("date_forwarded", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}>
@@ -155,7 +182,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <Input
                     value={editedRecord ? editedRecord.days_dfda : ""}
                     onChange={(e) => handleChange("days_dfda", e.target.value)}
-                    disabled={!isEditing}
+                    disabled={isEditing}
                     placeholder="No data"
                     rows={1}
                     className="text-area-legal"
@@ -167,44 +194,68 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
                   <strong>Date Approved by Chief Legal</strong>
-                  <DatePicker
-                    value={
-                      formattedDateLegalApproved
-                        ? dayjs(formattedDateLegalApproved, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("date_approved_clegal", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateLegalApproved
+                          ? dayjs(formattedDateLegalApproved, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("date_approved_clegal", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}></Col>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
                   <strong>NOV Date Released</strong>
-                  <DatePicker
-                    value={
-                      formattedDateNOVRelease
-                        ? dayjs(formattedDateNOVRelease, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("nov_released", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="No data"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateNOVRelease
+                          ? dayjs(formattedDateNOVRelease, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("nov_released", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}>
@@ -318,74 +369,81 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
                   <strong>TC Date Scheduled:</strong>
-                  <DatePicker
-                    value={
-                      formattedDate ? dayjs(formattedDate, "MM/DD/YYYY") : null
-                    }
-                    onChange={(date, dateString) => {
-                      const parsedDate = dayjs(dateString, "MM/DD/YYYY", false);
-                      if (parsedDate.isValid()) {
-                        handleDateChange(parsedDate.format("MM/DD/YYYY"));
-                      } else {
-                        handleDateChange(null);
-                      }
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    maxDate={dayjs()} // Set the maximum date to today
-                    //disabledDate={(current) => current > dayjs()} // Disable dates after today
-                    placeholder="No data"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph className="paragraph-container">
-                  <strong>TC Date (Actual):</strong>
-                  <DatePicker
-                    value={
-                      formattedDateTCAcual
-                        ? dayjs(formattedDateTCAcual, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      console.log(`New date selected: ${newDate}`);
-                      handleChange("tc_date_actual", newDate);
-                    }}
-                    disabled={!isEditing}
-                    placeholder="MM/DD/YYYY"
-                    format="MM/DD/YYYY"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph className="paragraph-container">
-                  <strong>Time:</strong>
-                  <ConfigProvider token={customToken.token}>
-                    <TimePicker
+                  >
+                    <DatePicker
                       value={
-                        editedRecord
-                          ? dayjs(editedRecord.time, "hh:mm a")
+                        formattedDate
+                          ? dayjs(formattedDate, "MM/DD/YYYY")
                           : null
                       }
-                      onOk={(time) => {
-                        const newTime = time ? time.format("hh:mm a") : "";
-                        console.log(`New time selected: ${newTime}`);
-                        handleChange("time", newTime);
+                      onChange={(date, dateString) => {
+                        const parsedDate = dayjs(
+                          dateString,
+                          "MM/DD/YYYY",
+                          false
+                        );
+                        if (parsedDate.isValid()) {
+                          handleDateChange(parsedDate.format("MM/DD/YYYY"));
+                        } else {
+                          handleDateChange(null);
+                        }
                       }}
                       disabled={!isEditing}
-                      format="hh:mm a"
-                      placeholder="No data"
-                      className="text-area-legal custom-time-picker time-picker-small"
+                      format="MM/DD/YYYY"
+                      //maxDate={dayjs()} // Set the maximum date to today
+                      //disabledDate={(current) => current > dayjs()} // Disable dates after today
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
                       style={{ width: "100%" }}
                     />
                   </ConfigProvider>
                 </Paragraph>
               </Col>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>TC Date (Actual):</strong>
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
+                    }}
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateTCAcual
+                          ? dayjs(formattedDateTCAcual, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        console.log(`New date selected: ${newDate}`);
+                        handleChange("tc_date_actual", newDate);
+                      }}
+                      disabled={!isEditing}
+                      placeholder="MM/DD/YYYY"
+                      format="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
+                </Paragraph>
+              </Col>
+
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
                   <strong className="label_title">Legal Officer:</strong>
@@ -416,6 +474,22 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   />
                 </Paragraph>
               </Col>
+              <Col xs={24} sm={24} md={24} lg={24} className="col-format-tc">
+                <Paragraph className="paragraph-container">
+                  <strong>Position Paper</strong>
+                  <span>
+                    <i> &nbsp; (Paste Link Here)</i>
+                  </span>
+                  <TextArea
+                    value={editedRecord ? editedRecord.pos_paper : ""}
+                    onChange={(e) => handleChange("pos_paper", e.target.value)}
+                    disabled={!isEditing}
+                    placeholder="No data"
+                    rows={2}
+                    className="text-area-legal"
+                  />
+                </Paragraph>
+              </Col>
             </Row>
           </Card>
 
@@ -429,75 +503,126 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
             title="For Order/Resolution"
           >
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={24} lg={24}>
-                <Paragraph className="paragraph-container">
-                  <strong>Position Paper:</strong>
-                  <Input
-                    value={editedRecord ? editedRecord.pos_paper : ""}
-                    onChange={(e) => handleChange("pos_paper", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={3}
-                    className="text-area-legal"
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph className="paragraph-container">
-                  <strong>Date Payment of Penalty:</strong>
-                  <DatePicker
-                    value={
-                      formattedDatePenalty
-                        ? dayjs(formattedDatePenalty, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      console.log(`New date selected: ${newDate}`);
-                      handleChange("penalty", newDate);
-                    }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="No data"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}></Col>
-              <Col xs={24} sm={24} md={12} lg={12} className="col-format">
-                <Paragraph className="paragraph-container">
-                  <strong>Amount:</strong>
-                  <Input
-                    prefix={<span>&#x20B1;</span>} // Add Philippine Peso currency symbol
-                    value={editedRecord ? editedRecord.amount : ""}
-                    onChange={(e) => {
-                      const regex = /^[0-9]+(\.[0-9][0-9]?)?$/; // Allow only numbers and optional decimal point
-                      if (regex.test(e.target.value)) {
-                        handleChange("amount", e.target.value);
-                      }
-                    }}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={3}
-                    className="text-area-legal"
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12} className="col-format">
-                <Paragraph className="paragraph-container">
-                  <strong>Official Receipt (OR) Number:</strong>
-                  <Input
-                    prefix={<span>#</span>} // Add "#" symbol
-                    value={editedRecord ? editedRecord.or_number : ""}
-                    onChange={(e) => handleChange("or_number", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={3}
-                    className="text-area-legal"
-                  />
-                </Paragraph>
-              </Col>
+              <Row gutter={[16, 16]} className="row-penalty-label">
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph className="paragraph-container-legal">
+                    <strong className="textl-legal-container">Date Payment of Penalty:</strong>
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph className="paragraph-container-legal">
+                    <strong className="textl-legal-container">Amount:</strong>
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph className="paragraph-container-legal">
+                    <strong className="textl-legal-container">(OR) Number:</strong>
+                  </Paragraph>
+                </Col>
+              </Row>
+              {fields.map((field) => (
+                <Row key={field.id} gutter={[16, 16]} className="row-penalty">
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <ConfigProvider
+                      theme={{
+                        components: {
+                          DatePicker: {
+                            fontSize: "11px",
+                            height: "29px",
+                            padding: "4px 8px",
+                          },
+                        },
+                      }}
+                    >
+                      <DatePicker
+                        value={
+                          field.penalty
+                            ? dayjs(field.penalty, "MM/DD/YYYY")
+                            : null
+                        }
+                        onChange={(date) => {
+                          const newDate = date ? date.format("MM/DD/YYYY") : "";
+                          handleChange("penalty", newDate);
+                          setFields(
+                            fields.map((f) =>
+                              f.id === field.id ? { ...f, penalty: newDate } : f
+                            )
+                          );
+                        }}
+                        disabled={!isEditing}
+                        format="MM/DD/YYYY"
+                        placeholder="MM/DD/YYYY"
+                        className="text-penalty"
+                        style={{ width: "100%" }}
+                      />
+                    </ConfigProvider>
+                  </Col>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <Input
+                      prefix={<span>&#x20B1;</span>}
+                      value={field.amount}
+                      onChange={(e) => {
+                        const regex = /^[0-9]+(\.[0-9][0-9]?)?$/;
+                        if (regex.test(e.target.value)) {
+                          setFields(
+                            fields.map((f) =>
+                              f.id === field.id
+                                ? { ...f, amount: e.target.value }
+                                : f
+                            )
+                          );
+                          handleChange("amount", e.target.value);
+                        }
+                      }}
+                      disabled={!isEditing}
+                      placeholder="No data"
+                      className="text-penalty"
+                    />
+                  </Col>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <Input
+                      prefix={<span>#</span>}
+                      value={field.or_number}
+                      onChange={(e) => {
+                        setFields(
+                          fields.map((f) =>
+                            f.id === field.id
+                              ? { ...f, or_number: e.target.value }
+                              : f
+                          )
+                        );
+                        handleChange("or_number", e.target.value);
+                      }}
+                      disabled={!isEditing}
+                      placeholder="No data"
+                      className="text-penalty"
+                    />
+                  </Col>
+                </Row>
+              ))}
+              <Row  style={{ marginTop: "-10px"}}>
+                <Col
+                  span={24}
+                  style={{ textAlign: "right"}}
+                >
+                  <Button type="primary" onClick={addFieldSet}  size="small"  disabled={!isEditing}>
+                    Add
+                  </Button>
+                  {fields.length > 1 && (
+                    <Button
+                      danger
+                      type="primary"
+                      onClick={removeFieldSet}
+                      style={{ marginLeft: "10px"}}
+                      size="small"
+                      disabled={!isEditing}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </Col>
+              </Row>
+
               <Col xs={24} sm={24} md={24} lg={24}>
                 <Paragraph>
                   <Checkbox

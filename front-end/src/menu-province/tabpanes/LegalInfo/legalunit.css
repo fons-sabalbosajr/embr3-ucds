@@ -2,6 +2,11 @@
   margin-top: -10px;
 }
 
+.paragraph-container-legal {
+  width: 200px;
+}
+
+
 .label_container_legal {
   margin-bottom: -10px;
   display: flex;
@@ -15,7 +20,7 @@
 }
 
 .label_legal {
-  font-size: 9px;
+  font-size: 8px;
   margin-top: -2px;
   flex: 2;
 }
@@ -72,4 +77,16 @@
 
 .ant-picker-input input {
   font-size: 11px !important;
+}
+
+.text-penalty{
+  font-size: 11px;
+}
+
+.row-penalty{
+  margin-top: -10px;
+}
+
+.row-penalty-label{
+  margin-bottom: -10px;
 }

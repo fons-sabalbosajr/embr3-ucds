@@ -193,80 +193,100 @@
 }
 
 .industry-label{
-  font-size: 11px;
+  font-size: 10px;
 }
 
 
 
 ////ROW COLOR MENU=============================================
-.custom-button-cyan{
+.custom-span-cyan {
   background-color: #0b5f74;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius:35px;
+  display: inline-block;
 }
 
-.custom-button-green {
+.custom-span-green {
   background-color: #0a4959;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-yellow {
+.custom-span-yellow {
   background-color: #bc6e00;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-blue {
+.custom-span-blue {
   background-color: #4a2250;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-orange {
+.custom-span-orange {
   background-color: #b45248;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-skyblue {
+.custom-span-skyblue {
   background-color: #415e20;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-brown {
+.custom-span-brown {
   background-color: #542c14;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-stone {
+.custom-span-stone {
   background-color: #242726;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-ash {
+.custom-span-ash {
   background-color: #5e5d3e;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
-.custom-button-slate {
+.custom-span-slate {
   background-color: #263238;
-  border: none;
   color: white;
   font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
 .modal-title-container {
@@ -431,6 +451,9 @@
   transition: background-color 0.3s;
 }
 
+.custom-table .ant-table-thead > tr > th {
+  font-size: 10px !important; /* Adjust size as needed */
+}
 
 
 @media (max-width: 768px) {

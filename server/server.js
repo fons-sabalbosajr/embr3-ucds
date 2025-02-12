@@ -63,6 +63,9 @@ let surveyLogCollection;
 let survey2025Collection;
 let ucdsLogCollection;
 let healthcareCollection;
+let chemicalCollection;
+let tsdCollection;
+let trcCollection;
 
 app.use(
   session({
@@ -103,6 +106,9 @@ async function connectToMongo() {
     ucdsLogCollection = db.collection("ucds-log");
     projectTypeCollection = db.collection("project_type");
     healthcareCollection = db.collection("ucds-data-healthcare");
+    chemicalCollection = db.collection("ucds-data-chemicals");
+    tsdCollection = db.collection("ucds-data-tsd");
+    trcCollection = db.collection("ucds-data-trc");
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error;
@@ -1202,7 +1208,7 @@ app.get("/api/surveys/:year", async (req, res) => {
   try {
     const { year } = req.params; // Get year from URL parameter
     let collection;
-    
+
     // Only allow valid years: 2024 or 2025
     if (year === "2024") {
       collection = db.collection("survey-data-2024");
@@ -2058,11 +2064,10 @@ app.get("/api/get-province-data", async (req, res) => {
       address: doc.address,
       ecc_cnc: doc.ecc_cnc,
       industry_class: doc.industry_class,
-      remarks_recommendations: doc.remarks_recommendations || "",
+      remarks: doc.remarks || "",
       industry_type: doc.industry_type || "",
       industry_subtype: doc.industry_subtype || "",
       psic_code: doc.psic_code || "",
-      proj_type: doc.proj_type || "",
       mbu_area: doc.mbu_area || "",
       waterbody: doc.waterbody || "",
       long: doc.long || "",
@@ -2072,86 +2077,57 @@ app.get("/api/get-province-data", async (req, res) => {
       brgy: doc.brgy || "",
       city: doc.city || "",
       province: doc.province || "",
-      emp_no_total: doc.emp_no_total || "",
-      wwtftype: doc.wwtftype || "",
+      emp_total: doc.emp_total || "",
+      wwtf_type: doc.wwtf_type || "",
       bod: doc.bod || "",
-      fmr_section_incharged: doc.fmr_section_incharged || "",
-      section_incharge: doc.section_incharge || "",
+      section_incharged: doc.section_incharged || "",
       handler: doc.handler || "",
       monitoring_sched: doc.monitoring_sched || "",
       iis_no: doc.iis_no || "",
+      iis_no_2025: doc.iis_no_2025 || "",
       insp_type: doc.insp_type || "",
-      report_type: doc.report_type || "",
       date_monitored: doc.date_monitored || "",
       date_routed: doc.date_routed || "",
       date_signed: doc.date_signed || "",
       days_dmds: doc.days_dmds || "",
-      days_dsdrs: doc.days_dsdrs || "",
+      days_drds: doc.days_drds || "",
       pismu_tracking: doc.pismu_tracking || "",
-      pd1586: doc.pd1586 || "",
+      title_status: doc.title_status || "",
+      with_nov: doc.with_nov || "",
       permit_process: doc.permit_process || "",
-      date_amend: doc.date_amend || "",
+      date_amended: doc.date_amended || "",
       date_approved: doc.date_approved || "",
-      ra8749: doc.ra8749 || "",
       pto_code: doc.pto_code || "",
       pto_issued: doc.pto_issued || "",
       pto_expiration: doc.pto_expiration || "",
-      ra9275: doc.ra9275 || "",
       wwdp_code: doc.wwdp_code || "",
       wwdp_issued: doc.wwdp_issued || "",
       wwdp_expiration: doc.wwdp_expiration || "",
-      ra6969: doc.ra6969 || "",
       haz_id: doc.haz_id || "",
       haz_issued: doc.haz_issued || "",
-      tsd_required: doc.tsd_required || "",
-      tsd: doc.tsd || "",
-      tp_trc_required: doc.tp_trc_required || "",
-      tsd_ref_no: doc.tsd_ref_no || "",
-      tsd_expiration: doc.tsd_expiration || "",
-      tp_trc: doc.tp_trc || "",
-      tp_trc_ref_no: doc.tp_trc_ref_no || "",
-      tp_trc_expiration: doc.tp_trc_expiration || "",
-      chemical_permit_required: doc.chemical_permit_required || "",
-      chemical_permit: doc.chemical_permit || "",
-      chemical_permit_type: doc.chemical_permit_type || "",
-      chemical_permit_sub_type: doc.chemical_permit_sub_type || "",
-      chem_permit_issued: doc.chem_permit_issued || "",
-      chem_permit_exp: doc.chem_permit_exp || "",
-      pco: doc.pco || "",
       pco_no: doc.pco_no || "",
       pco_name: doc.pco_name || "",
-      pco_tel_no: doc.pco_tel_no || "",
       pco_validity: doc.pco_validity || "",
       docket_no: doc.docket_no || "",
       denr_pab_case_no: doc.denr_pab_case_no || "",
-      date_forwarded: doc.date_forwarded || "",
-      date_approved_clegal: doc.date_approved_clegal || "",
-      days_dfda: doc.days_dfda || "",
-      service_mode: doc.service_mode || "",
-      nov_released: doc.nov_released || "",
+      nov_issued: doc.nov_issued || "",
       v_pd1586: doc.v_pd1586 || "",
       v_ra9275: doc.v_ra9275 || "",
       v_ra8749: doc.v_ra8749 || "",
-      v_haz: doc.v_haz || "",
-      v_tchem: doc.v_tchem || "",
-      tc_date_sched: doc.tc_date_sched || "",
+      v_ra6969_haz: doc.v_ra6969_haz || "",
+      v_ra6969_tchem: doc.v_ra6969_tchem || "",
       tc_date_actual: doc.tc_date_actual || "",
-      time: doc.time || "",
       legal_officer: doc.legal_officer || "",
-      tc_commitment: doc.tc_commitment || "",
+      tc_compliance_link: doc.tc_compliance_link || "",
       pos_paper: doc.pos_paper || "",
-      penalty: doc.penalty || "",
+      penalty_date: doc.penalty_date || "",
       amount: doc.amount || "",
       or_number: doc.or_number || "",
-      tc_order_compliance: doc.tc_order_compliance || "",
-      remarks: doc.remarks || "",
-      resolution: doc.resolution || "",
-      order: doc.order || "",
+      tc_commitment: doc.commitment || "",
+      other_tc_remarks: doc.other_tc_remarks || "",
+      resolution_issued: doc.resolution || "",
+      order_issued: doc.order || "",
       order_status: doc.order_status || "",
-      mbu_priority: doc.mbu_priority || "",
-      mbu_survey: doc.mbu_survey || "",
-      mbu_survey_request: doc.mbu_survey_request || "",
-      dp_universe: doc.dp_universe || "",
       color: doc.color || "",
     }));
 
@@ -2216,13 +2192,10 @@ app.get("/api/extract-province-data", async (req, res) => {
       address: doc.address,
       ecc_cnc: doc.ecc_cnc,
       industry_class: doc.industry_class,
-      remarks_recommendations: doc.remarks_recommendations,
-      industry_class: doc.industry_class || "",
-      remarks_recommendations: doc.remarks_recommendations || "",
+      remarks: doc.remarks_recommendations || "",
       industry_type: doc.industry_type || "",
       industry_subtype: doc.industry_subtype || "",
       psic_code: doc.psic_code || "",
-      proj_type: doc.proj_type || "",
       mbu_area: doc.mbu_area || "",
       waterbody: doc.waterbody || "",
       long: doc.long || "",
@@ -2232,85 +2205,58 @@ app.get("/api/extract-province-data", async (req, res) => {
       brgy: doc.brgy || "",
       city: doc.city || "",
       province: doc.province || "",
-      emp_no_total: doc.emp_no_total || "",
+      emp_total: doc.emp_total || "",
+      wwtf_type: doc.wwtf_type || "",
       bod: doc.bod || "",
-      fmr_section_incharged: doc.fmr_section_incharged || "",
-      section_incharge: doc.section_incharge || "",
+      section_incharged: doc.section_incharged || "",
       handler: doc.handler || "",
       monitoring_sched: doc.monitoring_sched || "",
       iis_no: doc.iis_no || "",
+      iis_no_2025: doc.iis_no_2025 || "",
       insp_type: doc.insp_type || "",
-      report_type: doc.report_type || "",
       date_monitored: doc.date_monitored || "",
       date_routed: doc.date_routed || "",
       date_signed: doc.date_signed || "",
       days_dmds: doc.days_dmds || "",
-      days_dsdrs: doc.days_dsdrs || "",
+      days_drds: doc.days_drds || "",
       pismu_tracking: doc.pismu_tracking || "",
-      pd1586: doc.pd1586 || "",
+      title_status: doc.title_status || "",
+      with_nov: doc.with_nov || "",
       permit_process: doc.permit_process || "",
-      date_amend: doc.date_amend || "",
+      date_amended: doc.date_amended || "",
       date_approved: doc.date_approved || "",
-      ra8749: doc.ra8749 || "",
       pto_code: doc.pto_code || "",
       pto_issued: doc.pto_issued || "",
       pto_expiration: doc.pto_expiration || "",
-      ra9275: doc.ra9275 || "",
       wwdp_code: doc.wwdp_code || "",
       wwdp_issued: doc.wwdp_issued || "",
       wwdp_expiration: doc.wwdp_expiration || "",
-      ra6969: doc.ra6969 || "",
       haz_id: doc.haz_id || "",
       haz_issued: doc.haz_issued || "",
-      tsd_required: doc.tsd_required || "",
-      tsd: doc.tsd || "",
-      tp_trc_required: doc.tp_trc_required || "",
-      tsd_ref_no: doc.tsd_ref_no || "",
-      tsd_expiration: doc.tsd_expiration || "",
-      tp_trc: doc.tp_trc || "",
-      tp_trc_ref_no: doc.tp_trc_ref_no || "",
-      tp_trc_expiration: doc.tp_trc_expiration || "",
-      chemical_permit_required: doc.chemical_permit_required || "",
-      chemical_permit: doc.chemical_permit || "",
-      chemical_permit_type: doc.chemical_permit_type || "",
-      chemical_permit_sub_type: doc.chemical_permit_sub_type || "",
-      chem_permit_issued: doc.chem_permit_issued || "",
-      chem_permit_exp: doc.chem_permit_exp || "",
-      pco: doc.pco || "",
       pco_no: doc.pco_no || "",
       pco_name: doc.pco_name || "",
-      pco_tel_no: doc.pco_tel_no || "",
       pco_validity: doc.pco_validity || "",
       docket_no: doc.docket_no || "",
       denr_pab_case_no: doc.denr_pab_case_no || "",
-      date_forwarded: doc.date_forwarded || "",
-      date_approved_clegal: doc.date_approved_clegal || "",
-      days_dfda: doc.days_dfda || "",
-      service_mode: doc.service_mode || "",
-      nov_released: doc.nov_released || "",
+      nov_issued: doc.nov_issued || "",
       v_pd1586: doc.v_pd1586 || "",
       v_ra9275: doc.v_ra9275 || "",
       v_ra8749: doc.v_ra8749 || "",
-      v_haz: doc.v_haz || "",
-      v_tchem: doc.v_tchem || "",
-      tc_date_sched: doc.tc_date_sched || "",
+      v_ra6969_haz: doc.v_ra6969_haz || "",
+      v_ra6969_tchem: doc.v_ra6969_tchem || "",
       tc_date_actual: doc.tc_date_actual || "",
-      time: doc.time || "",
       legal_officer: doc.legal_officer || "",
-      tc_commitment: doc.tc_commitment || "",
+      tc_compliance_link: doc.tc_compliance_link || "",
       pos_paper: doc.pos_paper || "",
-      penalty: doc.penalty || "",
+      penalty_date: doc.penalty_date || "",
       amount: doc.amount || "",
       or_number: doc.or_number || "",
-      tc_order_compliance: doc.tc_order_compliance || "",
-      remarks: doc.remarks || "",
-      resolution: doc.resolution || "",
-      order: doc.order || "",
+      tc_commitment: doc.commitment || "",
+      other_tc_remarks: doc.other_tc_remarks || "",
+      resolution_issued: doc.resolution || "",
+      order_issued: doc.order || "",
       order_status: doc.order_status || "",
-      mbu_priority: doc.mbu_priority || "",
-      mbu_survey: doc.mbu_survey || "",
-      mbu_survey_request: doc.mbu_survey_request || "",
-      dp_universe: doc.dp_universe || "",
+      color: doc.color || "",
     }));
 
     return res.status(200).json(formattedData);
@@ -2715,6 +2661,26 @@ app.get("/api/healthcare", async (req, res) => {
   }
 });
 
+app.get("/api/chemicals", async (req, res) => {
+  try {
+    const chemicalData = await chemicalCollection.find({}).toArray();
+    res.status(200).json(chemicalData);
+  } catch (error) {
+    console.error("Error fetching chemical data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/tsd", async (req, res) => {
+  try {
+    const tsdData = await tsdCollection.find({}).toArray();
+    res.status(200).json(tsdData);
+  } catch (error) {
+    console.error("Error fetching chemical data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 //Update the data per provinces
 app.put("/api/update-data/:id", logActivity, async (req, res) => {
   try {
@@ -2850,6 +2816,150 @@ app.put("/api/update-healthcare/:id", logActivity, async (req, res) => {
     console.error("Error updating healthcare data:", error);
     res.status(500).json({
       error: "Failed to update healthcare data. Please try again later.",
+    });
+  }
+});
+
+app.put("/api/update-chemical/:id", logActivity, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newData = req.body; // This should contain the updated data
+    const updatedBy = req.body.updated_by; // Assuming the user who updated the data is passed
+
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data-chemicals");
+
+    // Fetch the existing document before updating
+    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
+
+    if (!oldDocument) {
+      return res.status(404).json({ error: "Chemical data not found" });
+    }
+
+    // Perform the update operation
+    const result = await collection.updateOne(
+      { id_no: parseInt(id) },
+      { $set: newData }
+    );
+
+    if (result.modifiedCount === 1) {
+      // If the update was successful, create an audit log
+      const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+
+      // Create an audit log to track changes
+      const auditLog = {
+        updated_by: updatedBy,
+        updated_at: new Date(),
+        changes: [],
+      };
+
+      // Compare old and new data to find changes
+      Object.keys(newData).forEach((key) => {
+        if (oldDocument[key] !== newData[key]) {
+          auditLog.changes.push({
+            field: key,
+            old_value: oldDocument[key],
+            new_value: newData[key],
+          });
+        }
+      });
+
+      // Save audit log into a separate collection (optional)
+      const auditCollection = database.collection("audit-log");
+      await auditCollection.insertOne(auditLog);
+
+      res
+        .status(200)
+        .json({ message: "Chemical data updated successfully", auditLog });
+    } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
+      res
+        .status(200)
+        .json({ message: "No changes were made to the chemical data" });
+    } else {
+      res
+        .status(404)
+        .json({ error: "Chemical data not found or no changes were made" });
+    }
+  } catch (error) {
+    console.error("Error updating chemicale data:", error);
+    res.status(500).json({
+      error: "Failed to update chemical data. Please try again later.",
+    });
+  }
+});
+
+app.put("/api/update-tsd/:id", logActivity, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newData = req.body; // This should contain the updated data
+    const updatedBy = req.body.updated_by; // Assuming the user who updated the data is passed
+
+    // Ensure connection to the database
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const database = client.db("universe-db");
+    const collection = database.collection("ucds-data-tsd");
+
+    // Fetch the existing document before updating
+    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
+
+    if (!oldDocument) {
+      return res.status(404).json({ error: "TSD data not found" });
+    }
+
+    // Perform the update operation
+    const result = await collection.updateOne(
+      { id_no: parseInt(id) },
+      { $set: newData }
+    );
+
+    if (result.modifiedCount === 1) {
+      // If the update was successful, create an audit log
+      const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+
+      // Create an audit log to track changes
+      const auditLog = {
+        updated_by: updatedBy,
+        updated_at: new Date(),
+        changes: [],
+      };
+
+      // Compare old and new data to find changes
+      Object.keys(newData).forEach((key) => {
+        if (oldDocument[key] !== newData[key]) {
+          auditLog.changes.push({
+            field: key,
+            old_value: oldDocument[key],
+            new_value: newData[key],
+          });
+        }
+      });
+
+      // Save audit log into a separate collection (optional)
+      const auditCollection = database.collection("audit-log");
+      await auditCollection.insertOne(auditLog);
+
+      res
+        .status(200)
+        .json({ message: "TSD data updated successfully", auditLog });
+    } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
+      res.status(200).json({ message: "No changes were made to the tsd data" });
+    } else {
+      res
+        .status(404)
+        .json({ error: "TSD data not found or no changes were made" });
+    }
+  } catch (error) {
+    console.error("Error updating tsd data:", error);
+    res.status(500).json({
+      error: "Failed to update tsd data. Please try again later.",
     });
   }
 });

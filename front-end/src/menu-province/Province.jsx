@@ -24,6 +24,7 @@ import {
   GlobalOutlined,
   CheckCircleFilled,
   InfoCircleOutlined,
+  ClockCircleFilled
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import ProvinceModal from "./ProvinceModal";
@@ -345,8 +346,8 @@ const Province = ({ theme, currentUser }) => {
   const calculateSectionCounts = (data) => {
     const counts = {};
     data.forEach((record) => {
-      const sections = record.section_incharge
-        ? record.section_incharge.split(",").map((s) => s.trim())
+      const sections = record.section_incharged
+        ? record.section_incharged.split(",").map((s) => s.trim())
         : ["NoSectionIncharged"];
       sections.forEach((section) => {
         counts[section] = counts[section] ? counts[section] + 1 : 1;
@@ -396,8 +397,8 @@ const Province = ({ theme, currentUser }) => {
 
   const filteredSectionData = (section) => {
     return filteredData.filter((item) => {
-      const sections = item.section_incharge
-        ? item.section_incharge.split(",").map((s) => s.trim())
+      const sections = item.section_incharged
+        ? item.section_incharged.split(",").map((s) => s.trim())
         : ["NoSectionIncharged"];
       return sections.includes(section);
     });
@@ -510,15 +511,14 @@ const Province = ({ theme, currentUser }) => {
     onFilter: (value, record) => {
       const lowerValue = value.toLowerCase();
 
-      // Only search within the filtered data
       // Check if the record is in the filtered data
       const isInFilteredData = filteredData.includes(record);
 
-      if (dataIndex === "section_incharge") {
+      if (dataIndex === "section_incharged") {
         return (
           isInFilteredData &&
-          record.section_incharge &&
-          record.section_incharge.toLowerCase().includes(lowerValue)
+          record.section_incharged &&
+          record.section_incharged.toLowerCase().includes(lowerValue)
         );
       }
 
@@ -584,7 +584,7 @@ const Province = ({ theme, currentUser }) => {
         record.address,
         record.ecc_cnc,
         record.industry_class,
-        record.remarks_recommendations,
+        record.remarks,
         record.industry_type,
         record.industry_subtype,
         record.psic_code,
@@ -601,8 +601,7 @@ const Province = ({ theme, currentUser }) => {
         record.emp_no_total,
         record.wwtftype,
         record.bod,
-        record.fmr_section_incharged,
-        record.section_incharge,
+        record.section_incharged,
         record.handler,
         record.monitoring_sched,
         record.iis_no,
@@ -629,20 +628,6 @@ const Province = ({ theme, currentUser }) => {
         record.ra6969,
         record.haz_id,
         record.haz_issued,
-        record.tsd_required,
-        record.tsd,
-        record.tp_trc_required,
-        record.tsd_ref_no,
-        record.tsd_expiration,
-        record.tp_trc,
-        record.tp_trc_ref_no,
-        record.tp_trc_expiration,
-        record.chemical_permit_required,
-        record.chemical_permit,
-        record.chemical_permit_type,
-        record.chemical_permit_sub_type,
-        record.chem_permit_issued,
-        record.chem_permit_exp,
         record.pco,
         record.pco_no,
         record.pco_name,
@@ -870,18 +855,6 @@ const Province = ({ theme, currentUser }) => {
       permits.push(`HWG ID: ${record.haz_id}`);
     }
 
-    if (record.tsd_ref_no) {
-      permits.push(`TSD: ${record.tsd_ref_no}`);
-    }
-
-    if (record.tp_trc_ref_no) {
-      permits.push(`TP/TRC: ${record.tp_trc_ref_no}`);
-    }
-
-    if (record.chemical_code) {
-      permits.push(`Chemical Permit: ${record.chemical_code}`);
-    }
-
     if (record.pco_no) {
       permits.push(`PCO: ${record.pco_no}`);
     }
@@ -912,10 +885,10 @@ const Province = ({ theme, currentUser }) => {
           { title: "Industry Details", dataKey: "industryDetails" },
           { title: "Industry Classification", dataKey: "industry_class" },
           { title: "Permits/Clearances", dataKey: "permits_clearances" },
-          { title: "Section/Unit Incharged", dataKey: "section_incharge" },
+          { title: "Section/Unit Incharged", dataKey: "section_incharged" },
           {
             title: "Remarks/Recommendations",
-            dataKey: "remarks_recommendations",
+            dataKey: "remarks",
           },
           { title: "IIS Transaction No.", dataKey: "iis_no" },
         ];
@@ -928,8 +901,8 @@ const Province = ({ theme, currentUser }) => {
             industryDetails: formatIndustryDetails(record),
             industry_class: record.industry_class || "",
             permits_clearances: formatPermitsClearances(record),
-            section_incharge: record.section_incharge || "",
-            remarks_recommendations: record.remarks_recommendations || "",
+            section_incharge: record.section_incharged || "",
+            remarks: record.remarks|| "",
             iis_no: record.iis_no || "",
           }));
 
@@ -945,8 +918,8 @@ const Province = ({ theme, currentUser }) => {
             industryDetails: { cellWidth: 80 },
             industry_class: { cellWidth: 30 },
             permits_clearances: { cellWidth: 60 },
-            section_incharge: { cellWidth: 25 },
-            remarks_recommendations: { cellWidth: 30 },
+            section_incharged: { cellWidth: 25 },
+            remarks: { cellWidth: 30 },
             iis_no: { cellWidth: 20 },
           },
         });
@@ -1156,8 +1129,7 @@ const Province = ({ theme, currentUser }) => {
           {record.province}
           <br />
           <br />
-          Section Incharged: {record.fmr_section_incharged}{" "}
-          {record.section_incharge} <br />
+          {record.section_incharged} <br />
           Handler: {record.handler} <br />
           Monitoring Schedule: {record.monitoring_sched} <br />
           IIS No: {record.iis_no} <br />
@@ -1177,7 +1149,7 @@ const Province = ({ theme, currentUser }) => {
       render: (_, record) => (
         <>
           ECC/CNC: {record.ecc_cnc} <br />
-          Date Amend: {record.date_amend} <br />
+          Date Amend: {record.date_amended} <br />
           Date Approved: {record.date_approved} <br /> <br />
           PTO Code: {record.pto_code} <br />
           PTO Issued: {record.pto_issued} <br />
@@ -1193,12 +1165,13 @@ const Province = ({ theme, currentUser }) => {
           PCO: {record.pco} <br />
           PCO No: {record.pco_no} <br />
           PCO Name:{record.pco_name} <br />
-          PCO Tel No: {record.pco_tel_no} <br />
           PCO Validity:{record.pco_validity}
         </>
       ),
     },
   ];
+
+  
 
   const columns = [
     {
@@ -1206,9 +1179,9 @@ const Province = ({ theme, currentUser }) => {
       dataIndex: "id_no",
       key: "id_no",
       align: "left",
-      width: 140,
+      width: 100,
       ...getColumnSearchProps("id_no"),
-      render: (text) => <div className="industry-label">{text}</div>,
+      render: (text) => <div>{text}</div>,
     },
     {
       title: "Industry Details",
@@ -1218,7 +1191,7 @@ const Province = ({ theme, currentUser }) => {
         const isDuplicate = duplicates[record.ecc_cnc]; // Check if the current record's `ecc_cnc` is a duplicate
 
         return (
-          <div className="industry-label">
+          <div>
             <strong>{record.title}</strong>
             <br />
             Proponent Name: <i>{record.name}</i>
@@ -1246,14 +1219,14 @@ const Province = ({ theme, currentUser }) => {
         );
       },
       align: "left",
-      width: 500,
+      width: "800px"
     },
     {
       title: "Industry Classification",
       key: "industry_class",
       ...getColumnSearchProps("industry_class"),
       render: (text, record) => (
-        <div className="industry-label">{record.industry_class}</div>
+        <div>{record.industry_class}</div>
       ),
       align: "left",
       width: 100,
@@ -1261,253 +1234,142 @@ const Province = ({ theme, currentUser }) => {
     {
       title: "Permits/Clearances",
       key: "permits_clearances",
-      width: 200,
-      render: (text, record) => (
-        <div
-          className="permits-clearances-container"
-          style={{ fontSize: "11px" }}
-        >
-          {record.ecc_cnc &&
-            ((record.permit_process === "ECC Online" ||
-              record.permit_process === "ECC Manual") &&
-            typeof record.ecc_cnc === "string" &&
-            (record.ecc_cnc.includes("ECC-OL") ||
-              record.ecc_cnc.includes("R3") ||
-              record.ecc_cnc.includes("03") ||
-              record.ecc_cnc.includes("III") ||
-              record.ecc_cnc.includes("RO3") ||
-              record.ecc_cnc.includes("ECC")) ? (
+      width: 300,
+      render: (text, record) => {
+        const checkPendingStatus = (value) =>
+          typeof value === "string" &&
+          (value.includes("App. No") ||
+            value.includes("In process") ||
+            value.includes("On process") ||
+            value.includes("Application No"));
+    
+        const LabelWithIcon = ({ text, isPending, className }) => (
+          <span style={{ position: "relative", display: "inline-block"}} className={className}>
+            {text}
+            {isPending && (
+              <ClockCircleFilled
+                style={{
+                  position: "absolute",
+                  top: "-3px",
+                  right: "-3px",
+                  fontSize: "11px",
+                  color: "#FF0303",
+                }}
+              />
+            )}
+          </span>
+        );
+    
+        return (
+          <div className="permits-clearances-container" style={{ fontSize: "10px" }}>
+            {/* ECC / CNC */}
+            {record.ecc_cnc && (
               <Tooltip
                 title={
                   <div className="tooltip-content" style={{ fontSize: "11px" }}>
-                    <div>ECC Information</div>
+                    <div>{record.ecc_cnc.includes("CNC") ? "CNC Information" : "ECC Information"}</div>
                     <div>Reference No.: {record.ecc_cnc}</div>
                     <div>Date Approved: {record.date_approved}</div>
-                    <div>Date Amended: {record.date_amend}</div>
+                    {record.date_amend && <div>Date Amended: {record.date_amend}</div>}
                   </div>
                 }
-                color="#0b5f74"
+                color={record.ecc_cnc.includes("CNC") ? "#bc6e00" : "#0b5f74"}
               >
-                <Button
-                  type="text"
-                  className="custom-button-green"
-                  size="small"
-                >
-                  ECC
-                </Button>
+                <span>
+                  <LabelWithIcon
+                    text={record.ecc_cnc.includes("CNC") ? "CNC" : "ECC"}
+                    isPending={checkPendingStatus(record.ecc_cnc)}
+                    className={record.ecc_cnc.includes("CNC") ? "custom-span-yellow" : "custom-span-green"}
+                  />
+                </span>
               </Tooltip>
-            ) : typeof record.ecc_cnc === "string" &&
-              (record.ecc_cnc.includes("CNC") ||
-                record.ecc_cnc.includes("R03")) ? (
+            )}
+    
+            {/* PTO */}
+            {record.pto_code && (
               <Tooltip
                 title={
-                  <div className="tooltip-content" style={{ fontSize: "11px" }}>
-                    <div>CNC Information</div>
-                    <div>Code: {record.ecc_cnc}</div>
-                    <div>Date Issued: {record.date_approved}</div>
+                  <div style={{ fontSize: "11px" }}>
+                    <div>PTO Information</div>
+                    <div>Code: {record.pto_code}</div>
+                    <div>Date Issued: {record.pto_issued}</div>
+                    <div>Date of Expiration: {record.pto_expiration}</div>
                   </div>
                 }
-                color="#bc6e00"
+                color="#643c6a"
               >
-                <Button
-                  type="text"
-                  className="custom-button-yellow"
-                  size="small"
-                >
-                  CNC
-                </Button>
+                <span>
+                  <LabelWithIcon text="PTO" isPending={checkPendingStatus(record.pto_code)} className="custom-span-blue" />
+                </span>
               </Tooltip>
-            ) : null)}
-
-          {record.pto_code && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "11px" }}>
-                  <div>PTO Information</div>
-                  <div>Code: {record.pto_code}</div>
-                  <div>Date Issued: {record.pto_issued}</div>
-                  <div>Date of Expiration: {record.pto_expiration}</div>
-                </div>
-              }
-              color="#643c6a"
-            >
-              <Button type="text" className="custom-button-blue" size="small">
-                {typeof record.pto_code === "string" &&
-                (record.pto_code.includes("POA") ||
-                  record.pto_code.includes("PTO") ||
-                  record.pto_code.includes("FLA"))
-                  ? "PTO"
-                  : record.pto_code}
-              </Button>
-            </Tooltip>
-          )}
-
-          {record.wwdp_code && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "11px" }}>
-                  <div>WWDP Information</div>
-                  <div>Code: {record.wwdp_code}</div>
-                  <div>Date Issued: {record.wwdp_issued}</div>
-                  <div>Date of Expiration: {record.wwdp_expiration}</div>
-                </div>
-              }
-              color="#b45248"
-            >
-              <Button type="text" className="custom-button-orange" size="small">
-                {typeof record.wwdp_code === "string" &&
-                record.wwdp_code.includes("DP")
-                  ? "WWDP"
-                  : record.wwdp_code}
-              </Button>
-            </Tooltip>
-          )}
-
-          {record.haz_id && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "11px" }}>
-                  <div>HWG ID Information</div>
-                  <div>Code: {record.haz_id}</div>
-                  <div>Date Issued: {record.haz_issued}</div>
-                </div>
-              }
-              color="#415e20"
-            >
-              <Button
-                type="text"
-                className="custom-button-skyblue"
-                size="small"
+            )}
+    
+            {/* WWDP */}
+            {record.wwdp_code && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>WWDP Information</div>
+                    <div>Code: {record.wwdp_code}</div>
+                    <div>Date Issued: {record.wwdp_issued}</div>
+                    <div>Date of Expiration: {record.wwdp_expiration}</div>
+                  </div>
+                }
+                color="#b45248"
               >
-                {typeof record.haz_id === "string" &&
-                (record.haz_id.includes("GR") ||
-                  record.haz_id.includes("M-GR") ||
-                  record.pto_code.includes("OL-GR") ||
-                  record.pto_code.includes("HW"))
-                  ? "HWG ID"
-                  : record.haz_id}
-              </Button>
-            </Tooltip>
-          )}
-
-          {record.tsd_ref_no && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "11px" }}>
-                  <div>TSD Information</div>
-                  <div>Code: {record.tsd_ref_no}</div>
-                  <div>Date of Expiration: {record.tsd_expiration}</div>
-                </div>
-              }
-              color="#542c14"
-            >
-              <Button type="text" className="custom-button-brown" size="small">
-                {typeof record.tsd_ref_no === "string" &&
-                (record.tsd_ref_no.includes("TR") ||
-                  record.tsd_ref_no.includes("OL-TR"))
-                  ? "TSD ID"
-                  : record.tsd_ref_no}
-              </Button>
-            </Tooltip>
-          )}
-
-          {record.tp_trc_ref_no && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "11px" }}>
-                  <div>TP/TRC Information</div>
-                  <div>Code: {record.tp_trc_ref_no}</div>
-                  <div>Date of Expiration: {record.tp_trc_expiration}</div>
-                </div>
-              }
-              color="#242726"
-            >
-              <Button type="text" className="custom-button-stone" size="small">
-                {typeof record.tp_trc_ref_no === "string" &&
-                (record.tp_trc_ref_no.includes("TR") ||
-                  record.tp_trc_ref_no.includes("OL-TP") ||
-                  record.tp_trc_ref_no.includes("OL-PTT"))
-                  ? "TP/TRC ID"
-                  : record.tp_trc_ref_no}
-              </Button>
-            </Tooltip>
-          )}
-
-          {record.chemical_code && (
-            <Tooltip
-              title={
-                <div>
-                  <div>Chemical Permit/s Information</div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Element</th>
-                        <th>Code</th>
-                        <th>Permit Issued</th>
-                        <th>Permit Expiration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>{record.chemical_code.split("-")[0]}</td>
-                        <td>{record.chemical_code.split("-")[2]}</td>
-                        <td>{record.chemical_code}</td>
-                        <td>{record.chem_permit_issued}</td>
-                        <td>{record.chem_permit_exp}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              }
-              color="#5e5d3e"
-            >
-              <Button type="text" className="custom-button-ash" size="small">
-                {typeof record.chemical_code === "string" &&
-                (record.chemical_code.includes("CCOr") ||
-                  record.chemical_code.includes("CCOi") ||
-                  record.chemical_code.includes("OL") ||
-                  record.chemical_code.includes("PCL") ||
-                  record.chemical_code.includes("SQI"))
-                  ? "Chemical Permits"
-                  : record.chemical_code}
-              </Button>
-            </Tooltip>
-          )}
-
-          {record.pco_no && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "11px" }}>
-                  <div>PCO Information</div>
-                  <div>Code: {record.pco_no}</div>
-                  <div>Name: {record.pco_name}</div>
-                  <div>Tel. No: {record.pco_tel_no}</div>
-                  <div>PCO Validity: {record.pco_validity}</div>
-                </div>
-              }
-              color="#243d57"
-            >
-              <Button type="text" className="custom-button-slate" size="small">
-                {typeof record.pco_no === "string" &&
-                (record.pco_no.includes("PCO") ||
-                  record.pco_no.includes("PCC") ||
-                  record.pco_no.includes("A-PCO"))
-                  ? "PCO ID"
-                  : record.pco_no}
-              </Button>
-            </Tooltip>
-          )}
-        </div>
-      ),
+                <span>
+                  <LabelWithIcon text="WWDP" isPending={checkPendingStatus(record.wwdp_code)} className="custom-span-orange" />
+                </span>
+              </Tooltip>
+            )}
+    
+            {/* Hazwaste */}
+            {record.haz_id && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>Hazwaste Gen. Cert. Information</div>
+                    <div>Code: {record.haz_id}</div>
+                    <div>Date Issued: {record.haz_issued}</div>
+                  </div>
+                }
+                color="#415e20"
+              >
+                <span>
+                  <LabelWithIcon text="HAZ" isPending={checkPendingStatus(record.haz_id)} className="custom-span-skyblue" />
+                </span>
+              </Tooltip>
+            )}
+    
+            {/* PCO */}
+            {record.pco_no && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>PCO Accreditation Certificate</div>
+                    <div>PCO No: {record.pco_no}</div>
+                    <div>PCO Name: {record.pco_name}</div>
+                    <div>PCO Validity: {record.pco_validity}</div>
+                  </div>
+                }
+                color="#242726"
+              >
+                <span>
+                  <LabelWithIcon text="PCO" isPending={checkPendingStatus(record.pco_no)} className="custom-span-stone" />
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "Section/Unit Incharged",
-      key: "section_incharge",
-      ...getColumnSearchProps("section_incharge"),
+      key: "section_incharged",
+      ...getColumnSearchProps("section_incharged"),
       render: (text, record) => {
         // Split sections by comma
-        const sections = record.section_incharge
+        const sections = record.section_incharged
           .split(",")
           .map((section) => section.trim());
 
@@ -1525,11 +1387,7 @@ const Province = ({ theme, currentUser }) => {
                     <div style={{ fontSize: "11px" }}>
                       {" "}
                       {/* Reduced font size */}
-                      <div>Section Incharge: {record.section_incharge}</div>
-                      <div>
-                        FMR Section Incharge:{" "}
-                        {record.fmr_section_incharged || "N/A"}
-                      </div>
+                      <div>Section Incharge: {record.section_incharged}</div>
                       <div>Handler: {record.handler || "N/A"}</div>
                       <div>
                         Monitoring Schedule: {record.monitoring_sched || "N/A"}
@@ -1570,17 +1428,17 @@ const Province = ({ theme, currentUser }) => {
       key: "remarks_recommendations",
       ...getColumnSearchProps("remarks_recommendations"),
       render: (text, record) => (
-        <div className="industry-label">{record.remarks_recommendations}</div>
+        <div>{record.remarks_recommendations}</div>
       ),
       align: "left",
       width: 100,
     },
     {
-      title: <span style={{ fontSize: "12px" }}>Monitoring Status</span>,
+      title: <span style={{ fontSize: "10px" }}>Monitoring Status</span>,
       key: "iis_no",
       ...getColumnSearchProps("iis_no"), // Ensure this is set to the correct dataIndex
       render: (text, record) => (
-        <div className="industry-label">
+        <div>
           <a
             href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
               record.iis_no
@@ -1635,7 +1493,7 @@ const Province = ({ theme, currentUser }) => {
                   <span>
                     <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
                     <span style={{ marginLeft: 8 }}>
-                      Received by Planning Unit
+                      Received by PISMU
                     </span>
                   </span>
                 ) : (
@@ -1759,7 +1617,7 @@ const Province = ({ theme, currentUser }) => {
             </span>
             <span
               className="modal-title"
-              style={{ whiteSpace: "normal", textAlign: "right" }}
+              style={{ whiteSpace: "normal", textAlign: "right", marginRight:"20px" }}
             >
               {selectedRecord?.ecc_cnc || ""}
             </span>

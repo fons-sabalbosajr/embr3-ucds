@@ -358,7 +358,7 @@ const LegalUnit = ({
                     value={localRecord.service_mode || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                     onChange={(e) =>
                       handleInputChange("docket_no", e.target.value)
                     }
@@ -385,7 +385,7 @@ const LegalUnit = ({
                     value={localRecord.v_pd1586 || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                     onChange={(e) =>
                       handleInputChange("v_pd1586", e.target.value)
                     }
@@ -398,7 +398,7 @@ const LegalUnit = ({
                     value={localRecord.v_ra9275 || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                     onChange={(e) =>
                       handleInputChange("v_ra9275", e.target.value)
                     }
@@ -411,7 +411,7 @@ const LegalUnit = ({
                     value={localRecord.v_ra8749 || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                     onChange={(e) =>
                       handleInputChange("v_ra8749", e.target.value)
                     }
@@ -424,7 +424,7 @@ const LegalUnit = ({
                     value={localRecord.v_haz || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                     onChange={(e) => handleInputChange("v_haz", e.target.value)}
                     rows={3}
                   />
@@ -435,7 +435,7 @@ const LegalUnit = ({
                     value={localRecord.v_toxichem || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                     onChange={(e) =>
                       handleInputChange("v_toxichem", e.target.value)
                     }
@@ -559,7 +559,7 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("tc_commitment", newValue);
                       }}
-                      className="textbox-label disabled-input textbox_legal tc_commitment"
+                      className="textbox-label textbox_legal tc_commitment"
                       rows={2}
                     />
 
@@ -613,7 +613,7 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("pos_paper", newValue);
                       }}
-                      className="textbox-label disabled-input textbox_legal"
+                      className="textbox-label textbox_legal"
                       rows={2}
                     />
 
@@ -645,7 +645,6 @@ const LegalUnit = ({
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>Date Payment of Penalty:</strong>
-
                   <Input
                     value={localRecord.date_payment_penalty || ""}
                     disabled={!isEditing}
@@ -654,7 +653,7 @@ const LegalUnit = ({
                       const newValue = e.target.value;
                       handleInputChange("date_payment_penalty", newValue);
                     }}
-                    className="textbox-label disabled-input textbox_legal"
+                    className="textbox-label textbox_legal"
                   />
                 </Paragraph>
               </Col>
@@ -668,7 +667,7 @@ const LegalUnit = ({
                     <div key={`penalty-amount-${index}`}>
                       <Input
                         value={amount}
-                        onBlur={() => handleAmountBlur(index)} // Call formatting on blur
+                        onBlur={() => handleAmountBlur(index)}
                         disabled={!isEditing}
                         placeholder="No data"
                         onChange={(e) => {
@@ -678,7 +677,7 @@ const LegalUnit = ({
                             index
                           );
                         }}
-                        className="textbox-label disabled-input textbox_legal"
+                        className="textbox-label textbox_legal"
                         prefix="₱"
                       />
                     </div>
@@ -702,7 +701,7 @@ const LegalUnit = ({
                             index
                           );
                         }}
-                        className="textbox-label disabled-input textbox_legal"
+                        className="textbox-label textbox_legal"
                       />
                     </div>
                   ))}
@@ -774,7 +773,7 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("tc_compliance_remarks", newValue);
                       }}
-                      className="textbox-label disabled-input textbox_legal"
+                      className="textbox-label textbox_legal"
                       rows={2}
                     />
                   </Form.Item>
@@ -825,7 +824,7 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("tc_compliance_remarks", newValue);
                       }}
-                      className="textbox-label disabled-input textbox_legal tc_commitment"
+                      className="textbox-label textbox_legal tc_commitment"
                       rows={2}
                     />
                   </Form.Item>

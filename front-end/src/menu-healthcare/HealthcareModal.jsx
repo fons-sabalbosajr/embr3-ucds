@@ -28,10 +28,10 @@ const HealthcareModal = ({
   useEffect(() => {
     setCurrentRecord(record);
     setOriginalRecord(record);
-    const loadedPenaltyAmounts = (record.penalty_amount || "")
+    const loadedPenaltyAmounts = (record.amount || "")
       .split("\n")
       .map((amount) => amount.trim());
-    const loadedPenaltyOrNumbers = (record.penalty_or_number || "")
+    const loadedPenaltyOrNumbers = (record.or_number || "")
       .split("\n")
       .map((number) => number.trim());
     setPenaltyAmounts(loadedPenaltyAmounts);

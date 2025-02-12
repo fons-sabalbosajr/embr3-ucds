@@ -3,7 +3,8 @@
 }
 
 .textbox_legal{
-    margin-top: 6px;
+    font-size: 11px;
+    margin-top: -10px;
 }
 
 .label_title_legal{
@@ -17,5 +18,18 @@
 }
 
 .disabled-input-legal{
+    margin-top: 10px;
+}
+
+.or_number{
+    margin-top: 4px;
+    margin-bottom: -10px;
+}
+
+.legal-add{
+    margin-bottom: 5px;
+}
+
+.legal-tc-compliance{
     margin-top: 10px;
 }

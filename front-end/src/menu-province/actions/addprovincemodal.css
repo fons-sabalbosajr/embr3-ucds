@@ -1,3 +1,11 @@
 .id-no{
     margin-right: 30px;
 }
+
+.ant-tabs-tab {
+    font-size: 12px !important;
+  }
+
+.modal-title{
+    font-size: 11px;
+}

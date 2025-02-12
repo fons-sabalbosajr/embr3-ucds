@@ -327,7 +327,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
       key: "section_incharge",
       render: (text, record) => {
         // Split sections by comma
-        const sections = record.section_incharge
+        const sections = record.section_incharged
           .split(",")
           .map((section) => section.trim());
 
@@ -345,11 +345,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
                     <div style={{ fontSize: "10px" }}>
                       {" "}
                       {/* Reduced font size */}
-                      <div>Section Incharge: {record.section_incharge}</div>
-                      <div>
-                        FMR Section Incharge:{" "}
-                        {record.fmr_section_incharged || "N/A"}
-                      </div>
+                      <div>Section Incharge: {record.section_incharged}</div>
                       <div>Handler: {record.handler || "N/A"}</div>
                       <div>
                         Monitoring Schedule: {record.monitoring_sched || "N/A"}
@@ -559,7 +555,11 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
             </span>
             <span
               className="modal-title"
-              style={{ whiteSpace: "normal", textAlign: "right" }}
+              style={{
+                whiteSpace: "normal",
+                textAlign: "right",
+                marginRight: "20px",
+              }}
             >
               {selectedRecord?.ecc_cnc || ""}
             </span>
@@ -597,7 +597,8 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
               style={{
                 whiteSpace: "normal",
                 textAlign: "right",
-                fontSize: "12px", // adjust size if needed
+                fontSize: "12px",
+                marginRight: "20px",
               }}
             >
               Records Found: {filteredData ? filteredData.length : 0}

@@ -77,7 +77,7 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
             alignItems: "center",
           }}
         >
-          <span>Add New Establishment/Company</span>
+          <span className="modal-title">Add New Establishment/Company</span>
           {loading ? (
             <div className="id-no">
               <Spin size="small" /> loading...

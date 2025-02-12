@@ -15,6 +15,8 @@ import {
   LinkOutlined,
   PlusCircleFilled,
   DeleteFilled,
+  CloseOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
@@ -23,52 +25,35 @@ import LegalOfficers from "../../../components/Autocomplete/LegalOfficers";
 
 const { Paragraph } = Typography;
 
-const Legal = ({
-  record,
-  handleChange,
-  isEditing,
-  penaltyAmounts,
-  setPenaltyAmounts,
-  penaltyOrNumbers,
-  setPenaltyOrNumbers,
-}) => {
-  const [loadedInitialFields, setLoadedInitialFields] = useState([]);
+const Legal = ({ record, handleChange, isEditing }) => {
+  const [penalties, setPenalties] = useState([
+    { penalty_date: null, amount: "", or_number: "" },
+  ]);
   const [localRecord, setLocalRecord] = useState(record || {});
+
+  const safeRecord = record || {};
 
   useEffect(() => {
     setLocalRecord(record);
   }, [record]);
 
-  useEffect(() => {
-    if (!record) return; // Ensure record is defined before proceeding
-  
-    // Load penalty amounts and OR numbers safely
-    const loadedPenaltyAmounts = (record.amount || "")
-      .split("\n")
-      .map((amount) => amount.trim())
-      .filter((amount) => amount !== ""); // Remove empty strings
-  
-    const loadedPenaltyOrNumbers = (record.or_number || "")
-      .split("\n")
-      .map((number) => number.trim())
-      .filter((number) => number !== ""); // Remove empty strings
-  
-    setPenaltyAmounts(loadedPenaltyAmounts.length ? loadedPenaltyAmounts : [""]);
-    setPenaltyOrNumbers(loadedPenaltyOrNumbers.length ? loadedPenaltyOrNumbers : [""]);
-  
-    // Ensure indices are properly initialized
-    setLoadedInitialFields([...Array(loadedPenaltyAmounts.length).keys()]);
-  }, [record, setPenaltyAmounts, setPenaltyOrNumbers, setLoadedInitialFields]);
-  
-
   const handleDateChange = (date, dateString) => {
-    if (dateString) {
-      handleChange("tc_actual_date", dateString);
-      handleChange("penalty_date", dateString);
-    } else {
-      handleChange("tc_actual_date", null);
-      handleChange("penalty_date", null);
+    // Only update the state if the date has changed
+    if (dateString !== record.tc_actual_date) {
+      handleChange("tc_actual_date", dateString); // Update state with the selected date
     }
+  };
+
+  const handlePenaltyDateChange = (index, date, dateString) => {
+    const newPenalties = [...penalties];
+    newPenalties[index].penalty_date = dateString;
+    setPenalties(newPenalties);
+  };
+
+  const handlePenaltyInputChange = (index, field, value) => {
+    const newPenalties = [...penalties];
+    newPenalties[index][field] = value;
+    setPenalties(newPenalties);
   };
 
   const convertToMMDDYYYY = (dateString) => {
@@ -100,43 +85,17 @@ const Legal = ({
     handleChange(field, value); // Calls parent function to update the actual record
   };
 
-  const handlePenaltyInputChange = (field, value, index) => {
-    if (field === "amount") {
-      // Replace non-numeric characters but allow decimal points and commas
-      const cleanedValue = value.replace(/[^0-9.,]/g, "");
-  
-      // Create a new array with updated value
-      setPenaltyAmounts((prevAmounts) => {
-        const newAmounts = [...prevAmounts];
-        newAmounts[index] = cleanedValue;
-        return [...newAmounts]; // Ensure a new array is returned to trigger re-render
-      });
-    } else if (field === "or_number") {
-      // Remove non-numeric characters
-      const formattedValue = value.replace(/[^0-9]/g, "");
-  
-      setPenaltyOrNumbers((prevNumbers) => {
-        const newNumbers = [...prevNumbers];
-        newNumbers[index] = formattedValue;
-        return [...newNumbers]; // Return a new array reference
-      });
-    }
+  const addPenalty = () => {
+    setPenalties([
+      ...penalties,
+      { penalty_date: null, amount: "", or_number: "" },
+    ]);
   };
-  
 
-  const handleAmountBlur = (index) => {
-    setPenaltyAmounts((prevAmounts) => {
-      const newAmounts = [...prevAmounts];
-      const rawValue = newAmounts[index].replace(/[^0-9.]/g, ""); // Remove any non-numeric characters except decimal
-      const num = parseFloat(rawValue);
-      newAmounts[index] = isNaN(num)
-        ? ""
-        : num.toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          });
-      return newAmounts;
-    });
+  const removePenalty = () => {
+    if (penalties.length > 1) {
+      setPenalties(penalties.slice(0, -1));
+    }
   };
 
   const formattedDateNOVRelease = convertToMMDDYYYY(record.nov_date_issued);
@@ -306,7 +265,7 @@ const Legal = ({
                         : null
                     }
                     onChange={(date, dateString) => {
-                      handleDateChange(date, dateString);
+                      handleDateChange(date, dateString); // Ensure we handle date change only when necessary
                     }}
                     disabled={!isEditing}
                     format="MM/DD/YYYY"
@@ -430,56 +389,177 @@ const Legal = ({
               padding: 5,
             }}
             size="small"
-            title="For Penalty and Order/Resolution"
+            title="For Penalty & Order/Resolution"
           >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Penalty Payment Date:</strong>
-                  <DatePicker
-                    value={
-                      record.penalty_date
-                        ? dayjs(record.penalty_date, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date, dateString) => {
-                      handleDateChange(date, dateString);
-                    }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    className="text-area-legal custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
+            <div>
+              {/* Labels placed outside of the .map */}
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph>
+                    <strong>Penalty Date:</strong>
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph>
+                    <strong>Amount:</strong>
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph>
+                    <strong>OR Number:</strong>
+                  </Paragraph>
+                </Col>
+              </Row>
 
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Penalty Amount:</strong>
-                  {penaltyAmounts.map((amount, index) => (
-                    <div key={`amount-${index}`}>
-                      <Input
-                        value={amount}
-                        onBlur={() => handleAmountBlur(index)} // Call formatting on blur
-                        disabled={!isEditing}
-                        placeholder="No data"
-                        onChange={(e) => {
-                          handlePenaltyInputChange(
-                            "amount",
-                            e.target.value,
-                            index
-                          );
-                        }}
-                        className="textbox-label textbox_legal"
-                        prefix="₱"
-                      />
-                    </div>
-                  ))}
-                </Paragraph>
-              </Col>
-            </Row>
+              {/* Dynamic rendering of fields for each penalty */}
+              {penalties.map((record, index) => (
+                <Row gutter={[16, 16]} key={index}>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <DatePicker
+                      value={
+                        record.penalty_date
+                          ? dayjs(record.penalty_date, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date, dateString) =>
+                        handlePenaltyDateChange(index, date, dateString)
+                      }
+                      format="MM/DD/YYYY"
+                      className="textbox_legal legal-add"
+                      style={{ width: "100%" }}
+                    />
+                  </Col>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <Input
+                      value={record.amount}
+                      onChange={(e) =>
+                        handlePenaltyInputChange(
+                          index,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      placeholder="Amount"
+                      className="textbox_legal legal-add"
+                      prefix="₱"
+                    />
+                  </Col>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <Input
+                      value={record.or_number}
+                      onChange={(e) =>
+                        handlePenaltyInputChange(
+                          index,
+                          "or_number",
+                          e.target.value
+                        )
+                      }
+                      placeholder="OR Number"
+                      className="textbox_legal legal-add"
+                      prefix="#"
+                    />
+                  </Col>
+                </Row>
+              ))}
+
+              <div style={{ textAlign: "left" }}>
+                <Button
+                  type="primary"
+                  onClick={addPenalty}
+                  style={{ marginRight: "8px" }}
+                  size="small"
+                  icon={<PlusCircleFilled />}
+                  disabled={!isEditing}
+                >
+                  Add
+                </Button>
+                {penalties.length > 1 && (
+                  <Button
+                    danger
+                    onClick={removePenalty}
+                    size="small"
+                    type="primary"
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+            <Paragraph className="legal-tc-compliance">
+              <Checkbox
+                checked={
+                  safeRecord?.tc_order_compliance ===
+                  "Compliance with TC Commitment/Order"
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "tc_order_compliance",
+                    e.target.checked
+                      ? "Compliance with TC Commitment/Order"
+                      : ""
+                  )
+                }
+                disabled={!isEditing}
+                style={{ fontSize: "12px" }}
+              >
+                <span className="permit-label"></span>
+              </Checkbox>
+              <strong>Compliance with TC Commitment/Order</strong>
+            </Paragraph>
+
+            <Paragraph>
+              <strong>Remarks:</strong>
+              <TextArea
+                value={record ? record.remarks : ""}
+                onChange={(e) => handleChange("remarks", e.target.value)}
+                disabled={!isEditing}
+                placeholder="No data"
+                rows={3}
+                className="text-area-legal"
+              />
+            </Paragraph>
+
+            <Paragraph>
+              <Checkbox
+                checked={safeRecord?.resolution === "Resolution"}
+                onChange={(e) =>
+                  handleChange(
+                    "resolution",
+                    e.target.checked ? "Resolution" : ""
+                  )
+                }
+                disabled={!isEditing}
+                style={{ fontSize: "12px" }}
+              >
+                <span className="permit-label"></span>
+              </Checkbox>
+              <strong>Issued Resolution</strong>
+            </Paragraph>
+
+            <Paragraph>
+              <Checkbox
+                checked={safeRecord?.tc_order === "Order"}
+                onChange={(e) =>
+                  handleChange("tc_order", e.target.checked ? "Order" : "")
+                }
+                disabled={!isEditing}
+                style={{ fontSize: "12px" }}
+              >
+                <span className="permit-label"></span>
+              </Checkbox>
+              <strong>Issued Order</strong>
+            </Paragraph>
+
+            <Paragraph>
+              <strong>Order Status:</strong>
+              <TextArea
+                value={record ? record.order_status : ""}
+                onChange={(e) => handleChange("order_status", e.target.value)}
+                disabled={!isEditing}
+                placeholder="No data"
+                className="text-area-legal"
+              />
+            </Paragraph>
           </Card>
         </Col>
       </Row>

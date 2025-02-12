@@ -1,0 +1,5 @@
+/* Reduce font size of tab headers */
+.chemical-modal-tabs .ant-tabs-tab {
+    font-size: 12px !important; 
+    font-weight: 500;
+  }

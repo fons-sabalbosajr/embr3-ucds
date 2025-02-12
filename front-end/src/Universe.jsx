@@ -8,6 +8,8 @@ import Province from "./menu-province/Province";
 import Survey from "./menu-survey/Survey";
 import Healthcare from "./menu-healthcare/Healthcare";
 import Chemicals from "./menu-chemicals/Chemicals";
+import TSD from "./menu-tsd/TSDPermits";
+import TRC from "./menu-trc/TRCPermits";
 import MBU from "./menu-mbu/MBU";
 import Admin from "./menu-component/Admin";
 import Accounts from "./menu-component/UserAccounts";
@@ -273,6 +275,8 @@ const Universe = () => {
                 />
                 <Route path="healthcare" element={<Healthcare />} />
                 <Route path="chemicals" element={<Chemicals />} />
+                <Route path="tsd" element={<TSD />} />
+                <Route path="trc" element={<TRC />} />
                 <Route path="mbu" element={<MBU />} />
                 <Route path="eswm-database" element={<ESWM />} />
                 {permissions.includes("admin") && (

@@ -121,6 +121,16 @@ const SideMenu = ({ theme, currentUser }) => {
                   Chemical Industries
                 </Link>
               </Menu.Item>
+              <Menu.Item key="/universe/tsd">
+                <Link to="/universe/tsd">
+                  TSD Facilities
+                </Link>
+              </Menu.Item>
+              <Menu.Item key="/universe/trc">
+                <Link to="/universe/trc">
+                  TRC Permits
+                </Link>
+              </Menu.Item>
             </SubMenu>
 
             <Menu.Item key="/universe/survey" icon={<ReconciliationFilled/>}>
