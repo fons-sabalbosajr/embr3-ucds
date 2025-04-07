@@ -1065,6 +1065,7 @@ const uploadnewdp = multer({ storage: storagenewdp });
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(uploadsDir));
 
+
 app.post("/api/users/update", uploaddp.single("photo"), async (req, res) => {
   //console.log(req.file); // Log the uploaded file
   //console.log(req.body); // Log the request body
@@ -1169,6 +1170,182 @@ app.post("/api/newusers", uploadnewdp.single("avatar"), async (req, res) => {
   }
 });
 
+app.post("/api/ucds/add-establishment", async (req, res) => {
+  try {
+    const {
+      id_no,
+      title,
+      name,
+      address,
+      ecc_cnc,
+      industry_class,
+      remarks,
+      industry_type,
+      industry_subtype,
+      psic_code,
+      mbu_area,
+      waterbody,
+      long,
+      lat,
+      cong_district,
+      street,
+      brgy,
+      city,
+      province,
+      emp_total,
+      wwtf_type,
+      bod,
+      section_incharged,
+      handler,
+      monitoring_sched,
+      iis_no,
+      iis_no_2025,
+      insp_type,
+      date_monitored,
+      date_routed,
+      date_signed,
+      days_dmds,
+      days_drds,
+      pismu_tracking,
+      title_status,
+      with_nov,
+      permit_process,
+      date_amended,
+      date_approved,
+      pto_code,
+      pto_issued,
+      pto_expiration,
+      wwdp_code,
+      wwdp_issued,
+      wwdp_expiration,
+      haz_id,
+      haz_issued,
+      pco_no,
+      pco_name,
+      pco_validity,
+      docket_no,
+      denr_pab_case_no,
+      nov_issued,
+      v_pd1586,
+      v_ra9275,
+      v_ra8749,
+      v_ra6969_haz,
+      v_ra6969_tchem,
+      tc_date_actual,
+      legal_officer,
+      tc_compliance_link,
+      pos_paper,
+      penalty_date,
+      amount,
+      or_number,
+      tc_commitment,
+      other_tc_remarks,
+      resolution_issued,
+      order_issued,
+      order_status,
+      current_user, // New field: Name of the current user
+      division, // New field: Division
+    } = req.body;
+
+    if (!name || !title || !province || !ecc_cnc) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Check for duplicate ECC_CNC before inserting
+    const existingRecord = await ucdsCollection.findOne({ ecc_cnc });
+
+    if (existingRecord) {
+      return res.status(409).json({
+        message: "Duplicate entry found",
+        details: existingRecord,
+      });
+    }
+
+    const newEntry = {
+      id_no,
+      title,
+      name,
+      address,
+      ecc_cnc,
+      industry_class,
+      remarks,
+      industry_type,
+      industry_subtype,
+      psic_code,
+      mbu_area,
+      waterbody,
+      long,
+      lat,
+      cong_district,
+      street,
+      brgy,
+      city,
+      province,
+      emp_total,
+      wwtf_type,
+      bod,
+      section_incharged,
+      handler,
+      monitoring_sched,
+      iis_no,
+      iis_no_2025,
+      insp_type,
+      date_monitored,
+      date_routed,
+      date_signed,
+      days_dmds,
+      days_drds,
+      pismu_tracking,
+      title_status,
+      with_nov,
+      permit_process,
+      date_amended,
+      date_approved,
+      pto_code,
+      pto_issued,
+      pto_expiration,
+      wwdp_code,
+      wwdp_issued,
+      wwdp_expiration,
+      haz_id,
+      haz_issued,
+      pco_no,
+      pco_name,
+      pco_validity,
+      docket_no,
+      denr_pab_case_no,
+      nov_issued,
+      v_pd1586,
+      v_ra9275,
+      v_ra8749,
+      v_ra6969_haz,
+      v_ra6969_tchem,
+      tc_date_actual,
+      legal_officer,
+      tc_compliance_link,
+      pos_paper,
+      penalty_date,
+      amount,
+      or_number,
+      tc_commitment,
+      other_tc_remarks,
+      resolution_issued,
+      order_issued,
+      order_status,
+      createdBy: current_user, // Store the user who added the record
+      division,
+      dateAdded: new Date(), // Store the date of creation
+    };
+
+    const result = await ucdsCollection.insertOne(newEntry);
+    res.status(201).json({ message: "Establishment added successfully", id: result.insertedId });
+  } catch (error) {
+    console.error("Error adding establishment:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
 app.use("/uploads", express.static(uploadsDir));
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1272,18 +1449,49 @@ app.get("/api/ucds", async (req, res) => {
 
 app.get("/api/ucds/next-id", async (req, res) => {
   try {
-    const surveys = await ucdsCollection.find({}).toArray();
+    const { province } = req.query;
+
+    // If no province is selected, return a placeholder ID
+    if (!province) {
+      return res.status(200).json({ nextIdNo: "No ID assigned yet" });
+    }
+
+    // Define province prefixes
+    const provincePrefixes = {
+      Aurora: "AU-",
+      Bataan: "BA-",
+      Bulacan: "BU-",
+      Nueva_Ecija: "NE-",
+      Pampanga: "PA-",
+      Tarlac: "TA-",
+      Zambales: "ZA-"
+    };
+
+    const prefix = provincePrefixes[province];
+
+    if (!prefix) {
+      return res.status(400).json({ error: "Invalid province" });
+    }
+
+    // Fetch the highest ID for the given province
+    const surveys = await ucdsCollection.find({ province }).toArray();
     const maxIdNo = surveys.reduce((max, survey) => {
-      const idNo = parseInt(survey.id_no, 10);
+      const match = survey.id_no.match(/\d+$/); // Extract last number from ID
+      const idNo = match ? parseInt(match[0], 10) : 0;
       return idNo > max ? idNo : max;
     }, 0);
+
     const nextIdNo = maxIdNo + 1;
-    res.status(200).json({ nextIdNo });
+    const formattedId = `${prefix}${nextIdNo}`;
+
+    res.status(200).json({ nextIdNo: formattedId });
   } catch (error) {
     console.error("Error fetching next id_no:", error);
     res.status(500).send("Internal Server Error");
   }
 });
+
+
 
 // Search by name
 app.get("/api/ucds/search-name", async (req, res) => {
@@ -1409,6 +1617,36 @@ app.get("/api/ucds/search-ecc-cnc", async (req, res) => {
   } catch (error) {
     console.error("Error searching ECC CNCs:", error);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds/check-duplicate", async (req, res) => {
+  const query = req.query.query;
+  if (!query) {
+    return res.status(400).json({ error: "Query parameter is required" });
+  }
+
+  try {
+    const regex = new RegExp(`^${query}$`, "i"); // Exact match, case-insensitive
+    const duplicateEntry = await ucdsCollection.findOne({ ecc_cnc: regex });
+
+    if (duplicateEntry) {
+      return res.status(200).json({
+        duplicate: true,
+        details: {
+          id: duplicateEntry._id,
+          ecc_cnc: duplicateEntry.ecc_cnc,
+          name: duplicateEntry.name || "N/A",
+          title: duplicateEntry.title || "N/A",
+          province: duplicateEntry.province || "N/A",
+        },
+      });
+    } else {
+      return res.status(200).json({ duplicate: false });
+    }
+  } catch (error) {
+    console.error("Error checking duplicate ECC CNC:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -3118,18 +3356,36 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
     const updatedBy = req.body.updated_by;
 
     const database = client.db("universe-db");
-    const collection = database.collection("survey-data");
 
-    // Retrieve the old document from the database
-    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
+    // Extract year from iis_no (format: R3-YYYY-XXXXX)
+    const match = iisNo.match(/R3-(\d{4})-/);
+    const year = match ? match[1] : null;
 
-    const result = await collection.updateOne(
-      { id_no: parseInt(id) }, // Convert id to a number
-      { $set: newData }
-    );
+    if (!year) {
+      return res.status(400).json({ error: "Invalid iis_no format." });
+    }
 
-    const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+    // Determine collection based on extracted year
+    const collectionName = `survey-data-${year}`;
+    const collection = database.collection(collectionName);
 
+    // Convert id to the correct type
+    const recordId = isNaN(id) ? id.toString() : parseInt(id);
+
+    // Retrieve the old document from the correct collection
+    const oldDocument = await collection.findOne({ id_no: recordId });
+
+    if (!oldDocument) {
+      return res.status(404).json({ error: `Record not found in ${collectionName}.` });
+    }
+
+    // Perform the update
+    await collection.updateOne({ id_no: recordId }, { $set: newData });
+
+    // Fetch the updated document
+    const updatedDocument = await collection.findOne({ id_no: recordId });
+
+    // Build the audit log
     const auditLog = {
       updated_by: updatedBy,
       updated_at: new Date(),
@@ -3137,26 +3393,24 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
       changes: [],
     };
 
-    // Loop through the old and new documents to find the changed fields
+    // Compare old and new data
     Object.keys(newData).forEach((key) => {
       if (oldDocument[key] !== newData[key]) {
         auditLog.changes.push({
           field: key,
-          old_value: oldDocument[key],
-          new_value: newData[key],
+          old_value: oldDocument[key] || "N/A",
+          new_value: newData[key] || "N/A",
         });
       }
     });
 
-    //console.log("Audit Log:", auditLog);
+    console.log(`Audit Log for ${collectionName}:`, auditLog);
 
     // Return the audit log object in the response
     res.status(200).json(auditLog);
   } catch (error) {
     console.error("Error updating data:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to update data. Please try again later." });
+    res.status(500).json({ error: "Failed to update data. Please try again later." });
   }
 });
 

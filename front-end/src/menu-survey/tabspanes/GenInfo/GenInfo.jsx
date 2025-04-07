@@ -191,10 +191,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
           <Paragraph className="paragraph-margin-top">
             <strong>Other Project Type</strong>
             <Input
-              value={localRecord.other_project_type || ""}
+               value={localRecord.other_project_type || ""}
               disabled={!isEditing}
               placeholder="No data"
-              className="textbox-label disabled-input"
+              className="textbox-label"
               onChange={(e) =>
                 handleInputChange("other_project_type", e.target.value)
               }

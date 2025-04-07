@@ -16,12 +16,17 @@ import "./geninfoadd.css";
 const { Paragraph } = Typography;
 const { TextArea } = Input;
 
-const GenInfoAdd = ({isEditing}) => {
-  const [selectedIndustryClass, setSelectedIndustryClass] = useState("");
+const GenInfoAdd = ({
+  isEditing,
+  selectedProvince,
+  setSelectedProvince,
+  extractedData,
+  setGeneralInfo, generalInfo
+}) => {
+  const [selectedIndustryClass, setSelectedIndustryClass] = useState("n/a");
   const [industryType, setIndustryType] = useState("n/a");
   const [industrySubType, setIndustrySubType] = useState("n/a");
   const [psicCode, setPsicCode] = useState("n/a");
-  const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedMunicipality, setSelectedMunicipality] = useState("");
   const [selectedBarangay, setSelectedBarangay] = useState("");
   const [street, setStreet] = useState("");
@@ -29,6 +34,22 @@ const GenInfoAdd = ({isEditing}) => {
   const [longitude, setLongitude] = useState("n/a");
   const [latitude, setLatitude] = useState("n/a");
   const [withinManilaBayArea, setWithinManilaBayArea] = useState(false);
+  const [autoFilledFields, setAutoFilledFields] = useState({});
+  const [proponentName, setProponentName] = useState("n/a");
+  const [projectTitle, setProjectTitle] = useState("n/a");
+
+  useEffect(() => {
+    if (extractedData && Object.keys(extractedData).length > 0) {
+      setProponentName(extractedData.proponent_name || "");
+      setProjectTitle(extractedData.project_title || "");
+      setSelectedIndustryClass(extractedData.industry_class || "");
+      setPsicCode(extractedData.psic_code || "");
+      setSelectedBarangay(extractedData.barangay || "n/a");
+      setSelectedMunicipality(extractedData.city || "n/a");
+      setSelectedProvince(extractedData.province || "n/a");
+      setStreet(extractedData.street || "n/a");
+    }
+  }, [extractedData]);
 
   useEffect(() => {
     if (!selectedIndustryClass) {
@@ -38,6 +59,22 @@ const GenInfoAdd = ({isEditing}) => {
       setPsicCode("n/a");
     }
   }, [selectedIndustryClass]);
+
+  useEffect(() => {
+    if (!setSelectedProvince) {
+      // Reset the values of the other fields when Industry Classification is empty
+      setSelectedMunicipality("");
+      setSelectedBarangay("");
+      setStreet("");
+      setFullAddress("n/a")
+    }
+
+    if (!selectedMunicipality) {
+      // Reset the values of the other fields when Industry Classification is empty
+      setSelectedBarangay("");
+      setStreet("");
+    }
+  }, [setSelectedProvince, selectedMunicipality]);
 
   useEffect(() => {
     // Update the full address whenever any of the address components change
@@ -54,8 +91,15 @@ const GenInfoAdd = ({isEditing}) => {
   }, [street, selectedBarangay, selectedMunicipality, selectedProvince]);
 
   useEffect(() => {
-    const addressComponents = [street, selectedBarangay, selectedMunicipality, selectedProvince];
-    const filteredComponents = addressComponents.filter(component => component);
+    const addressComponents = [
+      street,
+      selectedBarangay,
+      selectedMunicipality,
+      selectedProvince,
+    ];
+    const filteredComponents = addressComponents.filter(
+      (component) => component
+    );
     setFullAddress(filteredComponents.join(", "));
   }, [street, selectedBarangay, selectedMunicipality, selectedProvince]);
 
@@ -64,7 +108,11 @@ const GenInfoAdd = ({isEditing}) => {
       if (fullAddress) {
         //console.log("Fetching coordinates for address:", fullAddress);
         try {
-          const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+              fullAddress
+            )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+          );
           const data = await response.json();
           //console.log("Geocoding API response:", data);
           if (data.results && data.results.length > 0) {
@@ -95,15 +143,18 @@ const GenInfoAdd = ({isEditing}) => {
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
         <Paragraph>
           <strong>Proponent Name</strong>
-          <ProponentName isEditing={isEditing} />
+          <ProponentName isEditing={isEditing} value={proponentName} />
         </Paragraph>
         <Paragraph>
           <strong>Project Title</strong>
-          <ProjectTitle isEditing={isEditing} />
+          <ProjectTitle isEditing={isEditing} value={projectTitle} />
         </Paragraph>
         <Paragraph>
           <strong>Industry Classification</strong>
-          <IndustryClass onChange={setSelectedIndustryClass} disabled={!isEditing} />
+          <IndustryClass
+            onChange={(value) => setSelectedIndustryClass(value)}
+            value={selectedIndustryClass}
+          />
         </Paragraph>
         <IndustryType
           selectedIndustryClass={selectedIndustryClass}
@@ -115,7 +166,10 @@ const GenInfoAdd = ({isEditing}) => {
         />
         <PSICCode
           selectedIndustryClass={selectedIndustryClass}
-          setPsicCode={setPsicCode}
+          value={psicCode} // Ensure it gets the correct value
+          onChange={(value) => {
+            setPsicCode(value);
+          }}
         />
       </Col>
 
@@ -250,7 +304,7 @@ const GenInfoAdd = ({isEditing}) => {
           </Col>
           <Col xs={24} sm={24} md={15} lg={15} className="modalcol-zipcode">
             <Paragraph style={{ marginTop: "-20px" }}>
-            <Waterbody selectedMunicipality={selectedMunicipality} />
+              <Waterbody selectedMunicipality={selectedMunicipality} />
             </Paragraph>
           </Col>
           <Col xs={24} sm={24} md={24} lg={24} className="modalcol-zipcode">
@@ -271,7 +325,7 @@ const GenInfoAdd = ({isEditing}) => {
                   >
                     <Input
                       value={longitude}
-                      readOnly
+                      onChange={(e) => isEditing && setLongitude(e.target.value)}
                       style={{
                         fontSize: "11px",
                         height: "29px",
@@ -298,6 +352,7 @@ const GenInfoAdd = ({isEditing}) => {
                   >
                     <Input
                       value={latitude}
+                      onChange={(e) => isEditing && setLatitude(e.target.value)}
                       style={{
                         fontSize: "11px",
                         height: "29px",

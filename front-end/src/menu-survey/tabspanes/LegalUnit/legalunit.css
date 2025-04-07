@@ -6,6 +6,10 @@
     margin-top: 6px;
 }
 
+.textbox_legal_survey{
+    margin-top: 9px;
+}
+
 .label_title_legal{
     font-size: 11px;
 }
@@ -16,6 +20,11 @@
     margin-left: 5px;
 }
 
-.disabled-input-legal{
-    margin-top: 10px;
+.disabled-input-legal-days{
+    margin-top: 2px;
+}
+
+.textbox-label-payments{
+    font-size: 11px;
+    margin-top: 5px;
 }

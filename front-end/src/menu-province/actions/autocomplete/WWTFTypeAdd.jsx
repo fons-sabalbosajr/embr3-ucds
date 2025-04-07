@@ -9,7 +9,8 @@ const WWTFOptions = [
     { value: "DIRECT DISCHARGE" },
   ];
 
-const WWTFTypeAdd = ({ isEditing }) => {
+
+  const WWTFTypeAdd = ({ value, onChange, isEditing }) => {
    return (
       <ConfigProvider
       theme={{
@@ -34,9 +35,14 @@ const WWTFTypeAdd = ({ isEditing }) => {
         }}
         options={WWTFOptions}
         dropdownClassName="custom-autocomplete-dropdown"
+        value={value} // Controlled component
         disabled={!isEditing}
+        onChange={(selectedValue) => {
+          //console.log("Selected WWTF Type:", selectedValue); // Debugging log
+          onChange(selectedValue); // Update parent state
+        }}
         filterOption={(inputValue, option) =>
-          option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+          option.value.toUpperCase().includes(inputValue.toUpperCase())
         }
       >
         <Input

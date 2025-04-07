@@ -46,7 +46,7 @@ const GenInfo = ({
             industry_type: project_type || "N/A",
             industry_subtype: project_subtype || "N/A",
           });
-    
+
           // Update fields with fetched data, fallback to "N/A" if data is missing
           handleChange("psic_code", psic_code || "N/A");
           handleChange("industry_type", project_type || "N/A");
@@ -98,7 +98,16 @@ const GenInfo = ({
               <strong>Industry Classification</strong>
               <IndustryClass
                 value={editedRecord ? editedRecord.industry_class : ""}
-                onChange={(value) => handleChange("industry_class", value)}
+                onChange={(value) => {
+                  handleChange("industry_class", value);
+
+                  // If industry_class is empty, set dependent fields to "N/A"
+                  if (!value) {
+                    handleChange("industry_type", "N/A");
+                    handleChange("industry_subtype", "N/A");
+                    handleChange("psic_code", "N/A");
+                  }
+                }}
                 disabled={!isEditing}
                 placeholder="No data"
               />

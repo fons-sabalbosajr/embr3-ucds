@@ -19,7 +19,7 @@ import dayjs from "dayjs";
 const { Paragraph } = Typography;
 const { TextArea } = Input;
 
-const FocalPersonAdd = ({ isEditing }) => {
+const FocalPersonAdd = ({ isEditing, extractedData, }) => {
   const [totalEmployees, setTotalEmployees] = useState("");
   const [wwtfType, setWwtfType] = useState("");
   const [bioOxygenDemand, setBioOxygenDemand] = useState("");
@@ -35,37 +35,65 @@ const FocalPersonAdd = ({ isEditing }) => {
   const [totalDaysMonitoredRouted, setTotalDaysMonitoredRouted] = useState("");
   const [totalDaysRoutedSigned, setTotalDaysRoutedSigned] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [handler, setHandler] = useState("");
+  
+
+    useEffect(() => {
+      if (extractedData && Object.keys(extractedData).length > 0) {
+        setHandler(extractedData.handler|| "n/a");
+        setRemarks(extractedData.recommendation_shaded || "n/a");
+      }
+    }, [extractedData]);
+  
 
   const calculateBOD = (empNoTotal, wwtfType) => {
-    if (!wwtfType) {
-      return "";
+    //console.log("Calculating BOD for:", empNoTotal, wwtfType); // Debugging log
+
+    if (!wwtfType || !empNoTotal) {
+      return "0.0000 kg/day"; // Show default value instead of empty
     }
 
-    let bod = 0;
+    // Normalize wwtfType (trim and uppercase)
+    const typeKey = String(wwtfType).trim().toUpperCase();
 
     const wwtfTypeValues = {
       WWTF: 0.6,
       "SEPTIC TANK": 0.25,
       "DIRECT DISCHARGE": 1,
-      "N/A": 0, // assuming N/A means 0
+      "N/A": 0,
     };
 
-    const v1 = wwtfTypeValues[wwtfType.toUpperCase()] || 0;
-    const v2 = Number(empNoTotal);
-
-    if (v2 === 0) {
-      bod = "";
-    } else if (wwtfType.toUpperCase() === "DIRECT DISCHARGE") {
-      bod = (v2 * 0.0378).toFixed(4); // round to 4 decimal points
-    } else {
-      bod = (v2 * 0.0378 * (1 - v1)).toFixed(4); // round to 4 decimal points
+    if (!wwtfTypeValues.hasOwnProperty(typeKey)) {
+      console.warn("Invalid WWTF Type:", typeKey);
+      return "0.0000 kg/day"; // Handle unknown values
     }
 
-    return bod ? bod + " kg/day" : ""; // add " kg/day" to the result
+    const v1 = wwtfTypeValues[typeKey] ?? 0;
+    const v2 = Number(empNoTotal) || 0; // Ensure numeric conversion
+
+    if (v2 <= 0) {
+      return "0.0000 kg/day"; // Prevent empty result
+    }
+
+    let bod;
+    if (typeKey === "DIRECT DISCHARGE") {
+      bod = v2 * 0.0378;
+    } else {
+      bod = v2 * 0.0378 * (1 - v1);
+    }
+
+    //console.log("Computed BOD:", bod.toFixed(4) + " kg/day"); // Debugging log
+    return bod.toFixed(4) + " kg/day";
   };
 
   useEffect(() => {
-    setBioOxygenDemand(calculateBOD(totalEmployees, wwtfType));
+    //console.log("Total Employees:", totalEmployees);
+    //console.log("WWTF Type:", wwtfType);
+
+    const newBOD = calculateBOD(totalEmployees, wwtfType);
+
+    //console.log("BOD Updated:", newBOD);
+    setBioOxygenDemand(newBOD);
   }, [totalEmployees, wwtfType]);
 
   function calculateBusinessDays(startDate, endDate) {
@@ -91,10 +119,6 @@ const FocalPersonAdd = ({ isEditing }) => {
     const dayString = weekdayCount === 1 ? " day" : " days";
     return `${weekdayCount}${dayString}`;
   }
-
-  useEffect(() => {
-    setBioOxygenDemand(calculateBOD(totalEmployees, wwtfType));
-  }, [totalEmployees, wwtfType]);
 
   useEffect(() => {
     if (dateMonitored && dateRouted) {
@@ -172,7 +196,11 @@ const FocalPersonAdd = ({ isEditing }) => {
               >
                 <Input
                   value={totalEmployees}
-                  onChange={(e) => setTotalEmployees(e.target.value)}
+                  onChange={(e) => {
+                    const numericValue =
+                      parseInt(e.target.value.replace(/\D/g, ""), 10) || 0;
+                    setTotalEmployees(numericValue); // Ensures numeric value
+                  }}
                   placeholder="ex. 100, 234, 1500"
                   style={{
                     fontSize: "11px",
@@ -188,8 +216,10 @@ const FocalPersonAdd = ({ isEditing }) => {
             <Paragraph>
               <strong>Type of WWTF Type</strong>
               <WWTFTypeAdd
-                value={wwtfType}
-                onChange={setWwtfType}
+                value={wwtfType} // Ensure controlled input
+                onChange={(newType) => {
+                  setWwtfType(newType);
+                }}
                 isEditing={isEditing}
               />
             </Paragraph>

@@ -149,6 +149,9 @@ const SideMenu = ({ theme, currentUser }) => {
               <Menu.Item key="/universe/extract">
                 <Link to="/universe/extract">Extract Data</Link>
               </Menu.Item>
+              <Menu.Item key="/universe/deleted_firms">
+                <Link to="/universe/deleted_firms">Deleted Industries</Link>
+              </Menu.Item>
             </SubMenu>
 
             {canViewAdminPanel && (

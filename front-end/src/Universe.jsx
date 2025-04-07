@@ -287,7 +287,7 @@ const Universe = () => {
                 <Route path="admin-report" element={<Report />} />
                 <Route path="posting" element={<Posting />} />
                 <Route path="activitylog" element={<ActivityLog />} />
-                <Route path="duplicate-firms" element={<Duplicates />} />
+                <Route path="deleted_firms" element={<Duplicates />} />
               </Routes>
             </Content>
           )}

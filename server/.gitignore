@@ -2,3 +2,5 @@ node_modules
 
 # Ignore .env file(s)
 .env
+
+config/service-account.json

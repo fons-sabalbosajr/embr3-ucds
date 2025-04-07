@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AutoComplete, Spin, Input, ConfigProvider } from "antd";
+import { AutoComplete, Spin, Input, ConfigProvider, notification } from "antd";
 import "./autocompletestyles.css";
 
 const { TextArea } = Input;
@@ -9,50 +9,102 @@ const ECC_CNC = ({ isEditing }) => {
   const [loading, setLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  const handleSearch = async (value) => {
-    const lastQuery = value.split(",").pop().trim(); // Get last typed value
-    if (lastQuery) {
-      setLoading(true);
-      try {
-        const response = await fetch(
-          `http://localhost:8081/api/ucds/search-ecc-cnc?query=${lastQuery}`
-        );
-        const data = await response.json();
-        const uniqueNames = data
-          .filter((item) => item.keyword && item.keyword.trim() !== "")
-          .map((item) => ({
-            value: item.keyword,
-            count: item.count,
-            label: (
-              <div className="autocomplete-option">
-                <span className="autocomplete-keyword">{item.keyword}</span>
-                <span className="autocomplete-count">({item.count} results)</span>
-              </div>
-            ),
-          }))
-          .sort((a, b) => b.count - a.count);
-        setOptions(uniqueNames);
-      } catch (error) {
-        console.error("Error fetching ECC CNC names:", error);
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      setOptions([]);
+  // Check for duplicate in the database
+  const checkDuplicateInDatabase = async (value) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/ucds/check-duplicate?query=${encodeURIComponent(value)}`
+      );
+      const data = await response.json();
+      return data.duplicate ? data.details : null;
+    } catch (error) {
+      console.error("Error checking duplicate:", error);
+      return null;
     }
   };
 
+  // Fetch suggestions based on search input
+  const handleSearch = async (value) => {
+    const lastQuery = value.split(",").pop().trim();
+    if (!lastQuery) {
+      setOptions([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `http://localhost:8081/api/ucds/search-ecc-cnc?query=${encodeURIComponent(lastQuery)}`
+      );
+      const data = await response.json();
+      const uniqueNames = data
+        .filter((item) => item.keyword?.trim())
+        .map((item) => ({
+          value: item.keyword,
+          count: item.count,
+          label: (
+            <div className="autocomplete-option">
+              <span className="autocomplete-keyword">{item.keyword}</span>
+              <span className="autocomplete-count">({item.count} results)</span>
+            </div>
+          ),
+        }))
+        .sort((a, b) => b.count - a.count);
+      setOptions(uniqueNames);
+    } catch (error) {
+      console.error("Error fetching ECC CNC names:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle input changes
   const handleChange = (e) => {
     setInputValue(e.target.value);
     handleSearch(e.target.value);
   };
 
-  const handleSelect = (selectedValue) => {
-    let values = inputValue ? inputValue.split(",").map((v) => v.trim()) : []; // Keep existing values
-    if (!values.includes(selectedValue)) {
-      values.push(selectedValue);
+  // Handle selection from autocomplete
+  const handleSelect = async (selectedValue) => {
+    let values = inputValue ? inputValue.split(",").map((v) => v.trim()) : [];
+
+    // Check for duplicate within the input field
+    if (values.includes(selectedValue)) {
+      notification.warning({
+        message: "Duplicate Entry Detected",
+        description: `The value "${selectedValue}" is already entered.`,
+        placement: "topRight",
+      });
+      return;
     }
-    setInputValue(values.join(", ") + ", "); // Append and keep the format
+
+    // Check for duplicate in the database
+    const duplicateData = await checkDuplicateInDatabase(selectedValue);
+    if (duplicateData) {
+      notification.error({
+        message: "Duplicate Found in Database",
+        description: (
+          <div className="duplicate-details">
+            <p>The value "{selectedValue}" already exists in the system.</p>
+            <strong>Details:</strong>
+            <ul>
+              <li><strong>Name:</strong> {duplicateData.name || "N/A"}</li>
+              <li><strong>Title:</strong> {duplicateData.title || "N/A"}</li>
+              <li><strong>Province:</strong> {duplicateData.province || "N/A"}</li>
+              <li><strong>ECC_CNC:</strong> {duplicateData.ecc_cnc || "N/A"}</li>
+              <li><strong>Status:</strong> {duplicateData.status || "N/A"}</li>
+            </ul>
+          </div>
+        ),
+        placement: "topRight",
+        duration: 6,
+      });
+      return;
+    }
+
+    // Append new value if no duplicates are found
+    values.push(selectedValue);
+    setInputValue(values.join(", ") + ", ");
     setOptions([]);
   };
 
@@ -84,12 +136,12 @@ const ECC_CNC = ({ isEditing }) => {
             </div>
           ) : null
         }
-        allowClear={true}
+        allowClear
         disabled={!isEditing}
       >
         <TextArea
           style={{ fontSize: "11px", height: "29px", padding: "4px 8px" }}
-          placeholder="Enter ECC CNC Name"
+          placeholder="Enter Reference No."
           value={inputValue}
           onChange={handleChange}
           disabled={!isEditing}

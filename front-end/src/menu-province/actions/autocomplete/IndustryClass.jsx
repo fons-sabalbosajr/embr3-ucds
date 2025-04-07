@@ -239,9 +239,10 @@ const IndustryClass = ({ value, disabled, onChange }) => {
         disabled={disabled}
         onSelect={onChange} // Use onSelect to get the selected value
         filterOption={(inputValue, option) =>
-          option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+          option.value.toLowerCase().includes(inputValue.toLowerCase())
         }
         allowClear={true}
+        onChange={onChange} // Capture changes while typing
       >
         <Input
           style={{

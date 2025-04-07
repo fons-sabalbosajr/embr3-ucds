@@ -9,3 +9,8 @@
 .modal-title{
     font-size: 11px;
 }
+
+.beta-label{
+    font-style: italic;
+    color: rgb(255, 0, 0);
+}

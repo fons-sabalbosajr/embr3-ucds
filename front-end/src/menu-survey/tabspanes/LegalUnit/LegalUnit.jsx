@@ -11,9 +11,16 @@ import {
   TimePicker,
   Button,
   Tooltip,
+  ConfigProvider,
 } from "antd";
-import { LinkOutlined, DeleteOutlined, PlusCircleFilled, DeleteFilled } from "@ant-design/icons";
+import {
+  LinkOutlined,
+  DeleteOutlined,
+  PlusCircleFilled,
+  DeleteFilled,
+} from "@ant-design/icons";
 import axios from "axios";
+import Swal from "sweetalert2";
 import "./legalunit.css";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
@@ -179,6 +186,7 @@ const LegalUnit = ({
   const formattedNOVRelease = convertToMMDDYYYY(editedRecord.nov_released_date);
   const formattedTCSchedule = convertToMMDDYYYY(editedRecord.tc_schedule);
   const formattedTCActual = convertToMMDDYYYY(editedRecord.tc_actual);
+  const penaltyDate = convertToMMDDYYYY(editedRecord.penalty_date);
 
   const [daysDfDa, setdaysDfDa] = useState(
     editedRecord ? editedRecord.days_approved : 0
@@ -269,49 +277,77 @@ const LegalUnit = ({
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>Date Forwarded to Legal Staff:</strong>
-                  <DatePicker
-                    value={
-                      formattedDateForwarededLegalStaff
-                        ? dayjs(formattedDateForwarededLegalStaff, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("date_forwarded_legal", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateForwarededLegalStaff
+                          ? dayjs(
+                              formattedDateForwarededLegalStaff,
+                              "MM/DD/YYYY"
+                            )
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("date_forwarded_legal", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>Date Approved by Chief Legal:</strong>
-                  <DatePicker
-                    value={
-                      formattedDateApprovedLegal
-                        ? dayjs(formattedDateApprovedLegal, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("date_approved_legal", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    {" "}
+                    <DatePicker
+                      value={
+                        formattedDateApprovedLegal
+                          ? dayjs(formattedDateApprovedLegal, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("date_approved_legal", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
             </Row>
 
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={18} lg={18}>
+              <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <span className="label_container_legal">
                     <strong className="label_title_legal">No. of Days</strong>
@@ -323,46 +359,43 @@ const LegalUnit = ({
                     value={daysDfDa}
                     disabled
                     placeholder="No data"
-                    className="textbox-label disabled-input-legal"
+                    className="disabled-input-legal-days"
                   />
                 </Paragraph>
               </Col>
-            </Row>
 
-            <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>NOV Released Date:</strong>
-                  <DatePicker
-                    value={
-                      formattedNOVRelease
-                        ? dayjs(formattedNOVRelease, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("nov_released_date", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Service Mode:</strong>
-                  <Input
-                    value={localRecord.service_mode || ""}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    className="textbox-label textbox_legal"
-                    onChange={(e) =>
-                      handleInputChange("docket_no", e.target.value)
-                    }
-                  />
+                  >
+                    {" "}
+                    <DatePicker
+                      value={
+                        formattedNOVRelease
+                          ? dayjs(formattedNOVRelease, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("nov_released_date", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="textbox_legal_survey"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
             </Row>
@@ -385,7 +418,7 @@ const LegalUnit = ({
                     value={localRecord.v_pd1586 || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label textbox_legal"
+                    className=""
                     onChange={(e) =>
                       handleInputChange("v_pd1586", e.target.value)
                     }
@@ -398,7 +431,7 @@ const LegalUnit = ({
                     value={localRecord.v_ra9275 || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label textbox_legal"
+                    className=""
                     onChange={(e) =>
                       handleInputChange("v_ra9275", e.target.value)
                     }
@@ -411,7 +444,7 @@ const LegalUnit = ({
                     value={localRecord.v_ra8749 || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label textbox_legal"
+                    className=""
                     onChange={(e) =>
                       handleInputChange("v_ra8749", e.target.value)
                     }
@@ -424,7 +457,7 @@ const LegalUnit = ({
                     value={localRecord.v_haz || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label textbox_legal"
+                    className=""
                     onChange={(e) => handleInputChange("v_haz", e.target.value)}
                     rows={3}
                   />
@@ -435,7 +468,7 @@ const LegalUnit = ({
                     value={localRecord.v_toxichem || ""}
                     disabled={!isEditing}
                     placeholder="No data"
-                    className="textbox-label textbox_legal"
+                    className=""
                     onChange={(e) =>
                       handleInputChange("v_toxichem", e.target.value)
                     }
@@ -461,43 +494,68 @@ const LegalUnit = ({
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>TC Date Scheduled:</strong>
-                  <DatePicker
-                    value={
-                      formattedTCSchedule
-                        ? dayjs(formattedTCSchedule, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("tc_schedule", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    <DatePicker
+                      value={
+                        formattedTCSchedule
+                          ? dayjs(formattedTCSchedule, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("tc_schedule", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>TC Date Actual:</strong>
-                  <DatePicker
-                    value={
-                      formattedTCActual
-                        ? dayjs(formattedTCActual, "MM/DD/YYYY")
-                        : null
-                    }
-                    onChange={(date) => {
-                      const newDate = date ? date.format("MM/DD/YYYY") : "";
-                      handleChange("tc_actual", newDate);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    disabled={!isEditing}
-                    format="MM/DD/YYYY"
-                    placeholder="MM/DD/YYYY"
-                    className="custom-date-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    {" "}
+                    <DatePicker
+                      value={
+                        formattedTCActual
+                          ? dayjs(formattedTCActual, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("tc_actual", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
             </Row>
@@ -506,25 +564,36 @@ const LegalUnit = ({
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>Time:</strong>
-
-                  <TimePicker
-                    value={
-                      localRecord.tc_time
-                        ? dayjs(localRecord.tc_time, "hh:mm:ss A") // Change format to match the input time
-                        : null
-                    }
-                    disabled={!isEditing}
-                    placeholder="Select Time"
-                    onChange={(time) => {
-                      const newValue = time ? time.format("hh:mm A") : "";
-                      handleInputChange("tc_time", newValue);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        TimePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    use12Hours
-                    format="hh:mm A"
-                    minuteStep={15}
-                    className="custom-time-picker"
-                    style={{ width: "100%" }}
-                  />
+                  >
+                    <TimePicker
+                      value={
+                        localRecord.tc_time
+                          ? dayjs(localRecord.tc_time, "hh:mm:ss A") // Change format to match the input time
+                          : null
+                      }
+                      disabled={!isEditing}
+                      placeholder="Select Time"
+                      onChange={(time) => {
+                        const newValue = time ? time.format("hh:mm A") : "";
+                        handleInputChange("tc_time", newValue);
+                      }}
+                      use12Hours
+                      format="hh:mm A"
+                      minuteStep={15}
+                      className="custom-time-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
               <Col xs={24} sm={24} md={12} lg={12}>
@@ -546,11 +615,17 @@ const LegalUnit = ({
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={24} lg={24}>
                 <Paragraph style={{ display: "flex", flexDirection: "column" }}>
-                  <strong>TC Commitment/Deadline of Compliance:</strong>
-                  <span className="paste-here">
+                  <strong>
+                    TC Commitment/Deadline of Compliance:{" "}
                     <i> &nbsp; (Paste Link Here)</i>
-                  </span>
-                  <div style={{ position: "relative", width: "100%" }}>
+                  </strong>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      marginTop: "10px",
+                    }}
+                  >
                     <TextArea
                       value={localRecord.tc_commitment || ""}
                       disabled={!isEditing}
@@ -559,27 +634,49 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("tc_commitment", newValue);
                       }}
-                      className="textbox-label textbox_legal tc_commitment"
                       rows={2}
                     />
 
                     {localRecord.tc_commitment && (
-                      <Tooltip title="Open link" placement="right">
-                        {" "}
-                        {/* Tooltip added here */}
+                      <Tooltip
+                        title={
+                          <div style={{ fontSize: "10px" }}>Open Link</div>
+                        }
+                        placement="topRight"
+                      >
                         <Button
                           type="primary"
                           size="small"
                           icon={<LinkOutlined />}
-                          onClick={() =>
-                            window.open(localRecord.tc_commitment, "_blank")
-                          }
+                          onClick={() => {
+                            const url = localRecord.tc_commitment;
+
+                            // Function to check if the URL is valid
+                            const isValidUrl = (string) => {
+                              try {
+                                new URL(string);
+                                return true;
+                              } catch (error) {
+                                return false;
+                              }
+                            };
+
+                            if (isValidUrl(url)) {
+                              window.open(url, "_blank"); // Open link if valid
+                            } else {
+                              Swal.fire({
+                                icon: "error",
+                                title: "Invalid Link",
+                                text: "The provided link is not valid. Please check and try again.",
+                              });
+                            }
+                          }}
                           style={{
                             position: "absolute",
                             top: "-30px", // Adjust as necessary for vertical positioning
                             right: "4px", // Adjust as necessary for horizontal positioning
                           }}
-                        ></Button>
+                        />
                       </Tooltip>
                     )}
                   </div>
@@ -600,10 +697,9 @@ const LegalUnit = ({
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={24} lg={24}>
                 <Paragraph style={{ display: "flex", flexDirection: "column" }}>
-                  <strong>Position Paper:</strong>
-                  <span className="paste-here">
-                    <i> &nbsp; (Paste Link Here)</i>
-                  </span>
+                  <strong>
+                    Position Paper: <i> &nbsp; (Paste Link Here)</i>
+                  </strong>
                   <div style={{ position: "relative", width: "100%" }}>
                     <TextArea
                       value={localRecord.pos_paper || ""}
@@ -613,27 +709,49 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("pos_paper", newValue);
                       }}
-                      className="textbox-label textbox_legal"
                       rows={2}
                     />
 
                     {localRecord.pos_paper && (
-                      <Tooltip title="Open link" placement="right">
-                        {" "}
-                        {/* Tooltip added here */}
+                      <Tooltip
+                        title={
+                          <div style={{ fontSize: "10px" }}>Open Link</div>
+                        }
+                        placement="topRight"
+                      >
                         <Button
                           type="primary"
                           size="small"
                           icon={<LinkOutlined />}
-                          onClick={() =>
-                            window.open(localRecord.pos_paper, "_blank")
-                          }
+                          onClick={() => {
+                            const url = localRecord.pos_paper;
+
+                            // Function to check if the URL is valid
+                            const isValidUrl = (string) => {
+                              try {
+                                new URL(string);
+                                return true;
+                              } catch (error) {
+                                return false;
+                              }
+                            };
+
+                            if (isValidUrl(url)) {
+                              window.open(url, "_blank"); // Open link if valid
+                            } else {
+                              Swal.fire({
+                                icon: "error",
+                                title: "Invalid Link",
+                                text: "The provided link is not valid. Please check and try again.",
+                              });
+                            }
+                          }}
                           style={{
                             position: "absolute",
                             top: "-30px", // Adjust as necessary for vertical positioning
                             right: "4px", // Adjust as necessary for horizontal positioning
                           }}
-                        ></Button>
+                        />
                       </Tooltip>
                     )}
                   </div>
@@ -645,16 +763,33 @@ const LegalUnit = ({
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph>
                   <strong>Date Payment of Penalty:</strong>
-                  <Input
-                    value={localRecord.date_payment_penalty || ""}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      handleInputChange("date_payment_penalty", newValue);
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
                     }}
-                    className="textbox-label textbox_legal"
-                  />
+                  >
+                    {" "}
+                    <DatePicker
+                      value={
+                        penaltyDate ? dayjs(penaltyDate, "MM/DD/YYYY") : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("penalty_date", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
                 </Paragraph>
               </Col>
             </Row>
@@ -677,7 +812,7 @@ const LegalUnit = ({
                             index
                           );
                         }}
-                        className="textbox-label textbox_legal"
+                        className="textbox-label-payments"
                         prefix="₱"
                       />
                     </div>
@@ -701,7 +836,7 @@ const LegalUnit = ({
                             index
                           );
                         }}
-                        className="textbox-label textbox_legal"
+                        className="textbox-label-payments"
                       />
                     </div>
                   ))}
@@ -720,7 +855,7 @@ const LegalUnit = ({
                   Add
                 </Button>
               </Col>
-              <Col xs={24} sm={24} md={5} lg={5} >
+              <Col xs={24} sm={24} md={5} lg={5}>
                 {hasNewFields && (
                   <Button
                     disabled={!isEditing}
@@ -773,7 +908,7 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("tc_compliance_remarks", newValue);
                       }}
-                      className="textbox-label textbox_legal"
+                      className="textbox-label"
                       rows={2}
                     />
                   </Form.Item>
@@ -824,7 +959,7 @@ const LegalUnit = ({
                         const newValue = e.target.value;
                         handleInputChange("tc_compliance_remarks", newValue);
                       }}
-                      className="textbox-label textbox_legal tc_commitment"
+                      className="textbox-label"
                       rows={2}
                     />
                   </Form.Item>
