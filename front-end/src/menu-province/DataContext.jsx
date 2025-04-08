@@ -18,17 +18,23 @@ export const DataProvider = ({ children }) => {
   const [currentProvince, setCurrentProvince] = useState("Aurora"); // Default province
   const loaded = useRef(false);
 
-  // Function to fetch data for a specific province
   const fetchData = useCallback(async (province) => {
     if (!province) {
       console.warn("No province specified for fetchData.");
       return null;
     }
   
-    //console.log(`Fetching data for province: ${province}`);
     try {
       setLoading(true);
       setProgress(0);
+  
+      // Check if data is already cached
+      if (dataCache[province]) {
+        setData(dataCache[province]);
+        setLoading(false);
+        setProgress(100);
+        return dataCache[province];
+      }
   
       const response = await axios.get(
         "http://localhost:8081/api/get-province-data",
@@ -39,21 +45,30 @@ export const DataProvider = ({ children }) => {
   
       if (response.status >= 200 && response.status < 300) {
         const fetchedData = response.data;
+
+          // Log the raw fetched data to check for unexpected values like XX-1, XX-2
+        //console.log("Raw Fetched Data:", fetchedData);
   
-        //console.log("Fetched data:", fetchedData);
+        const sortedData = fetchedData
+        .filter(item => !item.id_no.startsWith('XX-')) // Filter out entries starting with 'XX-'
+        .sort((a, b) => {
+          const numA = parseInt(a.id_no.replace(/[^0-9]/g, ""), 10);
+          const numB = parseInt(b.id_no.replace(/[^0-9]/g, ""), 10);
+          return numA - numB; // Ascending sort by numeric value
+        });
   
-        // Update state
-        setData(fetchedData);
+        // Cache the sorted data for future use
+        setData(sortedData);
         setDataCache((prevCache) => ({
           ...prevCache,
-          [province]: fetchedData, // Cache the data for the province
+          [province]: sortedData, // Cache the sorted data for the province
         }));
   
         setLoading(false);
         setProgress(100);
   
-        // Return the fetched data
-        return fetchedData;
+        // Return the sorted data
+        return sortedData;
       } else {
         throw new Error(`Unexpected response status: ${response.status}`);
       }
@@ -63,10 +78,10 @@ export const DataProvider = ({ children }) => {
       setLoading(false);
       return null;
     }
-  }, []);
+  }, [dataCache]);
   
   
-
+  
   // Fetch data when `currentProvince` changes
   useEffect(() => {
     if (currentProvince && !loaded.current) {

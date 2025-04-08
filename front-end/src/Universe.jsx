@@ -19,7 +19,7 @@ import Posting from "./menu-component/Posting";
 import "./index.css";
 import { DataProvider } from "./menu-province/DataContext";
 import UserPopover from "./components/PopOverUser";
-import NotificationsPopover from "./components/PopOverNotification";
+import NotificationsPopover from "./components/AiNotification/PopOverNotification";
 import SideMenu from "./components/SideMenu";
 import AvatarWithName from "./components/AvatarwithName";
 import ActivityLog from "./components/ActivityLog/ActivityLog";
@@ -43,6 +43,8 @@ const Universe = () => {
   const [retrying, setRetrying] = useState(false);
   const [userHandle, setUserHandle] = useState(null);
   const [division, setDivision] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [popoverContents, setPopoverContents] = useState("");
 
   const backendUrl = "http://localhost:8081";
   const navigate = useNavigate();
@@ -120,6 +122,43 @@ const Universe = () => {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    async function fetchDataIssues() {
+      if (!auth) return;
+
+      setIsLoading(true);
+
+      try {
+        const dataIssuesResponse = await axios.post(
+          `${backendUrl}/api/check-data`
+        );
+        const dataIssues = Array.isArray(dataIssuesResponse.data.issues)
+          ? dataIssuesResponse.data.issues
+          : [dataIssuesResponse.data.issues || "No issues detected"];
+
+          const duplicateIssuesResponse = await axios.get(`${backendUrl}/api/ucds/duplicates`);
+          const duplicateIssues = duplicateIssuesResponse.data.duplicates.map((duplicate) => ({
+            idNos: duplicate.idNos, // Array of ID numbers
+            ecc_cnc: duplicate.ecc_cnc, // ECC/CNC value
+            count: duplicate.count, // Number of times used
+          }));    
+
+        const combinedIssues = [...dataIssues, ...duplicateIssues];
+
+        setNotifications(combinedIssues);
+        setPopoverContents(combinedIssues);
+      } catch (error) {
+        console.error("Error fetching data issues:", error);
+        setNotifications(["Error fetching data issues."]);
+        setPopoverContents(["Error fetching data issues."]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchDataIssues();
+  }, [auth]);
 
   const handleRetry = () => {
     setRetrying(true);
@@ -216,9 +255,11 @@ const Universe = () => {
                     {name} | {division}
                   </span>
                   <NotificationsPopover
-                    popoverContent={popoverContent}
+                    popoverContent={popoverContents}
                     theme={theme}
                     notifications={notifications}
+                    isLoading={isLoading}
+                    className="notification-icon"
                   />
                   <Popover
                     content={

@@ -24,8 +24,11 @@ const fieldTitles = {
   psic_code: "PSIC Code",
   proj_type: "Project_Type",
   mbu_area: "Within Manila Bay Area?",
+  title_status: "Establishment Status",
+  with_nov: "With NOV?",
   waterbody: "Receiving Waterbody/River System",
-  emp_no_total: "Total Number of Employees",
+  emp_total: "Total Number of Employees",
+  wwtf_type: "WWTF Type",
   bod: "Bio-Oxygen Demand",
   long: "Longitude",
   lat: "Latitude",
@@ -34,24 +37,25 @@ const fieldTitles = {
   brgy: "Barangay",
   city: "City",
   province: "Province",
-  section_incharge: "Current Section In-Charge",
+  section_incharged: "Current Section In-Charge",
   fmr_section_incharged: "Former Section In-Charge",
   handler: "Handler",
   monitoring_sched: "Schedule of Monitoring",
   iis_no: "IIS Reference No.",
+  iis_no_2025: "IIS Reference No. (2025)",
   insp_type: "Inspection Type",
   report_type: "Report Type",
   date_monitored: "Date Monitored",
   date_routed: "Date Routed to IIS",
   date_signed: "Date Report Signed (Routed to PISMU)",
   days_dmds: "Total Days (Date Monitored vs. Date Submitted",
-  days_dsdrs: "Total Days (Date Submitted vs. Date Report Signed)",
+  days_drds: "Total Days (Date Submitted vs. Date Report Signed)",
   pismu_tracking: "Tracking of Reports",
-  remarks_recommendations: "Remarks/Recommendations",
+  remarks: "Remarks/Recommendations",
   pd1586: "PD1586",
   ecc_cnc: "ECC/CNC Reference Code",
   permit_process: "ECC/CNC Process Source",
-  date_amend: "Date Amended",
+  date_amended: "Date Amended",
   date_approved: "Date Approved",
   ra8749: "RA8749",
   pto_code: "PTO Code",
@@ -82,6 +86,7 @@ const fieldTitles = {
   pco_validity: "PCO Validity",
   docket_no: "Docket No",
   denr_pab_case_no: "DENR PAB Case No",
+  nov_issued: "NOV Issued",
   date_forwarded: "Date Forwarded to Legal Staff",
   date_approved_clegal: "Date Approved by Chief Legal",
   days_dfda: "Total Days (Date Forwarded vs. Date Approved)",
@@ -90,26 +95,27 @@ const fieldTitles = {
   v_pd1586: "Violation PD1586",
   v_ra9275: "Violation RA9275",
   v_ra8749: "Violation RA8749",
-  v_haz: "Violation HAZ",
-  v_tchem: "Violation TChem",
+  v_ra6969_haz: "Violation HAZ",
+  v_ra6969_tchem: "Violation TChem",
   tc_date_sched: "TC Date Scheduled",
   tc_date_actual: "TC Date Actual",
   time: "Time",
   legal_officer: "Legal Officer",
   tc_commitment: "TC Commitment/Deadline of Compliance",
   pos_paper: "Position Paper",
-  penalty: "Date of Payment of Penalty",
+  penalty_date: "Date of Payment of Penalty",
   amount: "Amount",
   or_number: "OR Number",
-  tc_order_compliance: "Compliance with TC Commitment/Order",
-  remarks: "Remarks",
-  resolution: "Issued Resolution",
-  order: "Issued Order",
+  tc_compliance_link: "Compliance with TC Commitment/Order",
+  other_tc_remarks: "Remarks",
+  resolution_issued: "Issued Resolution",
+  order_issued: "Issued Order",
   order_status: "Status of Issued Order",
   mbu_priority: "MBU Priority",
   mbu_survey: "MBU Survey",
   mbu_survey_request: "MBU Survey Request",
   dp_universe: "DP Universe",
+  color: "Tagged Status",
 };
 
 const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
@@ -140,8 +146,9 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   };
 
   useEffect(() => {
+    const encodedIdNo = encodeURIComponent(editedRecord.id_no);
     axios
-      .get(`http://localhost:8081/api/ucds-data/${editedRecord.id_no}`)
+      .get(`http://localhost:8081/api/ucds-data/${encodedIdNo}`)
       .then((response) => {
         setUcdsData(response.data);
       })
@@ -156,23 +163,30 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   }, [editedRecord]);
 
   const handleCheckboxChange = (field, checked) => {
+    // Update the state for which fields are included
     setIncludedFields((prevIncludedFields) => ({
       ...prevIncludedFields,
       [field]: checked,
     }));
-    if (checked) {
-      setSelectedData((prevSelectedData) => ({
-        ...prevSelectedData,
-        [field]: ucdsData[field],
-      }));
-    } else {
-      setSelectedData((prevSelectedData) => {
-        const newSelectedData = { ...prevSelectedData };
+  
+    // Get the corresponding description (value) for the field from the data source
+    const fieldData = data.find((item) => item.field === field);
+    const description = fieldData ? fieldData.value : null;
+  
+    // Update selected data with the description and field if checked
+    setSelectedData((prevSelectedData) => {
+      const newSelectedData = { ...prevSelectedData };
+      if (checked) {
+        newSelectedData[field] = description;
+      } else {
         delete newSelectedData[field];
-        return newSelectedData;
-      });
-    }
+      }
+  
+      console.log('Selected Data:', newSelectedData); // Log selected data
+      return newSelectedData;
+    });
   };
+  
 
   useEffect(() => {
     // Reset checkboxes when resetCheckboxesKey changes
@@ -182,7 +196,10 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
 
   const handleSelectAllChange = (e) => {
     const isChecked = e.target.checked;
-    setSelectAllChecked(isChecked);
+    //console.log("Select All Checked:", isChecked); // Log if select all is checked or unchecked
+    
+    setSelectAllChecked(isChecked); // Set the select all state
+    
     const fieldsToInclude = [
       "id_no",
       "title",
@@ -193,6 +210,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       "emp_no_total",
       "ecc_cnc",
       "date_approved",
+      "date_amended",
       "haz_id",
       "haz_issued",
       "pto_code",
@@ -205,16 +223,20 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       "lat",
       "handler",
     ];
+  
     fieldsToInclude.forEach((field) => {
-      handleCheckboxChange(field, isChecked);
+      handleCheckboxChange(field, isChecked); // Update each checkbox field
     });
+  
+    // Log the selected data to confirm if it's being populated correctly
+    //console.log("Selected Data after Select All Change:", selectedData);
   };
-
+  
   const handleGeneratePDF = async () => {
     try {
       setLoadingPDF(true);
       document.body.style.cursor = "wait";
-
+  
       // Show processing modal
       const processingModal = Modal.info({
         title: "Generating PDF...",
@@ -227,53 +249,63 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
         okButtonProps: { disabled: true },
         zIndex: 10000, // Ensure this modal is on top
       });
-
-      // Filter and sort selected fields based on your field order
+  
+      // Filter and remove fields with null values
       const selectedFields = Object.keys(selectedData)
-        .filter((key) => includedFields[key])
+        .filter((key) => includedFields[key]) // Only keep fields that are checked
         .reduce((obj, key) => {
-          obj[key] = selectedData[key];
+          if (selectedData[key] != null) {  // Only add fields with valid values
+            obj[key] = selectedData[key];
+          }
           return obj;
         }, {});
-
-      // Convert selected fields to query parameters
+  
+      // Construct the query parameters from selected fields
       const queryParams = new URLSearchParams(selectedFields).toString();
-
+      console.log("Query Params:", queryParams); // Log to ensure it's correct
+  
+      // Log Request URL to see if it aligns
+      console.log(
+        "Request URL:",
+        `http://localhost:8081/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`
+      );
+  
       // Call the API to generate PDF
       const response = await axios.get(
-        `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
+        `http://localhost:8081/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`,
         {
-          params: selectedFields,
-          responseType: "arraybuffer",
+          params: selectedFields, // Sending selected fields as query parameters
+          responseType: "arraybuffer", // Expecting PDF as an array buffer
         }
       );
-
+  
       // Close processing modal
       processingModal.destroy();
-
+  
       // Create a Blob from the PDF data and create a URL for it
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
-
-      // Determine the filename
+  
+      // Determine the filename based on selected fields or editedRecord
       const fileName = selectedFields.establishment_name
         ? `ICIR-${selectedFields.establishment_name}.pdf`
         : editedRecord.title
         ? `ICIR-${editedRecord.title}.pdf`
         : `ICIR-${editedRecord.id_no}.pdf`;
-
-      // Create an anchor tag with the download attribute
+  
+      // Create an anchor tag to trigger the file download
       const a = document.createElement("a");
       a.href = url;
       a.target = "_blank";
       a.download = fileName;
-
-      // Simulate a click on the anchor tag
+  
+      // Simulate a click on the anchor tag to download the file
       a.click();
-
+  
       // Clean up
       window.URL.revokeObjectURL(url);
     } catch (error) {
+      // Handle error
       setLoadingPDF(false);
       document.body.style.cursor = "default";
       Modal.destroyAll();
@@ -283,10 +315,12 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       });
       console.error("Error generating PDF:", error);
     } finally {
+      // Reset cursor and loading state
       document.body.style.cursor = "default";
       setLoadingPDF(false);
     }
   };
+  
 
   const handleGeneratePDFDraft = async () => {
     let response;
@@ -428,11 +462,6 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       title: "",
       description: (
         <div style={{ fontSize: 11 }}>
-          {Object.keys(selectedData).map((field, index) => (
-            <div key={index}>
-              <strong>{field}:</strong> {selectedData[field]}
-            </div>
-          ))}
           <hr />
           <h4>About Select Initial Data:</h4>
           <div className="data-p">
@@ -541,7 +570,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
           onChange={(e) => handleCheckboxChange(record.field, e.target.checked)}
         />
       ),
-    },
+    }    
   ];
 
   const data = Object.entries(editedRecord).map(([field, value]) => ({
@@ -613,7 +642,9 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               onFinish={() => (
                 <div>
                   <div>
-                    <Button type="primary" onClick={handleDontShowAgain}>Finish</Button>
+                    <Button type="primary" onClick={handleDontShowAgain}>
+                      Finish
+                    </Button>
                   </div>
                   <div>
                     <Button type="primary" onClick={handleDontShowAgain}>
@@ -629,6 +660,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
 
       <Table
         columns={columns}
+        size="small"
         dataSource={data}
         pagination={{
           pageSize: 20,
@@ -650,7 +682,8 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               "proj_type",
               "mbu_area",
               "waterbody",
-              "emp_no_total",
+              "emp_total",
+              "wwtf_type",
               "bod",
               "long",
               "lat",
@@ -660,30 +693,34 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               "brgy",
               "city",
               "province",
+              "title_status",
             ].includes(record.field)
           ) {
             return "skyblue-row";
           } else if (
             [
-              "section_incharge",
+              "section_incharged",
               "fmr_section_incharged",
               "handler",
               "monitoring_sched",
               "pismu_tracking",
               "remarks_recommendations",
+              "with_nov",
             ].includes(record.field)
           ) {
             return "green-row";
           } else if (
             [
               "iis_no",
+              "iis_no_2025",
               "insp_type",
               "report_type",
               "date_monitored",
               "date_routed",
               "date_signed",
               "days_dmds",
-              "days_dsdrs",
+              "days_drds",
+              "remarks",
             ].includes(record.field)
           ) {
             return "orange-row";
@@ -692,7 +729,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               "pd1586",
               "ecc_cnc",
               "permit_process",
-              "date_amend",
+              "date_amended",
               "date_approved",
               "pto_code",
               "pto_issued",
@@ -733,11 +770,12 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               "days_dfda",
               "service_mode",
               "nov_released",
+              "nov_issued",
               "v_pd1586",
               "v_ra9275",
               "v_ra8749",
-              "v_haz",
-              "v_tchem",
+              "v_ra6969_haz",
+              "v_ra6969_tchem",
               "ra6969",
               "tc_date_sched",
               "tc_date_actual",
@@ -761,14 +799,15 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
               "legal_officer",
               "tc_commitment",
               "pos_paper",
-              "penalty",
+              "penalty_date",
               "amount",
               "or_number",
-              "tc_order_compliance",
-              "remarks",
-              "resolution",
-              "order",
+              "tc_compliance_link",
+              "other_tc_remarks",
+              "resolution_issued",
+              "order_issued",
               "order_status",
+              "color",
             ].includes(record.field)
           ) {
             return "gray-row";

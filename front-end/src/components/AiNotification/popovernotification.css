@@ -1,0 +1,28 @@
+.notification-badge {
+    position: relative;
+    display: inline-block;
+  }
+  
+  .badge-count {
+    background-color: red;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    position: absolute;
+    top: -5px;
+    right: -5px;
+  }
+  
+
+.panel-header{
+  font-size: 11px;
+}
+
+.icon-hover {
+  transition: color 0.3s ease; /* Smooth transition for color change */
+}
+
+.icon-hover:hover {
+  color: #1890ff; /* Change to blue on hover */
+}

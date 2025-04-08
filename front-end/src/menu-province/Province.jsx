@@ -24,7 +24,7 @@ import {
   GlobalOutlined,
   CheckCircleFilled,
   InfoCircleOutlined,
-  ClockCircleFilled
+  ClockCircleFilled,
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import ProvinceModal from "./ProvinceModal";
@@ -100,28 +100,49 @@ const Province = ({ theme, currentUser }) => {
   const canViewDataHistory = permissions[3];
   const canAccessRangePicker = permissions[4];
 
-  useEffect(() => {
-    const fetchDataForProvince = async () => {
-      if (provinceName) {
-        setCurrentProvince(capitalizedProvinceName);
-        setLoading(true);
-        try {
-          const fetchedData = await fetchData(capitalizedProvinceName);
-          if (fetchedData) {
-            setOriginalData(fetchedData);
-            setFilteredData(fetchedData);
-            setSectionCounts(calculateSectionCounts(fetchedData));
-          }
-        } catch (err) {
-          console.error("Error fetching data:", err);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
+  // Province codes and their human-readable names
+  const provinceCodes = {
+    BA: "Bataan",
+    BU: "Bulacan",
+    NE: "Nueva_Ecija",
+    PA: "Pampanga",
+    TA: "Tarlac",
+    ZA: "Zambales",
+    AU: "Aurora",
+  };
 
-    fetchDataForProvince();
-  }, [provinceName, capitalizedProvinceName, setCurrentProvince]);
+  // Function to fetch and sort data for the selected province
+  const fetchDataForProvince = async (provinceCode) => {
+    setLoading(true);
+    try {
+      const fetchedData = await fetchData(provinceCode); // Fetch data for the specific province
+      if (fetchedData) {
+        // Sort the fetched data by id_no (ascending order)
+        const sortedData = fetchedData.sort((a, b) => {
+          const numA = parseInt(a.id_no.replace(/[^0-9]/g, ""), 10); // Extract numeric part from id_no
+          const numB = parseInt(b.id_no.replace(/[^0-9]/g, ""), 10); // Extract numeric part from id_no
+          return numA - numB; // Ascending sort
+        });
+
+        // Set the sorted data into state
+        setFilteredData(sortedData);
+        setOriginalData(sortedData);
+        setSectionCounts(calculateSectionCounts(sortedData));
+      }
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Whenever the provinceName changes, fetch and sort the data for that province
+  useEffect(() => {
+    if (provinceName && provinceCodes[provinceName]) {
+      setCurrentProvince(provinceCodes[provinceName]); // Set current province's name
+      fetchDataForProvince(provinceName); // Fetch and sort data for the selected province
+    }
+  }, [provinceName, setCurrentProvince]);
 
   const handleReload = async () => {
     setLoading(true);
@@ -902,7 +923,7 @@ const Province = ({ theme, currentUser }) => {
             industry_class: record.industry_class || "",
             permits_clearances: formatPermitsClearances(record),
             section_incharge: record.section_incharged || "",
-            remarks: record.remarks|| "",
+            remarks: record.remarks || "",
             iis_no: record.iis_no || "",
           }));
 
@@ -1171,8 +1192,6 @@ const Province = ({ theme, currentUser }) => {
     },
   ];
 
-  
-
   const columns = [
     {
       title: "ID No.",
@@ -1219,15 +1238,13 @@ const Province = ({ theme, currentUser }) => {
         );
       },
       align: "left",
-      width: "800px"
+      width: "800px",
     },
     {
       title: "Industry Classification",
       key: "industry_class",
       ...getColumnSearchProps("industry_class"),
-      render: (text, record) => (
-        <div>{record.industry_class}</div>
-      ),
+      render: (text, record) => <div>{record.industry_class}</div>,
       align: "left",
       width: 100,
     },
@@ -1242,9 +1259,12 @@ const Province = ({ theme, currentUser }) => {
             value.includes("In process") ||
             value.includes("On process") ||
             value.includes("Application No"));
-    
+
         const LabelWithIcon = ({ text, isPending, className }) => (
-          <span style={{ position: "relative", display: "inline-block"}} className={className}>
+          <span
+            style={{ position: "relative", display: "inline-block" }}
+            className={className}
+          >
             {text}
             {isPending && (
               <ClockCircleFilled
@@ -1259,18 +1279,27 @@ const Province = ({ theme, currentUser }) => {
             )}
           </span>
         );
-    
+
         return (
-          <div className="permits-clearances-container" style={{ fontSize: "10px" }}>
+          <div
+            className="permits-clearances-container"
+            style={{ fontSize: "10px" }}
+          >
             {/* ECC / CNC */}
             {record.ecc_cnc && (
               <Tooltip
                 title={
                   <div className="tooltip-content" style={{ fontSize: "11px" }}>
-                    <div>{record.ecc_cnc.includes("CNC") ? "CNC Information" : "ECC Information"}</div>
+                    <div>
+                      {record.ecc_cnc.includes("CNC")
+                        ? "CNC Information"
+                        : "ECC Information"}
+                    </div>
                     <div>Reference No.: {record.ecc_cnc}</div>
                     <div>Date Approved: {record.date_approved}</div>
-                    {record.date_amend && <div>Date Amended: {record.date_amend}</div>}
+                    {record.date_amend && (
+                      <div>Date Amended: {record.date_amend}</div>
+                    )}
                   </div>
                 }
                 color={record.ecc_cnc.includes("CNC") ? "#bc6e00" : "#0b5f74"}
@@ -1279,12 +1308,16 @@ const Province = ({ theme, currentUser }) => {
                   <LabelWithIcon
                     text={record.ecc_cnc.includes("CNC") ? "CNC" : "ECC"}
                     isPending={checkPendingStatus(record.ecc_cnc)}
-                    className={record.ecc_cnc.includes("CNC") ? "custom-span-yellow" : "custom-span-green"}
+                    className={
+                      record.ecc_cnc.includes("CNC")
+                        ? "custom-span-yellow"
+                        : "custom-span-green"
+                    }
                   />
                 </span>
               </Tooltip>
             )}
-    
+
             {/* PTO */}
             {record.pto_code && (
               <Tooltip
@@ -1299,11 +1332,15 @@ const Province = ({ theme, currentUser }) => {
                 color="#643c6a"
               >
                 <span>
-                  <LabelWithIcon text="PTO" isPending={checkPendingStatus(record.pto_code)} className="custom-span-blue" />
+                  <LabelWithIcon
+                    text="PTO"
+                    isPending={checkPendingStatus(record.pto_code)}
+                    className="custom-span-blue"
+                  />
                 </span>
               </Tooltip>
             )}
-    
+
             {/* WWDP */}
             {record.wwdp_code && (
               <Tooltip
@@ -1318,11 +1355,15 @@ const Province = ({ theme, currentUser }) => {
                 color="#b45248"
               >
                 <span>
-                  <LabelWithIcon text="WWDP" isPending={checkPendingStatus(record.wwdp_code)} className="custom-span-orange" />
+                  <LabelWithIcon
+                    text="WWDP"
+                    isPending={checkPendingStatus(record.wwdp_code)}
+                    className="custom-span-orange"
+                  />
                 </span>
               </Tooltip>
             )}
-    
+
             {/* Hazwaste */}
             {record.haz_id && (
               <Tooltip
@@ -1336,11 +1377,15 @@ const Province = ({ theme, currentUser }) => {
                 color="#415e20"
               >
                 <span>
-                  <LabelWithIcon text="HAZ" isPending={checkPendingStatus(record.haz_id)} className="custom-span-skyblue" />
+                  <LabelWithIcon
+                    text="HAZ"
+                    isPending={checkPendingStatus(record.haz_id)}
+                    className="custom-span-skyblue"
+                  />
                 </span>
               </Tooltip>
             )}
-    
+
             {/* PCO */}
             {record.pco_no && (
               <Tooltip
@@ -1355,7 +1400,11 @@ const Province = ({ theme, currentUser }) => {
                 color="#242726"
               >
                 <span>
-                  <LabelWithIcon text="PCO" isPending={checkPendingStatus(record.pco_no)} className="custom-span-stone" />
+                  <LabelWithIcon
+                    text="PCO"
+                    isPending={checkPendingStatus(record.pco_no)}
+                    className="custom-span-stone"
+                  />
                 </span>
               </Tooltip>
             )}
@@ -1427,9 +1476,7 @@ const Province = ({ theme, currentUser }) => {
       title: "Remarks/\nRecommendations",
       key: "remarks_recommendations",
       ...getColumnSearchProps("remarks_recommendations"),
-      render: (text, record) => (
-        <div>{record.remarks_recommendations}</div>
-      ),
+      render: (text, record) => <div>{record.remarks_recommendations}</div>,
       align: "left",
       width: 100,
     },
@@ -1492,9 +1539,7 @@ const Province = ({ theme, currentUser }) => {
                 {record.pismu_tracking === "✔" ? (
                   <span>
                     <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
-                    <span style={{ marginLeft: 8 }}>
-                      Received by PISMU
-                    </span>
+                    <span style={{ marginLeft: 8 }}>Received by PISMU</span>
                   </span>
                 ) : (
                   <span></span>
@@ -1617,7 +1662,11 @@ const Province = ({ theme, currentUser }) => {
             </span>
             <span
               className="modal-title"
-              style={{ whiteSpace: "normal", textAlign: "right", marginRight:"20px" }}
+              style={{
+                whiteSpace: "normal",
+                textAlign: "right",
+                marginRight: "20px",
+              }}
             >
               {selectedRecord?.ecc_cnc || ""}
             </span>

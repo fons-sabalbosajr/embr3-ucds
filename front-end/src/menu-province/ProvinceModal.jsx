@@ -44,6 +44,25 @@ const ProvinceModal = ({
   const [previousRecord, setPreviousRecord] = useState(null);
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
+  useEffect(() => {
+    if (record && record.id_no) {
+      // Fetch data based on the id_no
+      const fetchData = async () => {
+        try {
+          const response = await axios.get(
+            `http://localhost:8081/api/data/${record.id_no}`
+          );
+          setEditedRecord(response.data); // Load the data into the modal
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+      };
+  
+      fetchData();
+    }
+  }, [record]);
+
+  
   // Load the checked log state from localStorage
   useEffect(() => {
     const storedValue = localStorage.getItem("isLogChecked");

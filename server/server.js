@@ -15,9 +15,17 @@ const MongoStore = require("connect-mongo");
 const cron = require("node-cron");
 const nodemailer = require("nodemailer"); // Nodemailer for sending emails
 const crypto = require("crypto"); // Crypto for generating a reset token
+const { OpenAI } = require("openai");
+const bodyParser = require("body-parser");
 
 const app = express();
+const router = express.Router();
+app.use(bodyParser.json());
 const PORT = process.env.PORT || 8081;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
@@ -109,6 +117,8 @@ async function connectToMongo() {
     chemicalCollection = db.collection("ucds-data-chemicals");
     tsdCollection = db.collection("ucds-data-tsd");
     trcCollection = db.collection("ucds-data-trc");
+
+    app.locals.ucdsCollection = ucdsCollection;
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     throw error;
@@ -141,6 +151,349 @@ app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 app.set("trust proxy", 1);
+
+///////////////////////////////////////  AI HELPER  WITHIN THE ENTIRE UCDS  ///////////////////////////////////////////////////
+
+app.use("/api", router);
+
+// Utility function to check if a value is a placeholder
+const isPlaceholder = (value) => {
+  // Ensure the value is a string before calling toLowerCase
+  if (typeof value !== "string") return false;
+
+  const placeholders = ["---", "n/a", "test", "null", "none", "undefined"];
+  return placeholders.includes(value.toLowerCase());
+};
+
+// Utility function to check if a value is expired
+const isExpired = (expiryDate) => {
+  const currentDate = new Date();
+  return new Date(expiryDate) < currentDate;
+};
+
+// Utility function to check if a value is missing or placeholder
+const isMissingOrPlaceholder = (value) => {
+  const placeholders = ["---", "n/a", "test", "null", "none", "undefined"];
+  return value === undefined || value === null || placeholders.includes(value);
+};
+
+// Local data validation logic
+async function validateData(records) {
+  const issues = [];
+
+  records.forEach((record) => {
+    const id_no = record.id_no; // ID No for precise identification of issues
+
+    // Expiry checks for permits
+    if (isExpired(record.pto_expiration)) {
+      issues.push(`${id_no} - PTO Expiration Date is expired`);
+    }
+    if (isExpired(record.wwd_expiration)) {
+      issues.push(`${id_no} - WWDP Expiration Date is expired`);
+    }
+    if (isExpired(record.haz_issued)) {
+      issues.push(`${id_no} - Hazardous Material Issued Date is expired`);
+    }
+
+    // GENERAL INFO - Check for missing or placeholder values
+    if (isMissingOrPlaceholder(record.name)) {
+      issues.push(`${id_no} - Missing 'Company Name'`);
+    }
+    if (isMissingOrPlaceholder(record.title)) {
+      issues.push(`${id_no} - Missing 'Title'`);
+    }
+    if (isMissingOrPlaceholder(record.industry_type)) {
+      issues.push(`${id_no} - Missing 'Industry Type'`);
+    }
+    if (isMissingOrPlaceholder(record.industry_subtype)) {
+      issues.push(`${id_no} - Missing 'Industry Subtype'`);
+    }
+    if (isMissingOrPlaceholder(record.industry_class)) {
+      issues.push(`${id_no} - Missing 'Industry Classification'`);
+    }
+    if (isMissingOrPlaceholder(record.psic_code)) {
+      issues.push(`${id_no} - Missing 'PSIC Code'`);
+    }
+    if (isMissingOrPlaceholder(record.cong_district)) {
+      issues.push(`${id_no} - Missing 'Congressional District'`);
+    }
+    if (isMissingOrPlaceholder(record.address)) {
+      issues.push(`${id_no} - Missing 'Address'`);
+    }
+    if (isMissingOrPlaceholder(record.street)) {
+      issues.push(`${id_no} - Missing 'Street'`);
+    }
+    if (isMissingOrPlaceholder(record.brgy)) {
+      issues.push(`${id_no} - Missing 'Barangay'`);
+    }
+    if (isMissingOrPlaceholder(record.city)) {
+      issues.push(`${id_no} - Missing 'City'`);
+    }
+    if (isMissingOrPlaceholder(record.province)) {
+      issues.push(`${id_no} - Missing 'Province'`);
+    }
+
+    // MBU - Check for missing or placeholder values
+    if (isMissingOrPlaceholder(record.mbu_area)) {
+      issues.push(`${id_no} - Missing 'MBU Area'`);
+    }
+    if (isMissingOrPlaceholder(record.waterbody)) {
+      issues.push(`${id_no} - Missing 'Water Body'`);
+    }
+    if (isMissingOrPlaceholder(record.emp_no_total)) {
+      issues.push(`${id_no} - Missing 'Total Employees'`);
+    }
+    if (isMissingOrPlaceholder(record.wwtftype)) {
+      issues.push(`${id_no} - Missing 'WWTF Type'`);
+    }
+    if (isMissingOrPlaceholder(record.bod)) {
+      issues.push(`${id_no} - Missing 'BOD'`);
+    }
+    if (isMissingOrPlaceholder(record.long)) {
+      issues.push(`${id_no} - Missing 'Longitude'`);
+    }
+    if (isMissingOrPlaceholder(record.lat)) {
+      issues.push(`${id_no} - Missing 'Latitude'`);
+    }
+
+    // FOCAL PERSON - Check for missing or placeholder values
+    if (isMissingOrPlaceholder(record.iis_no)) {
+      issues.push(`${id_no} - Missing 'IIS Number'`);
+    }
+    if (isMissingOrPlaceholder(record.section_incharged)) {
+      issues.push(`${id_no} - Missing 'Section In Charge'`);
+    }
+    if (isMissingOrPlaceholder(record.handler)) {
+      issues.push(`${id_no} - Missing 'Handler'`);
+    }
+    if (isMissingOrPlaceholder(record.monitoring_sched)) {
+      issues.push(`${id_no} - Missing 'Monitoring Schedule'`);
+    }
+    if (isMissingOrPlaceholder(record.insp_type)) {
+      issues.push(`${id_no} - Missing 'Inspection Type'`);
+    }
+    if (isMissingOrPlaceholder(record.date_monitored)) {
+      issues.push(`${id_no} - Missing 'Date Monitored'`);
+    }
+    if (isMissingOrPlaceholder(record.date_routed)) {
+      issues.push(`${id_no} - Missing 'Date Routed'`);
+    }
+    if (isMissingOrPlaceholder(record.date_signed)) {
+      issues.push(`${id_no} - Missing 'Date Signed'`);
+    }
+    if (isMissingOrPlaceholder(record.days_dmds)) {
+      issues.push(`${id_no} - Missing 'Days DMDs'`);
+    }
+    if (isMissingOrPlaceholder(record.days_dsdrs)) {
+      issues.push(`${id_no} - Missing 'Days DSDRs'`);
+    }
+    if (isMissingOrPlaceholder(record.pismu_tracking)) {
+      issues.push(`${id_no} - Missing 'PISMU Tracking'`);
+    }
+    if (isMissingOrPlaceholder(record.recommendations)) {
+      issues.push(`${id_no} - Missing 'Recommendations'`);
+    }
+
+    // PERMITS - Check for missing or placeholder values
+    if (isMissingOrPlaceholder(record.ecc_cnc)) {
+      issues.push(`${id_no} - Missing 'ECC/CNC'`);
+    }
+    if (isMissingOrPlaceholder(record.permit_process)) {
+      issues.push(`${id_no} - Missing 'Permit Process'`);
+    }
+    if (isMissingOrPlaceholder(record.date_amend)) {
+      issues.push(`${id_no} - Missing 'Amendment Date'`);
+    }
+    if (isMissingOrPlaceholder(record.date_approved)) {
+      issues.push(`${id_no} - Missing 'Date Approved'`);
+    }
+    if (isMissingOrPlaceholder(record.pto_code)) {
+      issues.push(`${id_no} - Missing 'PTO Code'`);
+    }
+    if (isMissingOrPlaceholder(record.pto_issued)) {
+      issues.push(`${id_no} - Missing 'PTO Issued Date'`);
+    }
+    if (isMissingOrPlaceholder(record.pto_expiration)) {
+      issues.push(`${id_no} - Missing 'PTO Expiration Date'`);
+    }
+    if (isMissingOrPlaceholder(record.wwdp_code)) {
+      issues.push(`${id_no} - Missing 'WWDP Code'`);
+    }
+    if (isMissingOrPlaceholder(record.wwdp_issued)) {
+      issues.push(`${id_no} - Missing 'WWDP Issued Date'`);
+    }
+    if (isMissingOrPlaceholder(record.wwd_expiration)) {
+      issues.push(`${id_no} - Missing 'WWDP Expiration Date'`);
+    }
+    if (isMissingOrPlaceholder(record.haz_id)) {
+      issues.push(`${id_no} - Missing 'Hazardous Material ID'`);
+    }
+    if (isMissingOrPlaceholder(record.haz_issued)) {
+      issues.push(`${id_no} - Missing 'Hazardous Material Issued Date'`);
+    }
+    if (isMissingOrPlaceholder(record.pco_no)) {
+      issues.push(`${id_no} - Missing 'PCO Number'`);
+    }
+    if (isMissingOrPlaceholder(record.pco_name)) {
+      issues.push(`${id_no} - Missing 'PCO Name'`);
+    }
+    if (isMissingOrPlaceholder(record.pco_validity)) {
+      issues.push(`${id_no} - Missing 'PCO Validity'`);
+    }
+
+    // LEGAL - Check for missing or placeholder values
+    if (isMissingOrPlaceholder(record.docket_no)) {
+      issues.push(`${id_no} - Missing 'Docket Number'`);
+    }
+    if (isMissingOrPlaceholder(record.denr_pab_case_no)) {
+      issues.push(`${id_no} - Missing 'DENR PAB Case Number'`);
+    }
+    if (isMissingOrPlaceholder(record.nov_date_issued)) {
+      issues.push(`${id_no} - Missing 'NOV Date Issued'`);
+    }
+    if (isMissingOrPlaceholder(record.v_pd1586)) {
+      issues.push(`${id_no} - Missing 'PD 1586'`);
+    }
+    if (isMissingOrPlaceholder(record.v_ra9275)) {
+      issues.push(`${id_no} - Missing 'RA 9275'`);
+    }
+    if (isMissingOrPlaceholder(record.v_ra8749)) {
+      issues.push(`${id_no} - Missing 'RA 8749'`);
+    }
+    if (isMissingOrPlaceholder(record.v_ra6969_haz)) {
+      issues.push(`${id_no} - Missing 'RA 6969 (Hazardous)'`);
+    }
+    if (isMissingOrPlaceholder(record.v_ra6969_chem)) {
+      issues.push(`${id_no} - Missing 'RA 6969 (Chemical)'`);
+    }
+    if (isMissingOrPlaceholder(record.tc_date_actual)) {
+      issues.push(`${id_no} - Missing 'Actual TC Date'`);
+    }
+    if (isMissingOrPlaceholder(record.legal_officer)) {
+      issues.push(`${id_no} - Missing 'Legal Officer'`);
+    }
+    if (isMissingOrPlaceholder(record.speaker_name)) {
+      issues.push(`${id_no} - Missing 'Speaker Name'`);
+    }
+  });
+
+  return issues;
+}
+
+// OpenAI API call function with retry logic
+const callOpenAIWithRetry = async (prompt, retries = 3, delay = 1000) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful assistant for analyzing data integrity.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 1000,
+      });
+      return response.choices[0].message.content.trim();
+    } catch (err) {
+      if (err.status === 429 && attempt < retries) {
+        console.warn(`Rate limited. Retrying in ${delay}ms...`);
+        await new Promise((res) => setTimeout(res, delay));
+        delay *= 2; // exponential backoff
+      } else {
+        throw err; // fall back to mock data if completely failed
+      }
+    }
+  }
+};
+
+router.post("/check-data", async (req, res) => {
+  try {
+    // Ensure ucdsCollection exists in app.locals
+    if (!req.app.locals.ucdsCollection) {
+      return res
+        .status(500)
+        .json({ issues: ["Database collection not found."] });
+    }
+
+    // Fetch a small sample of data from MongoDB
+    const sampleData = await req.app.locals.ucdsCollection.find().toArray();
+    const compactData = sampleData.map((doc, index) => ({
+      row: index + 1,
+      ...doc,
+    }));
+
+    // Perform local validation
+    const issues = await validateData(compactData);
+
+    // Return the local issues found
+    return res.json({ issues });
+  } catch (error) {
+    console.error("Error fetching or validating data:", error);
+    return res.status(500).json({
+      issues: ["Error occurred while validating data. Please try again later."],
+    });
+  }
+});
+
+router.get("/ucds/duplicates", async (req, res) => {
+  try {
+    // Ensure ucdsCollection exists in app.locals
+    if (!req.app.locals.ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+
+    const ucdsCollection = req.app.locals.ucdsCollection;
+
+    // Aggregate to find duplicates
+    const duplicates = await ucdsCollection
+      .aggregate(
+        [
+          {
+            $match: { ecc_cnc: { $exists: true, $ne: null } }, // Filter documents with non-null ecc_cnc
+          },
+          {
+            $group: {
+              _id: "$ecc_cnc", // Group by ecc_cnc
+              idNos: { $push: "$id_no" }, // Collect all id_no values for each ecc_cnc
+              count: { $sum: 1 }, // Count occurrences of each ecc_cnc
+            },
+          },
+          {
+            $match: {
+              count: { $gt: 1 }, // Only include duplicates (count > 1)
+            },
+          },
+          {
+            $project: {
+              _id: 0, // Exclude MongoDB `_id`
+              ecc_cnc: "$_id", // Rename `_id` to ecc_cnc
+              idNos: 1, // Include the array of id_no values
+              count: 1, // Include the count of duplicates
+            },
+          },
+        ],
+        { allowDiskUse: true } // Enable disk usage for large datasets
+      )
+      .toArray();
+
+    // Return the duplicates
+    return res.status(200).json({ duplicates });
+  } catch (error) {
+    console.error("Error detecting duplicate ECC/CNC values:", error);
+    return res.status(500).json({
+      error: "An error occurred while detecting duplicate ECC/CNC values.",
+    });
+  }
+});
+
+
+module.exports = router;
+
+///////////////////////////////////////  AI HELPER  WITHIN THE ENTIRE UCDS  ///////////////////////////////////////////////////
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -1065,7 +1418,6 @@ const uploadnewdp = multer({ storage: storagenewdp });
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(uploadsDir));
 
-
 app.post("/api/users/update", uploaddp.single("photo"), async (req, res) => {
   //console.log(req.file); // Log the uploaded file
   //console.log(req.body); // Log the request body
@@ -1338,13 +1690,15 @@ app.post("/api/ucds/add-establishment", async (req, res) => {
     };
 
     const result = await ucdsCollection.insertOne(newEntry);
-    res.status(201).json({ message: "Establishment added successfully", id: result.insertedId });
+    res.status(201).json({
+      message: "Establishment added successfully",
+      id: result.insertedId,
+    });
   } catch (error) {
     console.error("Error adding establishment:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
 
 app.use("/uploads", express.static(uploadsDir));
 
@@ -1464,7 +1818,7 @@ app.get("/api/ucds/next-id", async (req, res) => {
       Nueva_Ecija: "NE-",
       Pampanga: "PA-",
       Tarlac: "TA-",
-      Zambales: "ZA-"
+      Zambales: "ZA-",
     };
 
     const prefix = provincePrefixes[province];
@@ -1490,8 +1844,6 @@ app.get("/api/ucds/next-id", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
-
 
 // Search by name
 app.get("/api/ucds/search-name", async (req, res) => {
@@ -1985,18 +2337,30 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
   const { id } = req.params;
   const selectedData = req.query;
 
-  //console.log("Received Query Parameters:", selectedData);
+  // Step 1: Validate the id format (alphanumeric and hyphen allowed)
+  const idPattern = /^[A-Za-z0-9\-]+$/;
+  if (!idPattern.test(id)) {
+    return res.status(400).send("Invalid id format");
+  }
 
-  // Define field mappings based on field names from the PDF
+  //console.log("Received ID:", id); // Log the ID received in the URL
+  //console.log("Received Query Parameters:", selectedData); // Log query params
+
+  // Step 2: Field mappings for form fields
   const fieldMapping = {
     title: "establishment_name",
-    name: "contact_person", // Adjust field name as needed
+    name: "contact_person",
     address: "establishment_address",
     industry_class: "establishment_industry_class",
     psic_code: "establishment_psic_code",
-    emp_no_total: "emp_total",
+    emp_total: "emp_total",
+    bod: "bod_loading",
+    wwtf_type: "wwtf_type",
     ecc_cnc: "establishment_ecc_cnc1",
+    pco_no: "pco_accreditation",
+    pco_validity: "pco_validity",
     date_approved: "ecc_issued1",
+    date_amended: "ecc_expiration1",
     haz_id: "establishment_haz_id",
     haz_issued: "haz_issued",
     pto_code: "establishment_pto_code",
@@ -2010,12 +2374,8 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     handler: "inspector1",
   };
 
+  // Step 3: Load the PDF template and custom font
   try {
-    // Validate id_no format
-    if (!parseInt(id)) {
-      return res.status(400).send("Invalid id_no format");
-    }
-
     // Load existing PDF template
     const pdfPath = path.join(__dirname, "tmp", "icir-form.pdf");
     const pdfBuffer = await fs.promises.readFile(pdfPath);
@@ -2024,29 +2384,47 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     // Register fontkit
     pdfDoc.registerFontkit(fontkit);
 
-    // Load custom font
+    // Load custom font (Arial, adjust if the font file path is incorrect)
     const fontPath = path.join(__dirname, "fonts", "arial.ttf");
+    if (!fs.existsSync(fontPath)) {
+      return res.status(500).send("Custom font file not found");
+    }
     const fontBytes = await fs.promises.readFile(fontPath);
     const customFont = await pdfDoc.embedFont(fontBytes);
 
+    // Step 4: Populate form fields with selected data
     const form = pdfDoc.getForm();
     const formFields = form.getFields();
 
-    // Map provided values to PDF fields
     formFields.forEach((field) => {
       const fieldName = field.getName();
       const pdfFieldName = Object.keys(fieldMapping).find(
         (key) => fieldMapping[key] === fieldName
       );
+
       if (pdfFieldName) {
-        const value = selectedData[pdfFieldName] || "";
-        //console.log(`Setting field ${fieldName} to ${value}`); // Log field names and values
-        field.setText(value);
-        field.updateAppearances(customFont);
+        const value = selectedData[pdfFieldName] || ""; // Default to empty string if not provided
+        console.log(`Filling field: ${fieldName} with value: ${value}`);
+
+        // Check the field type and set the text or value accordingly
+        if (field.constructor.name === "PDFTextField") {
+          field.setText(value);
+          field.updateAppearances(customFont);
+        } else if (field.constructor.name === "PDFCheckBox") {
+          // Handle checkbox (or radio button) field, if applicable
+          const isChecked = value.toLowerCase() === "true" || value === "1"; // Adjust based on your data
+          field.check(isChecked);
+        } else if (field.constructor.name === "PDFRadioButton") {
+          // Handle radio button field, if applicable
+          const options = field.getOptions(); // Get all options (if any)
+          if (options.includes(value)) {
+            field.select(value); // Select the option based on your data
+          }
+        }
       }
     });
 
-    // Send the modified PDF file to the client
+    // Step 5: Send the generated PDF to the client
     const pdfBytes = await pdfDoc.save();
     const compressedPdfBytes = zlib.gzipSync(pdfBytes);
 
@@ -2060,6 +2438,9 @@ app.get("/generate-custom-icir/:id", async (req, res) => {
     res.send(compressedPdfBytes);
   } catch (error) {
     console.error("Error generating ICIR:", error);
+    if (error.stack) {
+      console.error(error.stack); // Log detailed error stack for debugging
+    }
     res.status(500).send("Failed to generate ICIR");
   }
 });
@@ -2644,21 +3025,32 @@ app.get("/api/postings", async (req, res) => {
 app.get("/api/ucds-data/:id", async (req, res) => {
   const { id } = req.params;
 
-  //console.log(`Received request for id: ${id}`);
-
   // Validate id parameter
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ error: "Valid ID parameter is required" });
+  if (
+    !id ||
+    (!id.startsWith("AU-") &&
+      !id.startsWith("BA-") &&
+      !id.startsWith("BU-") &&
+      !id.startsWith("NE-") &&
+      !id.startsWith("PA-") &&
+      !id.startsWith("TA-") &&
+      !id.startsWith("ZA-"))
+  ) {
+    return res
+      .status(400)
+      .json({ error: "Valid ID parameter with a correct prefix is required" });
   }
 
   try {
-    // Convert id to a number
-    const idNumber = parseInt(id, 10);
+    // Strip the prefix and convert the remaining part to a number
+    const idNumber = parseInt(id.replace(/[A-Za-z-]/g, ""), 10); // Remove letters and dashes
+
+    if (isNaN(idNumber)) {
+      return res.status(400).json({ error: "Invalid ID number" });
+    }
 
     // Query the database
     const data = await ucdsCollection.findOne({ id_no: idNumber });
-
-    //console.log(`Data found: ${JSON.stringify(data)}`);
 
     if (!data) {
       return res.status(404).json({ error: "Data not found" });
@@ -3376,7 +3768,9 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
     const oldDocument = await collection.findOne({ id_no: recordId });
 
     if (!oldDocument) {
-      return res.status(404).json({ error: `Record not found in ${collectionName}.` });
+      return res
+        .status(404)
+        .json({ error: `Record not found in ${collectionName}.` });
     }
 
     // Perform the update
@@ -3410,7 +3804,9 @@ app.put("/api/update-survey-data/:id", logActivity, async (req, res) => {
     res.status(200).json(auditLog);
   } catch (error) {
     console.error("Error updating data:", error);
-    res.status(500).json({ error: "Failed to update data. Please try again later." });
+    res
+      .status(500)
+      .json({ error: "Failed to update data. Please try again later." });
   }
 });
 
@@ -3644,6 +4040,8 @@ app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+/////////////////////////////////////////////////////////////////
 
 // Start server
 app.listen(8081, () => {
