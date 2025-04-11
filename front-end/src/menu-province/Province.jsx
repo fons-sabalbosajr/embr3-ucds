@@ -140,25 +140,26 @@ const Province = ({ theme, currentUser }) => {
   useEffect(() => {
     if (provinceName && provinceCodes[provinceName]) {
       setCurrentProvince(provinceCodes[provinceName]); // Set current province's name
-      fetchDataForProvince(provinceName); // Fetch and sort data for the selected province
+      handleReload(provinceName); // Call handleReload whenever provinceName changes
     }
-  }, [provinceName, setCurrentProvince]);
+  }, [provinceName]);
 
-  const handleReload = async () => {
+  const handleReload = async (provinceName) => {
     setLoading(true);
-    setSectionCounts({});
+    setSectionCounts({}); // Reset section counts
 
     try {
-      const fetchedData = await fetchData(capitalizedProvinceName);
+      const fetchedData = await fetchData(provinceName); // Fetch data for the current province
       if (fetchedData) {
-        setFilteredData(fetchedData);
-        setCurrentPage(1);
+        setFilteredData(fetchedData); // Update filtered data
+        setOriginalData(fetchedData); // Update original data
+        setCurrentPage(1); // Reset to the first page
 
         // Recalculate the section counts based on the new fetched data
         const newSectionCounts = calculateSectionCounts(fetchedData);
         setSectionCounts(newSectionCounts); // Update section counts
 
-        setIsDateRangeApplied(false);
+        setIsDateRangeApplied(false); // Reset date range filter
       }
     } catch (error) {
       console.error("Error reloading data:", error);
@@ -166,6 +167,7 @@ const Province = ({ theme, currentUser }) => {
       setLoading(false); // End loading animation
     }
   };
+
 
   const filterData = () => {
     if (!data || data.length === 0) return [];
@@ -1613,7 +1615,7 @@ const Province = ({ theme, currentUser }) => {
           type="primary"
           className="refresh-button"
           icon={<ReloadOutlined />}
-          onClick={handleReload}
+          onClick={() => handleReload(provinceName)}
           loading={loading}
           title="Reload Table"
         />

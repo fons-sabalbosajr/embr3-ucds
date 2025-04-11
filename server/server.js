@@ -74,6 +74,7 @@ let healthcareCollection;
 let chemicalCollection;
 let tsdCollection;
 let trcCollection;
+let archiveCollection;
 
 app.use(
   session({
@@ -105,6 +106,7 @@ async function connectToMongo() {
     loginStatusCollection = db.collection("login-status");
     ucdsCollection = db.collection("ucds-data");
     dailyNoticesCollection = db.collection("ucds-data");
+    archiveCollection = db.collection("archive-data");
     postingCollection = db.collection("postings");
     reportdraftCollection = db.collection("draft-reports");
     surveyCollection = db.collection("survey-data-2024");
@@ -155,15 +157,6 @@ app.set("trust proxy", 1);
 ///////////////////////////////////////  AI HELPER  WITHIN THE ENTIRE UCDS  ///////////////////////////////////////////////////
 
 app.use("/api", router);
-
-// Utility function to check if a value is a placeholder
-const isPlaceholder = (value) => {
-  // Ensure the value is a string before calling toLowerCase
-  if (typeof value !== "string") return false;
-
-  const placeholders = ["---", "n/a", "test", "null", "none", "undefined"];
-  return placeholders.includes(value.toLowerCase());
-};
 
 // Utility function to check if a value is expired
 const isExpired = (expiryDate) => {
@@ -380,36 +373,6 @@ async function validateData(records) {
   return issues;
 }
 
-// OpenAI API call function with retry logic
-const callOpenAIWithRetry = async (prompt, retries = 3, delay = 1000) => {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful assistant for analyzing data integrity.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 1000,
-      });
-      return response.choices[0].message.content.trim();
-    } catch (err) {
-      if (err.status === 429 && attempt < retries) {
-        console.warn(`Rate limited. Retrying in ${delay}ms...`);
-        await new Promise((res) => setTimeout(res, delay));
-        delay *= 2; // exponential backoff
-      } else {
-        throw err; // fall back to mock data if completely failed
-      }
-    }
-  }
-};
-
 router.post("/check-data", async (req, res) => {
   try {
     // Ensure ucdsCollection exists in app.locals
@@ -487,6 +450,138 @@ router.get("/ucds/duplicates", async (req, res) => {
     return res.status(500).json({
       error: "An error occurred while detecting duplicate ECC/CNC values.",
     });
+  }
+});
+
+// Update multiple UCDS records
+router.post("/ucds/update-duplicates", async (req, res) => {
+  try {
+    const ucdsCollection = req.app.locals.ucdsCollection;
+
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+
+    const updates = req.body.updates; // Expecting an array of updated records
+
+    if (!Array.isArray(updates)) {
+      return res.status(400).json({ error: "Invalid updates format." });
+    }
+
+    const updateOps = updates.map((update) => {
+      const { id_no, ...rest } = update;
+
+      if (!id_no) return null;
+
+      return {
+        updateOne: {
+          filter: { id_no: id_no },
+          update: { $set: rest },
+        },
+      };
+    }).filter(Boolean); // Remove nulls if any
+
+    if (updateOps.length === 0) {
+      return res.status(400).json({ error: "No valid updates provided." });
+    }
+
+    const result = await ucdsCollection.bulkWrite(updateOps);
+    return res.status(200).json({ message: "Records updated successfully", result });
+  } catch (error) {
+    console.error("Error updating duplicates:", error);
+    return res.status(500).json({ error: "Failed to update records." });
+  }
+});
+
+
+router.post("/archive-data", async (req, res) => {
+  const { id_no } = req.body;
+
+  if (!id_no || typeof id_no !== "string" || id_no.trim() === "") {
+    console.error("Invalid or missing id_no in the request body.");
+    return res.status(400).json({ message: "Invalid or missing id_no in the request body." });
+  }
+
+  //console.log(`Attempting to archive record with id_no: ${id_no}`);
+
+  const session = client.startSession(); // Start a MongoDB session for the transaction
+
+  try {
+    await session.withTransaction(async () => {
+      // Find the record in ucds-data
+      const record = await ucdsCollection.findOne(
+        { id_no: { $regex: `^${id_no.trim()}$`, $options: "i" } }, // Case-insensitive match
+        { session } // Use the session for the transaction
+      );
+
+      if (!record) {
+        console.error(`Record with id_no: ${id_no} not found in ucds-data.`);
+        throw new Error(`Record with id_no: ${id_no} not found in ucds-data.`);
+      }
+
+      //console.log(`Record found: ${JSON.stringify(record)}`);
+
+      // Insert the record into archive-data
+      const archiveResult = await archiveCollection.insertOne(record, { session });
+      if (!archiveResult.acknowledged) {
+        console.error("Failed to archive the record.");
+        throw new Error("Failed to archive the record.");
+      }
+
+      //console.log(`Record successfully archived: ${JSON.stringify(archiveResult)}`);
+
+      // Delete the record from ucds-data
+      const deleteResult = await ucdsCollection.deleteOne(
+        { _id: record._id }, // Use the unique _id field for deletion
+        { session }
+      );
+
+      if (deleteResult.deletedCount === 0) {
+        console.error(`Failed to delete the record from ucds-data. id_no: ${id_no}`);
+        throw new Error("Failed to delete the record from ucds-data after archiving.");
+      }
+
+      //console.log(`Record successfully deleted from ucds-data: ${JSON.stringify(deleteResult)}`);
+    });
+
+    // If the transaction completes successfully
+    res.status(201).json({ message: "Record successfully transferred to archive-data." });
+  } catch (error) {
+    console.error("Error transferring record:", error);
+    res.status(500).json({ message: error.message || "Failed to transfer the record." });
+  } finally {
+    await session.endSession(); // End the session
+  }
+});
+
+
+router.get("/ucds-data/:id_no", async (req, res) => {
+  const { id_no } = req.params;
+
+  try {
+    // First, try to find the record in ucds-data
+    let record = await ucdsCollection.findOne({
+      id_no: { $regex: `^${id_no.trim()}$`, $options: "i" },
+    });
+
+    if (!record) {
+      // If not found in ucds-data, try archive-data
+      record = await archiveCollection.findOne({
+        id_no: { $regex: `^${id_no.trim()}$`, $options: "i" },
+      });
+
+      if (!record) {
+        return res.status(404).json({ message: `Record with id_no: ${id_no} not found.` });
+      }
+
+      // Optionally, you could indicate this is from the archive
+      record.archived = true;
+    }
+
+    res.status(200).json(record);
+  } catch (error) {
+    console.error("Error fetching record:", error);
+    res.status(500).json({ message: "Error fetching record." });
   }
 });
 
@@ -1798,6 +1893,24 @@ app.get("/api/ucds", async (req, res) => {
   } catch (error) {
     console.error("Error fetching survey data:", error);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/api/ucds-data/:id_no", async (req, res) => {
+  const { id_no } = req.params;
+
+  try {
+    // Fetch the data from the ucdsCollection based on id_no
+    const data = await ucdsCollection.findOne({ id_no });
+
+    if (!data) {
+      return res.status(404).json({ message: "Data not found" });
+    }
+
+    res.status(200).json(data);
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -4040,7 +4153,6 @@ app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 /////////////////////////////////////////////////////////////////
 
 // Start server

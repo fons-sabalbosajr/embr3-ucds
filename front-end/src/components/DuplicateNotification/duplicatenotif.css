@@ -1,0 +1,43 @@
+.table-header-center {
+  text-align: center !important; /* Center the header text */
+}
+
+.custom-tooltip {
+  font-size: 11px; /* Adjust the font size */
+  color: #333; /* Set the text color */
+  border-radius: 4px; /* Add rounded corners */
+}
+
+.table-footer {
+  margin-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.issues-section {
+  padding: 9px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  text-align: left; /* Align text to the left */
+  max-width: 650px;
+  width: 100%; /* Ensure it spans the full width */
+  font-size: 10px; /* Reduce the font size for better readability */
+}
+
+.pagination-controls {
+  text-align: right; /* Align pagination controls to the right */
+}
+
+.highlight-row {
+  background-color: #d4edda; /* Light green for matching rows */
+}
+
+.modal-button-group button {
+  margin-right: 10px;
+}

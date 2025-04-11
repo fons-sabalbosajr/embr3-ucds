@@ -50,7 +50,7 @@ const ProvinceModal = ({
       const fetchData = async () => {
         try {
           const response = await axios.get(
-            `http://localhost:8081/api/data/${record.id_no}`
+            `http://localhost:8081/api/ucds-data/${record.id_no}`
           );
           setEditedRecord(response.data); // Load the data into the modal
         } catch (error) {
@@ -433,7 +433,7 @@ const ProvinceModal = ({
 
       <Modal
         title="Generate Report"
-        visible={isModalVisible}
+        open={isModalVisible}
         onOk={handleModalOk}
         onCancel={handleModalCancel}
         width={1200}

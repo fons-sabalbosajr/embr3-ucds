@@ -84,11 +84,10 @@ export const DataProvider = ({ children }) => {
   
   // Fetch data when `currentProvince` changes
   useEffect(() => {
-    if (currentProvince && !loaded.current) {
-      loaded.current = true;
-      fetchData(currentProvince);
+    if (currentProvince) {
+      fetchData(currentProvince); // Fetch data whenever currentProvince changes
     }
-  }, [currentProvince, fetchData]);
+  }, [currentProvince, fetchData]); // Remove `loaded.current` to allow re-fetching
 
   return (
     <DataContext.Provider

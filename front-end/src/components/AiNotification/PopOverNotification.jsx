@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Popover,
   Badge,
@@ -16,7 +16,9 @@ import {
   SettingOutlined,
   LoadingOutlined,
 } from "@ant-design/icons";
+import { formatDistanceToNow } from "date-fns";
 import ProvinceModal from "../../menu-province/ProvinceModal";
+import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import "./popovernotification.css";
 
 const { Panel } = Collapse;
@@ -30,8 +32,14 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
   const [warningsPage, setWarningsPage] = useState(1);
   const [isRepairModalVisible, setIsRepairModalVisible] = useState(false);
   const [selectedWarning, setSelectedWarning] = useState(null);
+  const [isDuplicateModalVisible, setIsDuplicateModalVisible] = useState(false);
+  const [selectedDuplicate, setSelectedDuplicate] = useState(null);
+  const [updatedNotifications, setUpdatedNotifications] =
+    useState(notifications); // Store updated notifications
+  const [issues, setIssues] = useState([]);
+  const [warnings, setWarnings] = useState([]);
+  const [loading, setLoading] = useState(true); // Loading state
 
-  // Mapping of prefixes to provinces
   const prefixToProvince = {
     AU: "Aurora",
     BA: "Bataan",
@@ -43,9 +51,8 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
   };
 
   const groupedNotifications = useMemo(() => {
-    return notifications.reduce((acc, notification) => {
+    return updatedNotifications.reduce((acc, notification) => {
       if (typeof notification === "string") {
-        // Handle string notifications (e.g., general issues)
         const parts = notification.split(" - ");
         const id_no = parts[0]; // Extract id_no
         const issue = parts[1]; // Extract issue
@@ -57,17 +64,53 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
         }
         acc[id_no].issues.push(issue); // Push the issue into the corresponding id_no group
       }
-      // Skip objects (e.g., duplicate ECC/CNC issues) since they are not relevant for Notifications
       return acc;
     }, {});
-  }, [notifications]);
+  }, [updatedNotifications]);
 
-  const warnings = useMemo(() => {
+  useEffect(() => {
+    const fetchIssues = async () => {
+      try {
+        const res = await fetch("http://localhost:8081/api/check-data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        const data = await res.json();
+
+        if (!data || !data.issues) {
+          console.error("Invalid response format", data);
+          return;
+        }
+
+        setIssues(data.issues); // Optional: if you're still using this
+        setUpdatedNotifications(data.issues); // ✅ Drive the memoized groupedNotifications
+        setLoading(false); // ✅ Done loading
+      } catch (error) {
+        console.error("Error fetching issues:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchIssues();
+
+    const interval = setInterval(() => {
+      fetchIssues();
+    }, 10000); // 10 seconds
+  
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, []);
+
+
+
+  const computedWarnings = useMemo(() => {
     const eccCncMap = {};
 
     notifications.forEach((notification) => {
       if (typeof notification === "object" && notification.ecc_cnc) {
-        // If the notification is an object with ecc_cnc
         const { ecc_cnc, idNos, count } = notification;
 
         if (!eccCncMap[ecc_cnc]) {
@@ -96,10 +139,11 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
     currentPage * itemsPerPage
   );
 
-  const paginatedWarnings = warnings.slice(
-    (warningsPage - 1) * itemsPerPage,
-    warningsPage * itemsPerPage
-  );
+  const paginatedWarnings = useMemo(() => {
+    const start = (warningsPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return computedWarnings.slice(start, end);
+  }, [computedWarnings, warningsPage]);
 
   // Handle page changes
   const goToNextPage = () => {
@@ -114,14 +158,28 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
     }
   };
 
-  const handleSettingClick = (id_no) => {
-    const record = {
-      id_no,
-      title: groupedNotifications[id_no]?.province || "Unknown Title",
-      ecc_cnc: "ECC/CNC Placeholder", // Replace with actual data if available
-    };
-    setSelectedRecord(record); // Set the selected record
-    setIsModalVisible(true); // Open the modal
+  const handleSettingClick = async (id_no) => {
+    try {
+      // Fetch the full record data from the correct API endpoint
+      const response = await fetch(
+        `http://localhost:8081/api/ucds-data/${id_no}`
+      );
+      const data = await response.json();
+
+      if (response.ok) {
+        // Set the selected record with the full data
+        setSelectedRecord({
+          id_no: data.id_no,
+          title: data.title,
+          ecc_cnc: data.ecc_cnc,
+        });
+        setIsModalVisible(true); // Open the modal
+      } else {
+        console.error("Error fetching record:", data.message);
+      }
+    } catch (error) {
+      console.error("Error fetching record:", error);
+    }
   };
 
   // Close the modal
@@ -140,6 +198,35 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
     setSelectedWarning(null); // Clear the selected warning
   };
 
+  const handleDuplicateClick = (warning) => {
+    setSelectedDuplicate(warning); // Set the selected duplicate warning
+    setIsDuplicateModalVisible(true); // Open the duplicate modal
+  };
+
+  const handleCloseDuplicateModal = () => {
+    if (selectedDuplicate) {
+      setWarnings((prevWarnings) =>
+        prevWarnings.filter(
+          (warning) => warning.ecc_cnc !== selectedDuplicate.ecc_cnc
+        )
+      ); // Remove the resolved warning
+    }
+    setIsDuplicateModalVisible(false); // Close the duplicate modal
+    setSelectedDuplicate(null); // Clear the selected duplicate
+  };
+
+  const handleDuplicateResolved = (resolvedId) => {
+    setWarnings((prevWarnings) =>
+      prevWarnings.filter((warning) =>
+        !warning.idNos.includes(resolvedId)
+      )
+    );
+  
+    // Optionally close the modal if needed
+    setIsDuplicateModalVisible(false);
+    setSelectedDuplicate(null);
+  };
+
   const notificationsContent = (
     <div style={{ maxHeight: "300px", overflowY: "auto" }}>
       <div
@@ -150,11 +237,19 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
           marginBottom: "5px", // Add spacing between buttons and the list
         }}
       >
-        <span style={{ fontSize: "10px" }}>
-        {groupedKeys.length > 0
-          ? `${groupedKeys.length} ID(s) for repair`
-          : "No IDs for repair"}
-      </span>
+        <span
+          style={{
+            fontSize: "10px",
+            backgroundColor: "green",
+            padding: "2px 4px",
+            borderRadius: "4px",
+            color: "white",
+          }}
+        >
+          {groupedKeys.length > 0
+            ? `${groupedKeys.length} ID(s) for repair`
+            : "No IDs for repair"}
+        </span>
         <div style={{ textAlign: "right", marginTop: "1px" }}>
           <Button
             onClick={goToPreviousPage}
@@ -188,90 +283,109 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
         </div>
       </div>
       <List
-         dataSource={paginatedKeys.sort((a, b) => {
-          // Custom sorting function for natural order
-          const matchA = a.match(/^([A-Za-z]+)-(\d+)$/);
-          const matchB = b.match(/^([A-Za-z]+)-(\d+)$/);
-      
-          if (matchA && matchB) {
-            const [_, prefixA, numA] = matchA;
-            const [__, prefixB, numB] = matchB;
-      
-            if (prefixA === prefixB) {
-              return parseInt(numA, 10) - parseInt(numB, 10); // Sort numerically if prefixes are the same
-            }
-            return prefixA.localeCompare(prefixB); // Sort alphabetically by prefix
-          }
-      
-          // Fallback to string comparison if format doesn't match
-          return a.localeCompare(b)
-        })}
-        renderItem={(key) => {
-          const { province, issues } = groupedNotifications[key];
-          return (
-            <div key={key}>
-              <Collapse
-                bordered={false}
-                expandIcon={({ isActive }) => (
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <SettingOutlined
-                      className="icon-hover"
-                      style={{
-                        fontSize: "14px",
-                        cursor: "pointer",
-                        marginRight: "8px",
-                      }}
-                      onClick={() => handleSettingClick(key)}
-                    />
-                    <CaretRightFilled
-                      className="icon-hover"
-                      rotate={isActive ? 90 : 0}
-                      style={{
-                        fontSize: "14px",
-                        cursor: "pointer",
-                      }}
-                    />
-                  </div>
-                )}
-              >
-                <Collapse.Panel
-                  header={
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "2px 0",
-                        fontSize: "10px",
-                      }}
-                    >
-                      <div
-                        style={{ flex: 1 }}
-                      >{`Missing data in ${key} in ${province}`}</div>
-                    </div>
-                  }
-                  key={key}
-                  style={{
-                    backgroundColor: "#f7f7f7",
-                    padding: "5px",
-                    marginBottom: "5px",
-                    borderRadius: "5px",
-                  }}
-                  className="panel-header"
-                >
-                  <List
-                    size="small"
-                    dataSource={issues}
-                    renderItem={(issue) => (
-                      <List.Item style={{ fontSize: "10px", padding: "2px 0" }}>
-                        - {issue}
-                      </List.Item>
-                    )}
+        dataSource={[...paginatedKeys]
+          .map((key) => {
+            const doc = notifications.find((n) => n.id_no === key);
+            return {
+              id_no: key,
+              doc,
+              province: groupedNotifications[key]?.province || "Unknown",
+              issues: groupedNotifications[key]?.issues || [],
+              dateAdded: doc?._id
+                ? new Date(
+                    parseInt(doc._id.toString().substring(0, 8), 16) * 1000
+                  )
+                : null,
+            };
+          })
+          .sort((a, b) => {
+            const extract = (val) => {
+              const match = val.match(/^([A-Za-z]+)[-]?(\d+)$/);
+              return match ? [match[1], parseInt(match[2], 10)] : [val, 0];
+            };
+            const [prefixA, numA] = extract(a.id_no);
+            const [prefixB, numB] = extract(b.id_no);
+            return prefixA === prefixB
+              ? numA - numB
+              : prefixA.localeCompare(prefixB);
+          })}
+        renderItem={({ id_no, province, issues, dateAdded }) => (
+          <div key={id_no}>
+            <Collapse
+              bordered={false}
+              expandIcon={({ isActive }) => (
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <SettingOutlined
+                    className="icon-hover"
+                    style={{
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      marginRight: "8px",
+                    }}
+                    onClick={() => handleSettingClick(id_no)}
                   />
-                </Collapse.Panel>
-              </Collapse>
-            </div>
-          );
-        }}
+                  <CaretRightFilled
+                    className="icon-hover"
+                    rotate={isActive ? 90 : 0}
+                    style={{
+                      fontSize: "14px",
+                      cursor: "pointer",
+                    }}
+                  />
+                </div>
+              )}
+            >
+              <Collapse.Panel
+                header={
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      padding: "2px 0",
+                      fontSize: "10px",
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      {`Missing data in ${id_no} in ${province}`}
+                    </div>
+                    {dateAdded && (
+                      <div
+                        style={{
+                          fontSize: "8px",
+                          color: "#888",
+                          marginTop: "2px",
+                          textAlign: "left",
+                        }}
+                      >
+                        {`${formatDistanceToNow(dateAdded, {
+                          addSuffix: true,
+                        })}`}
+                      </div>
+                    )}
+                  </div>
+                }
+                key={id_no}
+                style={{
+                  backgroundColor: "#f7f7f7",
+                  padding: "5px",
+                  marginBottom: "5px",
+                  borderRadius: "5px",
+                }}
+                className="panel-header"
+              >
+                <List
+                  size="small"
+                  dataSource={issues}
+                  renderItem={(issue) => (
+                    <List.Item style={{ fontSize: "10px", padding: "2px 0" }}>
+                      - {issue}
+                    </List.Item>
+                  )}
+                />
+              </Collapse.Panel>
+            </Collapse>
+          </div>
+        )}
       />
     </div>
   );
@@ -283,12 +397,19 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "5px", // Add spacing between buttons and the list
+          marginBottom: "5px",
         }}
       >
-        <span style={{ fontSize: "10px" }}>
-          {warnings.length > 0
-            ? `${warnings.length} referrences of ECC/CNC found`
+        <span
+          style={{
+            fontSize: "10px",
+            backgroundColor: "#FFD662",
+            padding: "2px 4px",
+            borderRadius: "4px",
+          }}
+        >
+          {computedWarnings.length > 0
+            ? `${computedWarnings.length} references of ECC/CNC found`
             : "No ECC/CNC for repair"}
         </span>
         <div style={{ textAlign: "right", marginTop: "1px" }}>
@@ -296,11 +417,11 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
             onClick={() => setWarningsPage((prevPage) => prevPage - 1)}
             disabled={warningsPage === 1}
             style={{
-              marginRight: "4px", // Reduce margin for smaller spacing
-              padding: "0 6px", // Smaller padding for a compact button
-              fontSize: "10px", // Smaller font size
-              height: "20px", // Reduce height
-              lineHeight: "22px", // Align text vertically
+              marginRight: "4px",
+              padding: "0 6px",
+              fontSize: "10px",
+              height: "20px",
+              lineHeight: "22px",
             }}
             size="small"
             type="primary"
@@ -309,12 +430,12 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
           </Button>
           <Button
             onClick={() => setWarningsPage((prevPage) => prevPage + 1)}
-            disabled={warningsPage * itemsPerPage >= warnings.length}
+            disabled={warningsPage * itemsPerPage >= computedWarnings.length}
             style={{
-              padding: "0 6px", // Smaller padding for a compact button
-              fontSize: "10px", // Smaller font size
-              height: "20px", // Reduce height
-              lineHeight: "22px", // Align text vertically
+              padding: "0 6px",
+              fontSize: "10px",
+              height: "20px",
+              lineHeight: "22px",
             }}
             size="small"
             type="primary"
@@ -338,7 +459,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                       cursor: "pointer",
                       marginRight: "8px",
                     }}
-                    onClick={() => handleRepairClick(warning)}
+                    onClick={() => handleDuplicateClick(warning)}
                   />
                   <CaretRightFilled
                     className="icon-hover"
@@ -358,7 +479,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                       display: "flex",
                       alignItems: "center",
                       padding: "2px 0",
-                      fontSize: "10px", // Match font size with notificationsContent
+                      fontSize: "10px",
                     }}
                   >
                     <div style={{ flex: 1 }}>
@@ -501,28 +622,22 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
       </Modal>
 
       <Modal
-        open={isRepairModalVisible}
-        title={`Repair Warning for ${selectedWarning?.ecc_cnc || "Unknown"}`}
-        onCancel={handleCloseRepairModal}
+        open={isDuplicateModalVisible}
+        title={`Duplicate Records for ${
+          selectedDuplicate?.ecc_cnc || "Unknown"
+        }`}
+        onCancel={handleCloseDuplicateModal}
         footer={null}
-        width={600}
+        width={1000}
       >
-        {selectedWarning && (
-          <div>
-            <h4 style={{ fontSize: "12px", marginBottom: "10px" }}>
-              ECC/CNC: {selectedWarning.ecc_cnc}
-            </h4>
-            <List
-              size="small"
-              header={<div style={{ fontWeight: "bold" }}>ID Numbers</div>}
-              dataSource={[...selectedWarning.idNos].sort()} // Sort the id_no values
-              renderItem={(id_no) => (
-                <List.Item style={{ fontSize: "12px", padding: "2px 0" }}>
-                  - {id_no}
-                </List.Item>
-              )}
-            />
-          </div>
+        {selectedDuplicate && (
+          <DuplicateNotif
+            duplicateData={selectedDuplicate}
+            onDuplicateResolved={(resolvedId) =>
+              handleDuplicateResolved(resolvedId)
+            }
+            setWarnings={setWarnings}
+          />
         )}
       </Modal>
     </>

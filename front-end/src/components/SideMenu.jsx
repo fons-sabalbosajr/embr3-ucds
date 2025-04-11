@@ -24,6 +24,7 @@ const { SubMenu } = Menu;
 const SideMenu = ({ theme, currentUser }) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { setCurrentProvince } = useContext(DataContext);
 
   //console.log("Current User in SideMenu:", currentUser);
@@ -49,6 +50,7 @@ const SideMenu = ({ theme, currentUser }) => {
 
   const handleProvinceSelect = (province) => {
     setCurrentProvince(province); // Update currentProvince in DataContext
+    navigate(`/universe/province/${province}`); // Navigate to the selected province
   };
 
   return (
