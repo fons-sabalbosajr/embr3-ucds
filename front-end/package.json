@@ -10,10 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ant-design/pro-components": "^2.7.15",
+    "@ant-design/pro-components": "^2.8.7",
     "@arcgis/core": "^4.30.9",
     "@react-google-maps/api": "^2.19.3",
-    "antd": "^5.17.0",
+    "antd": "^5.24.7",
     "avataaars": "^2.0.0",
     "axios": "^1.6.8",
     "connect-mongo": "^5.1.0",
