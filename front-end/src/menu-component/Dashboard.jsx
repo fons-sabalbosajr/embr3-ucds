@@ -7,29 +7,31 @@ import Calendar from "../components/Calendar/SystemCalendar";
 import Summary from "../components/History/History";
 import Activity from "../components/Summary/Activity";
 
-
 const Dashboard = ({ avatar, name }) => {
   return (
     <div className="dashboard-container">
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={17}>
+        <Col xs={24} lg={18}>
           <div className="card">
             <Bulletin />
           </div>
         </Col>
-        <Col xs={24} lg={7}>
-          <div className="card">
+        <Col xs={24} lg={6}>
+          <div
+            className="card"
+            style={{ height: "100%", display: "flex", flexDirection: "column" }}
+          >
             <UserStatus avatar={avatar} name={name} />
           </div>
         </Col>
       </Row>
       <Row gutter={[16, 16]} className="row-gap">
-        <Col xs={24} lg={17}>
+        <Col xs={24} lg={18}>
           <div className="card-bottom">
             <Calendar />
           </div>
         </Col>
-        <Col xs={24} lg={7} className="right-column">
+        <Col xs={24} lg={6} className="right-column">
           <div className="card-bottom">
             <Activity />
           </div>

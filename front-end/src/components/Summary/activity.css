@@ -1,99 +1,165 @@
-.activity-container {
-  background-color: #172c4f;
-  border-radius: 10px;
-  //margin: 20px; 
-  height: 100%;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-}
-
-.activity-title {
-  font-size: 15px;
-  color: #ffffff;
-  margin-bottom: 10px;
-  font-weight: 400;
-}
-
-.metrics-container {
-  margin-top: 20px;
-  color: #ffffff;
-}
-
-.metric-row {
+.activity-header-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.activity-header {
+  font-size: 18px;
+  font-weight: bold;
   margin-bottom: 10px;
+  text-align: center;
 }
 
-.metric-col {
+.pagination-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.nav-button {
+  background-color: #f0f0f0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.nav-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.panel-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.activity-header-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.loading-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.activity-collapse {
+  background-color: transparent;
+  border: none;
+}
+
+.panel-header {
+  background-color: #f7f7f7;
+  border: none;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Tile effect */
+  margin-bottom: 5px;
+}
+
+.activity-header-content {
+  display: flex;
+  width: 100%;
+  justify-content: space-between; /* Space between the two columns */
+}
+
+.title-column {
+  flex: 1; /* This allows the title column to take up available space */
+  display: flex;
+  flex-direction: column;
+}
+
+.permit-tags-column {
+  flex: 0 0 30px; /* Fixed width for the tags column */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* Align the tags to the right */
+  gap: 8px;
+}
+
+.permit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.permit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.permit-text {
   flex: 1;
+  font-size: 9px;
 }
 
-.metric-label {
-  font-size: 12px;
-  color: #ffffff;
+.update-btn {
+  margin-left: 8px;
+  font-size: 8px;
+}
+
+.permit-item:last-child {
+  border-bottom: none;
+}
+
+.will-expire-icon {
+  color: #ffd118;
+  margin-right: 5px;
+}
+
+.expired-icon {
+  color: #ff4d4f;
+  margin-right: 5px;
+}
+
+.permit-tag {
+  font-size: 8px;
+}
+
+.permit-tags-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end; /* Align tags to the right */
+  margin-right: -15px;
+}
+
+.panel-title {
   text-align: left;
 }
 
-.metric-value {
-  font-size: 12px;
-  font-weight: 500;
-  color: #ffffff;
-  text-align: right;
-}
-
-.activity-row {
+.panel-header-text {
   display: flex;
-  align-items: center; /* Aligns items vertically in the center */
-  justify-content: flex-start; /* Aligns items to the left */
+  justify-content: space-between;
+  align-items: center;
 }
 
-.activity-col {
-  margin-bottom: 16px;
+.expand-icon-wrapper {
+  display: flex;
+  margin-left: 8px;
+  align-items: center; /* Center the icon vertically */
+  height: 100%; /* Ensure the height is 100% to fill the available space */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
 }
 
-.activity-card {
-  background-color: #0c1c3d;
-  color: #ffffff;
-  padding: 15px;
-  font-size: 16px;
+.ecc-cnc-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background-color: #f0f5ff;
+  color: #2f54eb;
+  border: 1px solid #adc6ff;
+  border-radius: 5px;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-.recent-activity-title {
-  font-size: 15px;
-  font-weight: 400;
-  margin-top: 20px; /* Adjusted margin-top */
-  margin-left: 0; /* Reset margin-left */
-}
-
-
-.tag-create {
-  background-color: #87d068; /* Green */
-  color: white;
-}
-
-.tag-add {
-  background-color: #f50; /* Red */
-  color: white;
-}
-
-.tag-update {
-  background-color: #2db7f5; /* Blue */
-  color: white;
-}
-
-.tag-delete {
-  background-color: #ff4d4f; /* Dark Red */
-  color: white;
-}
-
-
-.activity-text {
-  font-size: 11px; /* Adjust font size here */
-}
-
-.label-activity {
-  margin-right: 8px; /* Adds space between the label and value */
-  font-weight: 600;
-  color: #2db7f5;
-}

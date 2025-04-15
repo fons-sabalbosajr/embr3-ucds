@@ -42,8 +42,13 @@ const UserStatus = () => {
       }
     };
 
+    // Fetch data initially
     fetchOnlineUsers();
-    const intervalId = setInterval(fetchOnlineUsers, 30000);
+
+    // Set up polling for real-time updates every 10 seconds
+    const intervalId = setInterval(fetchOnlineUsers, 10000);
+
+    // Clean up interval on component unmount
     return () => clearInterval(intervalId);
   }, []);
 
@@ -68,17 +73,75 @@ const UserStatus = () => {
   };
 
   return (
-    <div>
-      <h3 className="user-status-title">Online Users</h3>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%", // Make it fill the parent container
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "10px",
+        }}
+      >
+        <h3 className="user-status-title" style={{ margin: 0 }}>
+          Online Users
+        </h3>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <div
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: "#52c41a",
+              }}
+            ></div>
+            <span style={{ fontSize: "10px" }}>Online</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <div
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: "#d9d9d9",
+              }}
+            ></div>
+            <span style={{ fontSize: "10px" }}>Offline</span>
+          </div>
+        </div>
+      </div>
       {onlineUsers.length > 0 ? (
-        <div className="user-status-list-container">
+        <div
+          className="user-status-list-container"
+          style={{
+            flex: 1, // Allow the list to grow and fill the remaining space
+            overflowY: "auto",
+          }}
+        >
           <List
             itemLayout="horizontal"
+            size="large" // Increase the size of the list items
             dataSource={onlineUsers}
             renderItem={(user) => (
               <List.Item
                 className="user-status-item"
-                style={{ opacity: user.isLoggedIn ? 1 : 0.75 }}
+                style={{
+                  opacity: user.isLoggedIn ? 1 : 0.75,
+                  padding: "0px", // Add padding to make items larger
+                  alignItems: "center", // Center the content vertically
+                }}
               >
                 <div style={{ position: "relative" }}>
                   {user.avatar ? (
@@ -87,31 +150,31 @@ const UserStatus = () => {
                         src={`http://localhost:8081${user.avatar}`}
                         alt="Avatar"
                         style={{
-                          width: "30px",
-                          height: "30px",
+                          width: "20px", // Increase avatar size
+                          height: "20px",
                           borderRadius: "50%",
                         }}
                       />
                     ) : (
                       <NiceAvatar
                         style={{
-                          width: "30px",
-                          height: "30px",
+                          width: "20px", // Increase avatar size
+                          height: "20px",
                           borderRadius: "50%",
                         }}
                         {...user.avatar}
                       />
                     )
                   ) : (
-                    <NiceAvatar style={{ width: "30px", height: "30px" }} />
+                    <NiceAvatar style={{ width: "20px", height: "20px" }} />
                   )}
                   <div
                     style={{
                       position: "absolute",
-                      bottom: 2,
+                      bottom: 4,
                       right: 0,
-                      width: "10px",
-                      height: "10px",
+                      width: "8px", // Increase status indicator size
+                      height: "8px",
                       borderRadius: "50%",
                       backgroundColor: user.isLoggedIn ? "#52c41a" : "#d9d9d9",
                       border: "2px solid white",
@@ -120,12 +183,20 @@ const UserStatus = () => {
                 </div>
                 <List.Item.Meta
                   title={
-                    <div className="user-status-item-title">{user.name}</div>
+                    <div
+                      className="user-status-item-title"
+                      style={{ fontSize: "10px", marginBottom: "10px"}} // Larger font size
+                    >
+                      {user.name}
+                    </div>
                   }
                 />
                 {!user.isLoggedIn && (
-                  <span className="user-status-item-time">
-                    {calculateTime (user.logoutTime)}
+                  <span
+                    className="user-status-item-time"
+                    style={{ fontSize: "9px" }} // Larger font size for time
+                  >
+                    {calculateTime(user.logoutTime)}
                   </span>
                 )}
               </List.Item>
