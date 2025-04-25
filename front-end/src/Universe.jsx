@@ -54,6 +54,7 @@ const Universe = () => {
   const [retrying, setRetrying] = useState(false);
   const [popoverContents, setPopoverContents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showThemeHint, setShowThemeHint] = useState(false);
 
   const backendUrl = "http://localhost:8081";
   const navigate = useNavigate();
@@ -145,6 +146,13 @@ const Universe = () => {
     fetchDataIssues();
   }, [auth]);
 
+  useEffect(() => {
+    const hintHidden = localStorage.getItem("hideThemeHint");
+    if (!hintHidden) {
+      setShowThemeHint(true);
+    }
+  }, []);
+
   const handleRetry = () => {
     setRetrying(true);
     checkAuth();
@@ -178,6 +186,15 @@ const Universe = () => {
     }
   };
 
+  const handleDismissHint = () => {
+    setShowThemeHint(false);
+  };
+
+  const handleDontShowAgainHint = () => {
+    localStorage.setItem("hideThemeHint", "true");
+    setShowThemeHint(false);
+  };
+
   if (loading) return <Z_CustomSpinner />;
 
   if (!auth) {
@@ -201,7 +218,7 @@ const Universe = () => {
       colorText: theme === "dark" ? "#e0e0e0" : "#333333", // Adjust text color for dark/light mode
     },
   };
-  
+
   const currentUser = {
     name,
     username: userHandle,
@@ -255,14 +272,64 @@ const Universe = () => {
                     </div>
                   </Popover>
 
-                  <div className="theme-switch">
+                  <Popover
+                    open={showThemeHint}
+                    title="Toggle Theme"
+                    content={
+                      <div
+                        style={{
+                          maxWidth: 220,
+                          fontSize: "12px",
+                          padding: "4px 0",
+                        }}
+                      >
+                        <p style={{ marginBottom: 8 }}>
+                          Click to switch between light and dark mode.
+                        </p>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            gap: 6,
+                          }}
+                        >
+                          <Button size="small" onClick={handleDismissHint}>
+                            Dismiss
+                          </Button>
+                          <Button
+                            size="small"
+                            type="primary"
+                            onClick={handleDontShowAgainHint}
+                          >
+                            Don’t Show Again
+                          </Button>
+                        </div>
+                      </div>
+                    }
+                    placement="bottomRight"
+                    className={theme === "dark" ? "dark-mode" : ""}
+                  >
                     <Button
                       className="theme-button"
                       type="text"
                       onClick={toggleTheme}
-                      icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
+                      icon={
+                        theme === "dark" ? (
+                          <SunOutlined style={{ fontSize: 15 }} />
+                        ) : (
+                          <MoonOutlined style={{ fontSize: 15 }} />
+                        )
+                      }
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     />
-                  </div>
+                  </Popover>
                 </div>
               </div>
             </Header>
@@ -293,13 +360,13 @@ const Universe = () => {
                 <Route path="trc" element={<TRC theme={theme} />} />
                 <Route path="mbu" element={<MBU theme={theme} />} />
                 <Route path="eswm-database" element={<ESWM theme={theme} />} />
-                <Route path="accounts" element={<Accounts />} />
-                <Route path="extract" element={<Extract />} />
-                <Route path="activity-log" element={<ActivityLog />} />
-                <Route path="admin" element={<Admin />} />
-                <Route path="report" element={<Report />} />
-                <Route path="posting" element={<Posting />} />
-                <Route path="duplicates" element={<Duplicates />} />
+                <Route path="accounts" element={<Accounts theme={theme}  />} />
+                <Route path="extract" element={<Extract theme={theme}  />} />
+                <Route path="activity-log" element={<ActivityLog theme={theme}  />} />
+                <Route path="admin" element={<Admin theme={theme}  />} />
+                <Route path="report" element={<Report theme={theme}  />} />
+                <Route path="posting" element={<Posting theme={theme}  />} />
+                <Route path="duplicates" element={<Duplicates theme={theme}  />} />
               </Routes>
             </Content>
           </Layout>

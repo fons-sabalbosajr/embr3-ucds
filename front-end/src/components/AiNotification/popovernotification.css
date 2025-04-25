@@ -17,12 +17,25 @@
 
 .panel-header{
   font-size: 11px;
+ 
+  margin-bottom: 5px;
+  border-radius: 5px;
 }
 
 .icon-hover {
-  transition: color 0.3s ease; /* Smooth transition for color change */
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.light-theme .icon-hover {
+  color: #000000;
+}
+
+.dark-theme .icon-hover {
+  color: #ffffff;
 }
 
 .icon-hover:hover {
-  color: #1890ff; /* Change to blue on hover */
+  color: #3d9ef9; /* Change to blue on hover */
 }

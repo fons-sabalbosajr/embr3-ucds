@@ -8,7 +8,8 @@ import {
   Menu,
   Button,
   Badge,
-  Input, Tooltip
+  Input,
+  Tooltip,
 } from "antd";
 import { DownOutlined, SearchOutlined } from "@ant-design/icons";
 import axios from "axios";
@@ -17,7 +18,7 @@ import "./systemcalendar.css";
 
 const { Search } = Input;
 
-const SystemCalendar = () => {
+const SystemCalendar = ({ theme }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedNotices, setSelectedNotices] = useState([]);
@@ -30,7 +31,7 @@ const SystemCalendar = () => {
     const fetchMonitoredDates = async () => {
       try {
         const response = await axios.get(
-          " http://localhost:8081/api/monitored_dates"
+          "http://localhost:8081/api/monitored_dates"
         );
         setMonitoredDates(response.data.monitoredDates || []);
       } catch (error) {
@@ -180,7 +181,6 @@ const SystemCalendar = () => {
     return context.measureText(text).width;
   };
 
-
   const columns = [
     {
       title: "Title",
@@ -231,27 +231,34 @@ const SystemCalendar = () => {
       width: "150px",
       align: "left",
       render: (text, record) => {
-        // Split sections by comma
+        // Ensure section_incharge is defined and not empty
         const sections = record.section_incharge
-          .split(",")
-          .map((section) => section.trim());
-    
+          ? record.section_incharge.split(",").map((section) => section.trim())
+          : [];
+
         return (
           <div style={{ display: "flex", flexWrap: "wrap" }}>
             {sections.map((section, index) => {
               const textWidth = measureTextWidth(section);
               const backgroundColor = sectionBackgroundColor(section); // Base background color
               const darkerBackgroundColor = darkenColor(backgroundColor, -40); // Darker shade
-    
+
               return (
                 <Tooltip
                   key={index}
                   title={
                     <div style={{ fontSize: "11px" }}>
-                      <div>Section Incharge: {record.section_incharge}</div>
-                      <div>FMR Section Incharge: {record.fmr_section_incharged || "N/A"}</div>
+                      <div>
+                        Section Incharge: {record.section_incharge || "N/A"}
+                      </div>
+                      <div>
+                        FMR Section Incharge:{" "}
+                        {record.fmr_section_incharged || "N/A"}
+                      </div>
                       <div>Handler: {record.handler || "N/A"}</div>
-                      <div>Monitoring Schedule: {record.monitoring_sched || "N/A"}</div>
+                      <div>
+                        Monitoring Schedule: {record.monitoring_sched || "N/A"}
+                      </div>
                       <div>Inspection Type: {record.insp_type || "N/A"}</div>
                     </div>
                   }
@@ -360,18 +367,42 @@ const SystemCalendar = () => {
       return 0;
     });
 
-    const displayNotices = dailyNotices.slice(0, 1); // Display only the first 2 notices
+    const displayNotices = dailyNotices.slice(0, 3); // Display only the first 2 notices
 
     return (
       <div className={hasData ? "clickable-date" : ""}>
-        <ul className="events">
+        <ul className="events" style={{ padding: "0", margin: "0" }}>
           {displayNotices.length > 0 &&
             displayNotices.map((notice, index) => (
-              <li key={index}>
+              <li
+                key={index}
+                style={{
+                  fontSize: "10px", // Reduced font size for event titles
+                  lineHeight: "1.2", // Adjust line height for better spacing
+                  marginBottom: "2px", // Reduce spacing between events
+                  overflow: "hidden", // Hide overflow text
+                  textOverflow: "ellipsis", // Add ellipsis for long text
+                  whiteSpace: "nowrap", // Prevent text wrapping
+                }}
+              >
                 <Badge
                   status="success"
-                  text={notice.title}
+                  text={
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: "400",
+                        verticalAlign: "middle",
+                        color: theme === "dark" ? "#ffffff" : "#000000", // Adjust text color based on theme
+                      }}
+                    >
+                      {notice.title}
+                    </span>
+                  }
                   className="event-title"
+                  style={{
+                    fontSize: "10px", // Reduced font size for badge text
+                  }}
                 />
               </li>
             ))}
@@ -384,20 +415,42 @@ const SystemCalendar = () => {
   };
 
   return (
-    <div className="calendar-container">
-      <h3 className="calendar-title">Monitoring Calendar</h3>
+    <div
+      className="calendar-container"
+      style={{
+        fontFamily: "Poppins, sans-serif",
+        color: theme === "dark" ? "#ffffff" : "#000000", // Adjust font color based on theme
+      }}
+    >
+      <h3
+        className="calendar-title"
+        style={{
+          color: theme === "dark" ? "#ffffff" : "#000000", // Adjust title color based on theme
+          fontSize: "16px",
+        }}
+      >
+        Monitoring Calendar
+      </h3>
       <Calendar
         onSelect={onSelect}
         cellRender={dateCellRender}
         className="custom-calendar"
-        style={{ height: "100%", width: "100%" }}
+        style={{
+          backgroundColor: theme === "dark" ? "#121212" : "#ffffff",
+          color: theme === "dark" ? "#ffffff" : "#000000", // Adjust calendar text color
+          padding: "10px",
+          borderRadius: "8px",
+        }}
       />
       <Modal
         title={`Monitored Industries as of ${selectedDate}`}
         open={isModalVisible}
         onCancel={handleCancel}
         footer={null}
-        width={1400} // Adjust width as needed
+        width={1200} // Adjust modal width
+        style={{
+          color: theme === "dark" ? "#ffffff" : "#000000", // Adjust modal font color
+        }}
       >
         <div
           style={{
@@ -409,7 +462,12 @@ const SystemCalendar = () => {
           <Search
             placeholder="Search industries"
             onChange={(e) => handleSearch(e.target.value)}
-            style={{ width: 300 }}
+            style={{
+              width: 250, // Reduced search box width
+              backgroundColor: theme === "dark" ? "#333333" : "#ffffff", // Adjust search box background
+              color: theme === "dark" ? "#ffffff" : "#000000", // Adjust search box text color
+              fontSize: "12px", // Reduced font size for the search box
+            }}
             prefix={<SearchOutlined />}
             allowClear
             value={searchText}
@@ -422,6 +480,10 @@ const SystemCalendar = () => {
           scroll={{ y: 700 }}
           size="small"
           className="custom-table"
+          style={{
+            backgroundColor: theme === "dark" ? "#1f1f1f" : "#ffffff", // Adjust table background
+            color: theme === "dark" ? "#ffffff" : "#000000", // Adjust table text color
+          }}
         />
       </Modal>
     </div>

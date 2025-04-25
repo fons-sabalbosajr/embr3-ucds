@@ -6,8 +6,6 @@
 }
 
 .user-status-title{
-  font-size: 15px;
-  color: #5a5a5a;
   font-weight: 500;
 }
 
@@ -45,16 +43,12 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid white;
+  border: 1px solid white;
 }
 
 .user-status-list-container {
   height: 180px;
   overflow-y: auto;
-}
-
-.user-status-title {
-  border-bottom: 1px solid #ddd;
 }
 
 .user-status-item {

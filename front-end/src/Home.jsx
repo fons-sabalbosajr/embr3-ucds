@@ -1,17 +1,43 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Button } from "antd";
-import { MenuOutlined, CloseOutlined } from "@ant-design/icons";
+import { Button, Drawer } from "antd";
+import { MenuOutlined } from "@ant-design/icons";
 import homelogo from "./assets/UCDSInformation.png";
 import databaseImage from "./assets/picbghome.png";
+import useWindowWidth from "./hooks/useWindowWith"
 import "./home.css";
 
 const Home = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const width = useWindowWidth();
+  const isMobile = width <= 768;
 
-  const toggleMenu = () => {
-    setMenuOpen((prev) => !prev);
-  };
+  const toggleMenu = () => setMenuOpen((prev) => !prev);
+
+  const renderMenu = () => (
+    <ul className="menu_container">
+      <li>
+        <NavLink to="https://embr3-ucds.netlify.app" className="menu_item">
+          About EMB-UCDS
+        </NavLink>
+      </li>
+      <li>
+        <NavLink to="https://embr3-ucds.netlify.app" className="menu_item">
+          Programs
+        </NavLink>
+      </li>
+      <li>
+        <NavLink to="https://embr3-ucds.netlify.app" className="menu_item">
+          Contacts
+        </NavLink>
+      </li>
+      <li>
+        <NavLink to="/login" className="menu_item signup">
+          Log in
+        </NavLink>
+      </li>
+    </ul>
+  );
 
   return (
     <div className="home-container">
@@ -19,36 +45,25 @@ const Home = () => {
         <div className="logo_container">
           <img src={homelogo} alt="Logo" className="logo" />
         </div>
-        <button
-          className="menu_icon"
-          onClick={toggleMenu}
-          aria-label="Toggle menu"
-        >
-          {menuOpen ? <CloseOutlined /> : <MenuOutlined />}
-        </button>
-        <ul className={`menu_container ${menuOpen ? "open" : ""}`}>
-          <li>
-            <NavLink to="https://embr3-ucds.netlify.app" className="menu_item" activeClassName="active">
-              About EMB-UCDS
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="https://embr3-ucds.netlify.app" className="menu_item" activeClassName="active">
-              Programs
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="https://embr3-ucds.netlify.app" className="menu_item" activeClassName="active">
-              Contacts
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="/login" className="menu_item signup" activeClassName="active">
-              Log in
-            </NavLink>
-          </li>
-        </ul>
+        {isMobile ? (
+          <button className="menu_icon" onClick={toggleMenu} aria-label="Toggle menu">
+            <MenuOutlined />
+          </button>
+        ) : (
+          renderMenu()
+        )}
       </nav>
+
+      {/* Drawer for mobile */}
+      <Drawer
+        title="Menu"
+        placement="right"
+        onClose={toggleMenu}
+        open={menuOpen}
+        bodyStyle={{ padding: 0 }}
+      >
+        {renderMenu()}
+      </Drawer>
 
       <div className="home-content">
         <div className="text-content">

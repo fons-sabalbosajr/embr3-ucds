@@ -100,11 +100,9 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
     const interval = setInterval(() => {
       fetchIssues();
     }, 10000); // 10 seconds
-  
+
     return () => clearInterval(interval); // Cleanup on unmount
   }, []);
-
-
 
   const computedWarnings = useMemo(() => {
     const eccCncMap = {};
@@ -159,21 +157,24 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
   };
 
   const handleSettingClick = async (id_no) => {
+    // Show modal right away
+    setSelectedRecord({ id_no }); // minimal info to render the modal shell
+    setIsModalVisible(true); // Open modal early for better UX
+
     try {
-      // Fetch the full record data from the correct API endpoint
       const response = await fetch(
         `http://localhost:8081/api/ucds-data/${id_no}`
       );
       const data = await response.json();
 
       if (response.ok) {
-        // Set the selected record with the full data
-        setSelectedRecord({
-          id_no: data.id_no,
+        // Update record once data is fully fetched
+        setSelectedRecord((prev) => ({
+          ...prev,
           title: data.title,
           ecc_cnc: data.ecc_cnc,
-        });
-        setIsModalVisible(true); // Open the modal
+          ...data, // include other data fields if needed
+        }));
       } else {
         console.error("Error fetching record:", data.message);
       }
@@ -217,18 +218,19 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
 
   const handleDuplicateResolved = (resolvedId) => {
     setWarnings((prevWarnings) =>
-      prevWarnings.filter((warning) =>
-        !warning.idNos.includes(resolvedId)
-      )
+      prevWarnings.filter((warning) => !warning.idNos.includes(resolvedId))
     );
-  
+
     // Optionally close the modal if needed
     setIsDuplicateModalVisible(false);
     setSelectedDuplicate(null);
   };
 
   const notificationsContent = (
-    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+    <div
+      style={{ maxHeight: "300px", overflowY: "auto" }}
+     
+    >
       <div
         style={{
           display: "flex",
@@ -250,7 +252,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
             ? `${groupedKeys.length} ID(s) for repair`
             : "No IDs for repair"}
         </span>
-        <div style={{ textAlign: "right", marginTop: "1px" }}>
+        <div style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}>
           <Button
             onClick={goToPreviousPage}
             disabled={currentPage === 1}
@@ -317,20 +319,12 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <SettingOutlined
                     className="icon-hover"
-                    style={{
-                      fontSize: "14px",
-                      cursor: "pointer",
-                      marginRight: "8px",
-                    }}
                     onClick={() => handleSettingClick(id_no)}
+                    style={{ marginRight: "8px" }}
                   />
                   <CaretRightFilled
                     className="icon-hover"
                     rotate={isActive ? 90 : 0}
-                    style={{
-                      fontSize: "14px",
-                      cursor: "pointer",
-                    }}
                   />
                 </div>
               )}
@@ -343,6 +337,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                       flexDirection: "column",
                       padding: "2px 0",
                       fontSize: "10px",
+                      color: theme === "dark" ? "#ffffff" : "#000000", // Adjust text color
                     }}
                   >
                     <div style={{ flex: 1 }}>
@@ -352,7 +347,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                       <div
                         style={{
                           fontSize: "8px",
-                          color: "#888",
+                          color: theme === "dark" ? "#aaaaaa" : "#000000", // Adjust date color
                           marginTop: "2px",
                           textAlign: "left",
                         }}
@@ -366,10 +361,11 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                 }
                 key={id_no}
                 style={{
-                  backgroundColor: "#f7f7f7",
+                  backgroundColor: theme === "dark" ? "#333333" : "#f7f7f7", // Adjust panel background
                   padding: "5px",
                   marginBottom: "5px",
                   borderRadius: "5px",
+                  marginRight: "10px",
                 }}
                 className="panel-header"
               >
@@ -377,7 +373,13 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                   size="small"
                   dataSource={issues}
                   renderItem={(issue) => (
-                    <List.Item style={{ fontSize: "10px", padding: "2px 0" }}>
+                    <List.Item
+                      style={{
+                        fontSize: "10px",
+                        padding: "2px 0",
+                        color: theme === "dark" ? "#ffffff" : "#000000", // Adjust issue text color
+                      }}
+                    >
                       - {issue}
                     </List.Item>
                   )}
@@ -403,16 +405,17 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
         <span
           style={{
             fontSize: "10px",
-            backgroundColor: "#FFD662",
+            backgroundColor: theme === "dark" ? "#444444" : "#FFD662", // Adjust badge background color
             padding: "2px 4px",
             borderRadius: "4px",
+            color: theme === "dark" ? "#FFD662" : "#000000", // Adjust badge text color
           }}
         >
           {computedWarnings.length > 0
             ? `${computedWarnings.length} references of ECC/CNC found`
             : "No ECC/CNC for repair"}
         </span>
-        <div style={{ textAlign: "right", marginTop: "1px" }}>
+        <div style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}>
           <Button
             onClick={() => setWarningsPage((prevPage) => prevPage - 1)}
             disabled={warningsPage === 1}
@@ -455,8 +458,6 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                   <SettingOutlined
                     className="icon-hover"
                     style={{
-                      fontSize: "14px",
-                      cursor: "pointer",
                       marginRight: "8px",
                     }}
                     onClick={() => handleDuplicateClick(warning)}
@@ -465,7 +466,6 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                     className="icon-hover"
                     rotate={isActive ? 90 : 0}
                     style={{
-                      fontSize: "14px",
                       cursor: "pointer",
                     }}
                   />
@@ -480,6 +480,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                       alignItems: "center",
                       padding: "2px 0",
                       fontSize: "10px",
+                      color: theme === "dark" ? "#ffffff" : "#000000", // Adjust text color
                     }}
                   >
                     <div style={{ flex: 1 }}>
@@ -489,10 +490,11 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                 }
                 key={warning.ecc_cnc}
                 style={{
-                  backgroundColor: "#f7f7f7",
+                  backgroundColor: theme === "dark" ? "#333333" : "#f7f7f7", // Adjust panel background
                   padding: "5px",
                   marginBottom: "5px",
                   borderRadius: "5px",
+                  marginRight: "10px",
                 }}
                 className="panel-header"
               >
@@ -500,7 +502,13 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
                   size="small"
                   dataSource={[...warning.idNos].sort()}
                   renderItem={(id_no) => (
-                    <List.Item style={{ fontSize: "10px", padding: "2px 0" }}>
+                    <List.Item
+                      style={{
+                        fontSize: "10px",
+                        padding: "2px 0",
+                        color: theme === "dark" ? "#ffffff" : "#000000", // Adjust issue text color
+                      }}
+                    >
                       - {id_no}
                     </List.Item>
                   )}

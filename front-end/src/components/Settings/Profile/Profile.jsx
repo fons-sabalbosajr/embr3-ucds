@@ -8,68 +8,49 @@ import {
   Button,
   message,
   Progress,
+  Skeleton,
 } from "antd";
 import {
   CameraFilled,
   UploadOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
-import UserAvatar from "./UserAvatar"; // Fixed spacing
 import "./profile.css";
 
-const { Paragraph, Text } = Typography;
+const { Paragraph } = Typography;
 
-const Profile = ({ userHandle }) => {
-  const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
+const Profile = ({ userHandle, prefetchedUserData }) => {
+  const [userData, setUserData] = useState(prefetchedUserData || null);
+  const [loading, setLoading] = useState(!prefetchedUserData); // Only load if not prefetched
   const [error, setError] = useState(null);
-  const [name, setName] = useState("");
-  const [division, setDivision] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [position, setPosition] = useState("");
-  const [designation, setDesignation] = useState("");
-  const [office, setOffice] = useState("");
-  const [region, setRegion] = useState("");
-  const [accountCreated, setAccountCreated] = useState("");
   const [photo, setPhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadButtons, setShowUploadButtons] = useState(false);
 
   useEffect(() => {
+    if (prefetchedUserData) return; // Skip fetching if data is already prefetched
+
     const fetchUserData = async () => {
       try {
         const response = await fetch(
           `http://localhost:8081/api/users?username=${userHandle}`
         );
         if (!response.ok) {
-          throw new Error("User  not found");
+          throw new Error("Failed to fetch user data");
         }
         const data = await response.json();
         setUserData(data[0]);
-        setName(data[0].name);
-        setDivision(data[0].division);
-        setEmployeeId(data[0].empid);
-        setFullName(data[0].fullName);
-        setEmail(data[0].email);
-        setPosition(data[0].position);
-        setDesignation(data[0].designation);
-        setOffice(data[0].office);
-        setRegion(data[0].region);
-        setAccountCreated(data[0].accountCreated);
       } catch (error) {
         setError(error.message);
-        console.log("Error fetching user data:", error.message);
       } finally {
         setLoading(false);
       }
     };
 
     fetchUserData();
-  }, [userHandle]);
+  }, [userHandle, prefetchedUserData]);
 
+  // Handle photo change
   const handlePhotoChange = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -81,6 +62,7 @@ const Profile = ({ userHandle }) => {
     }
   };
 
+  // Handle photo upload
   const handleUpload = async () => {
     if (!photo || !photo.file) {
       message.error("Please select an image to upload.");
@@ -88,8 +70,8 @@ const Profile = ({ userHandle }) => {
     }
 
     const formData = new FormData();
-    formData.append('photo', photo.file);
-    formData.append('username', userHandle);
+    formData.append("photo", photo.file);
+    formData.append("username", userHandle);
 
     setUploading(true);
 
@@ -119,24 +101,29 @@ const Profile = ({ userHandle }) => {
     }
   };
 
+  // Trigger file input
   const triggerFileInput = () => {
     document.getElementById("file-input").click();
   };
 
+  // Handle cancel photo upload
   const handleCancel = () => {
     setPhoto(null);
     setShowUploadButtons(false);
     document.getElementById("file-input").value = ""; // Reset the file input
   };
 
+  // Render loading state
   if (loading) {
-    return <Spin tip="Loading..." />;
+    return <Skeleton active />;
   }
 
+  // Render error state
   if (error) {
-    return null;
+    return <div>Error: {error}</div>;
   }
 
+  // Render no user data state
   if (!userData) {
     return <div>No user data available.</div>;
   }
@@ -144,10 +131,14 @@ const Profile = ({ userHandle }) => {
   return (
     <div className="profile-container">
       <Row gutter={16} justify="center" className="row-avatar">
-      <Col>
+        <Col>
           <div className="avatar-container">
             {photo ? (
-              <img src={photo.url} alt="Selected Photo" className="profile-avatar" />
+              <img
+                src={photo.url}
+                alt="Selected Photo"
+                className="profile-avatar"
+              />
             ) : (
               <img
                 src={`http://localhost:8081${userData.avatar}`}
@@ -198,7 +189,7 @@ const Profile = ({ userHandle }) => {
                   Cancel
                 </Button>
                 {uploading && (
-                  <Progress percent={uploadProgress} size="small" />
+                  <Progress percent={uploading ? 50 : 100} size="small" />
                 )}
               </>
             )}
@@ -210,8 +201,7 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Employee ID:</span>
             <Input
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
+              value={userData.empid || ""}
               className="input-field"
               placeholder="Employee ID"
               disabled
@@ -220,8 +210,7 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Full Name:</span>
             <Input
-              value={name || "N/A"}
-              onChange={(e) => setFullName(e.target.value)}
+              value={userData.name || "N/A"}
               className="input-field"
               placeholder="Full Name"
               disabled
@@ -230,8 +219,7 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Email:</span>
             <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={userData.email || ""}
               className="input-field"
               placeholder="Email Address"
               disabled
@@ -240,28 +228,25 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Designation:</span>
             <Input
-              value={designation}
-              onChange={(e) => setPosition(e.target.value)}
-              className="input-field"
-              placeholder="Position"
-              disabled
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Division:</span>
-            <Input
-              value={division}
-              onChange={(e) => setDesignation(e.target.value)}
+              value={userData.designation || ""}
               className="input-field"
               placeholder="Designation"
               disabled
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
+            <span className="label-title-profile">Division:</span>
+            <Input
+              value={userData.division || ""}
+              className="input-field"
+              placeholder="Division"
+              disabled
+            />
+          </Paragraph>
+          <Paragraph className="paragraph-input">
             <span className="label-title-profile">Office:</span>
             <Input
-              value={office}
-              onChange={(e) => setOffice(e.target.value)}
+              value={userData.office || ""}
               className="input-field"
               placeholder="Office"
               disabled
@@ -270,8 +255,7 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Region:</span>
             <Input
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
+              value={userData.region || ""}
               className="input-field"
               placeholder="Region"
               disabled
@@ -280,8 +264,7 @@ const Profile = ({ userHandle }) => {
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Account Created:</span>
             <Input
-              value={accountCreated}
-              onChange={(e) => setAccountCreated(e.target.value)}
+              value={userData.accountCreated || ""}
               className="input-field"
               placeholder="Account Created"
               disabled

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Table, Button, Typography, Space, Modal, Badge } from "antd";
-import { CheckCircleOutlined } from "@ant-design/icons";
+import { CheckCircleFilled } from "@ant-design/icons";
 import axios from "axios";
 import moment from "moment";
 import "./bulletin.css";
 
-const Bulletin = () => {
+
+const Bulletin = ({ theme = "dark" }) => {
+  const isDark = theme === "dark";
+
   const [bulletins, setBulletins] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedBulletin, setSelectedBulletin] = useState({});
@@ -43,7 +46,7 @@ const Bulletin = () => {
       dataIndex: "createdDate",
       key: "createdDate",
       align: "left",
-      width: 120,
+      width: 130,
       render: (createdDate, record) => (
         <div style={{ display: "flex", alignItems: "center" }}>
           {!record.isRead && !dontShowAgainIds.has(record._id) && (
@@ -68,7 +71,7 @@ const Bulletin = () => {
           >
             {record.isRead ? (
               <>
-                <CheckCircleOutlined
+                <CheckCircleFilled
                   style={{ color: "green", marginRight: 8 }}
                 />
                 {record.title}
@@ -88,6 +91,7 @@ const Bulletin = () => {
       title: "Action",
       key: "action",
       align: "left",
+      width: 70,
       render: (_, record) => (
         <Space size="middle">
           <Button
@@ -148,13 +152,16 @@ const Bulletin = () => {
   return (
     <div className="bulletin-content">
       <h3 className="bulletin-title">Bulletin Board</h3>
+      <div className={`table-wrapper ${theme === "dark" ? "dark" : ""}`}>
       <Table
         columns={columns}
         dataSource={bulletins}
-        pagination={{ pageSize: 2 }} // Limit rows per page
-        rowKey="_id" // Ensure unique key for rows
+        pagination={{ pageSize: 3 }}
+        rowKey="_id"
         size="small"
+        className="bulletin-table"
       />
+    </div>
       <Modal
         title="Bulletin Details"
         open={isModalVisible || showModalOnLoad}

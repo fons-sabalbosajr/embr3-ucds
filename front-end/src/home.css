@@ -9,16 +9,14 @@
 
 .home-container {
   width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center; /* Center content vertically */
   background: #f5f7fa;
   padding: 20px;
 }
 
 .navbar {
-  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -31,24 +29,26 @@
 }
 
 .menu_icon {
-  display: none;
-  font-size: 18px;
+  font-size: 24px;
   cursor: pointer;
-  color: #333; /* Ensure the menu icon is visible */
+  color: #333;
+  background: none;
+  border: none;
 }
 
 .menu_container {
   display: flex;
+  gap: 20px;
   list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .menu_item {
   color: #333;
   text-decoration: none;
-  margin-left: 20px;
   font-weight: 500;
-  font-size: 14px;
-  transition: color 0.3s;
+  font-size: 16px;
 }
 
 .menu_item:hover {
@@ -56,21 +56,20 @@
 }
 
 .signup {
-  background: #548547;
-  padding: 5px 15px;
-  border-radius: 5px;
+  background-color: #548547;
   color: #fff !important;
+  padding: 6px 14px;
+  border-radius: 5px;
 }
 
 .home-content {
   display: grid;
-  grid-template-columns: 1fr 1fr; /* Use 1fr for responsive columns */
+  grid-template-columns: 1fr 1fr;
   align-items: center;
-  justify-content: center; /* Center content horizontally */
-  width: 100%;
   max-width: 1000px;
-  gap: 20px; /* Adjust the gap between columns */
-  padding: 20px; /* Add padding to the content area */
+  margin: 0 auto;
+  gap: 20px;
+  padding: 20px;
 }
 
 .text-content {
@@ -90,9 +89,8 @@ h1 {
 
 .subheading {
   font-size: 20px;
-  font-weight: 400;
-  margin-bottom: 30px;
   color: #555;
+  margin-bottom: 30px;
 }
 
 .btn-learn-more {
@@ -101,94 +99,47 @@ h1 {
   color: #fff;
   font-size: 16px;
   border-radius: 5px;
-  transition: background-color 0.3s, transform 0.3s;
-  padding: 10px 20px; /* Add padding to the button */
+  padding: 10px 20px;
   cursor: pointer;
+  transition: 0.3s ease;
 }
 
-.btn-learn-more:hover {
-  background-color: #2d5722;
-  transform: scale(1.05);
+/* Override AntD primary button color */
+.btn-learn-more.ant-btn-primary {
+  background-color: #548547;
+  border-color: #548547;
+  color: #fff;
 }
+
+.btn-learn-more.ant-btn-primary:hover,
+.btn-learn-more.ant-btn-primary:focus {
+  background-color: #7ab76f; /* lighter green on hover */
+  border-color: #7ab76f;
+  color: #fff;
+}
+
 
 .image-content {
   display: flex;
   justify-content: center;
-  padding-left: 20px;
 }
 
 .illustration {
-  width: 100%; /* Make the illustration responsive */
+  width: 100%;
   height: auto;
   object-fit: contain;
   border-radius: 10px;
 }
 
-/* Media Queries */
-@media screen and (max-width: 1024px) {
-  .navbar {
-    padding: 15px 30px;
-  }
-
-  .text-content h1 {
-    font-size: 36px;
-  }
-
-  .subheading {
-    font-size: 18px;
-  }
-}
-
+/* Drawer content needs block styling for mobile */
 @media screen and (max-width: 768px) {
-  .menu_icon {
-    display: block;
-    color: #333;
-  }
-
   .menu_container {
-    display: none;
     flex-direction: column;
-    width: 100%;
-    text-align: center;
-    position: absolute;
-    top: 60px;
-    left: 0;
-    background-color: #f5f7fa;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  }
-
-  .menu_container.open {
-    display: flex;
-    row-gap: 20px;
-    padding: 20px 0;
-    margin-top: 50px;
+    padding: 20px;
   }
 
   .menu_item {
-    margin: 10px 0;
-  }
-
-  .signup {
-    margin: 10px 0;
-  }
-
-  .home-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .text-content {
-    text-align: center;
-  }
-
-  .image-content {
-    padding-left: 0;
-    margin-top: 20px;
-  }
-
-  .logo_container {
-    margin-left: -10px;
+    margin-bottom: 10px;
   }
 }
 
@@ -197,8 +148,8 @@ h1 {
     padding: 10px 20px;
   }
 
-  .text-content h1 {
-    font-size: 24px;
+  h1 {
+    font-size: 28px;
   }
 
   .subheading {
@@ -206,6 +157,6 @@ h1 {
   }
 
   .btn-learn-more {
-    padding: 8px 15px; /* Adjust padding for smaller screens */
+    padding: 8px 15px;
   }
 }

@@ -4,7 +4,7 @@ import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
 import "./userstatus.css";
 
-const UserStatus = () => {
+const UserStatus = ({ theme }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,7 +88,10 @@ const UserStatus = () => {
           marginBottom: "10px",
         }}
       >
-        <h3 className="user-status-title" style={{ margin: 0 }}>
+        <h3
+          className="user-status-title"
+          style={{ color: theme === "dark" ? "#ffffff" : "#000000" }}
+        >
           Online Users
         </h3>
         <div
@@ -177,7 +180,7 @@ const UserStatus = () => {
                       height: "8px",
                       borderRadius: "50%",
                       backgroundColor: user.isLoggedIn ? "#52c41a" : "#d9d9d9",
-                      border: "2px solid white",
+                      border: "1px solid white",
                     }}
                   />
                 </div>
@@ -185,7 +188,7 @@ const UserStatus = () => {
                   title={
                     <div
                       className="user-status-item-title"
-                      style={{ fontSize: "10px", marginBottom: "10px"}} // Larger font size
+                      style={{ fontSize: "10px", marginBottom: "10px" }} // Larger font size
                     >
                       {user.name}
                     </div>

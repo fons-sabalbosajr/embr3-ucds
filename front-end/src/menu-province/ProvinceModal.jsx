@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect } from "react";
-import { Modal, Button, Tabs, Space, Typography } from "antd";
+import { Modal, Button, Tabs, Space, Typography, Spin } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import "./provincemodal.css";
 import styled from "styled-components";
@@ -46,23 +46,21 @@ const ProvinceModal = ({
 
   useEffect(() => {
     if (record && record.id_no) {
-      // Fetch data based on the id_no
       const fetchData = async () => {
         try {
           const response = await axios.get(
             `http://localhost:8081/api/ucds-data/${record.id_no}`
           );
-          setEditedRecord(response.data); // Load the data into the modal
+          setEditedRecord(response.data);
         } catch (error) {
           console.error("Error fetching data:", error);
         }
       };
-  
+
       fetchData();
     }
   }, [record]);
 
-  
   // Load the checked log state from localStorage
   useEffect(() => {
     const storedValue = localStorage.getItem("isLogChecked");
@@ -126,28 +124,32 @@ const ProvinceModal = ({
   const logInitialData = async (record) => {
     if (isLogging) return;
     isLogging = true;
-  
+
     const now = new Date();
-    const transactionDate = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-  
+    const transactionDate = `${
+      now.getMonth() + 1
+    }/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`;
+
     try {
       const response = await axios.get("http://localhost:8081/api/ucds-log");
       const transactions = response.data;
-  
+
       const existingLog = transactions.find(
         (log) =>
           log.ecc_cnc === record.ecc_cnc &&
           log.newValue === `${record.ecc_cnc} \n ${record.title}`
       );
-  
+
       if (existingLog) {
         console.log("Initial data already logged for ecc_cnc:", record.ecc_cnc);
         isLogging = false;
         return;
       }
-  
+
       let transactionCounter = 1;
-  
+
       if (!transactions || transactions.length === 0) {
         console.log("No transactions found");
       } else {
@@ -166,17 +168,17 @@ const ProvinceModal = ({
           }
         }
       }
-  
+
       // Decrypt the username
       const encryptedUsername = localStorage.getItem("username");
       const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY; // Get the encryption key from your environment variable
       let username = null;
-  
+
       if (encryptedUsername) {
         const bytes = CryptoJS.AES.decrypt(encryptedUsername, encryptionKey);
         username = bytes.toString(CryptoJS.enc.Utf8);
       }
-  
+
       const logData = {
         transactionID: `TRXM-${String(transactionCounter).padStart(4, "0")}`,
         transactionDate: transactionDate,
@@ -187,7 +189,7 @@ const ProvinceModal = ({
         dateActed: transactionDate,
         ecc_cnc: record.ecc_cnc,
       };
-  
+
       try {
         const response = await axios.post(
           "http://localhost:8081/api/ucds-log",
@@ -358,157 +360,168 @@ const ProvinceModal = ({
 
   return (
     <div className="modal-container">
-      <Tabs activeKey={activeTab} onChange={handleTabChange}>
-        <TabPane
-          tab={<span className="custom-tab">General Information</span>}
-          key="1"
-          className="tabpane-container"
-        >
-          <GenInfo
-            editedRecord={editedRecord}
-            setEditedRecord={setEditedRecord}
-            handleChange={handleChange}
-            isEditing={isEditing}
-          />
-        </TabPane>
-        <TabPane
-          tab={<span className="custom-tab">Concerned Unit/Focal Person</span>}
-          key="2"
-          className="tabpane-container"
-        >
-          <FocalPerson
-            editedRecord={editedRecord}
-            handleChange={handleChange}
-            isEditing={isEditing}
-            currentUser={currentUser}
-          />
-        </TabPane>
-        <TabPane
-          tab={<span className="custom-tab">Clearances and Permits</span>}
-          key="3"
-          className="tabpane-container"
-        >
-          <Permit
-            editedRecord={editedRecord}
-            handleChange={handleChange}
-            isEditing={isEditing}
-            onSaveChanges={(updatedRecord, showNotification) => {
-              setEditedRecord(updatedRecord);
-              handleSaveChanges(showNotification);
-            }}
-          />
-        </TabPane>
-        <TabPane
-          tab={<span className="custom-tab">Legal Services Unit</span>}
-          key="4"
-          className="tabpane-container"
-        >
-          <Legal
-            editedRecord={editedRecord}
-            handleChange={handleChange}
-            isEditing={isEditing}
-          />
-        </TabPane>
-        <TabPane
-          tab={<span className="custom-tab">Manila Bay Unit</span>}
-          key="5"
-          className="tabpane-container"
-        >
-          <MBU
-            editedRecord={editedRecord}
-            handleChange={handleChange}
-            isEditing={isEditing}
-          />
-        </TabPane>
-        <TabPane
-          tab={<span className="custom-tab-history">History</span>}
-          key="6"
-        >
-          <ProvTransactionLog
-            editedRecord={editedRecord}
-            currentUser={currentUser}
-          />
-        </TabPane>
-      </Tabs>
-
-      <Modal
-        title="Generate Report"
-        open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={handleModalCancel}
-        width={1200}
-        footer={null}
-      >
-        <div className="report-modal-container">
-          <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={5}>
+      {!record || !record.id_no || !editedRecord ? (
+        <div style={{ textAlign: "center", padding: 40 }}>
+          <Spin size="large" tip="Loading record details..." />
+        </div>
+      ) : (
+        <>
+          <Tabs activeKey={activeTab} onChange={handleTabChange}>
             <TabPane
-              tab={<span className="tabpane-title">Generate ICIR</span>}
+              tab={<span className="custom-tab">General Information</span>}
               key="1"
+              className="tabpane-container"
             >
-              <ICIR
+              <GenInfo
                 editedRecord={editedRecord}
-                onIncludeChange={() => {}}
-                resetCheckboxesKey={resetCheckboxesKey} // Pass reset state as a key
+                setEditedRecord={setEditedRecord}
+                handleChange={handleChange}
+                isEditing={isEditing}
               />
             </TabPane>
             <TabPane
-              tab={<span className="tabpane-title">Generate CIC</span>}
+              tab={
+                <span className="custom-tab">Concerned Unit/Focal Person</span>
+              }
               key="2"
+              className="tabpane-container"
             >
-              <IC />
+              <FocalPerson
+                editedRecord={editedRecord}
+                handleChange={handleChange}
+                isEditing={isEditing}
+                currentUser={currentUser}
+              />
             </TabPane>
             <TabPane
-              tab={<span className="tabpane-title">Generate IC</span>}
+              tab={<span className="custom-tab">Clearances and Permits</span>}
               key="3"
+              className="tabpane-container"
             >
-              <CIC />
+              <Permit
+                editedRecord={editedRecord}
+                handleChange={handleChange}
+                isEditing={isEditing}
+                onSaveChanges={(updatedRecord, showNotification) => {
+                  setEditedRecord(updatedRecord);
+                  handleSaveChanges(showNotification);
+                }}
+              />
             </TabPane>
             <TabPane
-              tab={<span className="tabpane-title">Reports Logs</span>}
+              tab={<span className="custom-tab">Legal Services Unit</span>}
               key="4"
+              className="tabpane-container"
             >
-              <Drafts />
+              <Legal
+                editedRecord={editedRecord}
+                handleChange={handleChange}
+                isEditing={isEditing}
+              />
+            </TabPane>
+            <TabPane
+              tab={<span className="custom-tab">Manila Bay Unit</span>}
+              key="5"
+              className="tabpane-container"
+            >
+              <MBU
+                editedRecord={editedRecord}
+                handleChange={handleChange}
+                isEditing={isEditing}
+              />
+            </TabPane>
+
+            <TabPane
+              tab={<span className="custom-tab-history">History</span>}
+              key="6"
+            >
+              <ProvTransactionLog
+                editedRecord={editedRecord}
+                currentUser={currentUser}
+              />
             </TabPane>
           </Tabs>
-        </div>
-      </Modal>
 
-      {activeTab !== "6" && (
-        <>
-          <Button
-            className="button-generate"
-            type="primary"
-            onClick={handleopenModal}
-            disabled={loadingPDF}
+          <Modal
+            title="Generate Report"
+            open={isModalVisible}
+            onOk={handleModalOk}
+            onCancel={handleModalCancel}
+            width={1200}
+            footer={null}
           >
-            {loadingPDF ? "Generating PDF..." : "Generate Report"}
-          </Button>
-
-          <div className="action-buttons-container">
-            <Space>
-              {isEditing ? (
-                <>
-                  <Button
-                    onClick={handleSaveChanges}
-                    type="primary"
-                    icon={<SaveOutlined />}
-                  >
-                    Save
-                  </Button>
-                  <Button onClick={handleCancelEdit}>Cancel</Button>
-                </>
-              ) : (
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  type="primary"
-                  icon={<EditOutlined />}
-                  className="button-right"
+            <div className="report-modal-container">
+              <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={5}>
+                <TabPane
+                  tab={<span className="tabpane-title">Generate ICIR</span>}
+                  key="1"
                 >
-                  Edit
-                </Button>
-              )}
-            </Space>
-          </div>
+                  <ICIR
+                    editedRecord={editedRecord}
+                    onIncludeChange={() => {}}
+                    resetCheckboxesKey={resetCheckboxesKey}
+                  />
+                </TabPane>
+                <TabPane
+                  tab={<span className="tabpane-title">Generate CIC</span>}
+                  key="2"
+                >
+                  <IC />
+                </TabPane>
+                <TabPane
+                  tab={<span className="tabpane-title">Generate IC</span>}
+                  key="3"
+                >
+                  <CIC />
+                </TabPane>
+                <TabPane
+                  tab={<span className="tabpane-title">Reports Logs</span>}
+                  key="4"
+                >
+                  <Drafts />
+                </TabPane>
+              </Tabs>
+            </div>
+          </Modal>
+
+          {activeTab !== "6" && (
+            <>
+              <Button
+                className="button-generate"
+                type="primary"
+                onClick={handleopenModal}
+                disabled={loadingPDF}
+              >
+                {loadingPDF ? "Generating PDF..." : "Generate Report"}
+              </Button>
+
+              <div className="action-buttons-container">
+                <Space>
+                  {isEditing ? (
+                    <>
+                      <Button
+                        onClick={handleSaveChanges}
+                        type="primary"
+                        icon={<SaveOutlined />}
+                      >
+                        Save
+                      </Button>
+                      <Button onClick={handleCancelEdit}>Cancel</Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      type="primary"
+                      icon={<EditOutlined />}
+                      className="button-right"
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </Space>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

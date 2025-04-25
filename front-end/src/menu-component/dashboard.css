@@ -1,37 +1,45 @@
-/* Define default theme variables */
+/* Base Theme Variables */
 :root {
   --background-color: #fff;
   --card-background-color: #fff;
   --card-shadow: rgba(0, 0, 0, 0.1);
   --text-color: #333;
   --secondary-text-color: #777;
-  --primary-color: #1890ff; /* Ant Design primary color */
+  --primary-color: #265E92;
 }
 
-/* Dark Theme Variables */
-[data-theme="dark"] {
-  --background-color: #1f1f1f;
+/* Dark Theme Overrides */
+.dark-theme {
+  --background-color: #121212;
   --card-background-color: #2c2c2c;
-  --card-shadow: rgba(255, 255, 255, 0.1);
   --text-color: #f5f5f5;
   --secondary-text-color: #b0b0b0;
-  --primary-color: #40a9ff;
+  --primary-color: #265E92;
 }
 
-/* Light Theme Variables */
-[data-theme="light"] {
-  --background-color: #fff;
+/* Light Theme Overrides */
+.light-theme {
+  --background-color: #f5f5f5;
   --card-background-color: #fff;
   --card-shadow: rgba(0, 0, 0, 0.1);
   --text-color: #333;
   --secondary-text-color: #777;
-  --primary-color: #1890ff;
+  --primary-color: #265E92;
+}
+
+/* Force solid black dashboard background in dark mode */
+.black-dashboard {
+  background-color: #121212 !important;
+}
+
+.light-dashboard {
+  background-color: #f5f5f5 !important;
 }
 
 body, html {
   height: 100%;
   margin: 0;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
+  overflow-x: hidden;
   background-color: var(--background-color);
   color: var(--text-color);
 }
@@ -41,31 +49,36 @@ body, html {
   flex-direction: column;
   min-height: 100vh;
   box-sizing: border-box;
+  background-color: var(--background-color); /* use theme variable */
 }
 
-.card {
+.card,
+.card-bottom,
+.card-changes {
   background-color: var(--card-background-color);
   border-radius: 5px;
   box-shadow: 0 2px 5px var(--card-shadow);
-  padding: 15px;
-  margin-bottom: 10px;
+  padding: 10px;
   box-sizing: border-box;
   height: 100%;
+  width: 100%;
+}
+
+.card {
+  margin-bottom: -10px;
+}
+
+.card-bottom {
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.card-changes {
+  margin-top: 5px;
 }
 
 .card-body {
   overflow: auto;
-}
-
-.card-bottom {
-  background-color: var(--card-background-color);
-  border-radius: 5px;
-  box-shadow: 0 2px 5px var(--card-shadow);
-  padding: 15px;
-  margin-top: auto; 
-  flex-shrink: 0; 
-  box-sizing: border-box; 
-  width: 100%;
 }
 
 .row-gap {
@@ -76,16 +89,6 @@ body, html {
   margin-left: 10px;
 }
 
-.card-changes {
-  background-color: var(--card-background-color);
-  border-radius: 5px;
-  box-shadow: 0 2px 5px var(--card-shadow);
-  padding: 15px;
-  box-sizing: border-box; 
-  width: 100%;
-  margin-top: 5px;
-}
-
 .right-column {
   display: flex;
   flex-direction: column;
@@ -93,16 +96,17 @@ body, html {
 }
 
 .right-column .card-bottom {
-  margin-bottom: 16px; /* Ensure there is space between Activity and Summary cards */
+  margin-bottom: 16px;
 }
 
 .right-column .card-changes {
-  flex-grow: 1; /* Make the Summary card grow to fill available space */
+  flex-grow: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end; /* Align the Summary card to the bottom */
+  justify-content: flex-end;
 }
 
+/* Responsive tweaks */
 @media only screen and (max-width: 1200px) {
   .dashboard-container {
     padding: 12px;

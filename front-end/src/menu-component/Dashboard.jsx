@@ -8,39 +8,31 @@ import Summary from "../components/History/History";
 import Activity from "../components/Summary/Activity";
 
 const Dashboard = ({ avatar, name, theme = "dark" }) => {
-  const isDark = theme === "dark";
-
-  const getCardClass = (baseClass = "card") =>
-    `${baseClass} ${isDark ? "dark-theme" : "light-theme"}`;
-
   return (
-    <div className={`dashboard-container ${isDark ? "dark-theme" : "light-theme"}`}>
+    <div className="dashboard-container">
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={18}>
-          <div className={getCardClass()}>
-            <Bulletin />
+          <div className="card">
+          <Bulletin theme={theme} />
           </div>
         </Col>
         <Col xs={24} lg={6}>
-          <div
-            className={getCardClass()}
-            style={{ height: "100%", display: "flex", flexDirection: "column" }}
-          >
-            <UserStatus avatar={avatar} name={name} />
+          <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <UserStatus avatar={avatar} name={name} theme={theme} />
           </div>
         </Col>
       </Row>
       <Row gutter={[16, 16]} className="row-gap">
         <Col xs={24} lg={18}>
-          <div className={getCardClass("card-bottom")}>
-            <Calendar />
+          <div className="card-bottom">
+            <Calendar theme={theme}/>
           </div>
         </Col>
         <Col xs={24} lg={6} className="right-column">
-          <div className={getCardClass("card-bottom")}>
+          <div className="card-bottom">
             <Activity />
           </div>
-          <div className={getCardClass("card-changes")}>
+          <div className="card-changes">
             <Summary />
           </div>
         </Col>

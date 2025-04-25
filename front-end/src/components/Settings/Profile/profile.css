@@ -3,38 +3,69 @@
 }
 
 .avatar-container {
-  width: 100px; /* Set the desired width */
-  height: 100px; /* Set the desired height */
-  border-radius: 50%; /* Make it circular */
-  overflow: hidden; /* Hide overflow to maintain the circular shape */
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #f0f0f0; /* Optional: Background color for empty avatar */
+  background-color: #f0f0f0;
 }
 
 .avatar-container img {
-  width: 100%; /* Make the image take the full width of the container */
-  height: 100%; /* Make the image take the full height of the container */
-  object-fit: cover; /* Ensure the image covers the container */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .paragraph-input {
-  display: flex; 
-  justify-content: center;
+  display: flex;
   align-items: center;
+  margin-bottom: 10px;
 }
 
 .label-title-profile {
-  width: 100px;
-  align-items: center;
+  width: 120px;
+  min-width: 100px;
   font-weight: 500;
-  margin-right: 10px;
-  color: rgb(0, 67, 192);
+  color: #0043c0;
+  font-size: 11px;
+  text-align: left;
+  margin-right: 12px;
 }
 
 .input-field {
   font-size: 11px;
+  flex: 1;
+  background-color: #f5f5f5;
+  color: #000;
+  border-color: #d9d9d9;
+}
+
+.input-field[disabled] {
+  background-color: #f5f5f5 !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+  border: 1px solid #d9d9d9 !important;
+  cursor: not-allowed;
+}
+
+/* Dark theme support */
+[data-theme="dark"] .input-field {
+  background-color: #1f1f1f;
+  color: #d9d9d9;
+  border: 1px solid #434343;
+}
+
+[data-theme="dark"] .input-field[disabled] {
+  background-color: #1f1f1f !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid #434343 !important;
+}
+
+
+[data-theme="dark"] .label-title-profile {
+  color: #87aaff;
 }
 
 .name-text {
@@ -47,16 +78,13 @@
   margin-bottom: 20px;
 }
 
-.username-text {
-  font-size: 12px;
-}
-
+.username-text,
 .email-text {
   font-size: 12px;
 }
 
 .edit-button {
-  margin-top: 20px; /* Space above the edit button */
+  margin-top: 20px;
   margin-right: 5px;
 }
 
@@ -68,18 +96,18 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%; /* This keeps the Update Photo button full width */
+  width: 100%;
   font-weight: 400;
 }
 
 .button-container {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Space between buttons */
+  justify-content: space-between;
 }
 
 .button-container button {
-  flex: 1; /* Makes buttons take equal width */
-  margin: 0 5px; /* Adds some space between buttons */
-  font-weight: 400; /* Optional: Keep the same font weight */
+  flex: 1;
+  margin: 0 5px;
+  font-weight: 400;
 }
