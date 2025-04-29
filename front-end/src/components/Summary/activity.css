@@ -54,10 +54,9 @@
 }
 
 .panel-header {
-  background-color: #f7f7f7;
   border: none;
   border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Tile effect */
+ 
   margin-bottom: 5px;
 }
 
@@ -163,3 +162,23 @@
   line-height: 1.4;
 }
 
+
+.pagination-info {
+  font-size: 14px;
+  color: gray;
+  margin-right: 10px;
+  align-self: center;
+}
+
+.activity-title{
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.initial-loading {
+  height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

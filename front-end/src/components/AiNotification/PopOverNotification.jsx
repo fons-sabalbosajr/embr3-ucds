@@ -85,9 +85,9 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
           return;
         }
 
-        setIssues(data.issues); // Optional: if you're still using this
-        setUpdatedNotifications(data.issues); // ✅ Drive the memoized groupedNotifications
-        setLoading(false); // ✅ Done loading
+        setIssues(data.issues);
+        setUpdatedNotifications(data.issues);
+        setLoading(false);
       } catch (error) {
         console.error("Error fetching issues:", error);
       } finally {
@@ -227,10 +227,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
   };
 
   const notificationsContent = (
-    <div
-      style={{ maxHeight: "300px", overflowY: "auto" }}
-     
-    >
+    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
       <div
         style={{
           display: "flex",
@@ -252,7 +249,9 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
             ? `${groupedKeys.length} ID(s) for repair`
             : "No IDs for repair"}
         </span>
-        <div style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}>
+        <div
+          style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
+        >
           <Button
             onClick={goToPreviousPage}
             disabled={currentPage === 1}
@@ -415,7 +414,9 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
             ? `${computedWarnings.length} references of ECC/CNC found`
             : "No ECC/CNC for repair"}
         </span>
-        <div style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}>
+        <div
+          style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
+        >
           <Button
             onClick={() => setWarningsPage((prevPage) => prevPage - 1)}
             disabled={warningsPage === 1}
@@ -551,7 +552,11 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
         content={popoverContent}
         trigger="click"
         placement="bottomRight"
-        overlayStyle={{ width: "300px" }}
+        styles={{
+          body: {
+            width: "300px", // Replace overlayInnerStyle with styles.body
+          },
+        }}
       >
         <Badge
           count={
@@ -559,9 +564,9 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
               <LoadingOutlined
                 style={{
                   fontSize: "11px",
-                  color: "white", // Optional: Customize the color
-                  backgroundColor: "green", // White background for visibility
-                  borderRadius: "50%", // Circular background
+                  color: "white",
+                  backgroundColor: "green",
+                  borderRadius: "50%",
                   padding: "5px",
                 }}
               />
@@ -576,7 +581,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
             fontSize: "8px",
             padding: "1px",
             backgroundColor: isLoading
-              ? "#d9d9d9" // Gray background while loading
+              ? "#d9d9d9"
               : notifications.length > 0
               ? "green"
               : "#d9d9d9",

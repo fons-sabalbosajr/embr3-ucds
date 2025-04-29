@@ -111,31 +111,6 @@ const Province = ({ theme, currentUser }) => {
     AU: "Aurora",
   };
 
-  // Function to fetch and sort data for the selected province
-  const fetchDataForProvince = async (provinceCode) => {
-    setLoading(true);
-    try {
-      const fetchedData = await fetchData(provinceCode); // Fetch data for the specific province
-      if (fetchedData) {
-        // Sort the fetched data by id_no (ascending order)
-        const sortedData = fetchedData.sort((a, b) => {
-          const numA = parseInt(a.id_no.replace(/[^0-9]/g, ""), 10); // Extract numeric part from id_no
-          const numB = parseInt(b.id_no.replace(/[^0-9]/g, ""), 10); // Extract numeric part from id_no
-          return numA - numB; // Ascending sort
-        });
-
-        // Set the sorted data into state
-        setFilteredData(sortedData);
-        setOriginalData(sortedData);
-        setSectionCounts(calculateSectionCounts(sortedData));
-      }
-    } catch (err) {
-      console.error("Error fetching data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Whenever the provinceName changes, fetch and sort the data for that province
   useEffect(() => {
     if (provinceName && provinceCodes[provinceName]) {
@@ -167,7 +142,6 @@ const Province = ({ theme, currentUser }) => {
       setLoading(false); // End loading animation
     }
   };
-
 
   const filterData = () => {
     if (!data || data.length === 0) return [];
@@ -739,7 +713,7 @@ const Province = ({ theme, currentUser }) => {
     switch (section) {
       case "PEMU_Aurora":
       case "PEMU_AURORA":
-        return "#F0F3FF";
+        return "#A4B465";
 
       case "PEMU_Bataan":
       case "PEMU_BATAAN":
@@ -747,7 +721,7 @@ const Province = ({ theme, currentUser }) => {
 
       case "PEMU_Bulacan":
       case "PEMU_BULACAN":
-        return "#FCE5BB"; // Light purple
+        return "#7A73D1"; // Light purple
 
       case "PEMU_Nueva Ecija":
       case "PEMU_NUEVA ECIJA":
@@ -756,7 +730,7 @@ const Province = ({ theme, currentUser }) => {
 
       case "PEMU_Pampanga":
       case "PEMU_PAMPANGA":
-        return "#FFE225"; // Yellow
+        return "#DF9755"; // Yellow
 
       case "PEMU_Tarlac":
       case "PEMU_TARLAC":
@@ -776,7 +750,7 @@ const Province = ({ theme, currentUser }) => {
 
       case "AWECMES":
       case "awecmes":
-        return "#c8e6c9";
+        return "#626F47";
 
       case "TCHWMS/MBU":
         return "linear-gradient(to right, #936DDF, #FF9B3E)"; // Dual tone color for TCHWMS/MBU
@@ -1431,13 +1405,15 @@ const Province = ({ theme, currentUser }) => {
               const backgroundColor = sectionBackgroundColor(section); // Base background color
               const darkerBackgroundColor = darkenColor(backgroundColor, -40); // Darker shade
 
+              // Dynamically set tooltip background color based on theme
+              const tooltipBackgroundColor =
+                theme === "dark" ? darkerBackgroundColor : backgroundColor;
+
               return (
                 <Tooltip
                   key={index}
                   title={
                     <div style={{ fontSize: "11px" }}>
-                      {" "}
-                      {/* Reduced font size */}
                       <div>Section Incharge: {record.section_incharged}</div>
                       <div>Handler: {record.handler || "N/A"}</div>
                       <div>
@@ -1446,7 +1422,7 @@ const Province = ({ theme, currentUser }) => {
                       <div>Inspection Type: {record.insp_type || "N/A"}</div>
                     </div>
                   }
-                  color={darkerBackgroundColor} // Tooltip background color (slightly darker)
+                  color={tooltipBackgroundColor} // Apply theme-based tooltip background color
                 >
                   <div
                     className="industry-label"
@@ -1454,7 +1430,7 @@ const Province = ({ theme, currentUser }) => {
                       backgroundColor: backgroundColor, // Original background color for the label
                       padding: "5px",
                       margin: "2px", // Add some margin between sections
-                      width: `${textWidth + 10}px`, // Add some padding for better appearance
+                      width: `${textWidth}px`, // Add some padding for better appearance
                       display: "inline-block",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
@@ -1483,7 +1459,7 @@ const Province = ({ theme, currentUser }) => {
       width: 100,
     },
     {
-      title: <span style={{ fontSize: "10px" }}>Monitoring Status</span>,
+      title: "Monitoring Status",
       key: "iis_no",
       ...getColumnSearchProps("iis_no"), // Ensure this is set to the correct dataIndex
       render: (text, record) => (
@@ -1551,8 +1527,8 @@ const Province = ({ theme, currentUser }) => {
           </div>
         </div>
       ),
-      width: 400, // Adjust as needed
-      align: "left",
+      width: 300, // Adjust as needed
+      align: "center",
       onFilter: (value, record) => {
         const lowerValue = value.toLowerCase();
 
@@ -1607,23 +1583,23 @@ const Province = ({ theme, currentUser }) => {
   ];
 
   return (
-    <div className={`header-panel ${theme}`}>
+    <div className="province-container">
       <div className="header-content">
         <h3 className="header-title">{`${capitalizedProvinceName} Universe of Firms and Industries`}</h3>
-
         <Button
           type="primary"
           className="refresh-button"
-          icon={<ReloadOutlined />}
+          icon={<ReloadOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
           onClick={() => handleReload(provinceName)}
           loading={loading}
           title="Reload Table"
+          style={{ marginLeft: "10px" }}
         />
 
         <Button
           type="primary"
           className="refresh-button"
-          icon={<ExportOutlined />}
+          icon={<ExportOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
           onClick={() => handleExportPDF(capitalizedProvinceName)}
           title="Export Data"
         />
@@ -1799,7 +1775,7 @@ const Province = ({ theme, currentUser }) => {
               }}
             >
               <div style={{ display: "flex", alignItems: "center" }}>
-                <h4 style={{ marginRight: 16 }}>
+                <h4 style={{ marginRight: 16, fontWeight: 400 }}>
                   Industry Count: {filteredData.length}
                 </h4>
 
@@ -1981,6 +1957,7 @@ const Province = ({ theme, currentUser }) => {
               selectedRowKeys,
               onChange: setSelectedRowKeys,
             }}
+            
             dataSource={filteredDuplicateData} // Ensure this is set correctly
             columns={columns}
             rowKey="id_no"

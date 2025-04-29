@@ -1800,31 +1800,12 @@ app.use("/uploads", express.static(uploadsDir));
 //////////////////////////////////////////////////////////////////////////////////////////
 app.get("/api/permits-summary", async (req, res) => {
   const { page = 1, pageSize = 5 } = req.query;
-
-  // Convert to integers
   const currentPage = parseInt(page, 10);
   const pageSizeInt = parseInt(pageSize, 10);
-
   const skip = (currentPage - 1) * pageSizeInt;
   const limit = pageSizeInt;
 
-  //console.log("Fetching page:", currentPage, "with pageSize:", pageSizeInt);
-  //console.log("Skip:", skip, "Limit:", limit);
-
   try {
-    // Fetch all data without pagination first
-    const data = await ucdsCollection.find({}, {
-      projection: {
-        id_no: 1,
-        title: 1,
-        name: 1,
-        ecc_cnc: 1,
-        pto_issued: 1,
-        wwdp_issued: 1,
-        pco_validity: 1,
-      },
-    }).toArray();
-
     const now = new Date();
 
     const isNearExpiration = (expiryDate) => {
@@ -1835,67 +1816,80 @@ app.get("/api/permits-summary", async (req, res) => {
 
     const isExpired = (expiryDate) => now > expiryDate;
 
-    const filteredData = data
-      .map((record) => {
-        const permits = [];
-
-        if (record.pto_issued) {
-          const expiry = new Date(record.pto_issued);
-          expiry.setFullYear(expiry.getFullYear() + 2);
-          permits.push({
-            type: "PTO",
-            expiry,
-            isNearExpiry: isNearExpiration(expiry),
-            isExpired: isExpired(expiry),
-          });
-        }
-
-        if (record.wwdp_issued) {
-          const expiry = new Date(record.wwdp_issued);
-          expiry.setFullYear(expiry.getFullYear() + 1);
-          permits.push({
-            type: "WWDP",
-            expiry,
-            isNearExpiry: isNearExpiration(expiry),
-            isExpired: isExpired(expiry),
-          });
-        }
-
-        if (record.pco_validity) {
-          const expiry = new Date(record.pco_validity);
-          expiry.setFullYear(expiry.getFullYear() + 3);
-          permits.push({
-            type: "PCO",
-            expiry,
-            isNearExpiry: isNearExpiration(expiry),
-            isExpired: isExpired(expiry),
-          });
-        }
-
-        const validPermits = permits.filter(
-          (p) => p.isNearExpiry || p.isExpired
-        );
-
-        if (validPermits.length > 0) {
-          return {
-            id_no: record.id_no,
-            title: record.title || record.name || "Untitled",
-            ecc_cnc: record.ecc_cnc || "",
-            permits: validPermits,
-          };
-        }
-
-        return null; // If no valid permits, return null
+    // 1. Fetch ALL records but only needed fields (still optimize fields)
+    const allData = await ucdsCollection
+      .find({}, {
+        projection: {
+          id_no: 1,
+          title: 1,
+          name: 1,
+          ecc_cnc: 1,
+          pto_issued: 1,
+          wwdp_issued: 1,
+          pco_validity: 1,
+        },
       })
-      .filter((record) => record !== null); // Filter out null records
+      .toArray();
 
-    // Paginate the filtered data
-    const paginatedData = filteredData.slice(skip, skip + limit);
+    // 2. Process and filter
+    const processedData = allData.map((record) => {
+      const permits = [];
 
-    // Count total number of filtered records
-    const totalRecords = filteredData.length;
+      if (record.pto_issued) {
+        const expiry = new Date(record.pto_issued);
+        expiry.setFullYear(expiry.getFullYear() + 2);
+        permits.push({
+          type: "PTO",
+          expiry,
+          isNearExpiry: isNearExpiration(expiry),
+          isExpired: isExpired(expiry),
+        });
+      }
 
-    // Return data and total count for pagination
+      if (record.wwdp_issued) {
+        const expiry = new Date(record.wwdp_issued);
+        expiry.setFullYear(expiry.getFullYear() + 1);
+        permits.push({
+          type: "WWDP",
+          expiry,
+          isNearExpiry: isNearExpiration(expiry),
+          isExpired: isExpired(expiry),
+        });
+      }
+
+      if (record.pco_validity) {
+        const expiry = new Date(record.pco_validity);
+        expiry.setFullYear(expiry.getFullYear() + 3);
+        permits.push({
+          type: "PCO",
+          expiry,
+          isNearExpiry: isNearExpiration(expiry),
+          isExpired: isExpired(expiry),
+        });
+      }
+
+      const validPermits = permits.filter(
+        (p) => p.isNearExpiry || p.isExpired
+      );
+
+      if (validPermits.length > 0) {
+        return {
+          id_no: record.id_no,
+          title: record.title || record.name || "Untitled",
+          ecc_cnc: record.ecc_cnc || "",
+          permits: validPermits,
+        };
+      }
+
+      return null;
+    }).filter((record) => record !== null);
+
+    // 3. Paginate AFTER filtering
+    const paginatedData = processedData.slice(skip, skip + limit);
+
+    // 4. Get total count (only matching filtered)
+    const totalRecords = processedData.length;
+
     res.json({
       data: paginatedData,
       total: totalRecords,
@@ -1905,9 +1899,6 @@ app.get("/api/permits-summary", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
-
-
 
 app.get("/api/draft-report", async (req, res) => {
   try {

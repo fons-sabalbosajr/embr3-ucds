@@ -7,7 +7,7 @@ import "./activitlylog.css";
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-const ActivityLog = () => {
+const ActivityLog = ({ theme }) => {
   const [logs, setLogs] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [filteredLogs, setFilteredLogs] = useState([]);
@@ -208,38 +208,63 @@ const ActivityLog = () => {
   };
 
   return (
-    <div>
-      <Input
-        placeholder="Search logs"
-        value={searchText}
-        onChange={(e) => setSearchText(e.target.value)}
-        style={{ marginBottom: 16, width: 300 }}
-      />
-      <RangePicker
-        onChange={(dates) => setDateRange(dates)}
-        style={{ marginBottom: 16, marginLeft: 16 }}
-      />
-      <Select
-        placeholder="Select method"
-        style={{ width: 200, marginBottom: 16, marginLeft: 16 }}
-        onChange={(value) => setSelectedMethod(value)}
-        allowClear
-        dropdownRender={customDropdownRender}
-      >
-        <Option value="">All Activities</Option>
-        <Option value="GET">Load Data</Option>
-        <Option value="POST">Added Data</Option>
-        <Option value="PUT">Update Data</Option>
-        <Option value="DELETE">Delete Data</Option>
-      </Select>
-      <Table
-        columns={columns}
-        dataSource={filteredLogs}
-        rowKey="_id"
-        pagination={{ pageSize: 10 }}
-        className="activitylog-table"
-      />
-    </div>
+    <div
+    style={{
+      backgroundColor: theme === "dark" ? "#121212" : "#ffffff",
+      color: theme === "dark" ? "#e0e0e0" : "#000000",
+      padding: "16px",
+      borderRadius: "8px",
+    }}
+  >
+    <Input
+      placeholder="Search logs"
+      value={searchText}
+      onChange={(e) => setSearchText(e.target.value)}
+      style={{
+        marginBottom: 16,
+        width: 300,
+        backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",
+        color: theme === "dark" ? "#e0e0e0" : "#000000",
+      }}
+    />
+    <RangePicker
+      onChange={(dates) => setDateRange(dates)}
+      style={{
+        marginBottom: 16,
+        marginLeft: 16,
+        backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",
+      }}
+    />
+    <Select
+      placeholder="Select method"
+      style={{
+        width: 200,
+        marginBottom: 16,
+        marginLeft: 16,
+        backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",
+        color: theme === "dark" ? "#e0e0e0" : "#000000",
+      }}
+      onChange={(value) => setSelectedMethod(value)}
+      allowClear
+    >
+      <Option value="">All Activities</Option>
+      <Option value="GET">Load Data</Option>
+      <Option value="POST">Added Data</Option>
+      <Option value="PUT">Update Data</Option>
+      <Option value="DELETE">Delete Data</Option>
+    </Select>
+    <Table
+      columns={columns}
+      dataSource={filteredLogs}
+      rowKey="_id"
+      pagination={{ pageSize: 10 }}
+      className="activitylog-table"
+      style={{
+        backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",
+        color: theme === "dark" ? "#e0e0e0" : "#000000",
+      }}
+    />
+  </div>
   );
 };
 

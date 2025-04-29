@@ -60,7 +60,7 @@ const Home = () => {
         placement="right"
         onClose={toggleMenu}
         open={menuOpen}
-        bodyStyle={{ padding: 0 }}
+       style={{ padding: 0 }}
       >
         {renderMenu()}
       </Drawer>

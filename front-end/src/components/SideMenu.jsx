@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { ConfigProvider, Layout, Menu, Button } from "antd";
 import {
   DashboardFilled,
@@ -12,166 +12,152 @@ import {
   MenuUnfoldOutlined,
   MenuFoldOutlined,
 } from "@ant-design/icons";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { DataContext } from "./../menu-province/DataContext";
 import Logo from "./Logo";
 import "./sidemenu.css";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useContext } from "react";
-import { DataContext } from "./../menu-province/DataContext";
 
 const { Sider } = Layout;
-const { SubMenu } = Menu;
 
 const SideMenu = ({ theme, currentUser }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [openKeys, setOpenKeys] = useState([]);
   const location = useLocation();
   const navigate = useNavigate();
   const { setCurrentProvince } = useContext(DataContext);
 
-  //console.log("Current User in SideMenu:", currentUser);
-
-  // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
-  const visibleProvinces = [
-    { key: "Aurora", visible: permissions[5] },
-    { key: "Bataan", visible: permissions[6] },
-    { key: "Bulacan", visible: permissions[7] },
-    { key: "Nueva_Ecija", visible: permissions[8] },
-    { key: "Pampanga", visible: permissions[9] },
-    { key: "Tarlac", visible: permissions[10] },
-    { key: "Zambales", visible: permissions[11] },
-  ]
-    .filter((province) => province.visible) // Show only visible provinces
-    .map((province) => province.key);
 
-  const canViewAdminPanel = permissions[2]; // Example permission
-  const onCollapse = (collapsed) => {
-    setCollapsed(collapsed);
-  };
+  const visibleProvinces = [
+    "Aurora",
+    "Bataan",
+    "Bulacan",
+    "Nueva_Ecija",
+    "Pampanga",
+    "Tarlac",
+    "Zambales",
+  ].filter((_, i) => permissions[i + 5]);
+
+  const rootSubmenuKeys = ["r3-monitoring", "healthcare", "reports", "admin"];
+
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes("/universe/province/")) setOpenKeys(["r3-monitoring"]);
+    else if (["healthcare", "chemicals", "tsd", "trc"].some(p => path.includes(p))) setOpenKeys(["healthcare"]);
+    else if (["extract", "deleted_firms"].some(p => path.includes(p))) setOpenKeys(["reports"]);
+    else if (["accounts", "posting", "activitylog"].some(p => path.includes(p))) setOpenKeys(["admin"]);
+    else setOpenKeys([]);
+  }, [location.pathname]);
 
   const handleProvinceSelect = (province) => {
-    setCurrentProvince(province); // Update currentProvince in DataContext
-    navigate(`/universe/province/${province}`); // Navigate to the selected province
+    setCurrentProvince(province);
+    navigate(`/universe/province/${province}`);
   };
+
+  const menuItems = [
+    {
+      key: "/universe/dashboard",
+      icon: <DashboardFilled />,
+      label: <Link to="/universe/dashboard">Dashboard</Link>,
+    },
+    {
+      key: "r3-monitoring",
+      icon: <CheckCircleFilled />,
+      label: "Monitoring Plan",
+      children: visibleProvinces.map(province => ({
+        key: `/universe/province/${province}`,
+        label: <Link to={`/universe/province/${province}`}>{province}</Link>,
+      })),
+    },
+    {
+      key: "healthcare",
+      icon: <MedicineBoxFilled />,
+      label: "Healthcare",
+      children: [
+        { key: "/universe/healthcare", label: <Link to="/universe/healthcare">Healthcare Industries</Link> },
+        { key: "/universe/chemicals", label: <Link to="/universe/chemicals">Chemical Industries</Link> },
+        { key: "/universe/tsd", label: <Link to="/universe/tsd">TSD Facilities</Link> },
+        { key: "/universe/trc", label: <Link to="/universe/trc">TRC Permits</Link> },
+      ],
+    },
+    {
+      key: "/universe/survey",
+      icon: <ReconciliationFilled />,
+      label: <Link to="/universe/survey">Survey</Link>,
+    },
+    {
+      key: "/universe/mbu",
+      icon: <EnvironmentFilled />,
+      label: <Link to="/universe/mbu">Manila Bay Pipeline</Link>,
+    },
+    {
+      key: "/universe/eswm-database",
+      icon: <DatabaseFilled />,
+      label: <Link to="/universe/eswm-database">ESWM Database</Link>,
+    },
+    {
+      key: "reports",
+      icon: <PushpinFilled />,
+      label: "Reports",
+      children: [
+        { key: "/universe/extract", label: <Link to="/universe/extract">Extract Data</Link> },
+        { key: "/universe/deleted_firms", label: <Link to="/universe/deleted_firms">Deleted Industries</Link> },
+      ],
+    },
+    permissions[2] && {
+      key: "admin",
+      icon: <SettingFilled />,
+      label: "Admin",
+      children: [
+        { key: "/universe/accounts", label: <Link to="/universe/accounts">User Accounts</Link> },
+        { key: "/universe/posting", label: <Link to="/universe/posting">Post to Bulletin</Link> },
+        { key: "/universe/activitylog", label: <Link to="/universe/activitylog">Activity Logs</Link> },
+      ],
+    },
+  ].filter(Boolean);
 
   return (
     <Sider
       collapsed={collapsed}
-      onCollapse={onCollapse}
+      onCollapse={setCollapsed}
       theme={theme}
       width={220}
       trigger={null}
+      className="sider-container"
     >
       <div className="sider-header">
         <Logo theme={theme} collapsed={collapsed} />
       </div>
 
-      <div>
-        <Button
-          type="primary"
-          onClick={() => setCollapsed(!collapsed)}
-          className="collapse-toggle-button"
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          size="small"
+      <Button
+        type="primary"
+        onClick={() => setCollapsed(!collapsed)}
+        className="collapse-toggle-button"
+        icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+        size="small"
+      />
+
+      <ConfigProvider>
+        <Menu
+          theme={theme}
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          openKeys={openKeys}
+          onOpenChange={(keys) => {
+            const latestOpenKey = keys.find(key => !openKeys.includes(key));
+            setOpenKeys(rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys);
+          }}
+          inlineCollapsed={collapsed}
+          className="menu-container"
+          items={menuItems}
+          onClick={({ key }) => {
+            if (key.startsWith("/universe/province/")) {
+              const province = key.split("/").pop();
+              handleProvinceSelect(province);
+            }
+          }}
         />
-      </div>
-
-      <div>
-        <ConfigProvider>
-          <Menu
-            theme={theme}
-            defaultSelectedKeys={["1"]}
-            mode="inline"
-            selectedKeys={[location.pathname]}
-            inlineCollapsed={collapsed}
-            className="menu-container"
-          >
-            <Menu.Item
-              key="/universe/dashboard"
-              icon={<DashboardFilled />}
-              className="menu-bar-item"
-            >
-              <Link to="/universe/dashboard" className="link-menu">
-                Dashboard
-              </Link>
-            </Menu.Item>
-
-            <Menu.SubMenu
-              key="r3-monitoring"
-              icon={<CheckCircleFilled />}
-              title="Monitoring Plan"
-            >
-              {visibleProvinces.map((province) => (
-                <Menu.Item
-                  key={`/universe/province/${province}`}
-                  onClick={() => handleProvinceSelect(province)}
-                >
-                  <Link to={`/universe/province/${province}`}>{province}</Link>
-                </Menu.Item>
-              ))}
-            </Menu.SubMenu>
-
-            <SubMenu
-              key="healthcare"
-              icon={<MedicineBoxFilled />}
-              title="Healthcare"
-            >
-              <Menu.Item key="/universe/healthcare">
-                <Link to="/universe/healthcare">Healthcare Industries</Link>
-              </Menu.Item>
-              <Menu.Item key="/universe/chemicals">
-                <Link to="/universe/chemicals">
-                  Chemical Industries
-                </Link>
-              </Menu.Item>
-              <Menu.Item key="/universe/tsd">
-                <Link to="/universe/tsd">
-                  TSD Facilities
-                </Link>
-              </Menu.Item>
-              <Menu.Item key="/universe/trc">
-                <Link to="/universe/trc">
-                  TRC Permits
-                </Link>
-              </Menu.Item>
-            </SubMenu>
-
-            <Menu.Item key="/universe/survey" icon={<ReconciliationFilled/>}>
-              <Link to="/universe/survey" className="link-menu">Survey</Link>
-            </Menu.Item>
-
-            <Menu.Item key="/universe/mbu" icon={<EnvironmentFilled />}>
-              <Link to="/universe/mbu" className="link-menu">Manila Bay Pipeline</Link>
-            </Menu.Item>
-
-            <Menu.Item key="/universe/eswm-database" icon={<DatabaseFilled />}>
-              <Link to="/universe/eswm-database" className="link-menu">ESWM Database</Link>
-            </Menu.Item>
-
-            <SubMenu key="reports" icon={<PushpinFilled />} title="Reports">
-              <Menu.Item key="/universe/extract">
-                <Link to="/universe/extract">Extract Data</Link>
-              </Menu.Item>
-              <Menu.Item key="/universe/deleted_firms">
-                <Link to="/universe/deleted_firms">Deleted Industries</Link>
-              </Menu.Item>
-            </SubMenu>
-
-            {canViewAdminPanel && (
-              <SubMenu key="admin" icon={<SettingFilled />} title="Admin">
-                <Menu.Item key="/universe/accounts">
-                  <Link to="/universe/accounts">User Accounts</Link>
-                </Menu.Item>
-                <Menu.Item key="/universe/posting">
-                  <Link to="/universe/posting">Post to Bulletin</Link>
-                </Menu.Item>
-                <Menu.Item key="/universe/activitylog">
-                  <Link to="/universe/activitylog">Activity Logs</Link>
-                </Menu.Item>
-              </SubMenu>
-            )}
-          </Menu>
-        </ConfigProvider>
-      </div>
+      </ConfigProvider>
     </Sider>
   );
 };

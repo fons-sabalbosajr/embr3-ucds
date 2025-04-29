@@ -13,11 +13,14 @@ const Dashboard = ({ avatar, name, theme = "dark" }) => {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={18}>
           <div className="card">
-          <Bulletin theme={theme} />
+            <Bulletin theme={theme} />
           </div>
         </Col>
         <Col xs={24} lg={6}>
-          <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <div
+            className="card"
+            style={{ height: "100%", display: "flex", flexDirection: "column" }}
+          >
             <UserStatus avatar={avatar} name={name} theme={theme} />
           </div>
         </Col>
@@ -25,16 +28,16 @@ const Dashboard = ({ avatar, name, theme = "dark" }) => {
       <Row gutter={[16, 16]} className="row-gap">
         <Col xs={24} lg={18}>
           <div className="card-bottom">
-            <Calendar theme={theme}/>
+            <Calendar theme={theme} />
           </div>
         </Col>
         <Col xs={24} lg={6} className="right-column">
           <div className="card-bottom">
-            <Activity />
+            <Activity theme={theme} />
           </div>
-          <div className="card-changes">
-            <Summary />
-          </div>
+          {/* <div className="card-changes">
+            <Summary theme={theme} />
+          </div> */}
         </Col>
       </Row>
     </div>

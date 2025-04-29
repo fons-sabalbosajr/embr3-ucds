@@ -1,95 +1,127 @@
-.bulletin-content {
-  color: var(--text-color);
-  background-color: var(--card-background-color);
-  padding: 10px;
-  border-radius: 6px;
+:root {
+  --card-background-color: #ffffff;
+  --text-color: #000000;
+  --primary-color: #1890ff;
+  --primary-color-hover: #095592;
 }
 
-.bulletin-title {
-  color: var(--text-color);
-  font-size: 18px;
+.dark {
+  --card-background-color: #1e1e1e;
+  --text-color: #ffffff;
+  --primary-color: #0d77ce;
+  --primary-color-hover: #64b5f6;
+}
+
+/* Gradient background for bulletin item */
+.bulletin-item {
+  position: relative;
+  padding: 20px 20px 40px 20px; /* Added bottom padding */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #3cb371, #39205f); /* seagreen to steelblue */
+  border-radius: 12px;
+  color: white;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Background circles */
+.bulletin-item::before,
+.bulletin-item::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  z-index: 0;
+  opacity: 0.15;
+}
+
+.bulletin-item::before {
+  width: 200px;
+  height: 200px;
+  background: seagreen;
+  top: -50px;
+  left: -50px;
+}
+
+.bulletin-item::after {
+  width: 300px;
+  height: 300px;
+  background: steelblue;
+  bottom: -100px;
+  right: -100px;
+}
+
+/* Layout: left and right */
+.bulletin-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* Left section */
+.bulletin-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.bulletin-date {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 5px;
-  font-weight: 500;
-  margin-top: -10px;
 }
 
-.data-title.dark {
-  color: #f5f5f5;
+.bulletin-title-text {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #ffffff !important;
+  word-wrap: break-word;
 }
 
-.data-title.light {
-  color: #333;
+.bulletin-message {
+  font-size: 16px;
+  color: #e0e0e0;
+  margin-bottom: 16px;
+  word-break: break-word;
 }
 
-.data-label {
-  font-size: 13px;
-  color: var(--secondary-text-color);
-}
-
+/* View Button */
 .bulletin-button {
   background-color: var(--primary-color);
   border: none;
   color: #fff;
+  padding: 8px 20px;
+  font-size: 14px;
+  border-radius: 6px;
+  width: 140px;
 }
 
-.bulletin-table .ant-pagination {
-  margin-top: 12px;
+.bulletin-button:hover {
+  background-color: var(--primary-color-hover);
 }
 
-.bulletin-table .ant-table-thead > tr > th {
-  background-color: var(--card-background-color);
-  color: var(--text-color);
+/* Watermark-style announcement icon */
+.bulletin-watermark-icon {
+  position: absolute;
+  top: 5px;
+  right: 10px;
+  width: 250px;
+  height: 250px;
+  opacity: 0.5;
+  z-index: 0;
+  pointer-events: none; /* avoid interaction */
+  filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.3));
+  object-fit: contain;
+  
 }
 
-.table-wrapper .ant-table-container {
-  border-radius: 8px;
-  overflow: hidden; /* Ensures content stays rounded */
-}
-
-.table-wrapper .ant-table {
-  background-color: #ffffff;
-  color: #000000;
-}
-
-.table-wrapper .ant-table-thead > tr > th {
-  background-color: #f0f0f0;
-  color: #000000;
-}
-
-/* Dark theme override */
-.table-wrapper.dark {
-  background-color: #1e1e1e;
-  color: #f5f5f5;
-  border-radius: 8px;
-}
-
-.table-wrapper.dark .ant-table {
-  background-color: #1e1e1e;
-  color: #f5f5f5;
-}
-
-.table-wrapper.dark .ant-table-thead > tr > th {
-  background-color: #333333;
-  color: #f5f5f5;
-}
-
-/* Pagination spacing */
-.ant-pagination-item {
-  margin-inline: 4px !important;
-  font-size: 10px;
-}
-
-/* Optional: better hover/focus styling */
-.ant-pagination-item-active {
-  border-color: #1890ff;
-}
-
-.ant-pagination-item a {
-  display: inline-block;
-  padding: 0 6px;
-}
-
-.bulletin-table .ant-table-tbody > tr:hover > td {
-  background-color: var(--hover-background-color);
-  color: var(--hover-text-color);
+/* Bottom padding for carousel */
+.carousel-container {
+  padding-bottom: 20px;
 }
