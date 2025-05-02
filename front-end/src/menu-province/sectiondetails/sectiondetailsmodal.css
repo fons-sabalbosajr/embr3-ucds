@@ -4,9 +4,25 @@
 
 .monitoring-label{
   font-size: 10px;
+  text-align: left;
 }
+
+.left-align {
+  text-align: left;
+}
+
 
 .pismu-tracking-text {
   font-size: 10px;
   margin-left: 5px;
 }
+
+.table-section-details {
+  margin-left: 0px;
+  margin-top: 0px;
+  width: 100%;
+  border-radius: 5px;
+  border: none;
+  background-color: #f9f9f9; /* Default background color */
+}
+

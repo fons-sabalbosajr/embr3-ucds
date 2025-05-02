@@ -23,10 +23,6 @@ const router = express.Router();
 app.use(bodyParser.json());
 const PORT = process.env.PORT || 8081;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
   return input
@@ -153,8 +149,6 @@ app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 app.set("trust proxy", 1);
-
-///////////////////////////////////////  AI HELPER  WITHIN THE ENTIRE UCDS  ///////////////////////////////////////////////////
 
 app.use("/api", router);
 

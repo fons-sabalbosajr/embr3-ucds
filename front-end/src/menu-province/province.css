@@ -29,7 +29,6 @@
 }
 
 .header-panel {
-  background-color: var(--header-background);
   padding: 10px;
   border-radius: 5px;
   margin-bottom: 20px;
@@ -48,8 +47,6 @@
 }
 
 .table-container {
-  background-color: var(--background-color);
-  padding: 10px;
   border-radius: 5px;
 }
 
@@ -168,12 +165,6 @@
   width: 50px;
 }
 
-.custom-table {
-  width: 100%;
-  border-radius: 5px;
-  overflow: hidden;
-  background-color: var(--background-color);
-}
 
 .custom-table .ant-table-tbody > tr {
   transition: background-color 0.3s;

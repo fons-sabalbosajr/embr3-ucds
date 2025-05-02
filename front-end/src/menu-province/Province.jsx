@@ -1174,7 +1174,7 @@ const Province = ({ theme, currentUser }) => {
       dataIndex: "id_no",
       key: "id_no",
       align: "left",
-      width: 100,
+      width: 70,
       ...getColumnSearchProps("id_no"),
       render: (text) => <div>{text}</div>,
     },
@@ -1214,20 +1214,20 @@ const Province = ({ theme, currentUser }) => {
         );
       },
       align: "left",
-      width: "800px",
+      width: "300px",
     },
     {
       title: "Industry Classification",
       key: "industry_class",
       ...getColumnSearchProps("industry_class"),
       render: (text, record) => <div>{record.industry_class}</div>,
-      align: "left",
-      width: 100,
+      align: "center",
+      width: 150,
     },
     {
       title: "Permits/Clearances",
       key: "permits_clearances",
-      width: 300,
+      width: 150,
       render: (text, record) => {
         const checkPendingStatus = (value) =>
           typeof value === "string" &&
@@ -1447,8 +1447,8 @@ const Province = ({ theme, currentUser }) => {
           </div>
         );
       },
-      align: "left",
-      width: 150,
+      align: "center",
+      width: 100,
     },
     {
       title: "Remarks/\nRecommendations",
@@ -1456,7 +1456,7 @@ const Province = ({ theme, currentUser }) => {
       ...getColumnSearchProps("remarks_recommendations"),
       render: (text, record) => <div>{record.remarks_recommendations}</div>,
       align: "left",
-      width: 100,
+      width: 180,
     },
     {
       title: "Monitoring Status",
@@ -1527,7 +1527,7 @@ const Province = ({ theme, currentUser }) => {
           </div>
         </div>
       ),
-      width: 300, // Adjust as needed
+      width: 150, // Adjust as needed
       align: "center",
       onFilter: (value, record) => {
         const lowerValue = value.toLowerCase();
@@ -1565,7 +1565,7 @@ const Province = ({ theme, currentUser }) => {
       title: "Actions",
       key: "actions",
       align: "center",
-      width: 80,
+      width: 100,
       render: (text, record) => (
         <div>
           <Tooltip title="View Details" style={{ fontSize: "11px" }}>
@@ -1957,7 +1957,7 @@ const Province = ({ theme, currentUser }) => {
               selectedRowKeys,
               onChange: setSelectedRowKeys,
             }}
-            
+            scroll={{ y: 950 }} 
             dataSource={filteredDuplicateData} // Ensure this is set correctly
             columns={columns}
             rowKey="id_no"

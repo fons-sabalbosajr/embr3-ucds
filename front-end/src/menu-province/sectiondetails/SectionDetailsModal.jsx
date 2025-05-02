@@ -23,14 +23,16 @@ import {
   CheckCircleFilled,
   InfoCircleOutlined,
   ExclamationCircleOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 import "./sectiondetailsmodal.css";
 import ProvinceModal from "../ProvinceModal";
 import moment from "moment"; // For date comparison
+import dayjs from "dayjs";
 
 const { RangePicker } = DatePicker;
 
-const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
+const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [searchText, setSearchText] = useState("");
@@ -42,6 +44,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
   const [isChecked, setIsChecked] = useState(false); // Checkbox state
   const [dateRange, setDateRange] = useState([null, null]); // Date range for filtering (start, end)
   const [pismuTrackingFilter, setPismuTrackingFilter] = useState(null);
+  const [dateField, setDateField] = useState("date_monitored");
 
   // Filter the records based on the selected filters
   useEffect(() => {
@@ -106,23 +109,16 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
           onChange={(e) => {
             const value = e.target.value ? [e.target.value] : [];
             setSelectedKeys(value);
-            // Filter the data based on the search input
-            const filtered = value.length
-              ? data.filter((record) =>
-                  record[dataIndex]
-                    .toString()
-                    .toLowerCase()
-                    .includes(value[0].toLowerCase())
-                )
-              : data;
-            setFilteredData(filtered);
           }}
           placeholder={`Search ${dataIndex}`}
           style={{ marginBottom: 8, display: "block" }}
         />
         <Button
           type="primary"
-          onClick={() => confirm()}
+          onClick={() => {
+            confirm();
+            handleSearch(selectedKeys[0], dataIndex); // Trigger search logic
+          }}
           icon={<SearchOutlined />}
           size="small"
           style={{ width: 90, marginRight: 8 }}
@@ -132,7 +128,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         <Button
           onClick={() => {
             clearFilters();
-            setFilteredData(data); // Reset filtered data to original data
+            handleReset(); // Reset the search
           }}
           size="small"
         >
@@ -153,6 +149,26 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
     },
   });
 
+  // Search handler to update filteredData
+  const handleSearch = (searchText, dataIndex) => {
+    const filtered = originalData.filter((record) =>
+      record[dataIndex]
+        ? record[dataIndex]
+            .toString()
+            .toLowerCase()
+            .includes(searchText.toLowerCase())
+        : false
+    );
+    setFilteredData(filtered); // Update filteredData with search results
+    setCurrentPage(1); // Reset to the first page
+  };
+
+  // Reset handler to clear the search
+  const handleReset = () => {
+    setFilteredData(originalData); // Reset filteredData to the original dataset
+    setCurrentPage(1); // Reset to the first page
+  };
+
   const measureTextWidth = (text, font = "14px Poppins") => {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
@@ -164,7 +180,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
     switch (section) {
       case "PEMU_Aurora":
       case "PEMU_AURORA":
-        return "#F0F3FF";
+        return "#A4B465";
 
       case "PEMU_Bataan":
       case "PEMU_BATAAN":
@@ -172,7 +188,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
 
       case "PEMU_Bulacan":
       case "PEMU_BULACAN":
-        return "#FCE5BB"; // Light purple
+        return "#7A73D1"; // Light purple
 
       case "PEMU_Nueva Ecija":
       case "PEMU_NUEVA ECIJA":
@@ -181,7 +197,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
 
       case "PEMU_Pampanga":
       case "PEMU_PAMPANGA":
-        return "#FFE225"; // Yellow
+        return "#DF9755"; // Yellow
 
       case "PEMU_Tarlac":
       case "PEMU_TARLAC":
@@ -201,7 +217,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
 
       case "AWECMES":
       case "awecmes":
-        return "#c8e6c9";
+        return "#626F47";
 
       case "TCHWMS/MBU":
         return "linear-gradient(to right, #936DDF, #FF9B3E)"; // Dual tone color for TCHWMS/MBU
@@ -269,8 +285,8 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
       title: "ID No.",
       dataIndex: "id_no",
       key: "id_no",
-      align: "left",
-      width: 60,
+      align: "center",
+      width: 80,
       render: (text) => <div className="industry-label">{text}</div>,
       ...getColumnSearchProps("id_no"),
     },
@@ -278,7 +294,10 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
       title: "Industry Details",
       key: "industryDetails",
       render: (text, record) => (
-        <div className="industry-label">
+        <div
+          className="industry-label"
+          style={{ textAlign: "left" }} // Explicitly set text alignment to left
+        >
           <strong>{record.title}</strong>
           <br />
           Proponent Name: <i className="monitoring-label">{record.name}</i>
@@ -295,19 +314,17 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
           </a>
         </div>
       ),
-      align: "left",
-      width: 500,
+      width: 250,
+      align: "center",
       ...getColumnSearchProps("industryDetails"),
     },
     {
       title: "Industry Classification",
       dataIndex: "industry_class",
       key: "industry_class",
-      align: "left",
+      align: "center",
       width: 150,
-      render: (text) => (
-        <div className="industry-label monitoring-label">{text}</div>
-      ),
+      render: (text) => <div className="left-align">{text}</div>,
       ...getColumnSearchProps("industry_class"),
     },
     {
@@ -319,32 +336,38 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
         </div>
       ),
       align: "left",
-      width: 100,
+      width: 200,
       ...getColumnSearchProps("remarks_recommendations"),
     },
     {
       title: "Section/Unit Incharged",
       key: "section_incharge",
+      align: "center",
+      width: 150,
       render: (text, record) => {
-        // Split sections by comma
         const sections = record.section_incharged
           .split(",")
           .map((section) => section.trim());
 
         return (
-          <div style={{ display: "flex", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center", // Center the whole group
+              flexWrap: "wrap",
+              textAlign: "center", // Center text within individual divs
+            }}
+          >
             {sections.map((section, index) => {
               const textWidth = measureTextWidth(section);
-              const backgroundColor = sectionBackgroundColor(section); // Base background color
-              const darkerBackgroundColor = darkenColor(backgroundColor, -40); // Darker shade
+              const backgroundColor = sectionBackgroundColor(section);
+              const darkerBackgroundColor = darkenColor(backgroundColor, -40);
 
               return (
                 <Tooltip
                   key={index}
                   title={
                     <div style={{ fontSize: "10px" }}>
-                      {" "}
-                      {/* Reduced font size */}
                       <div>Section Incharge: {record.section_incharged}</div>
                       <div>Handler: {record.handler || "N/A"}</div>
                       <div>
@@ -353,21 +376,24 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
                       <div>Inspection Type: {record.insp_type || "N/A"}</div>
                     </div>
                   }
-                  color={darkerBackgroundColor} // Tooltip background color (slightly darker)
+                  color={darkerBackgroundColor}
                 >
                   <div
                     className="industry-label"
                     style={{
-                      backgroundColor: backgroundColor, // Original background color for the label
-                      padding: "5px",
-                      margin: "2px", // Add some margin between sections
-                      width: `${textWidth}px`, // Add some padding for better appearance
+                      backgroundColor: backgroundColor,
+                      padding: "5px 8px",
+                      margin: "2px",
+                      minWidth: "fit-content",
+                      maxWidth: "100%",
                       display: "inline-block",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
                       borderRadius: "5px",
-                      cursor: "pointer", // Cursor changes to pointer on hover
+                      cursor: "pointer",
                       fontSize: "10px",
+                      color: "#fff",
+                      textAlign: "center", // Ensures text inside is centered
                     }}
                   >
                     {section}
@@ -378,142 +404,62 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
           </div>
         );
       },
-      align: "center",
-      width: 200,
     },
     {
       title: "Monitoring Status",
       key: "monitoringStatus",
-      align: "left",
-      width: 300,
-      render: (text, record) => (
-        <div>
-          <p className="monitoring-label">
-            <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
-            Date Monitored:{" "}
-            {record.date_monitored ? record.date_monitored : "N/A"}
-          </p>
-
-          <p className="monitoring-label">
-            <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
-            Date Routed: {record.date_routed ? record.date_routed : "N/A"}
-          </p>
-
-          <p className="monitoring-label">
-            <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
-            Date Signed: {record.date_signed ? record.date_signed : "N/A"}
-          </p>
-
-          <p>
-            <Tooltip title="PISMU Tracking of Report">
-              {record.pismu_tracking === "✔" ? (
-                <span>
-                  <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
-                  <span className="pismu-tracking-text">
-                    Received by Planning Unit
-                  </span>
-                </span>
-              ) : (
-                <span></span>
-              )}
-            </Tooltip>
-          </p>
-        </div>
-      ),
+      align: "center",
+      width: 200,
       filterDropdown: ({
         setSelectedKeys,
         selectedKeys,
         confirm,
         clearFilters,
-      }) => {
-        // Local state for managing the selected date field
-        const [dateField, setDateField] = useState("date_monitored"); // Default to date_monitored
-        const [dateRange, setDateRange] = useState([null, null]); // Local date range state
-
-        // Handle date range change
-        const handleDateRangeChange = (dates) => {
-          setDateRange(dates);
-          setSelectedKeys(dates && dates.length ? [dates] : []); // Update Ant Design's filter state
-        };
-
-        // Apply the selected date range filter
-        const handleFilter = () => {
-          if (dateRange && dateRange[0] && dateRange[1]) {
-            confirm(); // Apply the filter
-          }
-        };
-
-        return (
-          <div
-            style={{
-              padding: 8,
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
+      }) => (
+        <div style={{ padding: 8, width: 200 }}>
+          <RangePicker
+            value={selectedKeys[0] || null}
+            onChange={(dates) => {
+              setSelectedKeys(dates ? [dates] : []);
             }}
+            style={{ marginBottom: 8, fontSize: "10px" }}
+            size="small"
+            format="MM/DD/YYYY"
+          />
+          <Button
+            type="primary"
+            onClick={() => confirm()}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{ marginRight: 8 }}
           >
-            {/* Dropdown to select the date field */}
-            <Select
-              size="small"
-              defaultValue="date_monitored"
-              style={{ width: 200 }}
-              onChange={(value) => setDateField(value)}
-            >
-              <Select.Option value="date_monitored">
-                Date Monitored
-              </Select.Option>
-              <Select.Option value="date_routed">Date Routed</Select.Option>
-              <Select.Option value="date_signed">Date Signed</Select.Option>
-            </Select>
+            Filter
+          </Button>
+          <Button onClick={() => clearFilters()} size="small">
+            Reset
+          </Button>
+        </div>
+      ),
+      filterIcon: (filtered) => (
+        <CalendarOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+      ),
 
-            {/* Date Range Picker */}
-            <DatePicker.RangePicker
-              size="small"
-              style={{ width: 200 }}
-              value={dateRange}
-              onChange={handleDateRangeChange}
-            />
-
-            {/* Action Buttons */}
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Button
-                type="primary"
-                onClick={handleFilter}
-                icon={<SearchOutlined />}
-                size="small"
-                style={{ width: 90 }}
-              >
-                Search
-              </Button>
-              <Button
-                onClick={() => {
-                  clearFilters(); // Clear Ant Design's filter state
-                  setDateRange([null, null]); // Clear local date range
-                  setFilteredData(data); // Reset filtered data to original data
-                }}
-                size="small"
-              >
-                Reset
-              </Button>
-            </div>
-          </div>
-        );
-      },
-      onFilter: (value, record) => {
-        // Ensure value is an array
-        if (!Array.isArray(value) || value.length !== 2) {
-          return true; // No filter applied if value is not a valid array
-        }
-
-        const [start, end] = value; // Safely destructure start and end
-        if (!start || !end) return true; // Skip filtering if dates are not set
-
-        const selectedField = dateField || "date_monitored"; // Default to date_monitored
-        const recordDate = record[selectedField]
-          ? moment(record[selectedField])
-          : null;
-        return recordDate && recordDate.isBetween(start, end, "days", "[]");
-      },
+      render: (text, record) => (
+        <div>
+          <p className="monitoring-label">
+            <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+            Date Monitored: {record.date_monitored || "N/A"}
+          </p>
+          <p className="monitoring-label">
+            <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
+            Date Routed: {record.date_routed || "N/A"}
+          </p>
+          <p className="monitoring-label">
+            <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
+            Date Signed: {record.date_signed || "N/A"}
+          </p>
+        </div>
+      ),
     },
     {
       title: "Actions",
@@ -637,29 +583,37 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading }) => {
               </Checkbox>
             </div>
 
-            {/* Table to display filtered records */}
-            {filteredData && filteredData.length > 0 ? (
-              <>
-                <Table
-                  columns={columns}
-                  dataSource={paginatedData}
-                  rowKey="id_no"
-                  pagination={false}
-                  bordered
-                />
-                <Pagination
-                  total={filteredData.length}
-                  current={currentPage}
-                  pageSize={pageSize}
-                  onChange={handlePageChange}
-                  showSizeChanger
-                  pageSizeOptions={["5", "10", "20", "30"]}
-                  style={{ marginTop: "20px" }}
-                  size="small"
-                />
-              </>
-            ) : (
-              <div>No data available</div>
+            <Table
+              columns={columns}
+              dataSource={paginatedData}
+              rowKey="id_no"
+              pagination={false}
+              bordered
+              scroll={{ y: 600 }}
+              className="table-section-details"
+              size="small"
+              locale={{
+                emptyText: "No data available", 
+              }}
+            />
+
+            {filteredData.length > 0 && (
+              <Pagination
+                total={filteredData.length}
+                current={currentPage}
+                pageSize={pageSize}
+                onChange={handlePageChange}
+                showSizeChanger
+                pageSizeOptions={["5", "10", "20", "30"]}
+                style={{ marginTop: "10px" }}
+                size="small"
+                itemRender={(page, type, originalElement) => {
+                  if (type === "page") {
+                    return <span style={{ margin: "0 8px" }}>{page}</span>;
+                  }
+                  return originalElement;
+                }}
+              />
             )}
           </>
         )}

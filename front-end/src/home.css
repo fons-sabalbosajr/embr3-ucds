@@ -45,14 +45,14 @@
 }
 
 .menu_item {
-  color: #333;
+  color: #ffffff;
   text-decoration: none;
   font-weight: 500;
   font-size: 16px;
 }
 
 .menu_item:hover {
-  color: #548547;
+  color: #71ce58;
 }
 
 .signup {
@@ -60,6 +60,11 @@
   color: #fff !important;
   padding: 6px 14px;
   border-radius: 5px;
+
+  :hover{
+    background-color: #71ce58;
+    color: #fff !important;
+  }
 }
 
 .home-content {
@@ -84,7 +89,7 @@ h1 {
 }
 
 .highlight {
-  color: #548547;
+  color: #4f9b3a;
 }
 
 .subheading {
@@ -96,7 +101,6 @@ h1 {
 .btn-learn-more {
   background-color: #548547;
   border: none;
-  color: #fff;
   font-size: 16px;
   border-radius: 5px;
   padding: 10px 20px;
@@ -104,12 +108,6 @@ h1 {
   transition: 0.3s ease;
 }
 
-/* Override AntD primary button color */
-.btn-learn-more.ant-btn-primary {
-  background-color: #548547;
-  border-color: #548547;
-  color: #fff;
-}
 
 .btn-learn-more.ant-btn-primary:hover,
 .btn-learn-more.ant-btn-primary:focus {
@@ -131,32 +129,163 @@ h1 {
   border-radius: 10px;
 }
 
-/* Drawer content needs block styling for mobile */
-@media screen and (max-width: 768px) {
-  .menu_container {
-    flex-direction: column;
-    padding: 20px;
-  }
-
-  .menu_item {
-    margin-bottom: 10px;
-  }
+/* THEME OVERRIDES */
+.light-theme {
+  background-color: #f5f7fa;
+  color: #333;
 }
 
-@media screen and (max-width: 480px) {
+.light-theme h1,
+.light-theme .subheading,
+.light-theme .menu_item,
+.light-theme .btn-learn-more {
+  color: #333;
+}
+
+.light-theme .menu_icon {
+  color: #333;
+}
+
+
+.dark-theme {
+  background-color: #141414;
+  color: #f0f0f0;
+}
+
+
+.dark-theme .navbar,
+.dark-theme .menu_item {
+  color: #fff;
+}
+
+
+.dark-theme h1,
+.dark-theme .subheading,
+.dark-theme .menu_item {
+  color: #f0f0f0;
+}
+
+.dark-theme .menu_icon {
+  color: #f0f0f0;
+}
+
+.dark-theme .menu_item:hover {
+  color: #9ddf85;
+}
+
+.dark-theme .signup {
+  background-color: #9ddf85;
+  color: #141414 !important;
+}
+
+.dark-theme .btn-learn-more.ant-btn-primary {
+  background-color: #9ddf85;
+  border-color: #9ddf85;
+  color: #141414;
+}
+
+.dark-theme .btn-learn-more.ant-btn-primary:hover {
+  background-color: #b6e8a2;
+  border-color: #b6e8a2;
+  color: #141414;
+}
+
+.dark-theme .text-content,
+.dark-theme .button_container,
+.dark-theme .image-content {
+  color: #f0f0f0;
+}
+
+.dark-theme .ant-drawer-body {
+  background-color: #141414;
+  color: #f0f0f0;
+}
+
+/* Devices <= 768px (Tablets and smaller) */
+@media screen and (max-width: 768px) {
   .navbar {
+    flex-direction: row;
+    justify-content: space-between;
     padding: 10px 20px;
   }
 
+  .menu_container {
+    flex-direction: column;
+    padding: 20px;
+    gap: 12px;
+  }
+
+  .menu_item {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .home-content {
+    grid-template-columns: 1fr;
+    text-align: center;
+    padding: 20px 10px;
+  }
+
+  .text-content {
+    order: 2;
+  }
+
+  .image-content {
+    order: 1;
+    margin-bottom: 20px;
+  }
+
+  .illustration {
+    width: 100%;
+    max-width: 320px;
+    height: auto;
+  }
+
   h1 {
-    font-size: 28px;
+    font-size: 32px;
+    line-height: 1.2;
   }
 
   .subheading {
-    font-size: 16px;
+    font-size: 18px;
+    padding: 0 10px;
   }
 
   .btn-learn-more {
+    padding: 10px 20px;
+    font-size: 15px;
+  }
+}
+
+/* Devices <= 480px (Mobile phones) */
+@media screen and (max-width: 480px) {
+  .navbar {
     padding: 8px 15px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .subheading {
+    font-size: 14px;
+  }
+
+  .btn-learn-more {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .menu_item {
+    font-size: 14px;
+  }
+
+  .logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .illustration {
+    max-width: 100%;
   }
 }
