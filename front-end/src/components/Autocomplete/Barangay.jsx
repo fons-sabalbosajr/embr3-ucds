@@ -12,6 +12,7 @@ const Barangay = ({
   isEditing,
   selectedProvince,
   selectedMunicipality,
+  style
 }) => {
   const [barangayOptions, setBarangayOptions] = useState([]);
   const [cityId, setCityId] = useState(null);
@@ -87,7 +88,7 @@ const Barangay = ({
         backgroundColor: "#f1f1f1",
       }}
       options={barangayOptions}
-      dropdownClassName="custom-autocomplete-dropdown"
+      popupClassName="custom-autocomplete-dropdown"
       value={value}
       disabled={disabled}
       onChange={onChange}
@@ -103,10 +104,11 @@ const Barangay = ({
       allowClear={true}
     >
       <Input
-        style={{
+         style={{
           fontSize: "11px",
-          height: "27px",
+          height: "29px",
           padding: "4px 8px",
+          ...style,
         }}
         placeholder="Select barangay"
         placeholderStyle={{

@@ -13,6 +13,7 @@ import {
   Popover,
   DatePicker,
   ConfigProvider,
+  Progress,
 } from "antd";
 import {
   ReloadOutlined,
@@ -91,6 +92,7 @@ const Province = ({ theme, currentUser }) => {
   const [selectedSectionData, setSelectedSectionData] = useState([]);
   const [sectionDetailsLoading, setSectionDetailsLoading] = useState(false);
   const [buttonColor, setButtonColor] = useState("primary");
+  const [progress, setProgress] = useState(0); // Progress state
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
@@ -121,25 +123,35 @@ const Province = ({ theme, currentUser }) => {
 
   const handleReload = async (provinceName) => {
     setLoading(true);
-    setSectionCounts({}); // Reset section counts
+    setProgress(0); // Reset progress
 
     try {
-      const fetchedData = await fetchData(provinceName); // Fetch data for the current province
+      // Simulate progress increment
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval); // Stop at 90% until data is fetched
+            return prev;
+          }
+          return prev + 10; // Increment progress by 10%
+        });
+      }, 200);
+
+      const fetchedData = await fetchData(provinceName); // Fetch data for the selected province
       if (fetchedData) {
-        setFilteredData(fetchedData); // Update filtered data
-        setOriginalData(fetchedData); // Update original data
-        setCurrentPage(1); // Reset to the first page
+        setFilteredData(fetchedData);
+        setOriginalData(fetchedData);
 
-        // Recalculate the section counts based on the new fetched data
+        // Calculate section counts
         const newSectionCounts = calculateSectionCounts(fetchedData);
-        setSectionCounts(newSectionCounts); // Update section counts
-
-        setIsDateRangeApplied(false); // Reset date range filter
+        setSectionCounts(newSectionCounts);
       }
     } catch (error) {
-      console.error("Error reloading data:", error);
+      console.error("Error fetching data:", error);
     } finally {
-      setLoading(false); // End loading animation
+      clearInterval(progressInterval); // Clear progress interval
+      setProgress(100); // Set progress to 100% when loading is complete
+      setTimeout(() => setLoading(false), 500); // Hide progress bar after a short delay
     }
   };
 
@@ -353,43 +365,30 @@ const Province = ({ theme, currentUser }) => {
     return counts;
   };
 
-  const handleSectionClick = async (section, sectionData) => {
+  const handleSectionClick = (section) => {
     if (isDateRangeApplied) {
       console.log("Cannot click on section because date range is applied");
       return; // Prevent further action
     }
 
-    const validSectionData = Array.isArray(sectionData) ? sectionData : [];
-    //console.log("Section Data on Click:", validSectionData);
-    setSelectedSection(section);
-    setSelectedSectionData(validSectionData);
+    // Filter data based on the selected section
+    const filteredSectionData = filteredData.filter((item) => {
+      const sections = item.section_incharged
+        ? item.section_incharged.split(",").map((s) => s.trim())
+        : ["NoSectionIncharged"];
+      return sections.includes(section);
+    });
 
-    try {
-      if (sectionData && sectionData.length > 0) {
-        const { id_no } = sectionData[0];
-        const response = await fetch(
-          `http://localhost:8081/api/ucds-data/${id_no}`
-        );
-        const data = await response.json();
-
-        if (response.ok) {
-          setSectionDetails(data);
-        } else {
-          console.error("Error fetching detailed data:", data.error);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setIsModalOpen(true);
-    }
+    setSelectedSection(section); // Set the selected section
+    setSelectedSectionData(filteredSectionData); // Set the filtered data for the section
+    setIsModalOpen(true); // Open the modal
   };
 
   const handleCloseSectionModal = () => {
-    setIsModalOpen(false);
-    setSelectedSection("");
-    setSelectedSectionData([]);
-    setSectionDetails([]);
+    setIsModalOpen(false); // Close the modal
+    setSelectedSection(""); // Clear the selected section
+    setSelectedSectionData([]); // Clear the section data
+    setSectionDetails([]); // Clear the section details
   };
 
   const filteredSectionData = (section) => {
@@ -738,7 +737,7 @@ const Province = ({ theme, currentUser }) => {
 
       case "PEMU_Zambales":
       case "PEMU_ZAMBALES":
-        return "#d1c4e9"; // Light lavender
+        return "#161A30"; // Light lavender
 
       case "MBU":
       case "mbu":
@@ -752,11 +751,15 @@ const Province = ({ theme, currentUser }) => {
       case "awecmes":
         return "#626F47";
 
+      case "":
+      case "":
+        return "transparent";
+
       case "TCHWMS/MBU":
         return "linear-gradient(to right, #936DDF, #FF9B3E)"; // Dual tone color for TCHWMS/MBU
 
       default:
-        return "transparent"; // Default transparent background
+        return "gray"; // Default transparent background
     }
   };
 
@@ -1448,7 +1451,7 @@ const Province = ({ theme, currentUser }) => {
         );
       },
       align: "center",
-      width: 100,
+      width: 130,
     },
     {
       title: "Remarks/\nRecommendations",
@@ -1583,7 +1586,7 @@ const Province = ({ theme, currentUser }) => {
   ];
 
   return (
-    <div className="province-container">
+    <div className="province-container-card">
       <div className="header-content">
         <h3 className="header-title">{`${capitalizedProvinceName} Universe of Firms and Industries`}</h3>
         <Button
@@ -1850,20 +1853,17 @@ const Province = ({ theme, currentUser }) => {
                 {Object.entries(mergedSectionCounts).map(([section, count]) => (
                   <div
                     key={section}
-                    onClick={
-                      () =>
-                        !isDateRangeApplied &&
-                        handleSectionClick(filteredSectionData(section)) // Only allow click if date range is not applied
-                    }
+                    onClick={() => handleSectionClick(section)}
                     className={`section-item ${
                       isDateRangeApplied ? "disabled" : ""
                     }`}
                     style={{
                       backgroundColor:
-                        section === "nosectionincharged" // normalized version
+                        section === "nosectionincharged"
                           ? "gray"
                           : sectionBackgroundColor(section),
-                      cursor: isDateRangeApplied ? "not-allowed" : "pointer", // Change cursor if disabled
+                      color: "white", // Set font color to white
+                      cursor: isDateRangeApplied ? "not-allowed" : "pointer",
                     }}
                   >
                     <span className="section-label">
@@ -1888,30 +1888,25 @@ const Province = ({ theme, currentUser }) => {
 
                       return (
                         <div
-                          key={section || "No Section Incharged"}
-                          onClick={
-                            () =>
-                              !isDateRangeApplied &&
-                              handleSectionClick(
-                                displaySection,
-                                filteredSectionData(section)
-                              ) // Only allow click if date range is not applied
-                          }
+                          key={section}
+                          onClick={() => handleSectionClick(section)}
                           className={`section-item ${
                             isDateRangeApplied ? "disabled" : ""
                           }`}
                           style={{
                             backgroundColor:
-                              section === "NoSectionIncharged" || !section
+                              section === "NoSectionIncharged"
                                 ? "gray"
                                 : sectionBackgroundColor(section),
-                            cursor: isDateRangeApplied
-                              ? "not-allowed"
-                              : "pointer", // Change cursor if disabled
+                            color: "white",
+                            cursor: "pointer",
                           }}
                         >
                           <span className="section-label">
-                            {displaySection}:
+                            {section === "NoSectionIncharged"
+                              ? "No Section Incharged"
+                              : section}
+                            :
                           </span>
                           <span className="section-count">{count}</span>
                         </div>
@@ -1936,19 +1931,25 @@ const Province = ({ theme, currentUser }) => {
               </div>
             )}
 
-            {/* SectionDetails Modal */}
             <SectionDetailsModal
               visible={isModalOpen}
               section={selectedSection}
-              data={selectedSectionData}
+              count={sectionCounts[selectedSection] || 0} // Pass the count for the selected section
+              data={selectedSectionData} // Pass the filtered data for the section
               onClose={handleCloseSectionModal}
-              loading={sectionDetailsLoading} // Use a separate loading state for modal
             />
           </div>
         </ConfigProvider>
 
         {loading ? (
-          <Spin tip="Loading data..." />
+          <div style={{ textAlign: "center", padding: "20px" }}>
+            <span>Loading Universe Data...</span> <br />
+            <Progress
+              percent={progress}
+              status="active"
+              style={{ width: "50%" }}
+            />
+          </div>
         ) : error ? (
           <p>{error}</p>
         ) : (
@@ -1957,7 +1958,7 @@ const Province = ({ theme, currentUser }) => {
               selectedRowKeys,
               onChange: setSelectedRowKeys,
             }}
-            scroll={{ y: 950 }} 
+            scroll={{ y: 950 }}
             dataSource={filteredDuplicateData} // Ensure this is set correctly
             columns={columns}
             rowKey="id_no"

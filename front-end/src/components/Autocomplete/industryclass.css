@@ -13,3 +13,32 @@
     color: #555 !important;            /* Placeholder text color */
   }
   
+
+  /* General styles for the autocomplete */
+.industry-class-autocomplete {
+  width: 100%;
+}
+
+/* Light theme styles */
+.industry-class-autocomplete.light-theme .ant-input {
+  background-color: #ffffff;
+  color: #000000; /* Black text for light theme */
+  border-color: #d9d9d9;
+}
+
+.industry-class-autocomplete.light-theme .custom-autocomplete-dropdown {
+  background-color: #f1f1f1;
+  color: #000000;
+}
+
+/* Dark theme styles */
+.industry-class-autocomplete.dark-theme .ant-input {
+  background-color: #1f1f1f;
+  color: #d9d9d9; /* Light gray text for dark theme */
+  border-color: #555555;
+}
+
+.industry-class-autocomplete.dark-theme .custom-autocomplete-dropdown {
+  background-color: #333333;
+  color: #d9d9d9;
+}

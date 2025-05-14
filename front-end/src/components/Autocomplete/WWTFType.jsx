@@ -33,7 +33,7 @@ const WWTFType = ({ value, disabled, onChange, isEditing }) => {
         backgroundColor: "#f1f1f1",
       }}
       options={WWTFOptions}
-      dropdownClassName="custom-autocomplete-dropdown"
+      popupClassName="custom-autocomplete-dropdown"
       value={value}
       disabled={disabled}
       onChange={onChange}

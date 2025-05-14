@@ -50,6 +50,7 @@ const FocalPerson = ({
   handleChange,
   isEditing,
   currentUser,
+  theme,
 }) => {
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
@@ -175,9 +176,9 @@ const FocalPerson = ({
 
   const handleValueChange = (field, newValue) => {
     const oldValue = editedRecord[field]; // Capture the old value
-    console.log(
-      `Field: ${field}, Old Value: ${oldValue}, New Value: ${newValue}`
-    );
+    // console.log(
+    //   `Field: ${field}, Old Value: ${oldValue}, New Value: ${newValue}`
+    // );
   };
 
   // Extract permissions from currentUser
@@ -202,9 +203,12 @@ const FocalPerson = ({
                 name="emp_no_total"
                 value={empNoTotal}
                 onChange={handleEmpNoTotalChange}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
-                className="textbox-label"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -214,8 +218,12 @@ const FocalPerson = ({
               <WWTFType
                 value={wwtftype}
                 onChange={handleWwtftypeChange}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -225,9 +233,12 @@ const FocalPerson = ({
               <Input
                 value={bod}
                 onChange={(e) => handleChange("bod", e.target.value)}
-                disabled
+                readOnly
                 placeholder="No data"
-                className="textbox-label"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -240,8 +251,11 @@ const FocalPerson = ({
               <SectionInCharged
                 value={editedRecord ? editedRecord.section_incharge : ""}
                 onChange={(value) => handleChange("section_incharge", value)}
-                disabled={!isEditing}
-                placeholder="No data"
+                readOnly={!isEditing} // Pass readOnly dynamically based on isEditing
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -250,8 +264,12 @@ const FocalPerson = ({
             <Inspector
               value={editedRecord ? editedRecord.handler : ""}
               onChange={(value) => handleChange("handler", value)}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
             />
           </Paragraph>
         </Row>
@@ -263,8 +281,12 @@ const FocalPerson = ({
               <Month
                 value={editedRecord ? editedRecord.monitoring_sched : ""}
                 onChange={(value) => handleChange("monitoring_sched", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
 
@@ -273,8 +295,12 @@ const FocalPerson = ({
               <ProjectStatus
                 value={editedRecord ? editedRecord.project_status : ""}
                 onChange={(value) => handleChange("project_status", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -287,9 +313,12 @@ const FocalPerson = ({
           <Input
             value={editedRecord ? editedRecord.iis_no : ""}
             onChange={(e) => handleChange("iis_no", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
-            className="textbox-label"
+            style={{
+              cursor: isEditing ? "text" : "not-allowed",
+              color: isEditing ? "" : "#aaa",
+            }}
           />
         </Paragraph>
 
@@ -300,8 +329,12 @@ const FocalPerson = ({
               <InspectionType
                 value={editedRecord ? editedRecord.insp_type : ""}
                 onChange={(value) => handleChange("insp_type", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -312,8 +345,12 @@ const FocalPerson = ({
               <ReportType
                 value={editedRecord ? editedRecord.report_type : ""}
                 onChange={(value) => handleChange("report_type", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
               />
             </Paragraph>
           </Col>
@@ -348,7 +385,11 @@ const FocalPerson = ({
                   format="MM/DD/YYYY"
                   placeholder="MM/DD/YYYY"
                   className="custom-date-picker"
-                  style={{ width: "100%" }}
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                    width: "100%",
+                  }}
                 />
               </ConfigProvider>
             </Paragraph>
@@ -377,11 +418,15 @@ const FocalPerson = ({
                     const newDate = date ? date.format("MM/DD/YYYY") : "";
                     handleChange("date_routed", newDate);
                   }}
-                  disabled={!isEditing}
                   format="MM/DD/YYYY"
                   placeholder="MM/DD/YYYY"
                   className="custom-date-picker"
-                  style={{ width: "100%" }}
+                  disabled={!isEditing}
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                    width: "100%",
+                  }}
                 />
               </ConfigProvider>
             </Paragraph>
@@ -414,7 +459,11 @@ const FocalPerson = ({
                   format="MM/DD/YYYY"
                   placeholder="MM/DD/YYYY"
                   className="custom-date-picker"
-                  style={{ width: "100%" }}
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                    width: "100%",
+                  }}
                 />
               </ConfigProvider>
             </Paragraph>
@@ -429,6 +478,7 @@ const FocalPerson = ({
                 marginBottom: 5,
               }}
               size="small"
+              disabled={isCardDisabled}
             >
               <strong>PLANNING UNIT</strong>
               <Row gutter={[16, 16]} className="row-auto">
@@ -447,9 +497,13 @@ const FocalPerson = ({
                       onChange={(e) =>
                         handleChange("days_dmds", e.target.value)
                       }
-                      disabled
-                      placeholder="No data"
-                      className="textbox-label"
+                      readOnly
+                      placeholder="0 day"
+                      style={{
+                        cursor: isEditing ? "text" : "not-allowed",
+                        color: isEditing ? "" : "#aaa",
+                        width: "100%",
+                      }}
                     />
                   </Paragraph>
                 </Col>
@@ -468,9 +522,13 @@ const FocalPerson = ({
                       onChange={(e) =>
                         handleChange("days_dsdrs", e.target.value)
                       }
-                      disabled
-                      placeholder="No data"
-                      className="textbox-label"
+                      readOnly
+                      placeholder="0 day"
+                      style={{
+                        cursor: isEditing ? "text" : "not-allowed",
+                        color: isEditing ? "" : "#aaa",
+                        width: "100%",
+                      }}
                     />
                   </Paragraph>
                 </Col>
@@ -484,10 +542,13 @@ const FocalPerson = ({
                   onChange={(e) =>
                     handleChange("remarks_recommendations", e.target.value)
                   }
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                  }}
                   rows={3}
-                  className="text-area"
                 />
               </Paragraph>
               <Paragraph>

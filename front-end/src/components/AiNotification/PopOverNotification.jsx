@@ -24,7 +24,12 @@ import "./popovernotification.css";
 const { Panel } = Collapse;
 const { TabPane } = Tabs;
 
-const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
+const NotificationsPopover = ({
+  notifications = [],
+  theme,
+  isLoading,
+  currentUser,
+}) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -50,8 +55,33 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
     ZA: "Zambales",
   };
 
+  //console.log("Current User:", currentUser);
+
+ // Map permissions to province prefixes (starting from index 6)
+  const allowedProvinces = useMemo(() => {
+    if (!currentUser?.permissions) return [];
+    const provinceKeys = Object.keys(prefixToProvince);
+    return provinceKeys.filter((key, index) => currentUser.permissions[index + 5]);
+  }, [currentUser]);
+
+    // Filter notifications based on allowed provinces
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter((notification) => {
+      if (typeof notification === "string") {
+        const id_no = notification.split(" - ")[0]; // Extract id_no
+        const prefix = id_no.split("-")[0]; // Extract prefix from id_no
+        //console.log("Detected Prefix:", prefix); // Debugging log
+        return allowedProvinces.includes(prefix); // Only include notifications with allowed prefixes
+      }
+      return false;
+    });
+  }, [notifications, allowedProvinces]);
+  
+  //console.log("Filtered Notifications:", filteredNotifications); // Debugging log
+
+
   const groupedNotifications = useMemo(() => {
-    return updatedNotifications.reduce((acc, notification) => {
+    return filteredNotifications.reduce((acc, notification) => {
       if (typeof notification === "string") {
         const parts = notification.split(" - ");
         const id_no = parts[0]; // Extract id_no
@@ -66,7 +96,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
       }
       return acc;
     }, {});
-  }, [updatedNotifications]);
+  }, [filteredNotifications]);
 
   useEffect(() => {
     const fetchIssues = async () => {
@@ -227,7 +257,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
   };
 
   const notificationsContent = (
-    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+    <div style={{ maxHeight: "500px", overflowY: "auto" }}>
       <div
         style={{
           display: "flex",
@@ -554,7 +584,7 @@ const NotificationsPopover = ({ notifications = [], theme, isLoading }) => {
         placement="bottomRight"
         styles={{
           body: {
-            width: "300px", // Replace overlayInnerStyle with styles.body
+            width: "350px", // Replace overlayInnerStyle with styles.body
           },
         }}
       >

@@ -5,7 +5,11 @@ import Draggable from "react-draggable";
 import fieldLabels from "../../constants/fieldLabels";
 import "./duplicatenotif.css";
 
-const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => {
+const DuplicateNotif = ({
+  duplicateData,
+  onDuplicateResolved,
+  setWarnings, theme
+}) => {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState([]);
   const [editingKey, setEditingKey] = useState("");
@@ -116,7 +120,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
       );
       setHasChanges(true); // Mark that changes have been made
     };
-  
+
     return (
       <td {...restProps}>
         {editing ? (
@@ -145,61 +149,117 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
     //message.success("Changes saved.");
   };
 
-  const detectIssues = (records) => {
-    if (!Array.isArray(records) || records.length < 2) {
-      return <p>No records to compare.</p>;
+ const detectIssues = (records) => {
+  if (!Array.isArray(records) || records.length < 2) {
+    return <p>No records to compare.</p>;
+  }
+
+  const issues = [];
+
+  const checkFieldDuplicate = (field, label, message) => {
+    const values = records.map((r) => r[field]);
+    const allSame = values.every((val) => val === values[0]);
+    if (allSame && values[0]) {
+      issues.push(`${label}: ${message}`);
     }
-
-    const issues = [];
-
-    // Check for duplicate ECC/CNC
-    const eccCncSet = new Set(records.map((record) => record.ecc_cnc));
-    if (eccCncSet.size === 1) {
-      issues.push(
-        "All records have the same ECC/CNC, which may indicate a duplicate permit."
-      );
-    }
-
-    // Check for duplicate project titles
-    const titleSet = new Set(records.map((record) => record.title));
-    if (titleSet.size === 1) {
-      issues.push(
-        "All records have the same project title, which may indicate a double entry."
-      );
-    }
-
-    // Check for duplicate addresses
-    const addressSet = new Set(records.map((record) => record.address));
-    if (addressSet.size === 1) {
-      issues.push(
-        "All records have the same address, which may indicate a duplicate entry."
-      );
-    }
-
-    // Return the issues or a message if no issues are found
-    return issues.length > 0 ? (
-      <ul>
-        {issues.map((issue, index) => (
-          <li key={index}>{issue}</li>
-        ))}
-      </ul>
-    ) : (
-      <p>No issues detected between the records.</p>
-    );
   };
+
+  // General duplicate checks
+  checkFieldDuplicate("ecc_cnc", "ECC/CNC", "All records have the same ECC/CNC, which may indicate a duplicate permit.");
+  checkFieldDuplicate("title", "Project Title", "All records have the same project title, which may indicate a double entry.");
+  checkFieldDuplicate("address", "Address", "All records have the same address, which may indicate a duplicate entry.");
+  checkFieldDuplicate("name", "Name", "All records have the same facility name, possibly indicating a reused name.");
+  checkFieldDuplicate("industry_class", "Industry Class", "Same industry classification across records.");
+  checkFieldDuplicate("industry_type", "Industry Type", "Same industry type across records.");
+  checkFieldDuplicate("industry_subtype", "Industry Subtype", "Same industry subtype across records.");
+  checkFieldDuplicate("psic_code", "PSIC Code", "Identical PSIC code across all records.");
+  checkFieldDuplicate("mbu_area", "MBU Area", "Identical MBU area values across records.");
+  checkFieldDuplicate("waterbody", "Waterbody", "Same waterbody assigned to all records.");
+  checkFieldDuplicate("long", "Longitude", "Identical longitude may imply same location.");
+  checkFieldDuplicate("lat", "Latitude", "Identical latitude may imply same location.");
+  checkFieldDuplicate("cong_district", "Congressional District", "All records are in the same congressional district.");
+  checkFieldDuplicate("street", "Street", "Identical street name in all records.");
+  checkFieldDuplicate("brgy", "Barangay", "Same barangay across all entries.");
+  checkFieldDuplicate("city", "City", "Same city indicated in all records.");
+  checkFieldDuplicate("province", "Province", "All entries are from the same province.");
+  checkFieldDuplicate("emp_total", "Total Employees", "Identical employee count might imply same business.");
+  checkFieldDuplicate("wwtf_type", "WWTF Type", "Same wastewater facility type.");
+  checkFieldDuplicate("bod", "BOD", "Identical BOD values across all records.");
+  checkFieldDuplicate("section_incharged", "Section In-Charge", "Same section is handling all records.");
+  checkFieldDuplicate("handler", "Handler", "Same handler is assigned to all records.");
+  checkFieldDuplicate("monitoring_sched", "Monitoring Schedule", "Identical schedule detected.");
+  checkFieldDuplicate("iis_no", "IIS No", "Same IIS number may mean duplicate tracking.");
+  checkFieldDuplicate("iis_no_2025", "IIS No 2025", "Same 2025 IIS number may indicate duplicate entry.");
+  checkFieldDuplicate("insp_type", "Inspection Type", "Same inspection type across all entries.");
+  checkFieldDuplicate("date_monitored", "Date Monitored", "Identical monitoring dates.");
+  checkFieldDuplicate("date_routed", "Date Routed", "Same routing date detected.");
+  checkFieldDuplicate("date_signed", "Date Signed", "Same date signed value.");
+  checkFieldDuplicate("days_dmds", "Days in DMDS", "Same DMDS duration across records.");
+  checkFieldDuplicate("days_drds", "Days in DRDS", "Same DRDS duration across records.");
+  checkFieldDuplicate("pismu_tracking", "PISMU Tracking", "Same tracking code used.");
+  checkFieldDuplicate("title_status", "Title Status", "Identical title status values.");
+  checkFieldDuplicate("with_nov", "With NOV", "Same NOV status in all records.");
+  checkFieldDuplicate("operational", "Operational", "All records have same operational status.");
+  checkFieldDuplicate("permit_process", "Permit Process", "Same permit process value.");
+  checkFieldDuplicate("date_amended", "Date Amended", "Same amendment date detected.");
+  checkFieldDuplicate("date_approved", "Date Approved", "Identical approval dates.");
+  checkFieldDuplicate("pto_code", "PTO Code", "Same PTO code across all records.");
+  checkFieldDuplicate("pto_issued", "PTO Issued", "Same PTO issuance date.");
+  checkFieldDuplicate("pto_expiration", "PTO Expiration", "Same PTO expiration date.");
+  checkFieldDuplicate("wwdp_code", "WWDP Code", "Same WWDP code across all records.");
+  checkFieldDuplicate("wwdp_issued", "WWDP Issued", "Same WWDP issuance date.");
+  checkFieldDuplicate("wwdp_expiration", "WWDP Expiration", "Same WWDP expiration date.");
+  checkFieldDuplicate("haz_id", "HazWaste ID", "Same hazardous waste ID across all records.");
+  checkFieldDuplicate("haz_issued", "HazWaste Issued", "Same hazardous waste issuance date.");
+  checkFieldDuplicate("pco_no", "PCO Number", "Same PCO number used.");
+  checkFieldDuplicate("pco_name", "PCO Name", "Same PCO assigned.");
+  checkFieldDuplicate("pco_validity", "PCO Validity", "Same PCO validity date.");
+  checkFieldDuplicate("docket_no", "Docket Number", "Same docket number detected.");
+  checkFieldDuplicate("denr_pab_case_no", "DENR-PAB Case No", "Same PAB case number.");
+  checkFieldDuplicate("nov_issued", "NOV Issued", "Same NOV issuance.");
+  checkFieldDuplicate("v_pd1586", "PD 1586 Violation", "Same violation of PD 1586.");
+  checkFieldDuplicate("v_ra9275", "RA 9275 Violation", "Same violation under RA 9275.");
+  checkFieldDuplicate("v_ra8749", "RA 8749 Violation", "Same violation under RA 8749.");
+  checkFieldDuplicate("v_ra6969_haz", "RA 6969 Hazardous", "Same violation under RA 6969 - hazardous.");
+  checkFieldDuplicate("v_ra6969_tchem", "RA 6969 Toxic", "Same violation under RA 6969 - toxic.");
+  checkFieldDuplicate("tc_date_actual", "TC Actual Date", "Same technical conference date.");
+  checkFieldDuplicate("legal_officer", "Legal Officer", "Same legal officer assigned.");
+  checkFieldDuplicate("tc_compliance_link", "TC Compliance Link", "Same TC compliance link detected.");
+  checkFieldDuplicate("pos_paper", "Position Paper", "Same position paper noted.");
+  checkFieldDuplicate("penalty_date", "Penalty Date", "Same penalty issuance date.");
+  checkFieldDuplicate("amount", "Penalty Amount", "Identical penalty amount.");
+  checkFieldDuplicate("or_number", "OR Number", "Same official receipt number.");
+  checkFieldDuplicate("tc_commitment", "TC Commitment", "Same commitment statement.");
+  checkFieldDuplicate("other_tc_remarks", "Other TC Remarks", "Same technical conference remarks.");
+  checkFieldDuplicate("resolution_issued", "Resolution", "Same resolution issued.");
+  checkFieldDuplicate("order_issued", "Order", "Same order issued.");
+  checkFieldDuplicate("order_status", "Order Status", "Same order status.");
+  checkFieldDuplicate("color", "Color Tag", "All records tagged with the same color.");
+
+  return issues.length > 0 ? (
+    <ul>
+      {issues.map((issue, index) => (
+        <li key={index}>{issue}</li>
+      ))}
+    </ul>
+  ) : (
+    <p>No issues detected between the records.</p>
+  );
+};
+
 
   const handleSaveChanges = async () => {
     try {
       const updatedRecords = [];
-  
+
       dataSource.forEach((row) => {
         const field = row.field;
-  
+
         records.forEach((record, index) => {
           const currentVal = row[`record${index + 1}`];
           const originalVal = record[field];
           const id_no = record.id_no;
-  
+
           if (currentVal !== originalVal) {
             let target = updatedRecords.find((r) => r.id_no === id_no);
             if (!target) {
@@ -210,12 +270,12 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
           }
         });
       });
-  
+
       if (updatedRecords.length === 0) {
         message.info("No changes to save.");
         return;
       }
-  
+
       const response = await fetch(
         "http://localhost:8081/api/ucds/update-duplicates",
         {
@@ -226,9 +286,9 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
           body: JSON.stringify({ updates: updatedRecords }),
         }
       );
-  
+
       if (!response.ok) throw new Error("Failed to save changes.");
-  
+
       message.success("Changes saved to database.");
       setHasChanges(false); // Reset hasChanges after saving
     } catch (err) {
@@ -275,22 +335,18 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
         placement: "topRight", // Show the message on the right side
       });
 
-       // Remove the archived record from the records state
-    setRecords((prev) => prev.filter((record) => record.id_no !== id_no));
+      // Remove the archived record from the records state
+      setRecords((prev) => prev.filter((record) => record.id_no !== id_no));
 
-    // Remove the archived record from the warnings state
-    setWarnings((prevWarnings) =>
-      prevWarnings.filter((warning) =>
-        !warning.idNos.includes(id_no)
-      )
-    );
+      // Remove the archived record from the warnings state
+      setWarnings((prevWarnings) =>
+        prevWarnings.filter((warning) => !warning.idNos.includes(id_no))
+      );
 
-     
-    // Notify the parent component about the resolved duplicate
-    if (typeof onDuplicateResolved === "function") {
-      onDuplicateResolved(id_no);
-    }
-
+      // Notify the parent component about the resolved duplicate
+      if (typeof onDuplicateResolved === "function") {
+        onDuplicateResolved(id_no);
+      }
     } catch (error) {
       console.error("Error during transfer operation:", error);
 
@@ -373,7 +429,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
         const editable = isEditing(record);
         return editable ? (
           <div style={{ textAlign: "center" }}>
-            <Tooltip title="Save" overlayClassName="custom-tooltip">
+            <Tooltip title="Save" classNames="custom-tooltip">
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
@@ -386,7 +442,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
                 size="small"
               />
             </Tooltip>
-            <Tooltip title="Cancel" overlayClassName="custom-tooltip">
+            <Tooltip title="Cancel" classNames="custom-tooltip">
               <Button
                 type="default"
                 danger
@@ -398,7 +454,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
             </Tooltip>
           </div>
         ) : (
-          <Tooltip title="Edit" overlayClassName="custom-tooltip">
+          <Tooltip title="Edit" classNames="custom-tooltip">
             <Button
               type="primary"
               icon={<EditOutlined />}
@@ -420,7 +476,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
   return loading ? (
     <Spin />
   ) : (
-    <>
+     <div className={`${theme}-theme`}> 
       <Table
         components={{
           body: {
@@ -436,13 +492,12 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
           emptyText: loading ? <Spin /> : "No duplicate records found.",
         }}
         rowClassName={(record) => {
-          // Highlight the row if all records in the row are the same
           const values = records.map(
             (_, index) => record[`record${index + 1}`]
           );
           return values.every((val) => val === values[0])
-            ? "highlight-row"
-            : "";
+            ? "highlight-row table-row"
+            : "table-row";
         }}
         scroll={{ y: 400 }} // Set the height for vertical scrolling
       />
@@ -460,7 +515,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
           >
             Save Changes
           </Button>
-          <Button type="default" size="small" onClick={() => handleArchive()}>
+          <Button type="primary" size="small" onClick={() => handleArchive()}>
             Archive
           </Button>
           <Button
@@ -535,7 +590,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, setWarnings }) => 
           the changes?
         </p>
       </Modal>
-    </>
+    </div>
   );
 };
 

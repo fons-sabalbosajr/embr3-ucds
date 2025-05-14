@@ -212,7 +212,7 @@ const Activity = ({ theme }) => {
                 color: theme === "dark" ? "#e0e0e0" : "#000000",
               }}
             >
-              See All
+              ...
             </button>
           </Tooltip>
         </div>

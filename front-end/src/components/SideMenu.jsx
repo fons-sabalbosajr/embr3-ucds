@@ -43,15 +43,23 @@ const SideMenu = ({ theme, currentUser }) => {
   useEffect(() => {
     const path = location.pathname;
     if (path.includes("/universe/province/")) setOpenKeys(["r3-monitoring"]);
-    else if (["healthcare", "chemicals", "tsd", "trc"].some(p => path.includes(p))) setOpenKeys(["healthcare"]);
-    else if (["extract", "deleted_firms"].some(p => path.includes(p))) setOpenKeys(["reports"]);
-    else if (["accounts", "posting", "activitylog"].some(p => path.includes(p))) setOpenKeys(["admin"]);
+    else if (
+      ["healthcare", "chemicals", "tsd", "trc"].some((p) => path.includes(p))
+    )
+      setOpenKeys(["healthcare"]);
+    else if (["extract", "deleted_firms"].some((p) => path.includes(p)))
+      setOpenKeys(["reports"]);
+    else if (
+      ["accounts", "posting", "activitylog"].some((p) => path.includes(p))
+    )
+      setOpenKeys(["admin"]);
     else setOpenKeys([]);
   }, [location.pathname]);
 
   const handleProvinceSelect = (province) => {
-    setCurrentProvince(province);
-    navigate(`/universe/province/${province}`);
+    setCurrentProvince(province); // Set the selected province
+    navigate(`/universe/province/${province}`); // Navigate to the province page
+    handleReload(province); // Trigger data reload for the selected province
   };
 
   const menuItems = [
@@ -64,7 +72,7 @@ const SideMenu = ({ theme, currentUser }) => {
       key: "r3-monitoring",
       icon: <CheckCircleFilled />,
       label: "Monitoring Plan",
-      children: visibleProvinces.map(province => ({
+      children: visibleProvinces.map((province) => ({
         key: `/universe/province/${province}`,
         label: <Link to={`/universe/province/${province}`}>{province}</Link>,
       })),
@@ -74,10 +82,22 @@ const SideMenu = ({ theme, currentUser }) => {
       icon: <MedicineBoxFilled />,
       label: "Healthcare",
       children: [
-        { key: "/universe/healthcare", label: <Link to="/universe/healthcare">Healthcare Industries</Link> },
-        { key: "/universe/chemicals", label: <Link to="/universe/chemicals">Chemical Industries</Link> },
-        { key: "/universe/tsd", label: <Link to="/universe/tsd">TSD Facilities</Link> },
-        { key: "/universe/trc", label: <Link to="/universe/trc">TRC Permits</Link> },
+        {
+          key: "/universe/healthcare",
+          label: <Link to="/universe/healthcare">Healthcare Industries</Link>,
+        },
+        {
+          key: "/universe/chemicals",
+          label: <Link to="/universe/chemicals">Chemical Industries</Link>,
+        },
+        {
+          key: "/universe/tsd",
+          label: <Link to="/universe/tsd">TSD Facilities</Link>,
+        },
+        {
+          key: "/universe/trc",
+          label: <Link to="/universe/trc">TRC Permits</Link>,
+        },
       ],
     },
     {
@@ -100,8 +120,14 @@ const SideMenu = ({ theme, currentUser }) => {
       icon: <PushpinFilled />,
       label: "Reports",
       children: [
-        { key: "/universe/extract", label: <Link to="/universe/extract">Extract Data</Link> },
-        { key: "/universe/deleted_firms", label: <Link to="/universe/deleted_firms">Deleted Industries</Link> },
+        {
+          key: "/universe/extract",
+          label: <Link to="/universe/extract">Extract Data</Link>,
+        },
+        {
+          key: "/universe/deleted_firms",
+          label: <Link to="/universe/deleted_firms">Deleted Industries</Link>,
+        },
       ],
     },
     permissions[2] && {
@@ -109,9 +135,18 @@ const SideMenu = ({ theme, currentUser }) => {
       icon: <SettingFilled />,
       label: "Admin",
       children: [
-        { key: "/universe/accounts", label: <Link to="/universe/accounts">User Accounts</Link> },
-        { key: "/universe/posting", label: <Link to="/universe/posting">Post to Bulletin</Link> },
-        { key: "/universe/activitylog", label: <Link to="/universe/activitylog">Activity Logs</Link> },
+        {
+          key: "/universe/accounts",
+          label: <Link to="/universe/accounts">User Accounts</Link>,
+        },
+        {
+          key: "/universe/posting",
+          label: <Link to="/universe/posting">Post to Bulletin</Link>,
+        },
+        {
+          key: "/universe/activitylog",
+          label: <Link to="/universe/activitylog">Activity Logs</Link>,
+        },
       ],
     },
   ].filter(Boolean);
@@ -121,9 +156,8 @@ const SideMenu = ({ theme, currentUser }) => {
       collapsed={collapsed}
       onCollapse={setCollapsed}
       theme={theme}
-      width={220}
+      width={collapsed ? 80 : 220}
       trigger={null}
-      className="sider-container"
     >
       <div className="sider-header">
         <Logo theme={theme} collapsed={collapsed} />
@@ -144,8 +178,10 @@ const SideMenu = ({ theme, currentUser }) => {
           selectedKeys={[location.pathname]}
           openKeys={openKeys}
           onOpenChange={(keys) => {
-            const latestOpenKey = keys.find(key => !openKeys.includes(key));
-            setOpenKeys(rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys);
+            const latestOpenKey = keys.find((key) => !openKeys.includes(key));
+            setOpenKeys(
+              rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys
+            );
           }}
           inlineCollapsed={collapsed}
           className="menu-container"

@@ -44,7 +44,7 @@ const Posting = () => {
   const [iconType, setIconType] = useState("");
   const [clickedIcon, setClickedIcon] = useState("");
   const [editId, setEditId] = useState(""); // New state
-  const [editing, setEditing] = useState(false); 
+  const [editing, setEditing] = useState(false);
   const [selectedPosting, setSelectedPosting] = useState(null);
 
   useEffect(() => {
@@ -66,6 +66,47 @@ const Posting = () => {
       setAnnouncements(announcementsData);
     } catch (error) {
       console.error("Error fetching announcements:", error);
+    }
+  };
+
+  const handleStatusChange = async (id, status) => {
+    console.log("Updating status for ID:", id); // Debugging log
+    try {
+      const response = await fetch(`http://localhost:8081/api/postings/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+        credentials: "include", // Include credentials
+      });
+
+      if (response.ok) {
+        Swal.fire({
+          title: "Success!",
+          text: "Announcement status updated successfully.",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+        fetchAnnouncements(); // Refresh the announcements
+      } else {
+        const error = await response.json();
+        console.error("Server response error:", error);
+        Swal.fire({
+          title: "Error",
+          text: error.message || "Error updating status",
+          icon: "error",
+          confirmButtonText: "OK",
+        });
+      }
+    } catch (error) {
+      console.error("Network error:", error);
+      Swal.fire({
+        title: "Error",
+        text: "Error updating status",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
     }
   };
 
@@ -152,14 +193,17 @@ const Posting = () => {
 
   const handleEditSubmit = async (values) => {
     try {
-      const response = await fetch(`http://localhost:8081/api/postings/${selectedPosting._id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-        credentials: "include", // Include credentials
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/postings/${selectedPosting._id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(values),
+          credentials: "include", // Include credentials
+        }
+      );
 
       if (response.ok) {
         const result = await response.json();
@@ -257,47 +301,87 @@ const Posting = () => {
 
   const columns = [
     {
-      title: " ",
+      title: "",
       dataIndex: "iconType",
       key: "iconType",
-      align: "left",
+      align: "center",
       render: (iconType) => (
-        <span style={{ fontSize: 30 }}>{iconMap[iconType]}</span>
+        <span style={{ fontSize: 20 }}>{iconMap[iconType]}</span>
       ),
     },
     {
-      title: "Date",
+      title: <div style={{ textAlign: "center" }}>Date</div>,
       dataIndex: "createdDate",
       key: "createdDate",
       align: "left",
+      sorter: (a, b) => moment(a.createdDate) - moment(b.createdDate),
       render: (createdDate) =>
         moment(createdDate).format("MMMM DD, YYYY hh:mm a"),
     },
     {
-      title: "Announcement",
+      title: <div style={{ textAlign: "center" }}>Announcement</div>,
       key: "announcement",
       align: "left",
+      render: (_, record) => {
+        if (!record.message) {
+          console.warn("Invalid message:", record);
+        }
+        return (
+          <div>
+            <Typography.Text strong>{record.title}</Typography.Text>
+            <br />
+            <Typography.Text>
+              {(record.message || "").split("\n").map((line, index) => (
+                <React.Fragment key={index}>
+                  {line}
+                  <br />
+                </React.Fragment>
+              ))}
+            </Typography.Text>
+          </div>
+        );
+      },
+    },
+    {
+      title: <div style={{ textAlign: "center" }}>Status</div>,
+      dataIndex: "status",
+      key: "status",
+      align: "center",
+      filters: [
+        { text: "Active", value: "active" },
+        { text: "Inactive", value: "inactive" },
+      ],
+      onFilter: (value, record) => record.status === value,
       render: (_, record) => (
-        <div>
-          <Typography.Text strong>{record.title}</Typography.Text>
-          <br />
-          <Typography.Text>{record.message}</Typography.Text>
-        </div>
+        <Select
+          defaultValue={record.status || "active"}
+          style={{ width: 120 }}
+          onChange={(value) => handleStatusChange(record._id, value)}
+          size="small"
+        >
+          <Option value="active">Active</Option>
+          <Option value="inactive">Inactive</Option>
+        </Select>
       ),
     },
     {
-      title: "Action",
+      title: <div style={{ textAlign: "center" }}>Action</div>,
       dataIndex: "action",
       key: "action",
-      align: "left",
+      align: "center",
       render: (_, record) => (
         <Space size="middle">
-        <Button type="primary" onClick={() => handleEdit(record)}>
-          Edit
-        </Button>
-        <Button
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => handleEdit(record)}
+          >
+            Edit
+          </Button>
+          <Button
             type="primary"
             danger
+            size="small"
             onClick={() => {
               Swal.fire({
                 title: "Are you sure?",
@@ -316,14 +400,14 @@ const Posting = () => {
           >
             Delete
           </Button>
-      </Space>
+        </Space>
       ),
     },
   ];
 
   return (
-    <div>
-      <div className="user-accounts-container">
+    <div className="card">
+      <div>
         <Title level={2} className="account-title">
           Announcement Gallery
         </Title>
@@ -335,7 +419,7 @@ const Posting = () => {
 
         <Modal
           title="Create an Announcement"
-          visible={visible}
+          open={visible}
           onCancel={handleCancel}
           footer={null}
           width={800}
@@ -463,7 +547,7 @@ const Posting = () => {
 
         <Modal
           title="Edit Announcement"
-          visible={editVisible}
+          open={editVisible}
           onCancel={handleCancel}
           footer={null}
           width={800}
@@ -501,14 +585,23 @@ const Posting = () => {
             </Form.Item>
 
             <Form.Item label="User Acknowledgement">
-              <Radio.Group name="acknowledgement" value={formData.acknowledgement} onChange={(e) => setFormData({ ...formData, acknowledgement: e.target.value })}>
+              <Radio.Group
+                name="acknowledgement"
+                value={formData.acknowledgement}
+                onChange={(e) =>
+                  setFormData({ ...formData, acknowledgement: e.target.value })
+                }
+              >
                 <Radio value={true}>Required</Radio>
                 <Radio value={false}>Not Required</Radio>
               </Radio.Group>
             </Form.Item>
 
             <Form.Item label="Icon Type" name="iconType">
-              <Select onChange={handleIconChange} defaultValue={formData.iconType}>
+              <Select
+                onChange={handleIconChange}
+                defaultValue={formData.iconType}
+              >
                 <Option value="alerts">Alerts</Option>
                 <Option value="information">Information</Option>
                 <Option value="warning">Warning</Option>

@@ -1,32 +1,64 @@
-.row-auto {
-  margin-bottom: -10px;
+
+
+.label-industry-subtype{
+  margin-top: 15px;
+} 
+
+.label-industry-type{
+  margin-top: 2px;
 }
 
-.textbox-label {
-  font-size: 12px;
+.dark-theme input[disabled] {
+  background-color: #2a2a2a !important;
+  color: #aaa !important;
+  border-color: #444 !important;
 }
 
-.label-title {
-  margin-top: 5px;
+/* General input styles */
+.custom-input {
+  width: 100%;
 }
 
-.label-industry-type {
-  margin-top: -4px;
+/* Light theme for input */
+.custom-input.light-theme {
+  background-color: #ffffff;
+  color: #000000; /* Black text for light theme */
+  border-color: #d9d9d9;
 }
 
-.paragraph-margin{
-  margin-top: -4px;
+/* Dark theme for input */
+.custom-input.dark-theme {
+  background-color: #1f1f1f;
+  color: #d9d9d9; /* Light gray text for dark theme */
+  border-color: #555555;
 }
 
-.congress{
-  margin-top: -9px;
+/* Disabled input styles (Light theme) */
+.custom-input.light-theme:disabled {
+  background-color: #f5f5f5;
+  color: #8c8c8c; /* Muted gray text for disabled state */
+  border-color: #d9d9d9;
 }
 
-.ant-input[disabled],
-.ant-textarea[disabled],
-.ant-select-selector[disabled],
-.ant-picker-input-disabled,
-.ant-picker-input[disabled],
-.ant-select-selector.ant-select-disabled {
-  color: #202020 !important; 
+/* Disabled input styles (Dark theme) */
+.custom-input.dark-theme:disabled {
+  background-color: #333333;
+  color: #666666; /* Muted gray text for disabled state */
+  border-color: #555555;
+}
+
+/* Input focus styles */
+.custom-input:focus {
+  border-color: #1890ff;
+  outline: none;
+}
+
+.custom-input.light-theme:focus {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.custom-input.dark-theme:focus {
+  background-color: #1f1f1f;
+  color: #d9d9d9;
 }

@@ -1,131 +1,80 @@
-import React, { useEffect, useState } from "react";
-import {
-  Typography,
-  Row,
-  Col,
-  Spin,
-  Input,
-  Button,
-  message,
-  Progress,
-  Skeleton,
-} from "antd";
+import React, { useState, useEffect } from "react";
+import { Row, Col, Button, Input, Typography, Progress } from "antd";
 import {
   CameraFilled,
   UploadOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
-import "./profile.css";
+import "./profile.css"; // Import the CSS file
 
 const { Paragraph } = Typography;
 
-const Profile = ({ userHandle, prefetchedUserData }) => {
-  const [userData, setUserData] = useState(prefetchedUserData || null);
-  const [loading, setLoading] = useState(!prefetchedUserData); // Only load if not prefetched
-  const [error, setError] = useState(null);
+const Profile = ({ username }) => {
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [photo, setPhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showUploadButtons, setShowUploadButtons] = useState(false);
 
+  // Fetch user data based on username
   useEffect(() => {
-    if (prefetchedUserData) return; // Skip fetching if data is already prefetched
-
     const fetchUserData = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8081/api/users?username=${userHandle}`
+          `http://localhost:8081/api/users?username=${username}`
         );
-        if (!response.ok) {
-          throw new Error("Failed to fetch user data");
-        }
         const data = await response.json();
-        setUserData(data[0]);
+        if (data && data.length > 0) {
+          setUserData(data[0]); // Assume the first result is the correct user
+        } else {
+          console.error("No user data found for the given username.");
+        }
       } catch (error) {
-        setError(error.message);
+        console.error("Error fetching user data:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchUserData();
-  }, [userHandle, prefetchedUserData]);
+  }, [username]);
 
-  // Handle photo change
   const handlePhotoChange = (event) => {
     const file = event.target.files[0];
     if (file) {
       setPhoto({
         file,
-        url: URL.createObjectURL(file), // Create a local URL for preview
+        url: URL.createObjectURL(file),
       });
       setShowUploadButtons(true);
     }
   };
 
-  // Handle photo upload
-  const handleUpload = async () => {
-    if (!photo || !photo.file) {
-      message.error("Please select an image to upload.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("photo", photo.file);
-    formData.append("username", userHandle);
-
+  const handleUpload = () => {
     setUploading(true);
-
-    try {
-      const response = await fetch(`http://localhost:8081/api/users/update`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const responseBody = await response.json();
-      if (!response.ok) {
-        throw new Error(responseBody.message || "Failed to update user photo");
-      }
-
-      setUserData((prevData) => ({
-        ...prevData,
-        avatar: responseBody.avatar, // Update avatar URL in user data
-      }));
-      setPhoto(null); // Clear photo state after successful upload
-      message.success("Profile photo updated successfully!");
-    } catch (error) {
-      console.error(error);
-      message.error("Error updating photo: " + error.message);
-    } finally {
+    // Simulate upload process
+    setTimeout(() => {
       setUploading(false);
       setShowUploadButtons(false);
-    }
+      console.log("Photo uploaded successfully!");
+    }, 2000);
   };
 
-  // Trigger file input
+  const handleCancel = () => {
+    setPhoto(null);
+    setShowUploadButtons(false);
+  };
+
   const triggerFileInput = () => {
     document.getElementById("file-input").click();
   };
 
-  // Handle cancel photo upload
-  const handleCancel = () => {
-    setPhoto(null);
-    setShowUploadButtons(false);
-    document.getElementById("file-input").value = ""; // Reset the file input
-  };
-
-  // Render loading state
   if (loading) {
-    return <Skeleton active />;
+    return <p>Loading user data...</p>;
   }
 
-  // Render error state
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
-
-  // Render no user data state
   if (!userData) {
-    return <div>No user data available.</div>;
+    return <p>No user data found.</p>;
   }
 
   return (
@@ -197,14 +146,14 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
         </Col>
       </Row>
       <Row gutter={16} justify="left">
-        <Col span={24}>
+        <Col span={24} className="profile-info">
           <Paragraph className="paragraph-input">
             <span className="label-title-profile">Employee ID:</span>
             <Input
               value={userData.empid || ""}
               className="input-field"
               placeholder="Employee ID"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -213,7 +162,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.name || "N/A"}
               className="input-field"
               placeholder="Full Name"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -222,7 +171,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.email || ""}
               className="input-field"
               placeholder="Email Address"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -231,7 +180,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.designation || ""}
               className="input-field"
               placeholder="Designation"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -240,7 +189,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.division || ""}
               className="input-field"
               placeholder="Division"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -249,7 +198,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.office || ""}
               className="input-field"
               placeholder="Office"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -258,7 +207,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.region || ""}
               className="input-field"
               placeholder="Region"
-              disabled
+              readOnly
             />
           </Paragraph>
           <Paragraph className="paragraph-input">
@@ -267,7 +216,7 @@ const Profile = ({ userHandle, prefetchedUserData }) => {
               value={userData.accountCreated || ""}
               className="input-field"
               placeholder="Account Created"
-              disabled
+              readOnly
             />
           </Paragraph>
         </Col>

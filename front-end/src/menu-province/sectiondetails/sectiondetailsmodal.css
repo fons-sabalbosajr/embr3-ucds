@@ -1,28 +1,122 @@
-.industry-label{
-  font-size: 10px;
+/* Modal Header */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* Align items to the top */
 }
 
-.monitoring-label{
-  font-size: 10px;
+.modal-header-left {
+  display: flex;
+  flex-direction: column; /* Stack title and filter vertically */
+}
+
+.modal-header-right {
+  display: flex;
+  align-items: center; /* Center the count vertically */
+  font-size: 14px;
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.modal-count {
+  font-size: 14px;
+  margin-right: 20px;
+}
+
+.custom-table-section{
+  margin-top: -50px;
+}
+
+
+/* Table Row Styling */
+.custom-row {
+  font-size: 10px; /* Reduce the font size of the rows */
+}
+
+.ant-table-thead > tr > th {
+  text-align: center; /* Center the column headers */
+}
+
+/* Filter Dropdown */
+.filter-dropdown {
+  padding: 8px;
+}
+
+.filter-input {
+  margin-bottom: 8px;
+  display: block;
+}
+
+.filter-button {
+  width: 90px;
+}
+
+/* Highlighted Text */
+.highlighted-text {
+  background-color: #ffff99; /* Light yellow background */
+  color: #000; /* Black text */
+  padding: 0;
+}
+
+/* Industry Details */
+.industry-details {
   text-align: left;
 }
 
-.left-align {
-  text-align: left;
+.ecc-link {
+  color: #1890ff;
+  text-decoration: none;
 }
 
+.ecc-link:hover {
+  text-decoration: underline;
+}
 
-.pismu-tracking-text {
+/* Remarks Label */
+.remarks-label {
   font-size: 10px;
-  margin-left: 5px;
 }
 
-.table-section-details {
-  margin-left: 0px;
-  margin-top: 0px;
-  width: 100%;
+/* Section Tags */
+.section-container {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.section-tag {
+  padding: 5px 8px;
+  margin: 2px;
   border-radius: 5px;
-  border: none;
-  background-color: #f9f9f9; /* Default background color */
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
 }
 
+/* Tooltip Content */
+.tooltip-content {
+  font-size: 10px;
+}
+
+.monitoring-status-container {
+  text-align: left;
+  margin-left: 20px;
+  font-size: 10px;
+}
+
+/* Dropdown Styling */
+.ant-select-dropdown {
+  font-size: 10px; /* Reduced font size for dropdown */
+}
+
+.iis-link {
+  transition: color 0.3s ease, text-decoration 0.3s ease;
+}
+
+.iis-link:hover {
+  color: #40a9ff; /* Change color on hover */
+  text-decoration: underline; /* Add underline on hover */
+}

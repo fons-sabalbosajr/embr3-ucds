@@ -5,25 +5,23 @@ import {
   Table,
   Button,
   Tooltip,
-  Pagination,
-  Spin,
   Input,
   Checkbox,
   DatePicker,
   Select,
-} from "antd"; // Import Ant Design components
+  Typography,
+  Space,
+  Progress,
+} from "antd";
 import {
-  ReloadOutlined,
-  ExportOutlined,
+  ClockCircleFilled,
   SearchOutlined,
   EyeOutlined,
-  PlusOutlined,
   MonitorOutlined,
   GlobalOutlined,
   CheckCircleFilled,
-  InfoCircleOutlined,
-  ExclamationCircleOutlined,
   CalendarOutlined,
+  TagsOutlined,
 } from "@ant-design/icons";
 import "./sectiondetailsmodal.css";
 import ProvinceModal from "../ProvinceModal";
@@ -32,12 +30,11 @@ import dayjs from "dayjs";
 
 const { RangePicker } = DatePicker;
 
-const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }) => {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
   const [searchText, setSearchText] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchedColumn, setSearchedColumn] = useState("");
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [filteredData, setFilteredData] = useState(data); // Filtered data based on checkbox and dates
   const [originalData, setOriginalData] = useState(data); // Store the original dataset
@@ -45,12 +42,79 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
   const [dateRange, setDateRange] = useState([null, null]); // Date range for filtering (start, end)
   const [pismuTrackingFilter, setPismuTrackingFilter] = useState(null);
   const [dateField, setDateField] = useState("date_monitored");
+  const [mainFilterText, setMainFilterText] = useState("");
+  const [loading, setLoading] = useState(true); // Loading state
+  const [progress, setProgress] = useState(0);
 
-  // Filter the records based on the selected filters
   useEffect(() => {
-    setOriginalData(data); // Ensure we always have the original data to work with
-    filterRecords();
-  }, [data]);
+    // Simulate data loading with progress
+    let progressInterval;
+    setLoading(true);
+    setProgress(0);
+
+    progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+
+          // Filter data based on the section value
+          const filtered =
+            section === "NoSectionIncharged"
+              ? data.filter(
+                  (record) =>
+                    !record.section_incharged || // Include records with no section_incharged field
+                    record.section_incharged.trim() === ""
+                )
+              : data.filter(
+                  (record) =>
+                    record.section_incharged &&
+                    record.section_incharged.toLowerCase() ===
+                      section.toLowerCase()
+                );
+
+          setFilteredData(filtered); // Set the filtered data
+          setLoading(false);
+          return 100;
+        }
+        return prev + 10; // Increment progress by 10%
+      });
+    }, 200);
+
+    return () => clearInterval(progressInterval);
+  }, [data, section]);
+
+  useEffect(() => {
+    if (isChecked) {
+      // Filter records where pismu_tracking is "✔"
+      setFilteredData(data.filter((record) => record.pismu_tracking === "✔"));
+    } else {
+      // If checkbox is unchecked, show all records
+      setFilteredData(data);
+    }
+  }, [isChecked, data]);
+
+  useEffect(() => {
+    // Filter the data based on the main filter text
+    const filtered = data.filter((record) => {
+      const searchText = mainFilterText.toLowerCase();
+      return (
+        record.id_no?.toString().toLowerCase().includes(searchText) ||
+        record.title?.toLowerCase().includes(searchText) ||
+        record.name?.toLowerCase().includes(searchText) ||
+        record.address?.toLowerCase().includes(searchText) ||
+        record.ecc_cnc?.toLowerCase().includes(searchText) ||
+        record.industry_class?.toLowerCase().includes(searchText) ||
+        record.remarks?.toLowerCase().includes(searchText) ||
+        record.section_incharged?.toLowerCase().includes(searchText)
+      );
+    });
+    setFilteredData(filtered);
+  }, [mainFilterText, data]);
+
+  // Checkbox change handler
+  const handleCheckboxChange = (e) => {
+    setIsChecked(e.target.checked);
+  };
 
   // Filtering function
   const filterRecords = () => {
@@ -105,75 +169,78 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
     }) => (
       <div style={{ padding: 8 }}>
         <Input
-          value={selectedKeys[0]}
-          onChange={(e) => {
-            const value = e.target.value ? [e.target.value] : [];
-            setSelectedKeys(value);
-          }}
           placeholder={`Search ${dataIndex}`}
+          value={selectedKeys[0]}
+          onChange={(e) =>
+            setSelectedKeys(e.target.value ? [e.target.value] : [])
+          }
+          onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
           style={{ marginBottom: 8, display: "block" }}
         />
-        <Button
-          type="primary"
-          onClick={() => {
-            confirm();
-            handleSearch(selectedKeys[0], dataIndex); // Trigger search logic
-          }}
-          icon={<SearchOutlined />}
-          size="small"
-          style={{ width: 90, marginRight: 8 }}
-        >
-          Search
-        </Button>
-        <Button
-          onClick={() => {
-            clearFilters();
-            handleReset(); // Reset the search
-          }}
-          size="small"
-        >
-          Reset
-        </Button>
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Search
+          </Button>
+          <Button
+            onClick={() => handleReset(clearFilters)}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Reset
+          </Button>
+        </Space>
       </div>
     ),
     filterIcon: (filtered) => (
       <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
     ),
-    onFilter: (value, record) => {
-      return record[dataIndex]
-        ? record[dataIndex]
-            .toString()
-            .toLowerCase()
-            .includes(value.toLowerCase())
-        : "";
-    },
-  });
-
-  // Search handler to update filteredData
-  const handleSearch = (searchText, dataIndex) => {
-    const filtered = originalData.filter((record) =>
+    onFilter: (value, record) =>
       record[dataIndex]
         ? record[dataIndex]
             .toString()
             .toLowerCase()
-            .includes(searchText.toLowerCase())
-        : false
-    );
-    setFilteredData(filtered); // Update filteredData with search results
-    setCurrentPage(1); // Reset to the first page
+            .includes(value.toLowerCase())
+        : "",
+    render: (text) =>
+      searchedColumn === dataIndex ? (
+        <span style={{ backgroundColor: "#ffc069", padding: 0 }}>{text}</span>
+      ) : (
+        text
+      ),
+  });
+
+  const handleSearch = (selectedKeys, confirm, dataIndex) => {
+    confirm();
+    setSearchText(selectedKeys[0]);
+    setSearchedColumn(dataIndex);
   };
 
-  // Reset handler to clear the search
-  const handleReset = () => {
-    setFilteredData(originalData); // Reset filteredData to the original dataset
-    setCurrentPage(1); // Reset to the first page
+  const handleReset = (clearFilters) => {
+    clearFilters();
+    setSearchText("");
   };
 
-  const measureTextWidth = (text, font = "14px Poppins") => {
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    context.font = font;
-    return context.measureText(text).width;
+  const darkenColor = (color, percent) => {
+    const num = parseInt(color.slice(1), 16),
+      amt = Math.round(2.55 * percent),
+      R = (num >> 16) + amt,
+      G = ((num >> 8) & 0x00ff) + amt,
+      B = (num & 0x0000ff) + amt;
+
+    return `#${(
+      0x1000000 +
+      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 1 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)}`;
   };
 
   const sectionBackgroundColor = (section) => {
@@ -205,7 +272,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
 
       case "PEMU_Zambales":
       case "PEMU_ZAMBALES":
-        return "#d1c4e9"; // Light lavender
+        return "#161A30"; // Light lavender
 
       case "MBU":
       case "mbu":
@@ -219,65 +286,48 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
       case "awecmes":
         return "#626F47";
 
+      case "":
+      case "":
+        return "transparent";
+
       case "TCHWMS/MBU":
         return "linear-gradient(to right, #936DDF, #FF9B3E)"; // Dual tone color for TCHWMS/MBU
 
       default:
-        return "transparent"; // Default transparent background
+        return "gray"; // Default transparent background
     }
   };
 
-  const darkenColor = (color, percent) => {
-    const num = parseInt(color.slice(1), 16),
-      amt = Math.round(2.55 * percent),
-      R = (num >> 16) + amt,
-      G = ((num >> 8) & 0x00ff) + amt,
-      B = (num & 0x0000ff) + amt;
+  const handleTableChange = (pagination, filters, sorter) => {
+    // Apply filters to the data
+    let filtered = [...data];
 
-    return `#${(
-      0x1000000 +
-      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-      (B < 255 ? (B < 1 ? 0 : B) : 255)
-    )
-      .toString(16)
-      .slice(1)}`;
+    // Filter by Industry Classification
+    if (filters.industry_class) {
+      filtered = filtered.filter((record) =>
+        filters.industry_class.includes(record.industry_class)
+      );
+    }
+
+    // Filter by Remarks/Recommendations
+    if (filters.remarks) {
+      filtered = filtered.filter((record) =>
+        filters.remarks.includes(record.remarks)
+      );
+    }
+
+    // Update the filtered data
+    setFilteredData(filtered);
   };
 
   const handleActionClick = (record) => {
-    setSelectedRecord(record);
-    setIsModalVisible(true);
+    setSelectedRecord(record); // Set the selected record
+    setIsModalVisible(true); // Open the ProvinceModal
   };
 
   const handleModalClose = () => {
-    setIsModalVisible(false);
+    setIsModalVisible(false); // Close the ProvinceModal
     setSelectedRecord(null);
-  };
-
-  const handlePageChange = (page, pageSize) => {
-    setCurrentPage(page);
-    setPageSize(pageSize); // Update the page size when changed
-  };
-
-  // Paginate data (for the current page and page size)
-  const paginatedData = filteredData.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  useEffect(() => {
-    if (isChecked) {
-      // Filter records where pismu_tracking is "✔"
-      setFilteredData(data.filter((record) => record.pismu_tracking === "✔"));
-    } else {
-      // If checkbox is unchecked, show all records
-      setFilteredData(data);
-    }
-  }, [isChecked, data]);
-
-  // Checkbox change handler
-  const handleCheckboxChange = (e) => {
-    setIsChecked(e.target.checked);
   };
 
   const columns = [
@@ -286,37 +336,33 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
       dataIndex: "id_no",
       key: "id_no",
       align: "center",
-      width: 80,
+      width: 70,
       render: (text) => <div className="industry-label">{text}</div>,
-      ...getColumnSearchProps("id_no"),
     },
     {
       title: "Industry Details",
       key: "industryDetails",
       render: (text, record) => (
-        <div
-          className="industry-label"
-          style={{ textAlign: "left" }} // Explicitly set text alignment to left
-        >
+        <div className="industry-details">
           <strong>{record.title}</strong>
           <br />
           Proponent Name: <i className="monitoring-label">{record.name}</i>
           <br />
           Address: <span className="monitoring-label">{record.address}</span>
           <br />
-          ECC/CNC Ref. No.:
+          ECC/CNC Ref. No.:{" "}
           <a
             href={`https://ecconline.emb.gov.ph/live/Account/Login.aspx/`}
             target="_blank"
             rel="noopener noreferrer"
+            className="ecc-link"
           >
             &nbsp;<span className="monitoring-label">{record.ecc_cnc}</span>
           </a>
         </div>
       ),
-      width: 250,
+      width: 300,
       align: "center",
-      ...getColumnSearchProps("industryDetails"),
     },
     {
       title: "Industry Classification",
@@ -324,20 +370,258 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
       key: "industry_class",
       align: "center",
       width: 150,
-      render: (text) => <div className="left-align">{text}</div>,
-      ...getColumnSearchProps("industry_class"),
+      filters: Array.from(
+        new Set(data.map((record) => record.industry_class).filter(Boolean))
+      ).map((industry) => ({
+        text: industry,
+        value: industry,
+      })),
+      onFilter: (value, record) => record.industry_class === value,
+      render: (text) => (
+        <div
+          className="left-align"
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {text}
+        </div>
+      ),
+      filterDropdown: ({
+        setSelectedKeys,
+        selectedKeys,
+        confirm,
+        clearFilters,
+      }) => (
+        <div style={{ padding: 8, width: 150 /* Reduced width */ }}>
+          <Select
+            style={{ width: "100%" }}
+            placeholder="Select Industry"
+            value={selectedKeys[0]}
+            onChange={(value) => setSelectedKeys(value ? [value] : [])}
+            onSelect={() => confirm()}
+            allowClear
+            dropdownStyle={{
+              maxWidth: 200, // Limit dropdown width
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {Array.from(
+              new Set(
+                data.map((record) => record.industry_class).filter(Boolean)
+              )
+            ).map((industry) => (
+              <Select.Option
+                key={industry}
+                value={industry}
+                style={{
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {industry}
+              </Select.Option>
+            ))}
+          </Select>
+          <div style={{ marginTop: 8, textAlign: "right" }}>
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => {
+                clearFilters();
+                setSelectedKeys([]);
+                confirm();
+              }}
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Permits/Clearances",
+      key: "permits_clearances",
+      align: "center",
+      width: 150,
+      render: (text, record) => {
+        const checkPendingStatus = (value) =>
+          typeof value === "string" &&
+          (value.includes("App. No") ||
+            value.includes("In process") ||
+            value.includes("On process") ||
+            value.includes("Application No"));
+
+        const LabelWithIcon = ({ text, isPending, className }) => (
+          <span
+            style={{ position: "relative", display: "inline-block" }}
+            className={className}
+          >
+            {text}
+            {isPending && (
+              <ClockCircleFilled
+                style={{
+                  position: "absolute",
+                  top: "-3px",
+                  right: "-3px",
+                  fontSize: "11px",
+                  color: "#FF0303",
+                }}
+              />
+            )}
+          </span>
+        );
+
+        return (
+          <div
+            className="permits-clearances-container"
+            style={{ fontSize: "10px" }}
+          >
+            {/* ECC / CNC */}
+            {record.ecc_cnc && (
+              <Tooltip
+                title={
+                  <div className="tooltip-content" style={{ fontSize: "11px" }}>
+                    <div>
+                      {record.ecc_cnc.includes("CNC")
+                        ? "CNC Information"
+                        : "ECC Information"}
+                    </div>
+                    <div>Reference No.: {record.ecc_cnc}</div>
+                    <div>Date Approved: {record.date_approved}</div>
+                    {record.date_amend && (
+                      <div>Date Amended: {record.date_amend}</div>
+                    )}
+                  </div>
+                }
+                color={record.ecc_cnc.includes("CNC") ? "#bc6e00" : "#0b5f74"}
+              >
+                <span>
+                  <LabelWithIcon
+                    text={record.ecc_cnc.includes("CNC") ? "CNC" : "ECC"}
+                    isPending={checkPendingStatus(record.ecc_cnc)}
+                    className={
+                      record.ecc_cnc.includes("CNC")
+                        ? "custom-span-yellow"
+                        : "custom-span-green"
+                    }
+                  />
+                </span>
+              </Tooltip>
+            )}
+
+            {/* PTO */}
+            {record.pto_code && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>PTO Information</div>
+                    <div>Code: {record.pto_code}</div>
+                    <div>Date Issued: {record.pto_issued}</div>
+                    <div>Date of Expiration: {record.pto_expiration}</div>
+                  </div>
+                }
+                color="#643c6a"
+              >
+                <span>
+                  <LabelWithIcon
+                    text="PTO"
+                    isPending={checkPendingStatus(record.pto_code)}
+                    className="custom-span-blue"
+                  />
+                </span>
+              </Tooltip>
+            )}
+
+            {/* WWDP */}
+            {record.wwdp_code && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>WWDP Information</div>
+                    <div>Code: {record.wwdp_code}</div>
+                    <div>Date Issued: {record.wwdp_issued}</div>
+                    <div>Date of Expiration: {record.wwdp_expiration}</div>
+                  </div>
+                }
+                color="#b45248"
+              >
+                <span>
+                  <LabelWithIcon
+                    text="WWDP"
+                    isPending={checkPendingStatus(record.wwdp_code)}
+                    className="custom-span-orange"
+                  />
+                </span>
+              </Tooltip>
+            )}
+
+            {/* Hazwaste */}
+            {record.haz_id && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>Hazwaste Gen. Cert. Information</div>
+                    <div>Code: {record.haz_id}</div>
+                    <div>Date Issued: {record.haz_issued}</div>
+                  </div>
+                }
+                color="#415e20"
+              >
+                <span>
+                  <LabelWithIcon
+                    text="HAZ"
+                    isPending={checkPendingStatus(record.haz_id)}
+                    className="custom-span-skyblue"
+                  />
+                </span>
+              </Tooltip>
+            )}
+
+            {/* PCO */}
+            {record.pco_no && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "11px" }}>
+                    <div>PCO Accreditation Certificate</div>
+                    <div>PCO No: {record.pco_no}</div>
+                    <div>PCO Name: {record.pco_name}</div>
+                    <div>PCO Validity: {record.pco_validity}</div>
+                  </div>
+                }
+                color="#242726"
+              >
+                <span>
+                  <LabelWithIcon
+                    text="PCO"
+                    isPending={checkPendingStatus(record.pco_no)}
+                    className="custom-span-stone"
+                  />
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "Remarks/Recommendations",
-      key: "remarks_recommendations",
-      render: (text, record) => (
-        <div className="industry-label monitoring-label">
-          {record.remarks_recommendations}
-        </div>
-      ),
-      align: "left",
-      width: 200,
-      ...getColumnSearchProps("remarks_recommendations"),
+      dataIndex: "remarks",
+      key: "remarks",
+      align: "center",
+      width: 150,
+      filters: Array.from(
+        new Set(data.map((record) => record.remarks).filter(Boolean))
+      ).map((remark) => ({
+        text: remark,
+        value: remark,
+      })),
+      onFilter: (value, record) => record.remarks === value,
+      render: (text) => <div className="remarks-label">{text}</div>,
     },
     {
       title: "Section/Unit Incharged",
@@ -346,28 +630,20 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
       width: 150,
       render: (text, record) => {
         const sections = record.section_incharged
-          .split(",")
-          .map((section) => section.trim());
+          ? record.section_incharged.split(",").map((section) => section.trim())
+          : ["N/A"];
 
         return (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center", // Center the whole group
-              flexWrap: "wrap",
-              textAlign: "center", // Center text within individual divs
-            }}
-          >
+          <div className="section-container">
             {sections.map((section, index) => {
-              const textWidth = measureTextWidth(section);
               const backgroundColor = sectionBackgroundColor(section);
-              const darkerBackgroundColor = darkenColor(backgroundColor, -40);
+              const tooltipColor = darkenColor(backgroundColor, -40);
 
               return (
                 <Tooltip
                   key={index}
                   title={
-                    <div style={{ fontSize: "10px" }}>
+                    <div className="tooltip-content">
                       <div>Section Incharge: {record.section_incharged}</div>
                       <div>Handler: {record.handler || "N/A"}</div>
                       <div>
@@ -376,25 +652,11 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
                       <div>Inspection Type: {record.insp_type || "N/A"}</div>
                     </div>
                   }
-                  color={darkerBackgroundColor}
+                  color={tooltipColor}
                 >
                   <div
-                    className="industry-label"
-                    style={{
-                      backgroundColor: backgroundColor,
-                      padding: "5px 8px",
-                      margin: "2px",
-                      minWidth: "fit-content",
-                      maxWidth: "100%",
-                      display: "inline-block",
-                      overflow: "hidden",
-                      whiteSpace: "nowrap",
-                      borderRadius: "5px",
-                      cursor: "pointer",
-                      fontSize: "10px",
-                      color: "#fff",
-                      textAlign: "center", // Ensures text inside is centered
-                    }}
+                    className="section-tag"
+                    style={{ backgroundColor: backgroundColor }}
                   >
                     {section}
                   </div>
@@ -408,7 +670,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
     {
       title: "Monitoring Status",
       key: "monitoringStatus",
-      align: "center",
+      align: "center", // Header alignment remains centered
       width: 200,
       filterDropdown: ({
         setSelectedKeys,
@@ -443,9 +705,8 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
       filterIcon: (filtered) => (
         <CalendarOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
       ),
-
       render: (text, record) => (
-        <div>
+        <div className="monitoring-status-container">
           <p className="monitoring-label">
             <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
             Date Monitored: {record.date_monitored || "N/A"}
@@ -458,6 +719,73 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
             <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
             Date Signed: {record.date_signed || "N/A"}
           </p>
+          {/* IIS No. (2024) */}
+          {record.iis_no && record.iis_no !== "N/A" && (
+            <p className="monitoring-label">
+              <Tooltip title="IIS No. (2024)">
+                <TagsOutlined style={{ color: "#ff4d4f", marginRight: 8 }} />
+              </Tooltip>
+              {record.iis_no.split(/\s+/).map((iis, index) => (
+                <span key={index}>
+                  <a
+                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                      iis.trim()
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#ff4d4f",
+                      textDecoration: "none",
+                    }}
+                    className="iis-link"
+                  >
+                    {iis.trim()}
+                  </a>
+                  <br /> {/* Add line break */}
+                </span>
+              ))}
+            </p>
+          )}
+          {/* IIS No. (2025) */}
+          {record.iis_no_2025 && record.iis_no_2025 !== "N/A" && (
+            <p className="monitoring-label">
+              <Tooltip title="IIS No. (2025)">
+                <TagsOutlined style={{ color: "#52c41a", marginRight: 8 }} />
+              </Tooltip>
+              {record.iis_no_2025.split(/\s+/).map((iis, index) => (
+                <span key={index}>
+                  <a
+                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                      iis.trim()
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#52c41a",
+                      textDecoration: "none",
+                    }}
+                    className="iis-link"
+                  >
+                    {iis.trim()}
+                  </a>
+                  <br /> {/* Add line break */}
+                </span>
+              ))}
+            </p>
+          )}
+
+          {record.pismu_tracking === "✔" && (
+            <p className="monitoring-label">
+              <Tooltip title="PISMU Tracking">
+                <span>
+                  <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
+                  <span style={{ marginLeft: 8 }}>
+                    Received by Planning Unit
+                  </span>
+                </span>
+              </Tooltip>
+            </p>
+          )}
         </div>
       ),
     },
@@ -467,7 +795,7 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
       align: "center",
       width: 80,
       render: (text, record) => (
-        <Tooltip title="View Details" style={{ fontSize: "11px" }}>
+        <Tooltip title="View Details">
           <Button
             icon={<EyeOutlined />}
             onClick={() => handleActionClick(record)}
@@ -482,6 +810,69 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
 
   return (
     <>
+      {/* SectionDetailsModal */}
+      <Modal
+        open={visible}
+        onCancel={onClose}
+        footer={null}
+        width={1400}
+        style={{
+          maxHeight: "70vh",
+          overflow: "hidden",
+          padding: "16px",
+        }}
+        title={
+          <div className="modal-header">
+            <div className="modal-header-left">
+              <Typography.Title level={4} className="modal-title">
+                Industries Incharged to: {section}
+              </Typography.Title>
+              <Input
+                placeholder="Search within industries..."
+                value={mainFilterText}
+                onChange={(e) => setMainFilterText(e.target.value)}
+                prefix={<SearchOutlined />}
+                style={{
+                  width: "300px",
+                  marginTop: "8px",
+                }}
+              />
+            </div>
+            <div className="modal-header-right">
+              <Typography.Text className="modal-count">
+                Industry Count: {filteredData.length}
+              </Typography.Text>
+            </div>
+          </div>
+        }
+      >
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "20px" }}>
+            <span>Loading Section Data...</span> <br />
+            <Progress
+              percent={progress}
+              style={{ marginTop: "16px", width: "50%" }}
+            />
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={filteredData}
+            rowKey="id_no"
+            pagination={{
+              position: ["topRight"],
+              size: "small",
+              simple: true,
+            }}
+            scroll={{
+              y: "50vh",
+            }}
+            className="custom-table-section"
+            onChange={handleTableChange}
+          />
+        )}
+      </Modal>
+
       <Modal
         open={isModalVisible}
         title={
@@ -514,121 +905,14 @@ const SectionDetailsModal = ({ visible, section, data, onClose, loading, theme }
         onCancel={handleModalClose}
         width={1100}
         footer={null}
-        zIndex={1050}
+        zIndex={1050} // Ensure it appears above other modals
       >
         {selectedRecord && (
-          <ProvinceModal
-            visible={isModalVisible}
-            record={selectedRecord}
-            zIndex={1060} // Set a higher zIndex for the ProvinceModal so it stays above the SectionDetailsModal
-          />
-        )}
-      </Modal>
-
-      <Modal
-        title={
-          <div
-            className="modal-title-container"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span className="modal-title" style={{ whiteSpace: "normal" }}>
-              Result Details for {section}
-            </span>
-            <span
-              className="modal-title"
-              style={{
-                whiteSpace: "normal",
-                textAlign: "right",
-                fontSize: "12px",
-                marginRight: "20px",
-              }}
-            >
-              Records Found: {filteredData ? filteredData.length : 0}
-            </span>
-          </div>
-        }
-        open={visible}
-        onCancel={onClose}
-        footer={null}
-        width={1200}
-        destroyOnClose={true}
-      >
-        {loading ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "300px",
-            }}
-          >
-            <Spin size="small" />
-          </div>
-        ) : (
-          <>
-            {/* Checkbox for filtering by "Received by Planning" */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginBottom: "10px",
-              }}
-            >
-              <Checkbox checked={isChecked} onChange={handleCheckboxChange}>
-                Received by Planning Unit
-              </Checkbox>
-            </div>
-
-            <Table
-              columns={columns}
-              dataSource={paginatedData}
-              rowKey="id_no"
-              pagination={false}
-              bordered
-              scroll={{ y: 600 }}
-              className="table-section-details"
-              size="small"
-              locale={{
-                emptyText: "No data available", 
-              }}
-            />
-
-            {filteredData.length > 0 && (
-              <Pagination
-                total={filteredData.length}
-                current={currentPage}
-                pageSize={pageSize}
-                onChange={handlePageChange}
-                showSizeChanger
-                pageSizeOptions={["5", "10", "20", "30"]}
-                style={{ marginTop: "10px" }}
-                size="small"
-                itemRender={(page, type, originalElement) => {
-                  if (type === "page") {
-                    return <span style={{ margin: "0 8px" }}>{page}</span>;
-                  }
-                  return originalElement;
-                }}
-              />
-            )}
-          </>
+          <ProvinceModal visible={isModalVisible} record={selectedRecord} />
         )}
       </Modal>
     </>
   );
-};
-
-// PropTypes for validation
-SectionDetailsModal.propTypes = {
-  visible: PropTypes.bool.isRequired,
-  section: PropTypes.string.isRequired,
-  data: PropTypes.array.isRequired,
-  onClose: PropTypes.func.isRequired,
-  loading: PropTypes.bool.isRequired,
 };
 
 export default SectionDetailsModal;

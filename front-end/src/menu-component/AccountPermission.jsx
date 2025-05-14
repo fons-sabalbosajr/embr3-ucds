@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Table, Switch, Row, Col, message, Button, Tabs } from "antd";
+import {
+  Table,
+  Switch,
+  Row,
+  Col,
+  message,
+  Button,
+  Tabs,
+  Avatar,
+  Tag,
+} from "antd";
 import {
   EyeOutlined,
   DatabaseOutlined,
@@ -7,6 +17,7 @@ import {
   HistoryOutlined,
   ExportOutlined,
   SearchOutlined,
+  UserAddOutlined,
 } from "@ant-design/icons";
 import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
@@ -16,8 +27,48 @@ import "./accountpermission.css";
 
 const { TabPane } = Tabs;
 
-const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
+const AccountPermission = ({
+  visible,
+  onClose,
+  onPermissionsUpdate,
+  userData,
+}) => {
+  const { name, email, permission, avatar } = userData;
   const [avatarData, setAvatarData] = useState(null);
+  const getPermissionStyle = (permission) => {
+    let bgColor = "#d9d9d9"; // default gray
+    let textColor = "#fff";
+
+    switch (permission.toLowerCase()) {
+      case "viewer":
+        bgColor = "#379777"; // Dark Gray
+        break;
+      case "contributor":
+        bgColor = "#F4CE14"; // Dark Blue
+        break;
+      case "admin":
+        bgColor = "#102E50"; // Dark Charcoal
+        break;
+      case "developer":
+        bgColor = "#3A3960"; // Dark Purple
+        break;
+      default:
+        bgColor = "#f0f0f0";
+    }
+
+    return {
+      backgroundColor: bgColor,
+      color: textColor,
+      padding: "2px 8px",
+      borderRadius: "4px",
+      fontWeight: 500,
+      fontSize: "12px",
+      textTransform: "capitalize",
+      display: "inline-block",
+      minWidth: "80px",
+      textAlign: "center",
+    };
+  };
   const [accessList, setAccessList] = useState([
     {
       key: "canViewAdminPanel",
@@ -66,7 +117,6 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
     { key: "tarlac", name: "Tarlac", isGranted: false },
     { key: "zambales", name: "Zambales", isGranted: false },
   ]);
-
   const [initialProvinceAccessList, setInitialProvinceAccessList] = useState(
     []
   );
@@ -76,71 +126,70 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
       console.error("Username not provided in userData:", userData);
       return;
     }
-
-    const fetchUserAvatar = async () => {
+  
+    const fetchUserAvatarAndAccess = async () => {
       try {
         const response = await axios.get(
           `http://localhost:8081/api/users?username=${userData.username}`
         );
+  
         const users = response.data;
         const currentUser = users[0];
-
-        if (currentUser) {
-          const avatar = currentUser.avatar;
-          setAvatarData(avatar);
-          const updatedAccessList = accessList.map((item) => ({
-            ...item,
-            isGranted: currentUser[item.key] || false,
-          }));
-          setAccessList(updatedAccessList);
-          setInitialAccessList(updatedAccessList);
-
-          // Set initial province access list
-          const updatedProvinceAccessList = provinceAccessList.map((item) => ({
-            ...item,
-            isGranted: currentUser[item.key] || false,
-          }));
-          setProvinceAccessList(updatedProvinceAccessList);
-          setInitialProvinceAccessList(updatedProvinceAccessList);
-        } else {
-          message.error("User  not found");
+  
+        if (!currentUser) {
+          message.error("User not found");
+          return;
         }
+  
+        // Set avatar
+        setAvatarData(currentUser.avatar || null);
+  
+        // Update Main Access List
+        const updatedAccess = accessList.map((item) => ({
+          ...item,
+          isGranted: !!currentUser[item.key],
+        }));
+        setAccessList(updatedAccess);
+        setInitialAccessList([...updatedAccess]);
+  
+        // Update Province Access List
+        const updatedProvinceAccess = provinceAccessList.map((item) => ({
+          ...item,
+          isGranted: !!currentUser[item.key],
+        }));
+        setProvinceAccessList(updatedProvinceAccess);
+        setInitialProvinceAccessList([...updatedProvinceAccess]);
       } catch (error) {
-        message.error("Error fetching user data");
         console.error("Error fetching user data:", error);
+        message.error("Error fetching user data");
       }
     };
-
-    fetchUserAvatar();
-  }, [userData.username]);
+  
+    fetchUserAvatarAndAccess();
+    // dependency: only rerun if username changes
+  }, [userData?.username]);
+  
 
   const toggleAccess = (key) => {
     setAccessList((prevList) => {
-      const updatedList = prevList.map((item) => {
-        if (item.key === key) {
-          const updatedItem = { ...item, isGranted: !item.isGranted };
-          return updatedItem;
-        }
-        return item;
-      });
+      const updatedList = prevList.map((item) =>
+        item.key === key ? { ...item, isGranted: !item.isGranted } : item
+      );
       checkForChanges(updatedList);
       return updatedList;
     });
   };
-
+  
   const toggleProvinceAccess = (key) => {
     setProvinceAccessList((prevList) => {
-      const updatedList = prevList.map((item) => {
-        if (item.key === key) {
-          const updatedItem = { ...item, isGranted: !item.isGranted };
-          return updatedItem;
-        }
-        return item;
-      });
+      const updatedList = prevList.map((item) =>
+        item.key === key ? { ...item, isGranted: !item.isGranted } : item
+      );
       checkForProvinceChanges(updatedList);
       return updatedList;
     });
   };
+  
 
   const checkForChanges = (updatedList) => {
     const isChanged = updatedList.some((item, index) => {
@@ -236,17 +285,17 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
     return !accessChanged && !provinceChanged; // Return true if neither has changed
   };
 
-  const columns = [
+  const accessColumns = [
     {
       title: "Access",
       dataIndex: "accessName",
       key: "access",
-      width: 200,
-      align: "left",
+      width: 300,
+      align: "center",
       render: (text, record) => (
         <div style={{ display: "flex", alignItems: "center" }}>
           <div className="icon-container">{record.icon}</div>
-          <div>
+          <div className="access-details">
             <strong>{record.accessName}</strong>
             <p style={{ margin: 0, color: "#888" }}>{record.description}</p>
           </div>
@@ -291,47 +340,28 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
   ];
 
   return (
-    <div style={{ padding: "20px" }}>
-      <Row style={{ marginBottom: "20px", alignItems: "center" }}>
-        <Col span={3}>
-          <AvatarWithName userHandle={userData.username} size="70px" />
-        </Col>
-        <Col span={15}>
-          <h3 style={{ margin: 0, fontWeight: 600 }}>{userData.name}</h3>
-          <p style={{ margin: 0, color: "gray", fontSize: 11 }}>
-            {userData.division}
+    <div className="account-permission-container">
+      <div className="user-info">
+        <div className="avatar-section">
+          <AvatarWithName userHandle={userData.username} size="100px" />
+          <span
+            className={`status-dot ${
+              userData.status === "online" ? "online" : "offline"
+            }`}
+          ></span>
+        </div>
+        <div className="user-details">
+          <p className="user-name-details">
+            <strong>{userData.name}</strong>
           </p>
-          <p style={{ margin: 0, color: "gray", fontSize: 11 }}>
-            {userData.email}
+          <p className="user-email-details">{userData.email}</p>
+          <p className="user-permission-details">
+            <span style={getPermissionStyle(userData.permission)}>
+              {userData.permission}
+            </span>
           </p>
-          <p
-            style={{
-              margin: 0,
-              color: "white",
-              fontSize: 10,
-              padding: "2px 10px",
-              borderRadius: "4px",
-              display: "inline-block",
-              backgroundColor: (() => {
-                switch (userData.permission) {
-                  case "viewer":
-                    return "#FBA834";
-                  case "contributor":
-                    return "#387ADF";
-                  case "admin":
-                    return "#333A73";
-                  case "developer":
-                    return "#800000";
-                  default:
-                    return "gray";
-                }
-              })(),
-            }}
-          >
-            {userData.permission}
-          </p>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <div className="note-section">
         <InfoCircleFilled style={{ fontSize: "24px", color: "#1890ff" }} />
@@ -344,7 +374,11 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
 
       <Tabs defaultActiveKey="1">
         <TabPane tab="Access Settings" key="1">
-          <Table dataSource={accessList} columns={columns} pagination={false} />
+          <Table
+            dataSource={accessList}
+            columns={accessColumns}
+            pagination={false}
+          />
         </TabPane>
         <TabPane tab="Province Access" key="2">
           <Table
@@ -355,24 +389,16 @@ const AccountPermission = ({ userData, onClose, onPermissionsUpdate }) => {
         </TabPane>
       </Tabs>
 
-      <div
-        style={{
-          marginTop: "20px",
-          display: "flex",
-          justifyContent: "flex-end",
-        }}
-      >
+      <div className="footer-actions">
         <Button
-          type="default"
-          style={{ marginRight: "10px" }}
-          onClick={onClose}
+          type="primary"
+          onClick={applyChanges}
           disabled={isInitialState()}
+          style={{ marginRight: "8px" }}
         >
-          OK
+          Save Changes
         </Button>
-        <Button type="primary" onClick={applyChanges}>
-          Apply
-        </Button>
+        <Button onClick={onClose}>Cancel</Button>
       </div>
     </div>
   );

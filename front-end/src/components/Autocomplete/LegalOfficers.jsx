@@ -16,7 +16,14 @@ const LegalOfficersOptions = [
   { value: "Ms. Shirley Owatan" },
 ];
 
-const LegalOfficers = ({ value, disabled, onChange }) => {
+const LegalOfficers = ({
+  value,
+  disabled,
+  onChange,
+  theme,
+  style,
+  readOnly,
+}) => {
   return (
     <ConfigProvider
       theme={{
@@ -33,17 +40,17 @@ const LegalOfficers = ({ value, disabled, onChange }) => {
       <AutoComplete
         style={{
           width: "100%",
-          fontSize: "11px",
+          ...style,
         }}
         dropdownStyle={{
           boxShadow: "none",
           backgroundColor: "#f1f1f1",
         }}
-        options={LegalOfficersOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
+        options={readOnly ? [] : LegalOfficersOptions}
+        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`} // Apply theme class
         value={value}
         disabled={disabled}
-        onChange={onChange}
+        onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
@@ -52,9 +59,8 @@ const LegalOfficers = ({ value, disabled, onChange }) => {
         <Input
           style={{
             fontSize: "11px",
-            height: "27px",
+            height: "29px",
             padding: "4px 8px",
-            marginTop: "7px"
           }}
           placeholder="Select Legal Officer"
           placeholderStyle={{

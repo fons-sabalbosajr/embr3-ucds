@@ -1,13 +1,20 @@
 import React from "react";
 import { ConfigProvider, AutoComplete, Input } from "antd";
-import './inspectiontype.css'
+import "./inspectiontype.css";
 
 const InspectionTypeOptions = [
   { value: "TABLE MONITORING" },
   { value: "ACTUAL MONITORING" },
 ];
 
-const InspectionType = ({ value, disabled, onChange }) => {
+const InspectionType = ({
+  value,
+  disabled,
+  onChange,
+  theme,
+  style,
+  readOnly,
+}) => {
   return (
     <ConfigProvider
       theme={{
@@ -24,18 +31,17 @@ const InspectionType = ({ value, disabled, onChange }) => {
       <AutoComplete
         style={{
           width: "100%",
-          fontSize: "11px",
-          marginTop: "4px",
+          ...style,
         }}
         dropdownStyle={{
           boxShadow: "none",
           backgroundColor: "#f1f1f1",
         }}
-        options={InspectionTypeOptions} // Use predefined suggestions
-        dropdownClassName="custom-autocomplete-dropdown"
+        options={readOnly ? [] : InspectionTypeOptions} // Use predefined suggestions
+        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`}
         value={value}
         disabled={disabled}
-        onChange={onChange}
+        onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
@@ -46,6 +52,7 @@ const InspectionType = ({ value, disabled, onChange }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
+            
           }}
           placeholder="select inspection type"
           placeholderStyle={{

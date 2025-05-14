@@ -1,5 +1,5 @@
-import React, { useState, lazy, Suspense } from "react";
-import { Avatar, Typography, Menu, Modal, Spin } from "antd";
+import React, { useState } from "react";
+import { Avatar, Typography, Menu, Modal } from "antd";
 import {
   UserOutlined,
   SettingOutlined,
@@ -7,9 +7,7 @@ import {
   BulbOutlined,
   LogoutOutlined,
 } from "@ant-design/icons";
-
-// Lazy load the Profile component
-const Profile = lazy(() => import("./Settings/Profile/Profile"));
+import Profile from "./Settings/Profile/Profile"; // Directly import Profile
 
 const { Text } = Typography;
 
@@ -30,14 +28,7 @@ const UserPopover = ({ name, userHandle, handleLogout, selection }) => {
   const renderModalContent = () => {
     switch (modalContent) {
       case "profile":
-        return (
-          <Suspense fallback={<Spin size="large" tip="Loading Profile..." />}>
-            <Profile
-              userHandle={userHandle}
-              prefetchedUserData={prefetchedUserData}
-            />
-          </Suspense>
-        );
+        return <Profile name={name} username={userHandle} />; // Pass name and username
       case "settings":
         return <div>Settings content</div>;
       case "help":
@@ -78,8 +69,7 @@ const UserPopover = ({ name, userHandle, handleLogout, selection }) => {
           }
         }}
         style={{
-          width: "100%",
-          borderRadius: "2px",
+          background: "transparent", // Remove background
         }}
         mode="vertical"
         theme="light"
@@ -87,7 +77,7 @@ const UserPopover = ({ name, userHandle, handleLogout, selection }) => {
         <Menu.Item
           key="profile"
           icon={<UserOutlined />}
-          onMouseEnter={prefetchUserData} // Prefetch data on hover
+          onMouseEnter={prefetchUserData}
         >
           Profile Setting
         </Menu.Item>

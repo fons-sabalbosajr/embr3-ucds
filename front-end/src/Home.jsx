@@ -70,7 +70,7 @@ const Home = () => {
           <FloatButton
             icon={isDarkMode ? <BulbFilled /> : <BulbOutlined />}
             tooltip={
-              isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"
+              isDarkMode ? "Light Theme" : "Dark Theme"
             }
             onClick={toggleTheme}
             style={{

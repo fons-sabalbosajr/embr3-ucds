@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Carousel, Button, Typography, Modal } from "antd";
 import axios from "axios";
 import moment from "moment";
-import announcementIcon from "../../assets/announcement.png"; // ✅ Correct import
+import announcementIcon from "../../assets/announcement.png";
 import "./bulletin.css";
 
 const Bulletin = ({ theme = "dark" }) => {
@@ -16,8 +16,12 @@ const Bulletin = ({ theme = "dark" }) => {
       try {
         const response = await axios.get("http://localhost:8081/api/postings");
         const data = response.data;
-        data.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
-        setBulletins(data);
+
+        const activeBulletins = data
+          .filter((item) => item.status === "active")
+          .sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
+
+        setBulletins(activeBulletins);
       } catch (error) {
         console.error("Error fetching postings:", error);
       }
@@ -32,9 +36,9 @@ const Bulletin = ({ theme = "dark" }) => {
       await axios.patch(`http://localhost:8081/api/postings/${record._id}`, {
         isRead: true,
       });
-      setBulletins(
-        bulletins.map((bulletin) =>
-          bulletin._id === record._id ? { ...bulletin, isRead: true } : bulletin
+      setBulletins((prev) =>
+        prev.map((item) =>
+          item._id === record._id ? { ...item, isRead: true } : item
         )
       );
     } catch (error) {
@@ -57,56 +61,96 @@ const Bulletin = ({ theme = "dark" }) => {
     }
   };
 
+  const getGradientClass = (iconType) => {
+    switch (iconType.toLowerCase()) {
+      case "information":
+        return "gradient-information"; // Blue gradient
+      case "announcement":
+        return "gradient-announcement"; // Yellow gradient
+      case "alerts":
+        return "gradient-alerts"; // Red gradient
+      case "warning":
+        return "gradient-warning"; // Orange gradient
+      default:
+        return "gradient-default"; // Gray gradient
+    }
+  };
+
+  const getButtonClass = (iconType) => {
+    switch (iconType.toLowerCase()) {
+      case "information":
+        return "button-information"; // Blue button
+      case "announcement":
+        return "button-announcement"; // Green button
+      case "alerts":
+        return "button-alerts"; // Red button
+      case "warning":
+        return "button-warning"; // Orange button
+      default:
+        return "button-default"; // Gray button
+    }
+  };
+
   return (
-    <div className={`bulletin-content ${theme}`}>
-      <h3
-          className="activity-title"
-          style={{
-            color: theme === "dark" ? "#ffffff" : "#000000", // Adjust title color based on theme
-            fontSize: "16px",
-          }}
-        >
-          Bulletin Board
-        </h3>
-      <div className="carousel-container">
-        <Carousel autoplay effect="scrollx" className="bulletin-carousel">
-          {bulletins.map(
-            (bulletin) =>
-              !dontShowAgainIds.has(bulletin._id) && (
-                <div className="bulletin-item" key={bulletin._id}>
-                  {/* Watermark Icon */}
-                  <img
-                    src={announcementIcon}
-                    alt="Announcement"
-                    className="bulletin-watermark-icon"
+    <div
+      className={`bulletin-container ${
+        theme === "dark" ? "bulletin-dark" : "bulletin-light"
+      }`}
+    >
+      <Carousel autoplay effect="fade" className="bulletin-carousel">
+        {bulletins.slice(0, 5).map((bulletin) => {
+          const gradientClass = getGradientClass(
+            bulletin.iconType || "default"
+          );
+          const buttonClass = getButtonClass(bulletin.iconType || "default");
+          return (
+            <div
+              key={bulletin._id}
+              className={`bulletin-slide ${gradientClass}`} // Apply gradient class
+            >
+              {/* Moving Bubbles Background */}
+              <div className="animated-background">
+                <div className="bubble bubble-1"></div>
+                <div className="bubble bubble-2"></div>
+                <div className="bubble bubble-3"></div>
+                <div className="bubble bubble-4"></div>
+                <div className="bubble bubble-5"></div>
+              </div>
+
+              {/* Bulletin Content */}
+              <div className="bulletin-left">
+                <Typography.Title level={3} className="bulletin-title">
+                  {bulletin.title}
+                </Typography.Title>
+                <Typography.Text className="bulletin-date">
+                  {moment(bulletin.createdDate).format("MMMM DD, YYYY")}
+                </Typography.Text>
+                <Typography.Paragraph className="bulletin-message">
+                  <span
+                    dangerouslySetInnerHTML={{
+                      __html: bulletin.message.replace(/\n/g, "<br />"),
+                    }}
                   />
-
-                  <div className="bulletin-inner">
-                    <div className="bulletin-left">
-                      <span className="bulletin-date">
-                        {moment(bulletin.createdDate).format("MMMM DD, YYYY")}
-                      </span>
-                      <Typography.Title level={4} className="bulletin-title-text">
-                        {bulletin.title}
-                      </Typography.Title>
-                      <Typography.Paragraph className="bulletin-message">
-                        {bulletin.message}
-                      </Typography.Paragraph>
-                      <Button
-                        type="primary"
-                        onClick={() => handleView(bulletin)}
-                        className="bulletin-button"
-                      >
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )
-          )}
-        </Carousel>
-      </div>
-
+                </Typography.Paragraph>
+                <Button
+                  type="primary"
+                  className={`bulletin-button ${buttonClass}`} // Apply button class
+                  onClick={() => handleView(bulletin)}
+                >
+                  Learn More
+                </Button>
+              </div>
+              <div className="bulletin-image">
+                <img
+                  src={announcementIcon}
+                  alt="announcement"
+                  className="bulletin-image-element"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </Carousel>
       {/* Modal for full bulletin view */}
       <Modal
         title="Bulletin Details"
@@ -116,23 +160,36 @@ const Bulletin = ({ theme = "dark" }) => {
           <Button
             key="dont-show"
             onClick={handleDontShowAgain}
-            className="modal-btn bulletin-button"
+            className={`modal-btn bulletin-button ${
+              theme === "dark" ? "button-dark" : "button-light"
+            }`}
           >
             Don't Show This Again
           </Button>,
-          <Button key="close" onClick={handleModalCancel} className="modal-btn">
+          <Button
+            key="close"
+            onClick={handleModalCancel}
+            className={`modal-btn ${
+              theme === "dark" ? "button-dark" : "button-light"
+            }`}
+          >
             Close
           </Button>,
         ]}
-        className={`bulletin-modal ${theme}`}
+        className={`bulletin-modal ${
+          theme === "dark" ? "modal-dark" : "modal-light"
+        }`}
       >
-        <Typography.Text strong className="bulletin-title-text">
+        <Typography.Title level={4} className="modal-title">
           {selectedBulletin.title}
-        </Typography.Text>
-        <br />
-        <Typography.Text className="bulletin-message-text">
-          {selectedBulletin.message}
-        </Typography.Text>
+        </Typography.Title>
+        <Typography.Paragraph className="modal-message">
+          <span
+            dangerouslySetInnerHTML={{
+              __html: (selectedBulletin.message || "").replace(/\n/g, "<br />"),
+            }}
+          />
+        </Typography.Paragraph>
       </Modal>
     </div>
   );

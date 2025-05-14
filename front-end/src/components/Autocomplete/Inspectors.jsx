@@ -86,7 +86,7 @@ const InspectorOptions = [
   { value: "Ms. Victoria Emery P. Ramos" },
 ];
 
-const Inspectors = ({ value, disabled, onChange }) => {
+const Inspectors = ({ value, readOnly, onChange, style }) => {
   return (
     <ConfigProvider
     theme={{
@@ -103,17 +103,16 @@ const Inspectors = ({ value, disabled, onChange }) => {
     <AutoComplete
       style={{
         width: "100%",
-        fontSize: "11px",
+        ...style,
       }}
       dropdownStyle={{
         boxShadow: "none",
         backgroundColor: "#f1f1f1",
       }}
-      options={InspectorOptions}
-      dropdownClassName="custom-autocomplete-dropdown"
+      options={readOnly ? [] : InspectorOptions} 
+      popupClassName="custom-autocomplete-dropdown"
       value={value}
-      disabled={disabled}
-      onChange={onChange}
+      onChange={!readOnly ? onChange : undefined}
       filterOption={(inputValue, option) =>
         option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
       }
@@ -124,8 +123,10 @@ const Inspectors = ({ value, disabled, onChange }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
+            cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
-          placeholder="handler"
+          placeholder="select inspector/handler"
           placeholderStyle={{
             fontSize: "9px",
           }}

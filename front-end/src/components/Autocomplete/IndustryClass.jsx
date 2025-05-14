@@ -210,14 +210,14 @@ const industryClassOptions = [
   { value: "Water Treatment" },
 ];
 
-const IndustryClass = ({ value, disabled, onChange }) => {
+const IndustryClass = ({ value, disabled, onChange, theme, style }) => {
   return (
     <ConfigProvider
       theme={{
         components: {
           AutoComplete: {
             optionFontSize: 10,
-            colorTextPlaceholder: "#555",
+            colorTextPlaceholder: theme === "dark" ? "#aaa" : "#555",
             fontSize: "11px",
             boxShadow: "none",
           },
@@ -225,16 +225,18 @@ const IndustryClass = ({ value, disabled, onChange }) => {
       }}
     >
       <AutoComplete
+        className={`industry-class-autocomplete ${theme}-theme`} // Apply theme class
         style={{
           width: "100%",
           fontSize: "11px",
         }}
         dropdownStyle={{
           boxShadow: "none",
-          backgroundColor: "#f1f1f1",
+          backgroundColor: theme === "dark" ? "#333333" : "#f1f1f1", // Dynamically set background color
+          color: theme === "dark" ? "#d9d9d9" : "#000000", // Adjust text color based on theme
         }}
         options={industryClassOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
+        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`} // Apply theme class
         value={value}
         disabled={disabled}
         onChange={onChange}
@@ -243,16 +245,15 @@ const IndustryClass = ({ value, disabled, onChange }) => {
         }
         allowClear={true}
       >
-       <Input
+        <Input
+          className={`industry-class-input ${theme}-theme`} // Apply theme class
           style={{
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
+            ...style,
           }}
           placeholder="Select industry classification"
-          placeholderStyle={{
-            fontSize: "9px",
-          }}
         />
       </AutoComplete>
     </ConfigProvider>

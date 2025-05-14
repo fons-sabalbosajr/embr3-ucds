@@ -178,10 +178,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.ecc_cnc : ""}
                     onChange={(e) => handleChange("ecc_cnc", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -193,10 +196,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("permit_process", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -208,10 +214,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("date_approved", e.target.value)
                     }
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -223,10 +232,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("date_amended", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -273,10 +285,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.pto_code : ""}
                     onChange={(e) => handleChange("pto_code", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -287,10 +302,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.pto_issued : ""}
                     onChange={(e) => handleChange("pto_issued", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -302,10 +320,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("pto_expiration", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -352,10 +373,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.wwdp_code : ""}
                     onChange={(e) => handleChange("wwdp_code", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -367,10 +391,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("wwdp_issued", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -382,22 +409,22 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("wwdp_expiration", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
             </Row>
           </Card>
-
-          
         </Col>
 
         <Col xs={24} sm={24} md={12} lg={12}>
-
-        <Card
+          <Card
             style={{
               width: 500,
               marginBottom: 10,
@@ -437,10 +464,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.haz_id : ""}
                     onChange={(e) => handleChange("haz_id", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -450,16 +480,19 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.haz_issued : ""}
                     onChange={(e) => handleChange("haz_issued", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
             </Row>
           </Card>
-         
+
           <Card
             style={{
               width: 500,
@@ -500,10 +533,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.pco_no : ""}
                     onChange={(e) => handleChange("pco_no", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -515,10 +551,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                     onChange={(e) =>
                       handleChange("pco_validity", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -530,10 +569,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.pco_name : ""}
                     onChange={(e) => handleChange("pco_name", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
@@ -543,17 +585,18 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.pco_tel_no : ""}
                     onChange={(e) => handleChange("pco_tel_no", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="-"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-permit"
                   />
                 </Paragraph>
               </Col>
             </Row>
           </Card>
-
-         
         </Col>
 
         <Modal
@@ -580,7 +623,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
               </span>
             </div>
           }
-          visible={isModalVisible}
+          open={isModalVisible}
           onCancel={handleCancelPermit}
           footer={[
             <Button key="cancel" onClick={handleCancelPermit}>

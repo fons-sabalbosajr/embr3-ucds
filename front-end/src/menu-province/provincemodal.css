@@ -122,3 +122,63 @@
   border-radius: 4px;
   padding: 16px;
 }
+
+
+///////////THEMES///////////////////////
+
+/* General styles for the modal */
+.modal-container.light-theme {
+  background-color: #ffffff;
+  color: #333333;
+}
+
+.modal-container.dark-theme {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+/* Tab pane styles */
+.tabpane-container.light-theme {
+  background-color: #f9f9f9;
+  color: #333333;
+}
+
+.tabpane-container.dark-theme {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+}
+
+/* Button styles */
+.ant-btn.light-theme {
+  background-color: #f0f0f0;
+  color: #333333;
+  border-color: #d9d9d9;
+}
+
+.ant-btn.dark-theme {
+  background-color: #333333;
+  color: #e0e0e0;
+  border-color: #444444;
+}
+
+/* Tab header styles */
+.ant-tabs-tab.light-theme {
+  background-color: #ffffff;
+  color: #333333;
+}
+
+.ant-tabs-tab.dark-theme {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+}
+
+/* Active tab styles */
+.ant-tabs-tab-active.light-theme {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+
+.ant-tabs-tab-active.dark-theme {
+  background-color: #0050b3;
+  color: #ffffff;
+}

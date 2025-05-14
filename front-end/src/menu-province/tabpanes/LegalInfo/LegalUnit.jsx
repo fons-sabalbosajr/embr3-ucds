@@ -112,10 +112,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <Input
                     value={editedRecord ? editedRecord.docket_no : ""}
                     onChange={(e) => handleChange("docket_no", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={1}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -128,10 +131,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) =>
                       handleChange("denr_pab_case_no", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={1}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -182,10 +188,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <Input
                     value={editedRecord ? editedRecord.days_dfda : ""}
                     onChange={(e) => handleChange("days_dfda", e.target.value)}
-                    disabled={isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={1}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -252,7 +261,6 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                       disabled={!isEditing}
                       format="MM/DD/YYYY"
                       placeholder="MM/DD/YYYY"
-                      className="text-area-legal custom-date-picker"
                       style={{ width: "100%" }}
                     />
                   </ConfigProvider>
@@ -266,10 +274,12 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) =>
                       handleChange("service_mode", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={1}
-                    className="text-area-legal textbox-prov"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                   />
                 </Paragraph>
               </Col>
@@ -292,10 +302,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.v_pd1586 : ""}
                     onChange={(e) => handleChange("v_pd1586", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={3}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -305,10 +318,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.v_ra9275 : ""}
                     onChange={(e) => handleChange("v_ra9275", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={3}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -318,10 +334,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.v_ra8749 : ""}
                     onChange={(e) => handleChange("v_ra8749", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={3}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -331,10 +350,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.v_haz : ""}
                     onChange={(e) => handleChange("v_haz", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={3}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -344,10 +366,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.v_tchem : ""}
                     onChange={(e) => handleChange("v_tchem", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={3}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -451,8 +476,12 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <LegalOfficers
                     value={editedRecord ? editedRecord.legal_officer : ""}
                     onChange={(value) => handleChange("legal_officer", value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                   />
                 </Paragraph>
               </Col>
@@ -467,10 +496,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) =>
                       handleChange("tc_commitment", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -483,10 +515,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.pos_paper : ""}
                     onChange={(e) => handleChange("pos_paper", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
                     rows={2}
-                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -506,7 +541,9 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Row gutter={[16, 16]} className="row-penalty-label">
                 <Col xs={24} sm={24} md={8} lg={8}>
                   <Paragraph className="paragraph-container-legal">
-                    <strong className="textl-legal-container">Date Payment of Penalty:</strong>
+                    <strong className="textl-legal-container">
+                      Date Payment of Penalty:
+                    </strong>
                   </Paragraph>
                 </Col>
                 <Col xs={24} sm={24} md={8} lg={8}>
@@ -516,7 +553,9 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                 </Col>
                 <Col xs={24} sm={24} md={8} lg={8}>
                   <Paragraph className="paragraph-container-legal">
-                    <strong className="textl-legal-container">(OR) Number:</strong>
+                    <strong className="textl-legal-container">
+                      (OR) Number:
+                    </strong>
                   </Paragraph>
                 </Col>
               </Row>
@@ -600,12 +639,14 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   </Col>
                 </Row>
               ))}
-              <Row  style={{ marginTop: "-10px"}}>
-                <Col
-                  span={24}
-                  style={{ textAlign: "right"}}
-                >
-                  <Button type="primary" onClick={addFieldSet}  size="small"  disabled={!isEditing}>
+              <Row style={{ marginTop: "-10px" }}>
+                <Col span={24} style={{ textAlign: "right" }}>
+                  <Button
+                    type="primary"
+                    onClick={addFieldSet}
+                    size="small"
+                    disabled={!isEditing}
+                  >
                     Add
                   </Button>
                   {fields.length > 1 && (
@@ -613,7 +654,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                       danger
                       type="primary"
                       onClick={removeFieldSet}
-                      style={{ marginLeft: "10px"}}
+                      style={{ marginLeft: "10px" }}
                       size="small"
                       disabled={!isEditing}
                     >
@@ -647,10 +688,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                   <TextArea
                     value={editedRecord ? editedRecord.remarks : ""}
                     onChange={(e) => handleChange("remarks", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={3}
-                    className="text-area-legal"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={2}
                   />
                 </Paragraph>
               </Col>
@@ -692,10 +736,13 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     onChange={(e) =>
                       handleChange("order_status", e.target.value)
                     }
-                    disabled={!isEditing}
-                    placeholder="No data"
-                    rows={3}
-                    className="text-area-legal"
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={2}
                   />
                 </Paragraph>
               </Col>

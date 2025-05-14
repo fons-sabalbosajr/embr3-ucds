@@ -12,30 +12,58 @@
   margin-top: 16px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start; /* Align items at the top */
 }
+
 
 .button-group {
   display: flex;
-  gap: 8px;
+  flex-direction: row; /* Stack buttons vertically */
+  gap: 8px; /* Add spacing between buttons */
+  z-index: 1;
+  margin-top: -2px;
 }
 
 .issues-section {
   padding: 9px;
   border: 1px solid #ddd;
   border-radius: 5px;
-  text-align: left; /* Align text to the left */
+  text-align: left;
   max-width: 650px;
-  width: 100%; /* Ensure it spans the full width */
-  font-size: 10px; /* Reduce the font size for better readability */
+  width: 100%;
+  font-size: 10px;
 }
 
 .pagination-controls {
   text-align: right; /* Align pagination controls to the right */
 }
 
+/* Default styles for highlighted rows */
 .highlight-row {
-  background-color: #d4edda; /* Light green for matching rows */
+  background-color: #a6a6a6; /* Light green for matching rows */
+}
+
+
+/* Dark theme styles */
+.dark-theme .highlight-row {
+  background-color: #2e3b4e; /* Darker background for highlighted rows */
+  color: #e0e0e0; /* Light text color for dark theme */
+}
+
+.dark-theme .table-row:hover {
+  background-color: #3a4a63; /* Darker blue for hover effect */
+  color: #ffffff; /* White font color on hover */
+}
+
+/* Light theme styles */
+.light-theme .highlight-row {
+  background-color: #e8f5e9; /* Light green for highlighted rows */
+  color: #333; /* Dark text color for light theme */
+}
+
+.light-theme .table-row:hover {
+  background-color: #f0f8ff; /* Light blue for hover effect */
+  color: #000; /* Black font color on hover */
 }
 
 .modal-button-group button {

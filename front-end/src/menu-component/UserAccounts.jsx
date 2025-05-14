@@ -8,26 +8,29 @@ import {
   Popover,
   List,
   Tag,
-  Modal,
+  Modal, Tabs
 } from "antd";
 import {
   SearchOutlined,
   DownloadOutlined,
   EllipsisOutlined,
   UserOutlined,
+  EditOutlined,
+  KeyOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
-import "./useraccount.css";
 import UserProfileModal from "./UserAccountModal";
 import SignAccountModal from "./SignAccountModal";
 import Swal from "sweetalert2";
 import AvatarWithName from "../components/AvatarwithName";
 import AccountPermission from "./AccountPermission";
 import { API_URLS } from "../constants/apiUrls";
+import "./useraccount.css";
 
 const { Option } = Select;
+const { TabPane } = Tabs;
 
-const UserAccounts = () => {
+const UserAccounts = ({ theme = "dark" }) => {
   const [userData, setUserData] = useState([]);
   const [filteredUserData, setFilteredUserData] = useState([]);
   const [signUpUsers, setSignUpUsers] = useState([]);
@@ -50,6 +53,8 @@ const UserAccounts = () => {
   const [isAccountPermissionVisible, setAccountPermissionVisible] =
     useState(false);
   const [refreshInterval, setRefreshInterval] = useState(1000);
+  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
+  const [isEditAccessModalOpen, setEditAccessModalOpen] = useState(false);
 
   const fetchLoginStatuses = async () => {
     try {
@@ -72,9 +77,9 @@ const UserAccounts = () => {
         }),
         fetchLoginStatuses(), // Fetch login statuses separately
       ]);
-  
+
       const users = usersResponse.data;
-  
+
       const combinedData = users.map((user) => {
         const status = loginStatuses.find(
           (status) => status.username === user.username
@@ -91,7 +96,7 @@ const UserAccounts = () => {
         }
         return { ...user, status: "offline" }; // Default to 'offline' if no status found
       });
-  
+
       // Sort the combinedData array: online users first, then offline users
       combinedData.sort((a, b) => {
         if (a.status === "online" && b.status !== "online") {
@@ -102,7 +107,7 @@ const UserAccounts = () => {
         }
         return 0; // Keep the order for users with the same status
       });
-  
+
       setUserData(combinedData);
       setFilteredUserData(combinedData);
       setPagination((prev) => ({ ...prev, total: combinedData.length }));
@@ -112,26 +117,6 @@ const UserAccounts = () => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchData();
-    const intervalId = setInterval(fetchData, refreshInterval);
-    return () => clearInterval(intervalId);
-  }, [pagination.current, pagination.pageSize, refreshInterval]);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    const uniquePermissions = new Set();
-    userData.forEach((user) => {
-      if (user.permission) {
-        uniquePermissions.add(user.permission);
-      }
-    });
-    setPermissions(Array.from(uniquePermissions));
-  }, [userData]);
 
   const fetchUserData = async () => {
     try {
@@ -162,18 +147,6 @@ const UserAccounts = () => {
       return [];
     }
   };
-
-  useEffect(() => {
-    const intervalId = setInterval(async () => {
-      const data = await fetchSignUpUsers();
-      setSignUpUsers(data);
-    }, refreshInterval);
-    return () => clearInterval(intervalId);
-  }, [refreshInterval, pagination.current, pagination.pageSize]);
-
-  useEffect(() => {
-    fetchSignUpUsers().then((data) => setSignUpUsers(data));
-  }, []);
 
   const fetchLoginStatus = async () => {
     try {
@@ -261,6 +234,114 @@ const UserAccounts = () => {
     }
   };
 
+  const handleModalClose = () => {
+    handleClose();
+  };
+
+  const handlePaginationChange = (pagination) => {
+    setPagination(pagination);
+  };
+
+  const handlePermissionChange = (value) => {
+    setSelectedPermission(value); // Set selected permission
+  };
+
+  const filterAndSetData = (permission, searchValue = "") => {
+    const filteredData = userData.filter(
+      (user) =>
+        (permission === "all" || user.permission === permission) &&
+        (user.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+          user.email.toLowerCase().includes(searchValue.toLowerCase()) ||
+          (user.designation &&
+            user.designation.toLowerCase().includes(searchValue.toLowerCase())))
+    );
+    setFilteredUserData(filteredData);
+  };
+
+  const handleSearch = (value) => {
+    console.log("Search:", value);
+    filterAndSetData(selectedPermission, value); // Filter data based on selected permission and search value
+  };
+
+  const handleViewSignUpUser = (record) => {
+    setSelectedSignUpUser(record); // Set the selected user
+    setIsSignUpModalVisible(true); // Open the modal
+  };
+
+  const handleSignUpModalCancel = () => {
+    setIsSignUpModalVisible(false); // Close the modal
+    setSelectedSignUpUser(null); // Clear selected user
+  };
+
+  const handleExport = () => {
+    console.log("Exporting...");
+  };
+
+  const handleEdit = (record) => {
+    setSelectedUser(record);
+    setEditProfileModalOpen(true);
+  };
+
+  const handleEditAccess = (user) => {
+    setSelectedAccessUser(user);
+    setModalAccessVisible(true);
+  };
+
+  const handleModalCancel = () => {
+    setSelectedUser(null);
+    setIsModalVisible(false); // Hide the modal
+  };
+
+  const rowClassName = (record) => {
+    if (record.status === "approved") {
+      return "disabled-row";
+    }
+    return "";
+  };
+
+  const handleClose = () => {
+    setModalAccessVisible(false);
+    setSelectedAccessUser(null);
+  };
+
+  const handlePermissionsUpdate = (updatedPermissions) => {
+    // You can save the permissions to server here if needed
+    //console.log("Updated Permissions:", updatedPermissions);
+    handleClose();
+  };
+
+  useEffect(() => {
+    fetchData();
+    const intervalId = setInterval(fetchData, refreshInterval);
+    return () => clearInterval(intervalId);
+  }, [pagination.current, pagination.pageSize, refreshInterval]);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    const uniquePermissions = new Set();
+    userData.forEach((user) => {
+      if (user.permission) {
+        uniquePermissions.add(user.permission);
+      }
+    });
+    setPermissions(Array.from(uniquePermissions));
+  }, [userData]);
+
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      const data = await fetchSignUpUsers();
+      setSignUpUsers(data);
+    }, refreshInterval);
+    return () => clearInterval(intervalId);
+  }, [refreshInterval, pagination.current, pagination.pageSize]);
+
+  useEffect(() => {
+    fetchSignUpUsers().then((data) => setSignUpUsers(data));
+  }, []);
+
   useEffect(() => {
     fetchSignUpUsers();
   }, [pagination.current, pagination.pageSize]);
@@ -323,161 +404,156 @@ const UserAccounts = () => {
     fetchData();
   }, [pagination.current, pagination.pageSize]);
 
-  const handleEditAccess = (record) => {
-    setSelectedAccessUser(record); // Set the selected user for access
-    setModalAccessVisible(true); // Open the main modal
-  };
-
-  const handleModalClose = () => {
-    setModalAccessVisible(false);
-    setSelectedAccessUser(null); // Reset the selected user
-  };
-
   const columns = [
     {
-      title: "Name",
+      title: <span className="table-header">Name</span>,
       dataIndex: "name",
       key: "avatarName",
       render: (name, record) => {
+        const isOnline = record.status === "online";
+
         return (
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <AvatarWithName
-              userHandle={record.username} // Pass userHandle to fetch avatar
-            />
-            <span style={{ marginLeft: "8px" }}>{name}</span>{" "}
-            {/* Display the name here */}
+          <div className="user-name-cell">
+            <AvatarWithName userHandle={record.username} />
+            <div className="user-fullname-wrapper">
+              <div className="user-fullname">{name}</div>
+              <span
+                className={`user-last-active ${
+                  record.status === "online" ? "active-now" : "active-ago"
+                }`}
+              >
+                {record.status === "online" ? "active now" : record.status}
+              </span>
+            </div>
           </div>
         );
       },
-      align: "left",
-      width: "200px",
+      align: "center",
+      width: 250,
     },
     {
-      title: "Email Address",
+      title: <span className="table-header">Email</span>,
       dataIndex: "email",
       key: "email",
+      render: (email) => <span className="user-email">{email}</span>,
+      align: "center",
       ellipsis: true,
-      align: "left",
-      width: "200px",
+      width: 250,
     },
     {
-      title: "Designation/Position",
+      title: <span className="table-header">Position</span>,
       dataIndex: "division",
       key: "division",
+      render: (division) => <span className="user-position">{division}</span>,
+      align: "center",
       ellipsis: true,
-      align: "left",
+      width: 180,
     },
     {
       title: "Permission",
       dataIndex: "permission",
       key: "permission",
       render: (permission) => {
-        let color = "";
+        let bgColor = "";
+        let textColor = "#fff";
         switch (permission) {
           case "viewer":
-            color = "#FBA834"; // Light Green
+            bgColor = "#379777"; // Dark Gray
             break;
           case "contributor":
-            color = "#387ADF"; // Dark Yellow
+            bgColor = "#F4CE14"; // Dark Blue
             break;
           case "admin":
-            color = "#333A73"; // Orange
+            bgColor = "#102E50"; // Dark Charcoal
             break;
           case "developer":
-            color = "#800000"; // Maroon
+            bgColor = "#3A3960"; // Dark Purple
             break;
           default:
-            color = "gray"; // Default color
+            bgColor = "#f0f0f0";
         }
         return (
           <span
             style={{
-              backgroundColor: color,
-              color: "white",
-              padding: "2px 4px", // Reduced padding
+              backgroundColor: bgColor,
+              color: textColor,
+              padding: "2px 6px",
               borderRadius: "3px",
               display: "inline-block",
-              fontSize: 10, // Reduced font size
-              minWidth: "50px", // Optional: to keep a consistent size for different permissions
-              textAlign: "center", // Center the text
+              fontSize: 11,
+              minWidth: "60px",
+              textAlign: "center",
+              fontWeight: 500,
             }}
           >
             {permission}
           </span>
         );
       },
-      align: "left",
+      align: "center",
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
       render: (status) => {
-        let color = "";
+        let bgColor = "";
+        let textColor = "#fff";
         switch (status) {
           case "online":
-            color = "green";
+            bgColor = "#5CB338";
             break;
           case "offline":
-            color = "red";
+            bgColor = "#973131";
             break;
           default:
-            color = "gray";
-            break;
+            bgColor = "#f0f0f0";
         }
         return (
           <span
             style={{
-              backgroundColor: color,
-              color: "white",
-              padding: "2px 4px", // Reduced padding
+              backgroundColor: bgColor,
+              color: textColor,
+              padding: "2px 6px",
               borderRadius: "3px",
               display: "inline-block",
-              fontSize: 10, // Reduced font size
-              minWidth: "50px", // Optional: to keep a consistent size for different statuses
-              textAlign: "center", // Center the text
+              fontSize: 11,
+              minWidth: "60px",
+              textAlign: "center",
+              fontWeight: 500,
             }}
           >
             {status}
           </span>
         );
       },
-      align: "left",
+      align: "center",
     },
     {
-      title: "Action",
+      title: <span className="table-header">Action</span>,
       dataIndex: "action",
       key: "action",
-      align: "left",
       render: (_, record) => (
-        <Popover
-          content={
-            <List>
-              <List.Item>
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={() => handleEdit(record)}
-                >
-                  Edit Profile
-                </Button>
-              </List.Item>
-              <List.Item>
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={() => handleEditAccess(record)}
-                >
-                  Edit Access
-                </Button>
-              </List.Item>
-            </List>
-          }
-          placement="rightTop" // Placement of the popover
-        >
-          <Button icon={<EllipsisOutlined />} />
-        </Popover>
+        <div className="action-buttons">
+          <Button
+            icon={<EditOutlined />}
+            size="small"
+            title="Edit Profile"
+            onClick={() => handleEdit(record)}
+            type="primary"
+          />
+          <Button
+            icon={<KeyOutlined />}
+            size="small"
+            type="primary"
+            title="Edit Access"
+            onClick={() => handleEditAccess(record)}
+            className="seagreen-btn"
+          />
+        </div>
       ),
+      align: "center",
+      width: 120,
     },
   ];
 
@@ -621,7 +697,7 @@ const UserAccounts = () => {
                 <Button
                   type="text"
                   size="small"
-                  onClick={() => handleViewSignUpUser (record)} // Open modal on click
+                  onClick={() => handleViewSignUpUser(record)} // Open modal on click
                 >
                   Approve
                 </Button>
@@ -636,7 +712,7 @@ const UserAccounts = () => {
                   type="text"
                   size="small"
                   danger
-                  onClick={() => handleRemoveUser (record)} // Assuming this function exists
+                  onClick={() => handleRemoveUser(record)} // Assuming this function exists
                 >
                   Remove
                 </Button>
@@ -648,97 +724,48 @@ const UserAccounts = () => {
           <Button icon={<EllipsisOutlined />} />
         </Popover>
       ),
-    }
+    },
   ];
 
-  const handlePaginationChange = (pagination) => {
-    setPagination(pagination);
-  };
-
-  const handlePermissionChange = (value) => {
-    setSelectedPermission(value); // Set selected permission
-  };
-
-  const handleSearch = (value) => {
-    console.log("Search:", value);
-    filterAndSetData(selectedPermission, value); // Filter data based on selected permission and search value
-  };
-
-  // Function to filter data based on permission and search value
-  const filterAndSetData = (permission, searchValue = "") => {
-    const filteredData = userData.filter(
-      (user) =>
-        (permission === "all" || user.permission === permission) &&
-        (user.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchValue.toLowerCase()) ||
-          (user.designation &&
-            user.designation.toLowerCase().includes(searchValue.toLowerCase())))
-    );
-    setFilteredUserData(filteredData);
-  };
-
-  const handleViewSignUpUser  = (record) => {
-    setSelectedSignUpUser (record); // Set the selected user
-    setIsSignUpModalVisible(true); // Open the modal
-  };
-
-  const handleSignUpModalCancel = () => {
-    setIsSignUpModalVisible(false); // Close the modal
-    setSelectedSignUpUser (null); // Clear selected user
-  };
-
-  const handleExport = () => {
-    console.log("Exporting...");
-  };
-
-  const handleEdit = (record) => {
-    setSelectedUser(record);
-    setIsModalVisible(true);
-    setPopoverVisible(false);
-  };
-
-  const handleModalCancel = () => {
-    setSelectedUser(null);
-    setIsModalVisible(false); // Hide the modal
-  };
-
-
-  const rowClassName = (record) => {
-    if (record.status === "approved") {
-      return "disabled-row";
-    }
-    return "";
-  };
-
-  const handleClose = () => {
-    setModalAccessVisible(false);
-  };
-
-  const handlePermissionsUpdate = () => {
-    //console.log("Permissions updated, re-authenticating...");
-  };
-
   return (
-    <div>
-      <div className="user-accounts-container">
+    <div className="accounts-container">
+      <div className="card">
         <h2 className="account-title">User Accounts</h2>
-        <div className="filter-options">
-          <div className="filter-input">
-            <Input
+        <div
+          className="filter-options"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "0.1rem 0", // Reduced vertical padding
+            marginBottom: "0.2rem", // Reduced margin for spacing between elements
+            flexWrap: "wrap", // responsive fallback
+          }}
+        >
+          {/* Grouped Search + Select */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <Input.Search
               placeholder="Search Users"
               allowClear
               prefix={<SearchOutlined />}
-              size="medium"
+              size="middle"
               onSearch={handleSearch}
-              className="search-filter"
+              style={{ width: 250 }}
             />
+
             <Select
-              defaultValue="All Permissions"
-              style={{ width: 150 }}
+              defaultValue="all"
+              style={{ width: 180 }}
               onChange={handlePermissionChange}
             >
               <Option value="all">All Permissions</Option>
-              {/* Dynamically render permission options */}
               {permissions.map((permission) => (
                 <Option key={permission} value={permission}>
                   {permission}
@@ -746,66 +773,69 @@ const UserAccounts = () => {
               ))}
             </Select>
           </div>
-          <div className="action-buttons">
-            <Button
-              type="text"
-              className="export"
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-            >
-              Export
-            </Button>
-          </div>
+
+          {/* Export Button */}
+          <Button
+            type="default"
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+          >
+            Export
+          </Button>
         </div>
+
         <Table
           columns={columns}
-          dataSource={userData} // Replace with your user accounts data
+          dataSource={userData}
           pagination={{
             ...pagination,
             showSizeChanger: true,
             pageSizeOptions: ["10", "50", "100"],
+            size: "small", // smaller pagination UI
           }}
           onChange={handlePaginationChange}
+          className={theme === "light" ? "light-theme-table" : ""}
         />
-
-        <UserProfileModal
-         user={selectedUser  }
-         visible={isModalVisible}
-         onCancel={() => {
-           setSelectedUser(null);
-           setIsModalVisible(false);
-         }}
-        />
-
-        <Modal
-          title="User Permission"
-          visible={isModalAccessVisible}
-          footer={null}
-          closable={true}
-          onCancel={handleClose}
-          width={800}
-        >
-          {selectedAccessUser && (
-            <div>
-              <AccountPermission
-                visible={isAccountPermissionVisible}
-                onClose={handleModalClose}
-                onPermissionsUpdate={handlePermissionsUpdate}
-                userData={{
-                  name: selectedAccessUser.name,
-                  email: selectedAccessUser.email,
-                  division: selectedAccessUser.division,
-                  permission: selectedAccessUser.permission,
-                  username: selectedAccessUser.username,
-                }}
-              />
-            </div>
-          )}
-        </Modal>
       </div>
 
-      {/* Container for Users Needing Approval */}
-      <div className="signed-up-container">
+      <Modal
+        title="Account Details"
+        open={isEditProfileModalOpen}
+        onCancel={() => setEditProfileModalOpen(false)}
+        footer={null}
+        destroyOnClose
+        width={800}
+      >
+        <UserProfileModal user={selectedUser} />
+      </Modal>
+
+      <Modal
+        title="User Permission"
+        open={isModalAccessVisible}
+        footer={null}
+        closable={true}
+        onCancel={handleClose}
+        width={800}
+      >
+        {selectedAccessUser && (
+          <AccountPermission
+            visible={isModalAccessVisible}
+            onClose={handleModalClose}
+            onPermissionsUpdate={handlePermissionsUpdate}
+            userData={{
+              name: selectedAccessUser.name,
+              email: selectedAccessUser.email,
+              division: selectedAccessUser.division,
+              permission: selectedAccessUser.permission,
+              username: selectedAccessUser.username,
+              avatar: selectedAccessUser.avatar,
+              status: selectedAccessUser.status, // if your AvatarWithName expects status
+            }}            
+          />
+        )}
+      </Modal>
+
+      <div className="card">
         <h2 className="account-title">Signed Up Users</h2>
         <div className="filter-options">
           <div className="filter-input">

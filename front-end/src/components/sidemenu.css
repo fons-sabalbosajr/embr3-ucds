@@ -54,6 +54,7 @@
   overflow-y: auto;
   transition: all 0.3s ease-in-out;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  
 }
 
 
@@ -73,6 +74,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
+  margin-top: -15px;
 }
 
 .collapse-toggle-button {
@@ -80,7 +82,7 @@
 }
 
 .menu-container {
-  margin-top: 16px; /* Adjust this if needed to provide spacing */
+  margin-top: 5px; /* Adjust this if needed to provide spacing */
 }
 
 .menu-bar-item {
@@ -102,4 +104,15 @@
 
 .ant-menu-item {
   font-size: 11px; /* Adjust the font size as needed */
+}
+
+.sider-container.expanded .sider-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-left: 10px;
+  color: var(--light-text);
+}
+
+.sider-container.collapsed .sider-title {
+  display: none;
 }

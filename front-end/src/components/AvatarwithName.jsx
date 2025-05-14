@@ -63,7 +63,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
                 <Avatar
                     src={`http://localhost:8081${avatar}`}
                     alt="Profile Picture"
-                    style={{ width: size, height: size, marginRight: "8px" }}
+                    style={{ width: size, height: size }}
                 />
             ) : (
                 renderOldAvatar()

@@ -15,7 +15,7 @@ export const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
-  const [currentProvince, setCurrentProvince] = useState("Aurora"); // Default province
+  const [currentProvince, setCurrentProvince] = useState(""); // Default province
   const loaded = useRef(false);
 
   const fetchData = useCallback(async (province) => {

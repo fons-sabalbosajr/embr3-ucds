@@ -12,7 +12,7 @@ const Dashboard = ({ avatar, name, theme = "dark" }) => {
     <div className="dashboard-container">
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={18}>
-          <div className="card">
+          <div>
             <Bulletin theme={theme} />
           </div>
         </Col>

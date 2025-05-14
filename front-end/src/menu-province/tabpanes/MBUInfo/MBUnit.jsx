@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  Input,
-  Select,
-  Tabs,
-  Row,
-  Col,
-  Checkbox,
-  Typography,
-} from "antd";
+import { Input, Select, Tabs, Row, Col, Checkbox, Typography } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
 import "./mbu.css";
@@ -43,9 +35,13 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Input
                 value={editedRecord ? editedRecord.lat : ""}
                 onChange={(e) => handleChange("lat", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="text-area-mbu"
+                readOnly={!isEditing}
+                placeholder="no data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+                rows={2}
               />
             </Paragraph>
           </Col>
@@ -55,9 +51,13 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Input
                 value={editedRecord ? editedRecord.long : ""}
                 onChange={(e) => handleChange("long", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="text-area-mbu"
+                readOnly={!isEditing}
+                placeholder="no data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+                rows={2}
               />
             </Paragraph>
           </Col>
@@ -67,9 +67,13 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
               <TextArea
                 value={editedRecord ? editedRecord.address : ""}
                 onChange={(e) => handleChange("address", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="text-area-mbu"
+                readOnly={!isEditing}
+                placeholder="no data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+                rows={2}
               />
             </Paragraph>
           </Col>
@@ -79,9 +83,13 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
               <Input
                 value={editedRecord ? editedRecord.waterbody : ""}
                 onChange={(e) => handleChange("waterbody", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="text-area-mbu"
+                readOnly={!isEditing}
+                placeholder="no data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+                rows={2}
               />
             </Paragraph>
           </Col>
@@ -91,10 +99,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 checked={editedRecord?.mbu_area === "✔"}
                 disabled={!isEditing}
                 onChange={(e) =>
-                  handleChange(
-                    "mbu_area",
-                    e.target.checked ? "✔" : ""
-                  )
+                  handleChange("mbu_area", e.target.checked ? "✔" : "")
                 }
                 style={{ fontSize: "15px" }}
               >
@@ -109,10 +114,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 checked={editedRecord?.mbu_priority === "✔"}
                 disabled={!isEditing}
                 onChange={(e) =>
-                  handleChange(
-                    "mbu_priority",
-                    e.target.checked ? "✔" : ""
-                  )
+                  handleChange("mbu_priority", e.target.checked ? "✔" : "")
                 }
                 style={{ fontSize: "15px" }}
               >
@@ -127,10 +129,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 checked={editedRecord?.mbu_survey === "✔"}
                 disabled={!isEditing}
                 onChange={(e) =>
-                  handleChange(
-                    "mbu_survey",
-                    e.target.checked ? "✔" : ""
-                  )
+                  handleChange("mbu_survey", e.target.checked ? "✔" : "")
                 }
                 style={{ fontSize: "15px" }}
               >
@@ -163,10 +162,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
                 checked={editedRecord?.dp_universe === "✔"}
                 disabled={!isEditing}
                 onChange={(e) =>
-                  handleChange(
-                    "dp_universe",
-                    e.target.checked ? "✔" : ""
-                  )
+                  handleChange("dp_universe", e.target.checked ? "✔" : "")
                 }
                 style={{ fontSize: "15px" }}
               >

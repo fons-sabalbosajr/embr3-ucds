@@ -45,13 +45,16 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
   };
 
   useEffect(() => {
-    if (user) {
-      const firstName = user.name.split(" ")[0];
-      const lastName = user.name.split(" ")[1];
+    if (user && user.name) {
+      const nameParts = user.name.split(" ");
+      const firstName = nameParts[0] || ""; // Default to an empty string if undefined
+      const lastName = nameParts[1] || ""; // Default to an empty string if undefined
       const firstLetter = firstName.charAt(0).toLowerCase();
       const surname = lastName.toLowerCase();
       const username = `${firstLetter}${surname}`;
       setGenerateUsername(username);
+    } else {
+      setGenerateUsername(""); // Fallback if user or user.name is undefined
     }
   }, [user]);
 
@@ -186,7 +189,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
     <>
       <Modal
         title="User  Details"
-        visible={visible}
+        open={visible}
         onCancel={onCancel}
         footer={[
           <Button key="cancel" onClick={onCancel}>
@@ -198,7 +201,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
         ]}
         width={800}
       >
-        <div className="modal-content">
+        <div className={`modal-content ${document.body.classList.contains('dark') ? 'dark' : ''}`}>
           <div className="avatar-section">
             <Avatar
               src={avatarPreview || DEFAULT_AVATAR_URL}
@@ -271,6 +274,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
               <p className="details-label">Generate Username:</p>
               <Input
                 value={generateUsername}
+                onChange={(e) => setGenerateUsername(e.target.value)} 
                 className="generate-username-input"
               />
             </div>

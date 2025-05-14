@@ -12,7 +12,6 @@ import {
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
-
 import "./index.css";
 import Dashboard from "./menu-component/Dashboard";
 import Province from "./menu-province/Province";
@@ -89,7 +88,7 @@ const Universe = () => {
               data.pampanga,
               data.tarlac,
               data.zambales,
-            ].filter(Boolean)
+            ]
       );
       setUserHandle(data.username);
       setDivision(data.division || "");
@@ -252,6 +251,7 @@ const Universe = () => {
                     notifications={notifications}
                     isLoading={isLoading}
                     className="notification-icon"
+                    currentUser={currentUser}
                   />
 
                   <Popover
@@ -360,13 +360,19 @@ const Universe = () => {
                 <Route path="trc" element={<TRC theme={theme} />} />
                 <Route path="mbu" element={<MBU theme={theme} />} />
                 <Route path="eswm-database" element={<ESWM theme={theme} />} />
-                <Route path="accounts" element={<Accounts theme={theme}  />} />
-                <Route path="extract" element={<Extract theme={theme}  />} />
-                <Route path="activity-log" element={<ActivityLog theme={theme}  />} />
-                <Route path="admin" element={<Admin theme={theme}  />} />
-                <Route path="report" element={<Report theme={theme}  />} />
-                <Route path="posting" element={<Posting theme={theme}  />} />
-                <Route path="duplicates" element={<Duplicates theme={theme}  />} />
+                <Route path="accounts" element={<Accounts theme={theme} />} />
+                <Route path="extract" element={<Extract theme={theme} />} />
+                <Route
+                  path="activity-log"
+                  element={<ActivityLog theme={theme} />}
+                />
+                <Route path="admin" element={<Admin theme={theme} />} />
+                <Route path="report" element={<Report theme={theme} />} />
+                <Route path="posting" element={<Posting theme={theme} />} />
+                <Route
+                  path="duplicates"
+                  element={<Duplicates theme={theme} />}
+                />
               </Routes>
             </Content>
           </Layout>

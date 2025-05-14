@@ -3,7 +3,7 @@ import { AutoComplete, ConfigProvider, Input } from "antd";
 import Papa from 'papaparse';
 import './municipality.css'
 
-const Municipality = ({ value, disabled, onChange, editedRecord, handleChange, isEditing, selectedProvince }) => {
+const Municipality = ({ value, disabled, onChange, style, editedRecord, handleChange, isEditing, selectedProvince }) => {
   const [municipalityOptions, setMunicipalityOptions] = useState([]);
   const [provinceId, setProvinceId] = useState(null);
 
@@ -48,7 +48,7 @@ const Municipality = ({ value, disabled, onChange, editedRecord, handleChange, i
         backgroundColor: "#f1f1f1",
       }}
       options={municipalityOptions}
-      dropdownClassName="custom-autocomplete-dropdown"
+      popupClassName="custom-autocomplete-dropdown"
       value={value}
       disabled={disabled}
       onChange={onChange}
@@ -61,8 +61,9 @@ const Municipality = ({ value, disabled, onChange, editedRecord, handleChange, i
       <Input
         style={{
           fontSize: "11px",
-          height: "27px",
+          height: "29px",
           padding: "4px 8px",
+          ...style,
         }}
         placeholder="Select municipality"
         placeholderStyle={{

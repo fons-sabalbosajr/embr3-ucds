@@ -152,6 +152,7 @@ app.set("trust proxy", 1);
 
 app.use("/api", router);
 
+
 // Utility function to check if a value is expired
 const isExpired = (expiryDate) => {
   const currentDate = new Date();
@@ -1550,7 +1551,6 @@ app.post("/api/newusers", uploadnewdp.single("avatar"), async (req, res) => {
 
   // Input validation
   if (!name || !email || !division || !status || !password || !username) {
-    //console.log("Validation error: Missing required fields");
     return res.status(400).json({
       error:
         "Required fields: name, email, division, status, password, username",
@@ -1571,14 +1571,14 @@ app.post("/api/newusers", uploadnewdp.single("avatar"), async (req, res) => {
     }
 
     // Hash password securely
-    const password = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10); // Use a different variable name
 
     // Create user object with hashed password and provided username
     const newUser = {
       name,
       username,
       email,
-      password, // Ensure to hash the password before saving
+      password: hashedPassword, // Use the hashed password here
       division,
       permission: "viewer", // Default permission
       status: status || "offline", // Default status
@@ -1598,7 +1598,7 @@ app.post("/api/newusers", uploadnewdp.single("avatar"), async (req, res) => {
 
     if (insertResult.acknowledged && insertResult.insertedId) {
       return res.status(201).json({
-        message: "User  created successfully",
+        message: "User created successfully",
         user: newUser,
       });
     } else {
@@ -3095,6 +3095,8 @@ app.get("/api/extract-province-data", async (req, res) => {
   }
 });
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.get("/api/users", async (req, res) => {
   const { username } = req.query; // Get the username from the query parameters
   //console.log("Querying for username:", username); // Log the queried username
@@ -4025,22 +4027,44 @@ app.put(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { title, message, acknowledgement, iconType, date } = req.body;
+      const updates = req.body;
+
+      // Clean and remap updates
+      const cleanUpdates = {};
+      for (const key in updates) {
+        if (updates[key] !== undefined) {
+          if (key === "date") {
+            cleanUpdates["createdDate"] = new Date(updates[key]);
+          } else {
+            cleanUpdates[key] = updates[key];
+          }
+        }
+      }
+
+      // Fetch current posting before update
+      const currentPosting = await postingCollection.findOne({ _id: new ObjectId(id) });
+      if (!currentPosting) {
+        return res.status(404).json({ error: "Posting not found" });
+      }
+
+      // Perform the update
       const updateResult = await postingCollection.updateOne(
         { _id: new ObjectId(id) },
-        {
-          $set: {
-            title,
-            message,
-            acknowledgement,
-            iconType,
-            createdDate: new Date(date), // Ensure date is handled correctly
-          },
-        }
+        { $set: cleanUpdates }
       );
 
-      if (updateResult.matchedCount === 0) {
-        return res.status(404).json({ error: "Posting not found" });
+      // If status is changed, log it
+      if (updates.status && updates.status !== currentPosting.status) {
+        const auditEntry = {
+          type: "PostingStatusChange",
+          postingId: id,
+          changedBy: req.session.user?.username || "unknown",
+          oldStatus: currentPosting.status || "undefined",
+          newStatus: updates.status,
+          timestamp: new Date(),
+        };
+
+        await db.collection("activity_logs").insertOne(auditEntry);
       }
 
       res.json({ message: "Posting updated successfully" });

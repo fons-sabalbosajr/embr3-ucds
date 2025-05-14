@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Input, Row, Col, Typography } from "antd";
+import { Input, Row, Col, Typography, ConfigProvider } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import "./geninfo.css";
 import IndustryClass from "../../../components/Autocomplete/IndustryClass";
@@ -15,6 +15,7 @@ const GenInfo = ({
   setEditedRecord,
   handleChange,
   isEditing,
+  theme,
 }) => {
   const [projectData, setProjectData] = useState({});
 
@@ -69,193 +70,245 @@ const GenInfo = ({
   }, [editedRecord?.industry_class]);
 
   return (
-    <Row gutter={[16, 16]}>
-      <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
-        <Paragraph>
-          <strong>Project Title</strong>
-          <TextArea
-            value={editedRecord ? editedRecord.title : ""}
-            onChange={(e) => handleChange("title", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
-        <Paragraph>
-          <strong>Proponent Name</strong>
-          <TextArea
-            value={editedRecord ? editedRecord.name : ""}
-            onChange={(e) => handleChange("name", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
+    <div>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={24} md={12} lg={12}>
+          <Paragraph>
+            <strong>Project Title</strong>
+            <TextArea
+              value={editedRecord?.title || ""}
+              onChange={(e) => handleChange("title", e.target.value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
+          <Paragraph>
+            <strong>Proponent Name</strong>
+            <TextArea
+              value={editedRecord?.name || ""}
+              onChange={(e) => handleChange("name", e.target.value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
 
-        <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12}>
-            <Paragraph>
-              <strong>Industry Classification</strong>
-              <IndustryClass
-                value={editedRecord ? editedRecord.industry_class : ""}
-                onChange={(value) => {
-                  handleChange("industry_class", value);
 
-                  // If industry_class is empty, set dependent fields to "N/A"
-                  if (!value) {
-                    handleChange("industry_type", "N/A");
-                    handleChange("industry_subtype", "N/A");
-                    handleChange("psic_code", "N/A");
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={24} md={12} lg={12}>
+              <Paragraph>
+                <strong>Industry Classification</strong>
+                <IndustryClass
+                  value={editedRecord?.industry_class || ""}
+                  onChange={(value) => {
+                    handleChange("industry_class", value);
+                    if (!value) {
+                      handleChange("industry_type", "N/A");
+                      handleChange("industry_subtype", "N/A");
+                      handleChange("psic_code", "N/A");
+                    }
+                  }}
+                  placeholder="No data"
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                  }}
+                  theme={theme}
+                />
+              </Paragraph>
+            </Col>
+            <Col xs={24} sm={24} md={12} lg={12}>
+              <Paragraph>
+                <strong>PSIC Code</strong>
+                <Input
+                  value={
+                    projectData
+                      ? projectData.psic_code
+                      : editedRecord?.psic_code || ""
                   }
-                }}
-                disabled={!isEditing}
-                placeholder="No data"
-              />
-            </Paragraph>
-          </Col>
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
-              <strong>PSIC Code</strong>
-              <Input
-                value={
-                  projectData
-                    ? projectData.psic_code
-                    : editedRecord.psic_code || ""
-                }
-                onChange={(e) => handleChange("psic_code", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="textbox-label"
-              />
-            </Paragraph>
-          </Col>
-        </Row>
+                  onChange={(e) => handleChange("psic_code", e.target.value)}
+                  readOnly
+                  placeholder="No data"
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                  }}
+                />
+              </Paragraph>
+            </Col>
+          </Row>
 
-        <Paragraph>
-          <strong>Industry Type</strong>
-          <Input
-            value={
-              projectData
-                ? projectData.industry_type
-                : editedRecord.industry_type || ""
-            }
-            onChange={(e) => handleChange("industry_type", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
-        <Paragraph className="label-industry-type">
-          <strong>Industry Sub-Type</strong>
-          <Input
-            value={
-              projectData
-                ? projectData.industry_subtype
-                : editedRecord.industry_subtype || ""
-            }
-            onChange={(e) => handleChange("industry_subtype", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
 
-        <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12}>
-            <Paragraph className="label-industry-type">
-              <strong>Latitude</strong>
-              <Input
-                value={editedRecord ? editedRecord.lat : ""}
-                onChange={(e) => handleChange("lat", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="textbox-label"
-              />
-            </Paragraph>
-          </Col>
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph className="label-industry-type">
-              <strong>Longitude</strong>
-              <Input
-                value={editedRecord ? editedRecord.long : ""}
-                onChange={(e) => handleChange("long", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="textbox-label"
-              />
-            </Paragraph>
-          </Col>
-        </Row>
-      </Col>
+          <Paragraph>
+            <strong>Industry Type</strong>
+            <Input
+              value={
+                projectData
+                  ? projectData.industry_type
+                  : editedRecord.industry_type || ""
+              }
+              onChange={(e) => handleChange("industry_type", e.target.value)}
+              readOnly
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
+          
+          <Paragraph className="label-industry-subtype">
+            <strong>Industry Sub-Type</strong>
+            <Input
+              value={
+                projectData
+                  ? projectData.industry_subtype
+                  : editedRecord?.industry_subtype || ""
+              }
+              onChange={(e) => handleChange("industry_subtype", e.target.value)}
+              readOnly
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
 
-      <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
-        <Paragraph>
-          <strong>Address</strong>
-          <TextArea
-            value={editedRecord ? editedRecord.address : ""}
-            onChange={(e) => handleChange("address", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
-        <Paragraph>
-          <strong>Street</strong>
-          <TextArea
-            value={editedRecord ? editedRecord.street : ""}
-            onChange={(e) => handleChange("street", e.target.value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
-        <Paragraph>
-          <strong>Barangay</strong>
-          <Barangays
-            value={editedRecord ? editedRecord.brgy : ""}
-            onChange={(value) => handleChange("brgy", value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            selectedProvince={editedRecord ? editedRecord.province : ""}
-            selectedMunicipality={editedRecord ? editedRecord.city : ""}
-          />
-        </Paragraph>
-        <Paragraph className="paragraph-margin">
-          <strong>City/Municipality</strong>
-          <Municipalities
-            value={editedRecord ? editedRecord.city : ""}
-            onChange={(value) => handleChange("city", value)}
-            disabled={!isEditing}
-            placeholder="No data"
-            selectedProvince={editedRecord ? editedRecord.province : ""}
-          />
-        </Paragraph>
-        <Paragraph className="paragraph-margin">
-          <strong>Province</strong>
-          <Provinces
-            value={editedRecord ? editedRecord.province : ""}
-            onChange={(value) => handleChange("province", value)}
-            disabled={!isEditing}
-            placeholder="No data"
-          />
-        </Paragraph>
+          <Row gutter={[16, 16]} className="row-auto">
+            <Col xs={24} sm={24} md={12} lg={12}>
+              <Paragraph className="label-industry-type">
+                <strong>Latitude</strong>
+                <Input
+                  value={editedRecord?.lat || ""}
+                  onChange={(e) => handleChange("lat", e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="No data"
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                  }}
+                />
+              </Paragraph>
+            </Col>
+            <Col xs={24} sm={24} md={12} lg={12}>
+              <Paragraph className="label-industry-type">
+                <strong>Longitude</strong>
+                <Input
+                  value={editedRecord?.long || ""}
+                  onChange={(e) => handleChange("long", e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="No data"
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                  }}
+                />
+              </Paragraph>
+            </Col>
+          </Row>
+        </Col>
 
-        <Row gutter={[16, 16]} className="row-auto">
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph className="paragraph-margin congress">
-              <strong>Congressional District</strong>
-              <Input
-                value={editedRecord ? editedRecord.cong_district : ""}
-                onChange={(e) => handleChange("cong_district", e.target.value)}
-                disabled={!isEditing}
-                placeholder="No data"
-                className="textbox-label"
-              />
-            </Paragraph>
-          </Col>
-        </Row>
-      </Col>
-    </Row>
+        <Col xs={24} sm={24} md={12} lg={12}>
+          <Paragraph>
+            <strong>Address</strong>
+            <TextArea
+              value={editedRecord?.address || ""}
+              onChange={(e) => handleChange("address", e.target.value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
+          <Paragraph>
+            <strong>Street</strong>
+            <TextArea
+              value={editedRecord?.street || ""}
+              onChange={(e) => handleChange("street", e.target.value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
+          <Paragraph>
+            <strong>Barangay</strong>
+            <Barangays
+              value={editedRecord?.brgy || ""}
+              onChange={(value) => handleChange("brgy", value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+                
+              }}
+              selectedProvince={editedRecord?.province || ""}
+              selectedMunicipality={editedRecord?.city || ""}
+            />
+          </Paragraph>
+          <Paragraph className="margin-top">
+            <strong>City/Municipality</strong>
+            <Municipalities
+              value={editedRecord?.city || ""}
+              onChange={(value) => handleChange("city", value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+              selectedProvince={editedRecord?.province || ""}
+            />
+          </Paragraph>
+          <Paragraph className="margin-top">
+            <strong>Province</strong>
+            <Provinces
+              value={editedRecord?.province || ""}
+              onChange={(value) => handleChange("province", value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
+            />
+          </Paragraph>
+
+          <Row gutter={[16, 16]} className="row-auto">
+            <Col xs={24} sm={24} md={12} lg={12}>
+              <Paragraph className="paragraph-margin congress">
+                <strong>Congressional District</strong>
+                <Input
+                  value={editedRecord?.cong_district || ""}
+                  onChange={(e) =>
+                    handleChange("cong_district", e.target.value)
+                  }
+                  readOnly={!isEditing}
+                  placeholder="No data"
+                  style={{
+                    cursor: isEditing ? "text" : "not-allowed",
+                    color: isEditing ? "" : "#aaa",
+                  }}
+                />
+              </Paragraph>
+            </Col>
+          </Row>
+        </Col>
+      </Row>
+    </div>
   );
 };
 

@@ -1,127 +1,315 @@
-:root {
-  --card-background-color: #ffffff;
-  --text-color: #000000;
-  --primary-color: #1890ff;
-  --primary-color-hover: #095592;
+.gradient-information {
+  background: linear-gradient(135deg, #5b8cb4, #00203f);
 }
 
-.dark {
-  --card-background-color: #1e1e1e;
-  --text-color: #ffffff;
-  --primary-color: #0d77ce;
-  --primary-color-hover: #64b5f6;
+.gradient-announcement {
+  background: linear-gradient(135deg, #3ea489, #005b55); /* Yellow gradient */
 }
 
-/* Gradient background for bulletin item */
-.bulletin-item {
-  position: relative;
-  padding: 20px 20px 40px 20px; /* Added bottom padding */
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: linear-gradient(135deg, #3cb371, #39205f); /* seagreen to steelblue */
-  border-radius: 12px;
-  color: white;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+.gradient-alerts {
+  background: linear-gradient(135deg, #ff7875, #a8071a); /* Red gradient */
 }
 
-/* Background circles */
-.bulletin-item::before,
-.bulletin-item::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  z-index: 0;
-  opacity: 0.15;
+.gradient-warning {
+  background: linear-gradient(135deg, #fff566, #fa8c16); /* Orange gradient */
 }
 
-.bulletin-item::before {
-  width: 200px;
-  height: 200px;
-  background: seagreen;
-  top: -50px;
-  left: -50px;
+.gradient-default {
+  background: linear-gradient(135deg, #a6a6a6, #595959); /* Gray gradient */
 }
 
-.bulletin-item::after {
-  width: 300px;
-  height: 300px;
-  background: steelblue;
-  bottom: -100px;
-  right: -100px;
-}
-
-/* Layout: left and right */
-.bulletin-inner {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-  position: relative;
-  z-index: 1;
+.bulletin-container {
   width: 100%;
+  margin: 0 auto;
 }
 
-/* Left section */
+.bulletin-carousel {
+  overflow: hidden;
+}
+
+.bulletin-carousel .slick-slide {
+  background: transparent !important; /* Clear default bg */
+}
+
+.bulletin-slide {
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30px;
+  border-radius: 10px;
+  height: 250px;
+  position: relative;
+  width: 100%;
+  background-size: cover; /* Ensure background fills the space */
+  transition: background 0.4s ease-in-out;
+}
+
 .bulletin-left {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  color: #fff;
+  padding-right: 30px;
+}
+
+.bulletin-title {
+  color: white !important; /* Force the title color to white */
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 16px;
 }
 
 .bulletin-date {
+  display: block;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 5px;
-}
-
-.bulletin-title-text {
-  font-size: 22px;
-  font-weight: 700;
+  color: #ccc; /* Light gray for better readability */
   margin-bottom: 8px;
-  color: #ffffff !important;
-  word-wrap: break-word;
 }
 
 .bulletin-message {
   font-size: 16px;
-  color: #e0e0e0;
-  margin-bottom: 16px;
-  word-break: break-word;
+  color: #ffffff;
+  line-height: 1.6;
+  margin-bottom: 24px;
 }
 
-/* View Button */
 .bulletin-button {
-  background-color: var(--primary-color);
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 24px;
   border: none;
-  color: #fff;
-  padding: 8px 20px;
-  font-size: 14px;
-  border-radius: 6px;
-  width: 140px;
+  border-radius: 8px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 .bulletin-button:hover {
-  background-color: var(--primary-color-hover);
+  transform: scale(1.05); /* Slight zoom effect */
+  opacity: 0.9; /* Slight transparency */
 }
 
-/* Watermark-style announcement icon */
-.bulletin-watermark-icon {
-  position: absolute;
-  top: 5px;
-  right: 10px;
-  width: 250px;
-  height: 250px;
+.bulletin-image {
+  width: 260px;
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0.5;
-  z-index: 0;
-  pointer-events: none; /* avoid interaction */
-  filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.3));
-  object-fit: contain;
-  
+  transition: opacity 0.3s ease;
 }
 
-/* Bottom padding for carousel */
-.carousel-container {
-  padding-bottom: 20px;
+.bulletin-image-element {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(2px 2px 8px rgba(0, 0, 0, 0.4));
+}
+
+.new-icon {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+/* Button Colors */
+.button-information {
+  background-color: #003a75; /* Darker blue */
+}
+
+.button-announcement {
+  background-color: #005b55; /* Darker green */
+}
+
+.button-alerts {
+  background-color: #a8071a; /* Darker red */
+}
+
+.button-warning {
+  background-color: #fa8c16; /* Darker orange */
+}
+
+.button-default {
+  background-color: #595959; /* Darker gray */
+}
+
+/* Hover Effects */
+.button-information:hover {
+  background-color: #00203f; /* Even darker blue */
+}
+
+.button-announcement:hover {
+  background-color: #003f3a; /* Even darker green */
+}
+
+.button-alerts:hover {
+  background-color: #820014; /* Even darker red */
+}
+
+.button-warning:hover {
+  background-color: #d46b08; /* Even darker orange */
+}
+
+.button-default:hover {
+  background-color: #404040; /* Even darker gray */
+}
+
+/* Modal Styles */
+.bulletin-modal {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Dark Theme Modal */
+.modal-dark .ant-modal-content {
+  background-color: #1e1e1e; /* Dark background */
+  color: #ffffff; /* White text */
+}
+
+.modal-dark .ant-modal-header {
+  background-color: #1e1e1e; /* Dark header */
+}
+
+.modal-dark .ant-modal-title {
+  color: #ffffff; /* White title */
+}
+
+.modal-dark .ant-modal-footer {
+  background-color: #1e1e1e; /* Dark footer */
+}
+
+.modal-dark .modal-btn {
+  background-color: #0078d4; /* Blue button */
+  color: #ffffff; /* White text */
+  border: none;
+}
+
+.modal-dark .modal-btn:hover {
+  background-color: #005a9e; /* Darker blue on hover */
+}
+
+/* Light Theme Modal */
+.modal-light .ant-modal-content {
+  background-color: #ffffff; /* Light background */
+  color: #000000; /* Black text */
+}
+
+.modal-light .ant-modal-header {
+  background-color: #ffffff; /* Light header */
+}
+
+.modal-light .ant-modal-title {
+  color: #000000; /* Black title */
+}
+
+.modal-light .ant-modal-footer {
+  background-color: #ffffff; /* Light footer */
+}
+
+.modal-light .modal-btn {
+  background-color: #0078d4; /* Blue button */
+  color: #ffffff; /* White text */
+  border: none;
+}
+
+.modal-light .modal-btn:hover {
+  background-color: #005a9e; /* Darker blue on hover */
+}
+
+/* Modal Message */
+.modal-message {
+  font-size: 16px;
+  line-height: 1.6;
+  color: inherit; /* Inherit text color from theme */
+}
+
+/* Animated Background */
+.animated-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0; /* Ensure it stays behind the content */
+}
+
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.2; /* Semi-transparent */
+  animation: moveBubble 15s infinite ease-in-out;
+}
+
+.bubble-1 {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.3);
+  top: 10%;
+  left: 15%;
+  animation-duration: 12s;
+}
+
+.bubble-2 {
+  width: 150px;
+  height: 150px;
+  background: rgba(255, 255, 255, 0.2);
+  top: 30%;
+  left: 50%;
+  animation-duration: 18s;
+}
+
+.bubble-3 {
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.25);
+  top: 50%;
+  left: 70%;
+  animation-duration: 10s;
+}
+
+.bubble-4 {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.15);
+  top: 70%;
+  left: 30%;
+  animation-duration: 20s;
+}
+
+.bubble-5 {
+  width: 200px;
+  height: 200px;
+  background: rgba(255, 255, 255, 0.1);
+  top: 90%;
+  left: 10%;
+  animation-duration: 25s;
+}
+
+/* Animation for moving bubbles */
+@keyframes moveBubble {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-30px) translateX(30px);
+  }
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+}
+
+/* Ensure carousel content stays above the background */
+.bulletin-slide {
+  position: relative;
+  z-index: 1;
+}
+
+.bulletin-left,
+.bulletin-image {
+  position: relative;
+  z-index: 2; /* Ensure text and image are above the bubbles */
 }

@@ -10,7 +10,7 @@ const ReportTypeOptions = [
   { value: "INVESTIGATION REPORT (IR)" },
 ];
 
-const ReportType = ({ value, disabled, onChange }) => {
+const ReportType = ({ value, disabled, onChange, theme, style, readOnly }) => {
   return (
     <ConfigProvider
       theme={{
@@ -27,18 +27,17 @@ const ReportType = ({ value, disabled, onChange }) => {
       <AutoComplete
         style={{
           width: "100%",
-          fontSize: "11px",
-          marginTop: "4px",
+          ...style,
         }}
         dropdownStyle={{
           boxShadow: "none",
           backgroundColor: "#f1f1f1",
         }}
-        options={ReportTypeOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
+        options={readOnly ? [] : ReportTypeOptions} // Use predefined suggestions
+        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`}
         value={value}
         disabled={disabled}
-        onChange={onChange}
+        onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }

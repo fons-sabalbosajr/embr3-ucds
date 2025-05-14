@@ -3,7 +3,7 @@ import { AutoComplete, ConfigProvider, Input } from "antd";
 import Papa from 'papaparse';
 import './province.css'
 
-const Province = ({ value, disabled, onChange, editedRecord, handleChange, isEditing }) => {
+const Province = ({ value, disabled, onChange, style, editedRecord, handleChange, isEditing }) => {
   const [provinceOptions, setProvinceOptions] = useState([]);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const Province = ({ value, disabled, onChange, editedRecord, handleChange, isEdi
       backgroundColor: "#f1f1f1",
     }}
     options={provinceOptions}
-    dropdownClassName="custom-autocomplete-dropdown"
+    popupClassName="custom-autocomplete-dropdown"
     value={value}
     disabled={disabled}
     onChange={onChange}
@@ -43,8 +43,9 @@ const Province = ({ value, disabled, onChange, editedRecord, handleChange, isEdi
    <Input
        style={{
         fontSize: "11px",
-        height: "27px",
-        padding: "4px 8px",
+          height: "29px",
+          padding: "4px 8px",
+          ...style,
       }}
       placeholder="Select province"
       placeholderStyle={{

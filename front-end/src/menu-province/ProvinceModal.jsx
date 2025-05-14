@@ -32,6 +32,7 @@ const ProvinceModal = ({
   setShouldRefreshTable,
   handleReload,
   currentUser,
+  theme
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
@@ -359,7 +360,7 @@ const ProvinceModal = ({
   };
 
   return (
-    <div className="modal-container">
+    <div className={`modal-container ${theme}-theme`} >
       {!record || !record.id_no || !editedRecord ? (
         <div style={{ textAlign: "center", padding: 40 }}>
           <Spin size="large" tip="Loading record details..." />
@@ -377,6 +378,7 @@ const ProvinceModal = ({
                 setEditedRecord={setEditedRecord}
                 handleChange={handleChange}
                 isEditing={isEditing}
+                theme={theme}
               />
             </TabPane>
             <TabPane
@@ -391,6 +393,7 @@ const ProvinceModal = ({
                 handleChange={handleChange}
                 isEditing={isEditing}
                 currentUser={currentUser}
+                theme={theme}
               />
             </TabPane>
             <TabPane
@@ -406,6 +409,7 @@ const ProvinceModal = ({
                   setEditedRecord(updatedRecord);
                   handleSaveChanges(showNotification);
                 }}
+                theme={theme}
               />
             </TabPane>
             <TabPane
@@ -417,6 +421,7 @@ const ProvinceModal = ({
                 editedRecord={editedRecord}
                 handleChange={handleChange}
                 isEditing={isEditing}
+                theme={theme}
               />
             </TabPane>
             <TabPane
@@ -428,6 +433,7 @@ const ProvinceModal = ({
                 editedRecord={editedRecord}
                 handleChange={handleChange}
                 isEditing={isEditing}
+                theme={theme}
               />
             </TabPane>
 
@@ -438,6 +444,7 @@ const ProvinceModal = ({
               <ProvTransactionLog
                 editedRecord={editedRecord}
                 currentUser={currentUser}
+                theme={theme}
               />
             </TabPane>
           </Tabs>
@@ -534,6 +541,7 @@ ProvinceModal.propTypes = {
   record: PropTypes.object.isRequired,
   setShouldRefreshTable: PropTypes.func,
   handleReload: PropTypes.func.isRequired,
+  theme: PropTypes.string.isRequired,
 };
 
 export default ProvinceModal;
