@@ -15,7 +15,7 @@ import "./activity.css";
 
 const { Panel } = Collapse;
 
-const Activity = ({ theme }) => {
+const Activity = ({ theme, provinceAccess }) => {
   const [permits, setPermits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -28,28 +28,55 @@ const Activity = ({ theme }) => {
   });
   const pageSize = 5; // Number of id_no entries per page
 
+  const provincePrefixes = {
+    aurora: "AU",
+    bataan: "BA",
+    bulacan: "BU",
+    nuevaEcija: "NE",
+    pampanga: "PA",
+    tarlac: "TA",
+    zambales: "ZA",
+  };
+
+  const allowedPrefixes = Object.entries(provinceAccess)
+    .filter(([_, access]) => access)
+    .map(([prov]) => provincePrefixes[prov]);
+
   useEffect(() => {
     const fetchPermits = async () => {
       try {
-        setLoading(true); // Start loading before fetching
+        setLoading(true);
+
         const response = await axios.get(
-          `http://localhost:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}`
+          "http://localhost:8081/api/permits-summary",
+          {
+            params: {
+              page: currentPage,
+              pageSize: pageSize,
+              prefixes: allowedPrefixes.join(","), // Send as query string
+            },
+          }
         );
 
-        // Ensure we correctly extract data and total records
         const { data, total } = response.data;
-        // Set the permits and total number of records in state
         setPermits(data);
         setTotal(total);
       } catch (error) {
         console.error("Error fetching permit summary:", error);
+        setPermits([]);
+        setTotal(0);
       } finally {
-        setLoading(false); // Stop loading after fetching is done
+        setLoading(false);
       }
     };
 
-    fetchPermits();
-  }, [currentPage, pageSize]);
+    if (allowedPrefixes.length > 0) {
+      fetchPermits();
+    } else {
+      setPermits([]);
+      setTotal(0);
+    }
+  }, [currentPage, pageSize, allowedPrefixes.join(",")]);
 
   const handleNext = () => {
     if (currentPage * pageSize < total) {
@@ -270,6 +297,7 @@ const Activity = ({ theme }) => {
         visible={modalOpen}
         onClose={() => setModalOpen(false)}
         data={permits}
+        provinceAccess={provinceAccess}
       />
     </div>
   );

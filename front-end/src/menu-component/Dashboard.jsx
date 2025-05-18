@@ -7,7 +7,7 @@ import Calendar from "../components/Calendar/SystemCalendar";
 import Summary from "../components/History/History";
 import Activity from "../components/Summary/Activity";
 
-const Dashboard = ({ avatar, name, theme = "dark" }) => {
+const Dashboard = ({ avatar, name, theme = "dark", provinceAccess }) => {
   return (
     <div className="dashboard-container">
       <Row gutter={[16, 16]}>
@@ -33,7 +33,7 @@ const Dashboard = ({ avatar, name, theme = "dark" }) => {
         </Col>
         <Col xs={24} lg={6} className="right-column">
           <div className="card-bottom">
-            <Activity theme={theme} />
+            <Activity theme={theme} provinceAccess={provinceAccess} />
           </div>
           {/* <div className="card-changes">
             <Summary theme={theme} />

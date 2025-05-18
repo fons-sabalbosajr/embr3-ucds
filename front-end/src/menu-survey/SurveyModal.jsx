@@ -10,13 +10,13 @@ import MBU from "./tabspanes/MBU/MBU";
 import Transaction from "./tabspanes/TransactionLog/Transaction";
 import SurveyReport from "./reports/SurveyReport/SurveyReport";
 import CryptoJS from "crypto-js";
-import SVR from "./reports/SVR/SVR"
+import SVR from "./reports/SVR/SVR";
 
 import "./surveymodal.css";
 
 const { TabPane } = Tabs;
 
-const SurveyModal = ({ record, handleReload, currentUser }) => {
+const SurveyModal = ({ record, handleReload, currentUser, theme }) => { // Added theme prop
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(record);
   const [activeTab, setActiveTab] = useState("1");
@@ -31,9 +31,8 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
 
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
-
-   // Load the checked log state from localStorage
-   useEffect(() => {
+  // Load the checked log state from localStorage
+  useEffect(() => {
     const storedValue = localStorage.getItem("isLogChecked");
     if (storedValue) {
       try {
@@ -45,7 +44,6 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
       }
     }
   }, [encryptionKey]);
-
 
   useEffect(() => {
     try {
@@ -126,10 +124,12 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
       if (transactions.length > 0) {
         const lastTransaction = transactions[transactions.length - 1];
         const lastTransactionID = lastTransaction.transactionID;
-  
+
         // Correctly parse the last transaction number
-        const lastTransactionNumber = parseInt(lastTransactionID.replace("TRXS-", "")); // Use "TRXS-" instead of "TRX-"
-        
+        const lastTransactionNumber = parseInt(
+          lastTransactionID.replace("TRXS-", "")
+        ); // Use "TRXS-" instead of "TRX-"
+
         // Check if parsing was successful
         if (!isNaN(lastTransactionNumber)) {
           transactionCounter = lastTransactionNumber + 1;
@@ -227,10 +227,9 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
 
                     // Create the survey log entry based on the audit log returned from the server
                     const surveyLogEntry = {
-                      transactionID: `TRXS-${String(transactionCounter).padStart(
-                        4,
-                        "0"
-                      )}`,
+                      transactionID: `TRXS-${String(
+                        transactionCounter
+                      ).padStart(4, "0")}`,
                       transactionDate: new Date().toLocaleString(),
                       actionType: "Modified",
                       oldValue: auditLog.changes
@@ -343,6 +342,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
+            theme={theme} // Pass theme
           />
         </TabPane>
         <TabPane
@@ -353,6 +353,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
+            theme={theme} // Pass theme
           />
         </TabPane>
         <TabPane
@@ -367,6 +368,7 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
             setPenaltyAmounts={setPenaltyAmounts}
             penaltyOrNumbers={penaltyOrNumbers}
             setPenaltyOrNumbers={setPenaltyOrNumbers}
+            theme={theme} // Pass theme
           />
         </TabPane>
         <TabPane
@@ -377,19 +379,24 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
             editedRecord={editedRecord}
             handleChange={handleChange}
             isEditing={isEditing}
+            theme={theme} // Pass theme
           />
         </TabPane>
         <TabPane
           tab={<span className="custom-tab-history">History</span>}
           key="5"
         >
-          <Transaction editedRecord={editedRecord} currentUser={currentUser} />
+          <Transaction
+            editedRecord={editedRecord}
+            currentUser={currentUser}
+            theme={theme} // Pass theme
+          />
         </TabPane>
       </Tabs>
 
       <Modal
         title="Generate Report"
-        visible={isModalVisible}
+        open={isModalVisible}
         onOk={handleModalOk}
         onCancel={handleModalCancel}
         width={1200}
@@ -407,14 +414,8 @@ const SurveyModal = ({ record, handleReload, currentUser }) => {
                 resetCheckboxesKey={resetCheckboxesKey}
               />
             </TabPane>
-            <TabPane
-              tab={<span className="tabpane-title">SVR</span>}
-              key="2"
-            >
-              <SVR
-                editedRecord={editedRecord}
-                onIncludeChange={() => {}}
-              />
+            <TabPane tab={<span className="tabpane-title">SVR</span>} key="2">
+              <SVR editedRecord={editedRecord} onIncludeChange={() => {}} />
             </TabPane>
           </Tabs>
         </div>

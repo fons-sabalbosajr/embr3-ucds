@@ -3,7 +3,8 @@ import {
   Popover,
   Badge,
   List,
-  Spin,
+  // Spin, // Spin might not be needed if isLoading prop handles it
+  Spin, // Import Spin for loading indicator
   Collapse,
   Button,
   Modal,
@@ -16,7 +17,7 @@ import {
   SettingOutlined,
   LoadingOutlined,
 } from "@ant-design/icons";
-import { formatDistanceToNow } from "date-fns";
+// import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
 import ProvinceModal from "../../menu-province/ProvinceModal";
 import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import "./popovernotification.css";
@@ -24,156 +25,151 @@ import "./popovernotification.css";
 const { Panel } = Collapse;
 const { TabPane } = Tabs;
 
+// Define prefixToProvince outside the component to make it a stable constant
+const prefixToProvince = {
+  AU: "Aurora",
+  BA: "Bataan",
+  BU: "Bulacan",
+  NE: "Nueva Ecija",
+  PA: "Pampanga",
+  TA: "Tarlac",
+  ZA: "Zambales",
+};
+
 const NotificationsPopover = ({
   notifications = [],
   theme,
-  isLoading,
+  isLoading, // Prop from Universe.jsx
   currentUser,
+  refreshNotifications, // New prop to trigger data refresh in parent
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [warningsPage, setWarningsPage] = useState(1);
-  const [isRepairModalVisible, setIsRepairModalVisible] = useState(false);
-  const [selectedWarning, setSelectedWarning] = useState(null);
+  // const [isRepairModalVisible, setIsRepairModalVisible] = useState(false); // Removed
   const [isDuplicateModalVisible, setIsDuplicateModalVisible] = useState(false);
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
-  const [updatedNotifications, setUpdatedNotifications] =
-    useState(notifications); // Store updated notifications
-  const [issues, setIssues] = useState([]);
-  const [warnings, setWarnings] = useState([]);
-  const [loading, setLoading] = useState(true); // Loading state
-
-  const prefixToProvince = {
-    AU: "Aurora",
-    BA: "Bataan",
-    BU: "Bulacan",
-    NE: "Nueva Ecija",
-    PA: "Pampanga",
-    TA: "Tarlac",
-    ZA: "Zambales",
-  };
-
-  //console.log("Current User:", currentUser);
-
- // Map permissions to province prefixes (starting from index 6)
-  const allowedProvinces = useMemo(() => {
-    if (!currentUser?.permissions) return [];
-    const provinceKeys = Object.keys(prefixToProvince);
-    return provinceKeys.filter((key, index) => currentUser.permissions[index + 5]);
-  }, [currentUser]);
-
-    // Filter notifications based on allowed provinces
-  const filteredNotifications = useMemo(() => {
-    return notifications.filter((notification) => {
-      if (typeof notification === "string") {
-        const id_no = notification.split(" - ")[0]; // Extract id_no
-        const prefix = id_no.split("-")[0]; // Extract prefix from id_no
-        //console.log("Detected Prefix:", prefix); // Debugging log
-        return allowedProvinces.includes(prefix); // Only include notifications with allowed prefixes
-      }
-      return false;
-    });
-  }, [notifications, allowedProvinces]);
   
-  //console.log("Filtered Notifications:", filteredNotifications); // Debugging log
+  // Granular state for internal processing and processed data
+  const [isProcessingNotifications, setIsProcessingNotifications] = useState(false);
+  const [isProcessingWarnings, setIsProcessingWarnings] = useState(false);
+  const [processedGroupedNotifications, setProcessedGroupedNotifications] = useState({});
+  const [processedComputedWarnings, setProcessedComputedWarnings] = useState([]);
+  const [refreshTrigger, setRefreshTrigger] = useState('initial'); // 'initial', 'archive'
 
-
-  const groupedNotifications = useMemo(() => {
-    return filteredNotifications.reduce((acc, notification) => {
-      if (typeof notification === "string") {
-        const parts = notification.split(" - ");
-        const id_no = parts[0]; // Extract id_no
-        const issue = parts[1]; // Extract issue
-        const prefix = id_no.split("-")[0]; // Extract prefix from id_no
-        const province = prefixToProvince[prefix] || "Unknown Province"; // Map prefix to province
-
-        if (!acc[id_no]) {
-          acc[id_no] = { province, issues: [] };
+  // Determine which province prefixes the user has "readWrite" access to
+  const allowedReadWriteProvincesPrefixes = useMemo(() => {
+    if (!currentUser?.provinceStringPermissions) return [];
+    const prefixes = [];
+    for (const [provinceNameKey, permission] of Object.entries(currentUser.provinceStringPermissions)) {
+       if (permission === 'readWrite') {
+        for (const [prefix, name] of Object.entries(prefixToProvince)) {
+          // Normalize both names for comparison (e.g., "Nueva Ecija" vs "nuevaEcija")
+          if (name.toLowerCase().replace(/ /g, '').replace(/_/g, '') === provinceNameKey.toLowerCase()) {
+            prefixes.push(prefix);
+            break;
+          }
         }
-        acc[id_no].issues.push(issue); // Push the issue into the corresponding id_no group
       }
-      return acc;
-    }, {});
-  }, [filteredNotifications]);
+    }
+    return prefixes;
+  }, [currentUser?.provinceStringPermissions, prefixToProvince]);
 
   useEffect(() => {
-    const fetchIssues = async () => {
-      try {
-        const res = await fetch("http://localhost:8081/api/check-data", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
+    if (isLoading) { // If parent is loading, don't start internal processing
+      setIsProcessingNotifications(false);
+      setIsProcessingWarnings(false);
+      setProcessedGroupedNotifications({}); // Clear processed data
+      setProcessedComputedWarnings([]);   // Clear processed data
+      setRefreshTrigger('initial'); // Reset trigger
+      return;
+    }
 
-        const data = await res.json();
+    if (notifications && notifications.length > 0) {
+      if (refreshTrigger === 'initial') {
+        setIsProcessingNotifications(true);
+      }
+      setIsProcessingWarnings(true); // Always set warnings to processing initially
 
-        if (!data || !data.issues) {
-          console.error("Invalid response format", data);
-          return;
+      // Defer heavy processing to allow UI to update (e.g., show "Processing..." spinner)
+      const timerId = setTimeout(() => {
+        if (refreshTrigger === 'initial') {
+          // Process Notifications (Missing Data Issues)
+          const localProvinceFilteredDataIssues = notifications
+            .filter((notification) => typeof notification === "string")
+            .filter((notificationString) => {
+              const id_no = notificationString.split(" - ")[0];
+              const idPrefix = id_no.split("-")[0]?.toUpperCase();
+              return allowedReadWriteProvincesPrefixes.includes(idPrefix);
+            });
+
+          const localGroupedNotifications = localProvinceFilteredDataIssues.reduce((acc, notificationString) => {
+            const parts = notificationString.split(" - ");
+            const id_no = parts[0];
+            const issue = parts[1];
+            const idPrefix = id_no.split("-")[0]?.toUpperCase();
+            const province = prefixToProvince[idPrefix] || "Unknown Province";
+            if (!acc[id_no]) {
+              acc[id_no] = { province, issues: [] };
+            }
+            acc[id_no].issues.push(issue);
+            return acc;
+          }, {});
+          setProcessedGroupedNotifications(localGroupedNotifications);
+          setIsProcessingNotifications(false); // Notifications processing done
         }
 
-        setIssues(data.issues);
-        setUpdatedNotifications(data.issues);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching issues:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+        // Process Warnings (Duplicate ECC/CNC)
+        // This part always runs if notifications change, as duplicates might have been resolved
+        // or new ones appeared.
+        const localComputedWarnings = notifications
+          .filter((n) => typeof n === "object" && n.ecc_cnc && Array.isArray(n.idNos))
+          .filter(dup => {
+            return dup.idNos.some(idNo => {
+              const idPrefix = String(idNo).split("-")[0]?.toUpperCase();
+              return allowedReadWriteProvincesPrefixes.includes(idPrefix);
+            });
+          })
+          .map((dup) => ({
+            ecc_cnc: dup.ecc_cnc,
+            idNos: [...new Set(dup.idNos)],
+            count: dup.count,
+          }));
+        setProcessedComputedWarnings(localComputedWarnings);
+        setIsProcessingWarnings(false); // Warnings processing done
 
-    fetchIssues();
-
-    const interval = setInterval(() => {
-      fetchIssues();
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, []);
-
-  const computedWarnings = useMemo(() => {
-    const eccCncMap = {};
-
-    notifications.forEach((notification) => {
-      if (typeof notification === "object" && notification.ecc_cnc) {
-        const { ecc_cnc, idNos, count } = notification;
-
-        if (!eccCncMap[ecc_cnc]) {
-          eccCncMap[ecc_cnc] = { idNos: [], count: 0 };
+        if (refreshTrigger === 'archive') {
+          setRefreshTrigger('initial'); // Reset trigger after archive-specific processing
         }
+      }, 0); // setTimeout with 0ms delay
 
-        eccCncMap[ecc_cnc].idNos.push(...idNos); // Collect all idNos
-        eccCncMap[ecc_cnc].count += count; // Increment the count
-      }
-    });
+      return () => clearTimeout(timerId); // Cleanup timeout
+    } else {
+      // If no notifications or isLoading is false but notifications are empty
+      setProcessedGroupedNotifications({});
+      setProcessedComputedWarnings([]);
+      setIsProcessingNotifications(false);
+      setIsProcessingWarnings(false);
+      setRefreshTrigger('initial'); // Reset trigger
+    }
+  }, [notifications, isLoading, allowedReadWriteProvincesPrefixes, refreshTrigger, prefixToProvince]);
 
-    // Return an array of warnings with ecc_cnc, idNos, and count
-    return Object.entries(eccCncMap).map(([ecc_cnc, data]) => ({
-      ecc_cnc,
-      idNos: [...new Set(data.idNos)], // Remove duplicate idNos
-      count: data.count,
-    }));
-  }, [notifications]);
 
-  // Get the keys (id_no values) for pagination
-  const groupedKeys = Object.keys(groupedNotifications);
+  const groupedKeys = useMemo(() => Object.keys(processedGroupedNotifications), [processedGroupedNotifications]);
 
-  // Calculate which notification groups to display based on the current page
-  const paginatedKeys = groupedKeys.slice(
+  const paginatedKeys = useMemo(() => groupedKeys.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
-  );
+  ), [groupedKeys, currentPage, itemsPerPage]);
 
   const paginatedWarnings = useMemo(() => {
     const start = (warningsPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
-    return computedWarnings.slice(start, end);
-  }, [computedWarnings, warningsPage]);
+    return processedComputedWarnings.slice(start, end);
+  }, [processedComputedWarnings, warningsPage, itemsPerPage]);
 
-  // Handle page changes
   const goToNextPage = () => {
     if (currentPage * itemsPerPage < groupedKeys.length) {
       setCurrentPage((prevPage) => prevPage + 1);
@@ -187,9 +183,8 @@ const NotificationsPopover = ({
   };
 
   const handleSettingClick = async (id_no) => {
-    // Show modal right away
-    setSelectedRecord({ id_no }); // minimal info to render the modal shell
-    setIsModalVisible(true); // Open modal early for better UX
+    setSelectedRecord({ id_no });
+    setIsModalVisible(true);
 
     try {
       const response = await fetch(
@@ -198,12 +193,11 @@ const NotificationsPopover = ({
       const data = await response.json();
 
       if (response.ok) {
-        // Update record once data is fully fetched
         setSelectedRecord((prev) => ({
           ...prev,
           title: data.title,
           ecc_cnc: data.ecc_cnc,
-          ...data, // include other data fields if needed
+          ...data,
         }));
       } else {
         console.error("Error fetching record:", data.message);
@@ -213,357 +207,349 @@ const NotificationsPopover = ({
     }
   };
 
-  // Close the modal
   const handleCloseModal = () => {
     setIsModalVisible(false);
-    setSelectedRecord(null); // Clear the selected record
-  };
-
-  const handleRepairClick = (warning) => {
-    setSelectedWarning(warning); // Set the selected warning
-    setIsRepairModalVisible(true); // Open the repair modal
-  };
-
-  const handleCloseRepairModal = () => {
-    setIsRepairModalVisible(false); // Close the repair modal
-    setSelectedWarning(null); // Clear the selected warning
+    setSelectedRecord(null);
   };
 
   const handleDuplicateClick = (warning) => {
-    setSelectedDuplicate(warning); // Set the selected duplicate warning
-    setIsDuplicateModalVisible(true); // Open the duplicate modal
+    setSelectedDuplicate(warning);
+    setIsDuplicateModalVisible(true);
   };
 
   const handleCloseDuplicateModal = () => {
-    if (selectedDuplicate) {
-      setWarnings((prevWarnings) =>
-        prevWarnings.filter(
-          (warning) => warning.ecc_cnc !== selectedDuplicate.ecc_cnc
-        )
-      ); // Remove the resolved warning
-    }
-    setIsDuplicateModalVisible(false); // Close the duplicate modal
-    setSelectedDuplicate(null); // Clear the selected duplicate
-  };
-
-  const handleDuplicateResolved = (resolvedId) => {
-    setWarnings((prevWarnings) =>
-      prevWarnings.filter((warning) => !warning.idNos.includes(resolvedId))
-    );
-
-    // Optionally close the modal if needed
     setIsDuplicateModalVisible(false);
     setSelectedDuplicate(null);
   };
 
+  const handleDuplicateResolved = async (resolvedId) => {
+    setIsDuplicateModalVisible(false);
+    setSelectedDuplicate(null);
+    setRefreshTrigger('archive'); // Set trigger before calling refresh
+    if (refreshNotifications) {
+      await refreshNotifications(); // Trigger refetch in parent
+    }
+  };
+
   const notificationsContent = (
-    <div style={{ maxHeight: "500px", overflowY: "auto" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "5px", // Add spacing between buttons and the list
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            backgroundColor: "green",
-            padding: "2px 4px",
-            borderRadius: "4px",
-            color: "white",
-          }}
-        >
-          {groupedKeys.length > 0
-            ? `${groupedKeys.length} ID(s) for repair`
-            : "No IDs for repair"}
-        </span>
-        <div
-          style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
-        >
-          <Button
-            onClick={goToPreviousPage}
-            disabled={currentPage === 1}
-            style={{
-              marginRight: "4px", // Reduce margin for smaller spacing
-              padding: "0 6px", // Smaller padding for a compact button
-              fontSize: "10px", // Smaller font size
-              height: "20px", // Reduce height
-              lineHeight: "22px", // Align text vertically
-            }}
-            size="small"
-            type="primary"
-          >
-            <CaretLeftFilled />
-          </Button>
-          <Button
-            onClick={goToNextPage}
-            disabled={currentPage * itemsPerPage >= groupedKeys.length}
-            style={{
-              padding: "0 6px", // Smaller padding for a compact button
-              fontSize: "10px", // Smaller font size
-              height: "20px", // Reduce height
-              lineHeight: "22px", // Align text vertically
-            }}
-            size="small"
-            type="primary"
-          >
-            <CaretRightFilled />
-          </Button>
+    <div style={{ maxHeight: "700px", overflowY: "auto" }}>
+      {isLoading || isProcessingNotifications ? (
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Spin tip={isLoading ? "Fetching data..." : "Processing issues..."} />
         </div>
-      </div>
-      <List
-        dataSource={[...paginatedKeys]
-          .map((key) => {
-            const doc = notifications.find((n) => n.id_no === key);
-            return {
-              id_no: key,
-              doc,
-              province: groupedNotifications[key]?.province || "Unknown",
-              issues: groupedNotifications[key]?.issues || [],
-              dateAdded: doc?._id
-                ? new Date(
-                    parseInt(doc._id.toString().substring(0, 8), 16) * 1000
-                  )
-                : null,
-            };
-          })
-          .sort((a, b) => {
-            const extract = (val) => {
-              const match = val.match(/^([A-Za-z]+)[-]?(\d+)$/);
-              return match ? [match[1], parseInt(match[2], 10)] : [val, 0];
-            };
-            const [prefixA, numA] = extract(a.id_no);
-            const [prefixB, numB] = extract(b.id_no);
-            return prefixA === prefixB
-              ? numA - numB
-              : prefixA.localeCompare(prefixB);
-          })}
-        renderItem={({ id_no, province, issues, dateAdded }) => (
-          <div key={id_no}>
-            <Collapse
-              bordered={false}
-              expandIcon={({ isActive }) => (
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <SettingOutlined
-                    className="icon-hover"
-                    onClick={() => handleSettingClick(id_no)}
-                    style={{ marginRight: "8px" }}
-                  />
-                  <CaretRightFilled
-                    className="icon-hover"
-                    rotate={isActive ? 90 : 0}
-                  />
-                </div>
-              )}
+      ) : (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "5px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "10px",
+                backgroundColor: "green",
+                padding: "2px 4px",
+                borderRadius: "4px",
+                color: "white",
+              }}
             >
-              <Collapse.Panel
-                header={
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      padding: "2px 0",
-                      fontSize: "10px",
-                      color: theme === "dark" ? "#ffffff" : "#000000", // Adjust text color
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      {`Missing data in ${id_no} in ${province}`}
+              {groupedKeys.length > 0
+                ? `${groupedKeys.length} ID(s) for repair`
+                : "No IDs for repair"}
+            </span>
+            <div
+              style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
+            >
+              <Button
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+                style={{
+                  marginRight: "4px",
+                  padding: "0 6px",
+                  fontSize: "10px",
+                  height: "20px",
+                  lineHeight: "22px",
+                }}
+                size="small"
+                type="primary"
+              >
+                <CaretLeftFilled />
+              </Button>
+              <Button
+                onClick={goToNextPage}
+                disabled={currentPage * itemsPerPage >= groupedKeys.length}
+                style={{
+                  padding: "0 6px",
+                  fontSize: "10px",
+                  height: "20px",
+                  lineHeight: "22px",
+                }}
+                size="small"
+                type="primary"
+              >
+                <CaretRightFilled />
+              </Button>
+            </div>
+          </div>
+          <List
+            dataSource={[...paginatedKeys]
+              .map((key) => {
+                return {
+                  id_no: key,
+                  province: processedGroupedNotifications[key]?.province || "Unknown",
+                  issues: processedGroupedNotifications[key]?.issues || [],
+                };
+              })
+              .sort((a, b) => {
+                const extract = (val) => {
+                  const match = val.match(/^([A-Za-z]+)[-]?(\d+)$/);
+                  return match ? [match[1], parseInt(match[2], 10)] : [val, 0];
+                };
+                const [prefixA, numA] = extract(a.id_no);
+                const [prefixB, numB] = extract(b.id_no);
+                return prefixA === prefixB
+                  ? numA - numB
+                  : prefixA.localeCompare(prefixB);
+              })}
+            renderItem={(
+              { id_no, province, issues }
+            ) => (
+              <div key={id_no}>
+                <Collapse
+                  bordered={false}
+                  expandIcon={({ isActive }) => (
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <SettingOutlined
+                        className="icon-hover"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSettingClick(id_no);
+                        }}
+                        style={{ marginRight: "8px" }}
+                      />
+                      <CaretRightFilled
+                        className="icon-hover"
+                        rotate={isActive ? 90 : 0}
+                      />
                     </div>
-                    {dateAdded && (
+                  )}
+                >
+                  <Collapse.Panel
+                    header={
                       <div
                         style={{
-                          fontSize: "8px",
-                          color: theme === "dark" ? "#aaaaaa" : "#000000", // Adjust date color
-                          marginTop: "2px",
-                          textAlign: "left",
+                          display: "flex",
+                          flexDirection: "column",
+                          padding: "2px 0",
+                          fontSize: "10px",
+                          color: theme === "dark" ? "#ffffff" : "#000000",
                         }}
                       >
-                        {`${formatDistanceToNow(dateAdded, {
-                          addSuffix: true,
-                        })}`}
+                        <div style={{ flex: 1 }}>
+                          {`Missing data in ${id_no} in ${province}`}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                }
-                key={id_no}
-                style={{
-                  backgroundColor: theme === "dark" ? "#333333" : "#f7f7f7", // Adjust panel background
-                  padding: "5px",
-                  marginBottom: "5px",
-                  borderRadius: "5px",
-                  marginRight: "10px",
-                }}
-                className="panel-header"
-              >
-                <List
-                  size="small"
-                  dataSource={issues}
-                  renderItem={(issue) => (
-                    <List.Item
-                      style={{
-                        fontSize: "10px",
-                        padding: "2px 0",
-                        color: theme === "dark" ? "#ffffff" : "#000000", // Adjust issue text color
-                      }}
-                    >
-                      - {issue}
-                    </List.Item>
-                  )}
-                />
-              </Collapse.Panel>
-            </Collapse>
-          </div>
-        )}
-      />
+                    }
+                    key={id_no}
+                    style={{
+                      backgroundColor: theme === "dark" ? "#333333" : "#f7f7f7",
+                      marginBottom: "5px",
+                      borderRadius: "5px",
+                    }}
+                    className="panel-header"
+                  >
+                    <List
+                      size="small"
+                      dataSource={issues}
+                      renderItem={(issue) => (
+                        <List.Item
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 0",
+                            color: theme === "dark" ? "#ffffff" : "#000000",
+                          }}
+                        >
+                          - {issue}
+                        </List.Item>
+                      )}
+                    />
+                  </Collapse.Panel>
+                </Collapse>
+              </div>
+            )}
+          />
+        </>
+      )}
     </div>
   );
 
   const warningsContent = (
-    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "5px",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            backgroundColor: theme === "dark" ? "#444444" : "#FFD662", // Adjust badge background color
-            padding: "2px 4px",
-            borderRadius: "4px",
-            color: theme === "dark" ? "#FFD662" : "#000000", // Adjust badge text color
-          }}
-        >
-          {computedWarnings.length > 0
-            ? `${computedWarnings.length} references of ECC/CNC found`
-            : "No ECC/CNC for repair"}
-        </span>
-        <div
-          style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
-        >
-          <Button
-            onClick={() => setWarningsPage((prevPage) => prevPage - 1)}
-            disabled={warningsPage === 1}
-            style={{
-              marginRight: "4px",
-              padding: "0 6px",
-              fontSize: "10px",
-              height: "20px",
-              lineHeight: "22px",
-            }}
-            size="small"
-            type="primary"
-          >
-            <CaretLeftFilled />
-          </Button>
-          <Button
-            onClick={() => setWarningsPage((prevPage) => prevPage + 1)}
-            disabled={warningsPage * itemsPerPage >= computedWarnings.length}
-            style={{
-              padding: "0 6px",
-              fontSize: "10px",
-              height: "20px",
-              lineHeight: "22px",
-            }}
-            size="small"
-            type="primary"
-          >
-            <CaretRightFilled />
-          </Button>
+    <div style={{ maxHeight: "700px", overflowY: "auto" }}>
+      {isLoading || isProcessingWarnings ? (
+         <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Spin tip={isLoading ? "Fetching data..." : "Processing warnings..."} />
         </div>
-      </div>
-      <List
-        dataSource={paginatedWarnings}
-        renderItem={(warning, index) => (
-          <div key={index}>
-            <Collapse
-              bordered={false}
-              expandIcon={({ isActive }) => (
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <SettingOutlined
-                    className="icon-hover"
-                    style={{
-                      marginRight: "8px",
-                    }}
-                    onClick={() => handleDuplicateClick(warning)}
-                  />
-                  <CaretRightFilled
-                    className="icon-hover"
-                    rotate={isActive ? 90 : 0}
-                    style={{
-                      cursor: "pointer",
-                    }}
-                  />
-                </div>
-              )}
+      ) : (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "5px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "10px",
+                backgroundColor: theme === "dark" ? "#444444" : "#FFD662",
+                padding: "2px 4px",
+                borderRadius: "4px",
+                color: theme === "dark" ? "#FFD662" : "#000000",
+              }}
             >
-              <Collapse.Panel
-                header={
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "2px 0",
-                      fontSize: "10px",
-                      color: theme === "dark" ? "#ffffff" : "#000000", // Adjust text color
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      {`Ref No.: ${warning.ecc_cnc} appeared (${warning.count}) times`}
-                    </div>
-                  </div>
+              {processedComputedWarnings.length > 0
+                ? `${processedComputedWarnings.length} references of ECC/CNC found`
+                : "No ECC/CNC for repair"}
+            </span>
+            <div
+              style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
+            >
+              <Button
+                onClick={() =>
+                  setWarningsPage((prevPage) => Math.max(1, prevPage - 1))
                 }
-                key={warning.ecc_cnc}
+                disabled={warningsPage === 1}
                 style={{
-                  backgroundColor: theme === "dark" ? "#333333" : "#f7f7f7", // Adjust panel background
-                  padding: "5px",
-                  marginBottom: "5px",
-                  borderRadius: "5px",
-                  marginRight: "10px",
+                  marginRight: "4px",
+                  padding: "0 6px",
+                  fontSize: "10px",
+                  height: "20px",
+                  lineHeight: "22px",
                 }}
-                className="panel-header"
+                size="small"
+                type="primary"
               >
-                <List
-                  size="small"
-                  dataSource={[...warning.idNos].sort()}
-                  renderItem={(id_no) => (
-                    <List.Item
-                      style={{
-                        fontSize: "10px",
-                        padding: "2px 0",
-                        color: theme === "dark" ? "#ffffff" : "#000000", // Adjust issue text color
-                      }}
-                    >
-                      - {id_no}
-                    </List.Item>
-                  )}
-                />
-              </Collapse.Panel>
-            </Collapse>
+                <CaretLeftFilled />
+              </Button>
+              <Button
+                onClick={() =>
+                  setWarningsPage((prevPage) =>
+                    warningsPage * itemsPerPage < processedComputedWarnings.length
+                      ? prevPage + 1
+                      : prevPage
+                  )
+                }
+                disabled={warningsPage * itemsPerPage >= processedComputedWarnings.length}
+                style={{
+                  padding: "0 6px",
+                  fontSize: "10px",
+                  height: "20px",
+                  lineHeight: "22px",
+                }}
+                size="small"
+                type="primary"
+              >
+                <CaretRightFilled />
+              </Button>
+            </div>
           </div>
-        )}
-      />
+          <List
+            dataSource={paginatedWarnings}
+            renderItem={(warning, index) => (
+              <div key={index}>
+                <Collapse
+                  bordered={false}
+                  expandIcon={({ isActive }) => (
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <SettingOutlined
+                        className="icon-hover"
+                        style={{
+                          marginRight: "8px",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDuplicateClick(warning);
+                        }}
+                      />
+                      <CaretRightFilled
+                        className="icon-hover"
+                        rotate={isActive ? 90 : 0}
+                        style={{
+                          cursor: "pointer",
+                        }}
+                      />
+                    </div>
+                  )}
+                >
+                  <Collapse.Panel
+                    header={
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "2px 0",
+                          fontSize: "10px",
+                          color: theme === "dark" ? "#ffffff" : "#000000",
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          {`Ref No.: ${warning.ecc_cnc} appeared (${warning.count}) times`}
+                        </div>
+                      </div>
+                    }
+                    key={warning.ecc_cnc}
+                    style={{
+                      backgroundColor: theme === "dark" ? "#333333" : "#f7f7f7",
+                      marginBottom: "5px",
+                      borderRadius: "5px",
+                    }}
+                    className="panel-header"
+                  >
+                    <List
+                      size="small"
+                      dataSource={[...warning.idNos].sort()}
+                      renderItem={(id_no) => (
+                        <List.Item
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 0",
+                            color: theme === "dark" ? "#ffffff" : "#000000",
+                          }}
+                        >
+                          - {id_no}
+                        </List.Item>
+                      )}
+                    />
+                  </Collapse.Panel>
+                </Collapse>
+              </div>
+            )}
+          />
+        </>
+      )}
     </div>
   );
 
-  // Render messages content (placeholder for future use)
   const messagesContent = (
-    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-      <p style={{ fontSize: "12px", textAlign: "center" }}>
-        No messages available.
-      </p>
+    <div style={{ maxHeight: "700px", overflowY: "auto" }}>
+      {isLoading ? ( // Messages don't have separate client-side processing for now
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Spin tip="Fetching data..." />
+        </div>
+      ) : (
+        <p style={{ fontSize: "12px", textAlign: "center" }}>
+          No messages available.
+        </p>
+      )}
     </div>
   );
 
-  // Render the popover content with tabs
   const popoverContent = (
-    <Tabs defaultActiveKey="1" size="small">
+    <Tabs defaultActiveKey="1" size="small" style={{width: '330px'}}>
       <TabPane tab="Notifications" key="1">
         {notificationsContent}
       </TabPane>
@@ -582,18 +568,14 @@ const NotificationsPopover = ({
         content={popoverContent}
         trigger="click"
         placement="bottomRight"
-        styles={{
-          body: {
-            width: "350px", // Replace overlayInnerStyle with styles.body
-          },
-        }}
+        // styles={{ body: { width: "350px" } }} // width is now controlled by Tabs
       >
         <Badge
           count={
-            isLoading ? (
+            isLoading || isProcessingNotifications || isProcessingWarnings ? ( // Reflect all loading states
               <LoadingOutlined
                 style={{
-                  fontSize: "11px",
+                  fontSize: "8px",
                   color: "white",
                   backgroundColor: "green",
                   borderRadius: "50%",
@@ -601,7 +583,7 @@ const NotificationsPopover = ({
                 }}
               />
             ) : (
-              notifications.length
+              groupedKeys.length + processedComputedWarnings.length // Use processed data for count
             )
           }
           offset={[1, 0]}
@@ -610,9 +592,13 @@ const NotificationsPopover = ({
             marginRight: "15px",
             fontSize: "8px",
             padding: "1px",
-            backgroundColor: isLoading
-              ? "#d9d9d9"
-              : notifications.length > 0
+            backgroundColor: isLoading || isProcessingNotifications || isProcessingWarnings // Reflect all for background
+              ? theme === "dark"
+                ? "#444444"
+                : "#d9d9d9"
+              : groupedKeys.length + // Use processed data for color logic
+                  processedComputedWarnings.length >
+                0
               ? "green"
               : "#d9d9d9",
           }}
@@ -625,7 +611,6 @@ const NotificationsPopover = ({
         </Badge>
       </Popover>
 
-      {/* ProvinceModal styled as a modal */}
       <Modal
         open={isModalVisible}
         title={
@@ -679,7 +664,7 @@ const NotificationsPopover = ({
             onDuplicateResolved={(resolvedId) =>
               handleDuplicateResolved(resolvedId)
             }
-            setWarnings={setWarnings}
+            // setWarnings prop is removed
           />
         )}
       </Modal>

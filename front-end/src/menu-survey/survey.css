@@ -1,57 +1,189 @@
-.filter-container {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  margin-top: 15px;
-  margin-bottom: 15px;
+/* Theme Variables */
+:root {
+  --page-background-color: #ffffff; /* Overall page background for light theme */
+  --card-background-light: #f4f4f4; /* Light gray shade for cards in light theme */
+  --text-color: #000000;
+  --button-background: #1890ff;
+  --button-hover: #40a9ff;
+  --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --border-color: #d9d9d9;
 }
 
-.filter-container {
+.dark-theme {
+  --page-background-color: #1e1e1e; /* Overall page background for dark theme */
+  --card-background-dark: #2a2a2a; /* Dark gray shade for cards in dark theme */
+  --text-color: #e0e0e0; /* Light text for dark theme */
+  --header-background: #1e1e1e; /* Darker shade for table headers in dark mode */
+  --button-background: #0d77ce;
+  --button-hover: #64b5f6;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --border-color: #434343;
+}
+
+/* Main Page Container - Card Style */
+.survey-container-card {
+  background-color: var(
+    --card-background-light
+  ); /* Light gray for light theme */
+  color: var(--text-color);
+  padding: 10px;
+  border-radius: 8px; /* Slightly more rounded */
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: calc(100vh - 100px);
+}
+
+.dark-theme.survey-container-card {
+  /* Specific for dark theme card background */
+  background-color: var(--card-background-dark);
+  color: #f5f5f5;
+}
+
+/* Header Section */
+.header-content-survey {
   display: flex;
-  padding: 10px 0;
-  margin-top: 15px;
-  margin-bottom: 15px;
+  justify-content: space-between;
+  align-items: center; /* Vertically align items in header */
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.header-title-survey {
+  font-size: 1.1rem; /* Slightly larger */
+  font-weight: 600; /* Bolder */
+  margin-right: 16px;
+  color: var(--text-color);
+  margin-bottom: 0; /* Remove default h3 margin */
+}
+
+.header-action-buttons {
+  display: flex;
+  gap: 5px; /* Increased gap */
+  align-items: center;
+}
+
+.action-button,
+.add-survey-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.survey-year-dropdown {
+  width: 150px;
+  text-align: left;
 }
 
 .total-rows {
   font-weight: 600;
-  margin-left: 10px;
-  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--text-color);
 }
 
+/* Filter Bar Section */
+.filter-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+  gap: 15px; /* Add gap if items wrap to next line */
+}
 
-.filter-inputs {
+.filter-controls-group {
+  /* Renamed from filter-actions-right */
   display: flex;
   align-items: center;
-  margin-left: 20px;
+  flex-wrap: wrap; /* Allow wrapping */
+  gap: 10px; /* Gap between search, select, and pagination group */
+  margin-left: auto; /* Push this group to the right */
+}
+
+.survey-pagination-controls {
+  /* Existing class, ensure it's flex and aligned */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.global-search-input.search-input-survey {
+  /* More specific for global search */
+  width: 250px; /* Adjust as needed */
+  height: 32px;
+  font-size: 0.8rem;
 }
 
 .search-input-survey {
-  width: 300px;
-  border: 1px solid gainsboro;
-  border-radius: 7px;
-  font-size: 11px;
+  width: 200px; /* Default for column search, global search overrides */
+  font-size: 0.8rem;
   height: 32px;
-  margin-right: 10px;
 }
 
 .select-input {
-  width: 300px;
-  text-align: left;
-  margin-right: 10px;
-}
-
-.right-container {
-  display: flex;
-  align-items: center;
-}
-
-
-.select-input-unit {
-  width: 200px;
+  width: 220px; /* For industry class filter */
   text-align: left;
 }
 
+/* Pagination Controls */
+.survey-pagination-controls
+  .custom-pagination
+  .ant-pagination-simple-pager
+  input {
+  height: 24px !important;
+  line-height: 24px !important;
+  font-size: 0.8rem;
+}
+
+.survey-pagination-controls .custom-page-size-select .ant-select-selector {
+  height: 24px !important;
+  padding: 0 7px !important;
+}
+
+.survey-pagination-controls
+  .custom-page-size-select
+  .ant-select-selection-item {
+  line-height: 22px !important;
+  font-size: 0.8rem;
+}
+
+.custom-pagination {
+  margin-right: 8px; /* Space before page size selector */
+}
+
+/* Table Specific Styles */
+.survey-table .custom-table .ant-table {
+  /* Target the table */
+  background-color: var(
+    --card-background-light
+  ) !important; /* Ensure this applies */
+}
+
+.light-theme .survey-table .custom-table .ant-table-row {
+  background-color: #f4f4f4 !important; /* Use the light card background variable */
+}
+
+.dark-theme .survey-table .custom-table .ant-table-row {
+  background-color: #121212 !important;
+}
+
+.survey-table .custom-table .ant-table-thead > tr > th {
+  background-color: var(--header-background) !important;
+  color: var(--text-color) !important;
+  font-weight: 600; /* Bolder header text */
+  font-size: 10px; /* Consistent header font size */
+  text-align: center;
+  /* Theme-aware border */
+}
+
+.survey-table .custom-table .ant-table-tbody > tr > td {
+  color: var(--text-color);
+  font-size: 10px; /* Slightly smaller body text */
+}
+
+.survey-table .custom-table .ant-table-tbody > tr:hover > td {
+  background-color: var(--page-background-color) !important;
+}
+
+/* Checkbox styling in table */
 .checkbox-container {
   display: flex;
   flex-direction: column;
@@ -64,12 +196,12 @@
   background-color: #f0f0f0;
   border-radius: 5px;
   padding: 2px 0 0 5px;
-  margin-bottom: 2px;
+  margin-bottom: 3px; /* Increased spacing */
   width: 100px;
 }
 
 .checkbox-wrapper.survey_eia {
-  background-color: #aab4f2;
+  background-color: #aab4f2; /* Light Purple-Blue */
   font-size: 11px;
   font-weight: 600;
 }
@@ -81,82 +213,68 @@
 }
 
 .checkbox-wrapper.survey_water {
-  background-color: #72dfe9;
+  background-color: #72dfe9; /* Light Cyan */
   font-size: 11px;
   font-weight: 600;
 }
 
 .checkbox-wrapper.survey_haz {
-  background-color: #ffc568;
+  background-color: #ffc568; /* Light Orange */
   font-size: 11px;
   font-weight: 600;
 }
 
 .checkbox-wrapper.survey_chem {
-  background-color: #95e05f;
+  background-color: #95e05f; /* Light Green */
   font-size: 11px;
   font-weight: 600;
 }
 
 .checkbox-label {
-  margin-left: 8px; /* Space between checkbox and label */
+  margin-left: 8px;
 }
 
+/* Action buttons in table */
 .btn-action {
   margin-right: 8px;
   margin-top: 10px;
 }
 
-.btn-modify{
+.btn-modify {
   margin-top: 10px;
 }
 
 /* Default row color */
-.ant-table-row {
+.survey-table .custom-table .ant-table-row {
+  background-color: inherit !important;
   transition: background-color 0.3s;
 }
 
 .industry-label {
+  font-size: 10px;
+  text-align: left;
+  margin-left: 20px;
+}
+
+.title {
   font-size: 11px;
+  font-weight: 600;
 }
 
-.ant-table-row td, .ant-table-row th {
+.survey-table .custom-table .ant-table-row td,
+.survey-table .custom-table .ant-table-row th {
   background-color: inherit;
 }
 
-.row-colored {
-  background-color: inherit !important;
-}
-
-.custom-table .ant-table-row td, .custom-table .ant-table-row th {
-  background-color: inherit;
-}
-
-
-.custom-table-row{
+.custom-table-row {
   height: 30px;
   line-height: 30px;
-  padding-top: 5px; 
+  padding-top: 5px;
   padding-bottom: 5px;
 }
+/* Removed .survey-dropdown as it's now .survey-year-dropdown and styled with .header-action-buttons */
 
-.survey-dropdown {
-  margin-bottom: 10px;
-  width: 180px;
-  text-align: left;
-  font-weight: 500;
-}
-
-.dark-theme {
-  background-color: #001529 !important;
-  color: #fff;
-}
-
-.light-theme {
-  background-color: #fff;
-  color: #000;
-}
-
+/* Theme specific icon colors if needed, AntD usually handles this */
 .dark-theme-icon {
   color: #fff;
 }
@@ -165,7 +283,30 @@
   color: #000;
 }
 
-.modal-iis{
+.modal-iis {
+  /* For IIS link in modal if any */
   font-size: 14px;
   margin-right: 20px;
+}
+
+.loading-progress-container {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+/* IIS Link Styling (similar to province.css) */
+.iis-link {
+  transition: color 0.3s ease, text-decoration 0.3s ease;
+}
+
+.iis-link:hover {
+  color: var(--button-hover); /* Use theme variable for hover color */
+  text-decoration: underline;
+}
+
+.survey-iis-label {
+  /* Specific styling for IIS label in Survey Status column */
+  margin-top: 4px; /* Add some space above the IIS number if needed */
 }

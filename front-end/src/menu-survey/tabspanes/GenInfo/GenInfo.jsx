@@ -123,10 +123,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Project Title</strong>
             <TextArea
               value={localRecord.project_title || ""}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               rows={2}
-              className="textbox-label"
+              className="textbox-label disable-input"
               onChange={(e) =>
                 handleInputChange("project_title", e.target.value)
               }
@@ -137,7 +137,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Industry Classification</strong>
             <IndustryClass
               value={localRecord.industry_class || ""}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               onChange={(value) => handleInputChange("industry_class", value)}
             />
@@ -151,9 +151,9 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                   ? projectData.project_type
                   : localRecord.project_type || ""
               }
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
-              className="textbox-label disabled-input"
+              className="textbox-label disable-input"
               onChange={(e) => handleInputChange("pisc_code", e.target.value)}
             />
           </Paragraph>
@@ -166,9 +166,9 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                   ? projectData.project_subtype
                   : localRecord.project_subtype || ""
               }
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
-              className="textbox-label disabled-input"
+              className="textbox-label disable-input"
               onChange={(e) => handleInputChange("pisc_code", e.target.value)}
             />
           </Paragraph>
@@ -181,9 +181,9 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                   ? projectData.psic_code
                   : localRecord.psic_code || ""
               }
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
-              className="textbox-label disabled-input"
+              className="textbox-label"
               onChange={(e) => handleInputChange("pisc_code", e.target.value)}
             />
           </Paragraph>
@@ -192,9 +192,9 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Other Project Type</strong>
             <Input
                value={localRecord.other_project_type || ""}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
-              className="textbox-label"
+              className="textbox-label disable-input"
               onChange={(e) =>
                 handleInputChange("other_project_type", e.target.value)
               }
@@ -207,10 +207,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Complete Address</strong>
             <TextArea
               value={localRecord.address || ""}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               rows={2}
-              className="textbox-label disabled-input"
+              className="textbox-label disable-input"
               onChange={(e) => handleInputChange("address", e.target.value)}
             />
           </Paragraph>
@@ -219,9 +219,9 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Street</strong>
             <Input
               value={localRecord.street || ""}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
-              className="textbox-label disabled-input"
+              className="textbox-label disable-input"
               onChange={(e) => handleInputChange("street", e.target.value)}
             />
           </Paragraph>
@@ -230,7 +230,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <Barangays
               value={localRecord.brgy || ""}
               onChange={(value) => handleInputChange("brgy", value)}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               selectedProvince={localRecord.province || ""}
               selectedMunicipality={localRecord.city || ""}
@@ -242,7 +242,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <Municipalities
               value={localRecord.city || ""}
               onChange={(value) => handleInputChange("city", value)}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               selectedProvince={localRecord.province || ""}
             />
@@ -253,7 +253,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             <Provinces
               value={localRecord.province || ""}
               onChange={(value) => handleInputChange("province", value)}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
             />
           </Paragraph>

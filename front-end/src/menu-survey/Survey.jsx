@@ -1,4 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   Table,
   Button,
@@ -12,6 +18,8 @@ import {
   ConfigProvider,
   Select,
   Badge,
+  Pagination, // Import Pagination
+  Progress, // Import Progress
   Modal,
 } from "antd";
 import {
@@ -24,6 +32,7 @@ import {
   MonitorOutlined,
   GlobalOutlined,
   CheckCircleFilled,
+  TagsOutlined, // Import TagsOutlined
 } from "@ant-design/icons";
 import "./survey.css";
 import axios from "axios";
@@ -33,12 +42,14 @@ import SurveyModal from "./SurveyModal";
 import AddSurvey from "./actions/AddSurvey";
 import CryptoJS from "crypto-js";
 
+const { Option } = Select;
+
 const Survey = ({ theme, currentUser }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [searchedColumn, setSearchedColumn] = useState("");
-  const [filteredData, setFilteredData] = useState(data);
+  const [filteredData, setFilteredData] = useState([]); // Initialize as empty array
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [uniqueUnits, setUniqueUnits] = useState([]);
   const [selectedKeys, setSelectedKeys] = useState([]);
@@ -54,9 +65,12 @@ const Survey = ({ theme, currentUser }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [viewedRecord, setViewedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedSurvey, setSelectedSurvey] = useState("Survey 2024");
+  const [selectedSurvey, setSelectedSurvey] = useState("Survey 2025");
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [buttonColor, setButtonColor] = useState("primary");
+  const [progress, setProgress] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
@@ -66,7 +80,14 @@ const Survey = ({ theme, currentUser }) => {
 
   const fetchData = async (year) => {
     setLoading(true);
+    setProgress(0);
+    let progressInterval = null;
+
     try {
+      progressInterval = setInterval(() => {
+        setProgress((prev) => Math.min(prev + 10, 90));
+      }, 200);
+
       const response = await fetch(
         `http://localhost:8081/api/surveys/${year}`,
         {
@@ -75,6 +96,9 @@ const Survey = ({ theme, currentUser }) => {
         }
       );
 
+      if (progressInterval) clearInterval(progressInterval);
+      progressInterval = null;
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText);
@@ -82,7 +106,6 @@ const Survey = ({ theme, currentUser }) => {
 
       const result = await response.json();
 
-      // Normalize data: Ensure consistency between Survey 2024 and Survey 2025
       const normalizedResult = result.map((item) => ({
         id_no: item.id_no ?? null,
         survey_eia: item.survey_eia === true ? "✔" : item.survey_eia || "",
@@ -129,20 +152,18 @@ const Survey = ({ theme, currentUser }) => {
         penalty_or_number: item.penalty_or_number ?? "N/A",
         daysDfDa: item.daysDfDa ?? "N/A",
         updated_by: item.updated_by ?? "N/A",
-        color: item.color ?? "#ffffff", // Default to white
+        color: item.color ?? "#ffffff",
       }));
 
       const sortedResult = normalizedResult.sort((a, b) => a.id_no - b.id_no);
 
       setData(sortedResult);
-      setFilteredData(sortedResult);
+      // setFilteredData(sortedResult); // Filtering will be handled by useEffect
 
-      // Extract unique responsible units
       const uniqueUnits = [
         ...new Set(sortedResult.map((item) => item.resp_unit)),
       ];
 
-      // Store initial states
       const stateMap = new Map();
       sortedResult.forEach((item) => {
         stateMap.set(item.id_no, {
@@ -160,64 +181,54 @@ const Survey = ({ theme, currentUser }) => {
       setSelectedKeys([]);
     } catch (error) {
       console.error("Error fetching survey data:", error.message);
+      if (progressInterval) clearInterval(progressInterval);
+      setProgress(100);
     } finally {
-      setLoading(false);
+      if (progressInterval) clearInterval(progressInterval);
+      setProgress(100);
+      setTimeout(() => {
+        setLoading(false);
+        setProgress(0);
+      }, 500);
     }
+  };
+
+  const handlePageChange = (page, newPageSize) => {
+    setCurrentPage(page);
+    if (newPageSize) setPageSize(newPageSize);
+  };
+
+  const handlePageSizeChange = (value) => {
+    setPageSize(value);
+    setCurrentPage(1);
   };
 
   useEffect(() => {
     if (selectedSurvey) {
-      const year = selectedSurvey.replace("Survey ", ""); // Extract year
+      const year = selectedSurvey.replace("Survey ", "");
       fetchData(year);
     }
   }, [selectedSurvey]);
 
-  useEffect(() => {
-    const filteredData = data.filter((record) => {
-      const recordValue = record.resp_unit;
-      if (typeof recordValue === "string" && recordValue !== null) {
-        const normalizedRecordValue = recordValue.toLowerCase();
-        const filteredSelectedKeys = selectedKeys.map((key) =>
-          key.toLowerCase()
-        );
-        return (
-          filteredSelectedKeys.length === 0 ||
-          filteredSelectedKeys.some(
-            (key) =>
-              normalizedRecordValue.includes(key) ||
-              key.includes(normalizedRecordValue)
-          )
-        );
-      }
-      return false;
-    });
-    setFilteredData(filteredData);
-  }, [selectedKeys, data]);
-
   // Decrypt rowColors from localStorage
   useEffect(() => {
     const storedColors = localStorage.getItem("rowColors");
-    //console.log("Stored Colors:", storedColors); // Log the stored colors
 
     if (storedColors) {
       try {
-        // Decrypt the stored colors
         const decryptedBytes = CryptoJS.AES.decrypt(
           storedColors,
           encryptionKey
         );
         const decryptedColors = decryptedBytes.toString(CryptoJS.enc.Utf8);
-        //console.log("Decrypted Colors:", decryptedColors); // Log decrypted colors
-
-        // Parse the decrypted string into a JavaScript object
         const rowColors = JSON.parse(decryptedColors);
-        setSelectedRowColors(rowColors); // Store the colors in state
+        setSelectedRowColors(rowColors);
       } catch (error) {
         console.error("Error decrypting or parsing rowColors:", error);
-        setSelectedRowColors({}); // Reset if there's an error
+        setSelectedRowColors({});
       }
     }
-  }, []);
+  }, [encryptionKey]); // Added encryptionKey to dependency array
 
   useEffect(() => {
     if (data && data.length > 0) {
@@ -226,7 +237,6 @@ const Survey = ({ theme, currentUser }) => {
         rowColors[row.id_no] = row.color;
       });
 
-      // Encrypt the rowColors object before storing it in localStorage
       const encryptedRowColors = CryptoJS.AES.encrypt(
         JSON.stringify(rowColors),
         encryptionKey
@@ -234,7 +244,7 @@ const Survey = ({ theme, currentUser }) => {
 
       localStorage.setItem("rowColors", encryptedRowColors);
     }
-  }, [data]);
+  }, [data, encryptionKey]); // Added encryptionKey to dependency array
 
   useEffect(() => {
     const uniqueIndustryClasses = [
@@ -243,12 +253,8 @@ const Survey = ({ theme, currentUser }) => {
     setIndustryClasses(uniqueIndustryClasses);
   }, [data]);
 
-  useEffect(() => {
-    setFilteredData(data);
-  }, [data]);
-
   // Search functionality for each column
-  let searchInput = null;
+  let searchInput = null; // Changed from const to let
   const handleSearch = (selectedKeys, confirm, dataIndex) => {
     confirm();
     setSearchText(selectedKeys[0]);
@@ -256,22 +262,74 @@ const Survey = ({ theme, currentUser }) => {
   };
 
   const handleSearchKeyWord = debounce((e) => {
-    const searchText = e.target.value.toLowerCase();
-    const filteredData = data.filter((item) => {
-      return Object.values(item).some((value) => {
-        return String(value).toLowerCase().includes(searchText);
-      });
-    });
-    setFilteredData(filteredData);
-  }, 500);
+    setSearchText(e.target.value);
+  }, 300);
 
   const handleFilterChange = (value) => {
     setFilterValue(value);
-    const filteredData = data.filter((item) => {
-      return item.industry_class === value || value === "";
-    });
-    setFilteredData(filteredData);
   };
+
+  // Centralized useEffect for all filtering
+  useEffect(() => {
+    if (!data || !currentUser || !currentUser.provinceStringPermissions) {
+      setFilteredData([]);
+      return;
+    }
+
+    const allowedProvinceKeys = Object.entries(
+      currentUser.provinceStringPermissions
+    )
+      .filter(
+        ([key, permission]) =>
+          permission === "view" || permission === "readWrite"
+      )
+      .map(([key]) => key.toLowerCase().replace(/ /g, "").replace(/_/g, ""));
+
+    let currentFilteredData = data.filter((record) => {
+      if (!record.province) return false;
+      const normalizedRecordProvince = record.province
+        .toLowerCase()
+        .replace(/ /g, "")
+        .replace(/_/g, "");
+      return allowedProvinceKeys.includes(normalizedRecordProvince);
+    });
+
+    if (selectedKeys.length > 0) {
+      currentFilteredData = currentFilteredData.filter((record) => {
+        const recordValue = record.resp_unit;
+        if (typeof recordValue === "string" && recordValue !== null) {
+          const normalizedRecordValue = recordValue.toLowerCase();
+          const lowerSelectedKeys = selectedKeys.map((key) =>
+            key.toLowerCase()
+          );
+          return lowerSelectedKeys.some(
+            (key) =>
+              normalizedRecordValue.includes(key) ||
+              key.includes(normalizedRecordValue)
+          );
+        }
+        return false;
+      });
+    }
+
+    if (searchText) {
+      const lowerSearchText = searchText.toLowerCase();
+      currentFilteredData = currentFilteredData.filter((item) =>
+        Object.values(item).some((value) =>
+          String(value).toLowerCase().includes(lowerSearchText)
+        )
+      );
+    }
+
+    if (filterValue) {
+      currentFilteredData = currentFilteredData.filter(
+        (item) => item.industry_class === filterValue
+      );
+    }
+
+    setFilteredData(currentFilteredData);
+    setCurrentPage(1);
+  }, [data, currentUser, selectedKeys, searchText, filterValue]);
 
   const handleReset = (clearFilters) => {
     clearFilters();
@@ -319,25 +377,25 @@ const Survey = ({ theme, currentUser }) => {
     filterIcon: (filtered) => (
       <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
     ),
-    // Modify the onFilter method to search across multiple fields
     onFilter: (value, record) => {
-      const searchText = value.toLowerCase();
+      const searchTextValue = value.toLowerCase();
       return (
-        record.project_title.toLowerCase().includes(searchText) ||
-        (record.address && record.address.toLowerCase().includes(searchText)) ||
+        record.project_title.toLowerCase().includes(searchTextValue) ||
+        (record.address &&
+          record.address.toLowerCase().includes(searchTextValue)) ||
         (record.date_surveyed &&
           new Date(record.date_surveyed)
             .toLocaleDateString()
             .toLowerCase()
-            .includes(searchText)) ||
+            .includes(searchTextValue)) ||
         (record.resp_unit &&
-          record.resp_unit.toLowerCase().includes(searchText)) ||
-        (record.iis_no && record.iis_no.toLowerCase().includes(searchText))
+          record.resp_unit.toLowerCase().includes(searchTextValue)) ||
+        (record.iis_no && record.iis_no.toLowerCase().includes(searchTextValue))
       );
     },
     onFilterDropdownVisibleChange: (visible) => {
       if (visible) {
-        setTimeout(() => searchInput.select(), 100);
+        setTimeout(() => searchInput?.select(), 100); // Added optional chaining
       }
     },
     render: (text) =>
@@ -362,13 +420,12 @@ const Survey = ({ theme, currentUser }) => {
     const normalizedUnits = new Set();
     const displayUnits = [];
 
-    // Populate unique display units while avoiding duplicates (case insensitive)
     uniqueUnits.forEach((unit) => {
       if (unit !== undefined && unit !== null) {
         const normalizedUnit = unit.toLowerCase();
         if (!normalizedUnits.has(normalizedUnit)) {
-          normalizedUnits.add(normalizedUnit); // Keep the normalized value
-          displayUnits.push(unit); // Add to display array
+          normalizedUnits.add(normalizedUnit);
+          displayUnits.push(unit);
         }
       }
     });
@@ -464,8 +521,7 @@ const Survey = ({ theme, currentUser }) => {
           }
         })
       );
-      //console.log("Row colors updated:", results);
-      fetchData();
+      fetchData(selectedSurvey.replace("Survey ", "")); // Refetch data
     } catch (error) {
       console.error("Error updating row colors:", error.message);
     } finally {
@@ -498,7 +554,7 @@ const Survey = ({ theme, currentUser }) => {
       updateRowColors(
         selectedRowKeys.map((id) => id.toString()),
         selectedColor
-      ); // Update the row colors
+      );
       notification.success({
         message: "Data marked successfully",
         description: `The selected data have been marked.`,
@@ -563,17 +619,21 @@ const Survey = ({ theme, currentUser }) => {
 
   const handleSave = async (record) => {
     try {
-      // Check if the record has an ID
       if (!record._id) {
-        // Ensure you use _id
         notification.error({
           message: "Error",
           description: "Record ID is missing.",
         });
         return;
       }
+      if (!modifiedRows[record.id_no]?.modifiedApplicableLaws) {
+        notification.info({
+          message: "No Changes",
+          description: "No applicable laws were modified for this record.",
+        });
+        return;
+      }
 
-      // Prepare the payload with only the updated fields
       const payload = {};
       if (record.modifiedApplicableLaws) {
         if (record.survey_eia !== initialState.get(record.id_no).survey_eia) {
@@ -595,7 +655,6 @@ const Survey = ({ theme, currentUser }) => {
         }
       }
 
-      // Call the API using _id
       const response = await axios.put(
         `http://localhost:8081/api/survey/${record._id}`,
         payload
@@ -613,19 +672,14 @@ const Survey = ({ theme, currentUser }) => {
         });
       }
 
-      // Call fetchData to refresh the data
-      await fetchData();
-
-      // Clear modifications after update
+      await fetchData(selectedSurvey.replace("Survey ", ""));
       setModifiedRows({});
     } catch (error) {
-      // Log the error response if available
       if (error.response) {
         console.error("Error updating record:", error.response.data);
       } else {
         console.error("Error updating record:", error);
       }
-
       notification.error({
         message: "Update Failed",
         description: "Failed to update data.",
@@ -657,47 +711,26 @@ const Survey = ({ theme, currentUser }) => {
 
   const handleCheckboxChange = (field, checked, record) => {
     setIgnoreRowSelection(true);
-
-    // Update the field in the record to "✔" if checked, otherwise ""
     record[field] = checked ? "✔" : "";
 
-    // Log the changes for debugging purposes
-    console.log(
-      `ID_No: ${record.id_no}, IIS No: ${record.iis_no}, ${field} Checked: ${
-        checked ? "✔" : ""
-      }`
-    );
-
-    // Update the data array with the modified record
     const updatedData = data.map((item) => {
       if (item.id_no === record.id_no) {
-        return record;
+        return { ...item, [field]: record[field] }; // Ensure to update the item correctly
       }
       return item;
     });
 
-    // Set the updated data
     setData(updatedData);
-    setFilteredData(updatedData);
+    // setFilteredData(updatedData); // Let the main useEffect handle filtering
 
-    // Mark the record as modified
-    if (checked) {
-      setModifiedRows((prevModifiedRows) => ({
-        ...prevModifiedRows,
-        [record.id_no]: {
-          ...prevModifiedRows[record.id_no],
-          [field]: "✔",
-        },
-      }));
-    } else {
-      setModifiedRows((prevModifiedRows) => ({
-        ...prevModifiedRows,
-        [record.id_no]: {
-          ...prevModifiedRows[record.id_no],
-          [field]: "",
-        },
-      }));
-    }
+    setModifiedRows((prevModifiedRows) => ({
+      ...prevModifiedRows,
+      [record.id_no]: {
+        ...(prevModifiedRows[record.id_no] || {}), // Preserve other modified fields
+        [field]: record[field],
+        modifiedApplicableLaws: true, // Indicate that applicable laws were modified
+      },
+    }));
   };
 
   const handleToggleEdit = () => {
@@ -706,85 +739,66 @@ const Survey = ({ theme, currentUser }) => {
 
   const handleCloseModal = () => {
     setIsModalVisible(false);
-    setIsLogChecked(false);
+    // setIsLogChecked(false); // This might not be needed here
   };
 
   const handleView = (record) => {
-    // Set the viewed record and show the modal
     setViewedRecord(record);
     setIsModalVisible(true);
   };
 
   const handleReload = () => {
-    fetchData();
+    fetchData(selectedSurvey.replace("Survey ", ""));
   };
 
   const responsibleUnitBackgroundColor = (unit) => {
+    if (!unit) return "transparent";
     switch (unit.toUpperCase()) {
       case "PEMU_AURORA":
-      case "PEMU_Aurora":
         return "#F0F3FF";
-
       case "PEMU_BATAAN":
-      case "PEMU_Bataan":
-        return "#FCE5BB"; // Beige
-
+        return "#FCE5BB";
       case "PEMU_BULACAN":
-      case "PEMU_Bulacan":
-        return "#FCE5BB"; // Light purple
-
+        return "#FCE5BB";
       case "PEMU_NUEVA ECIJA":
-      case "PEMU_Nueva_Ecija":
-        return "#FFE225"; // Yellow
-
+        return "#FFE225";
       case "PEMU_PAMPANGA":
-      case "PEMU_Pampanga":
-        return "#FFE225"; // Yellow
-
+        return "#FFE225";
       case "PEMU_TARLAC":
-      case "PEMU_Tarlac":
-        return "#39C665"; // Green
-
+        return "#39C665";
       case "PEMU_ZAMBALES":
-      case "PEMU_Zambales":
-        return "#d1c4e9"; // Light lavender
-
+        return "#d1c4e9";
       case "MBU":
-        return "#FF9B3E"; // Light green
-
+        return "#FF9B3E";
       case "TCHWMS":
-        return "#936DDF"; // Dark purple
-
+        return "#936DDF";
       case "AWECMES":
-        return "#c8e6c9"; // Light green
-
+        return "#c8e6c9";
       case "EMED":
         return "#FFD09B";
-
       case "CPD":
         return "#D2E0FB";
-
       default:
-        return "transparent"; // Default
+        return "transparent";
     }
   };
 
   const measureTextWidth = (text) => {
+    if (!text) return 0;
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
-    context.font = "12px Arial"; // You can adjust the font size here
+    context.font = "10px Arial"; // Match font size used in render
     const metrics = context.measureText(text);
     return metrics.width;
   };
 
-  // Utility function to darken a given color
   const darkenColor = (color, percent) => {
+    if (!color || color === "transparent") return "gray"; // Handle transparent case
     const num = parseInt(color.slice(1), 16),
       amt = Math.round(2.55 * percent),
       R = (num >> 16) + amt,
       G = ((num >> 8) & 0x00ff) + amt,
       B = (num & 0x0000ff) + amt;
-
     return `#${(
       0x1000000 +
       (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
@@ -803,31 +817,28 @@ const Survey = ({ theme, currentUser }) => {
     setIsAddModalVisible(false);
   };
 
-  // Define table columns
+  const paginatedData = useMemo(() => {
+    return filteredData.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize
+    );
+  }, [filteredData, currentPage, pageSize]);
+
   const columns = [
     {
       title: "ID No.",
       dataIndex: "id_no",
       key: "id_no",
       ...getColumnSearchProps("id_no"),
-      align: "left",
+      align: "center",
       width: 75,
-      fixed: "left",
     },
     {
       title: "Applicable Laws",
       key: "applicable_laws",
       align: "center",
-      width: 150,
+      width: 120,
       render: (_, record) => {
-        const handleCheckboxChange = (field, checked) => {
-          record[field] = checked ? "✔" : "";
-          setModifiedRows((prev) => ({
-            ...prev,
-            [record.id_no]: true,
-          }));
-        };
-
         return (
           <div className="checkbox-container">
             {[
@@ -841,7 +852,7 @@ const Survey = ({ theme, currentUser }) => {
                 <Checkbox
                   checked={record[field] === "✔" || record[field] === true}
                   onChange={(e) =>
-                    handleCheckboxChange(field, e.target.checked)
+                    handleCheckboxChange(field, e.target.checked, record)
                   }
                 />
                 <span className="checkbox-label">
@@ -858,28 +869,15 @@ const Survey = ({ theme, currentUser }) => {
       dataIndex: "project_title",
       key: "project_title",
       ...getColumnSearchProps("project_title"),
-      align: "left",
-      width: 300,
-      fixed: "left",
+      align: "center",
+      width: 250,
       render: (text, record) => (
         <div>
-          <strong className="industry-label">{text || "N/A"}</strong>
           <div className="industry-label">
+            <strong className="title">{text || "N/A"}</strong>
             <p style={{ fontStyle: "italic" }}>{record.address || "N/A"}</p>
             <p>Date Surveyed: {record.date_surveyed || "N/A"}</p>
             <p>Responsible Unit: {record.resp_unit || "N/A"}</p>
-            <p>
-              IIS No.:{" "}
-              <a
-                href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                  record.iis_no || ""
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {record.iis_no || "N/A"}
-              </a>
-            </p>
           </div>
         </div>
       ),
@@ -888,18 +886,16 @@ const Survey = ({ theme, currentUser }) => {
       title: "Industry Class",
       dataIndex: "industry_class",
       key: "industry_class",
-      align: "left",
-      width: 200,
-      fixed: "left",
+      align: "center",
+      width: 150,
       ...getColumnSearchProps("industry_class"),
     },
     {
       title: "Responsible Unit",
       dataIndex: "resp_unit",
       key: "resp_unit",
-      align: "left",
-      width: 200,
-      fixed: "left",
+      align: "center",
+      width: 150,
       ...getColumnFilterProps(
         "resp_unit",
         uniqueResponsibleUnits,
@@ -916,7 +912,9 @@ const Survey = ({ theme, currentUser }) => {
         return (
           <Tooltip
             title={
-              <div style={{ fontSize: "12px" }}>
+              <div style={{ fontSize: "10px" }}>
+                {" "}
+                {/* Adjusted font size */}
                 <div>Responsible Unit: {record.resp_unit || "N/A"}</div>
                 <div>Handler: {record.handler || "N/A"}</div>
               </div>
@@ -929,10 +927,13 @@ const Survey = ({ theme, currentUser }) => {
                 padding: "5px",
                 borderRadius: "4px",
                 color: backgroundColor !== "transparent" ? "black" : "inherit",
-                width: `${textWidth + 10}px`,
+                width: `${textWidth + 20}px`, // Added padding to width
+                minWidth: "80px", // Ensure a minimum width
                 display: "inline-block",
                 whiteSpace: "nowrap",
                 cursor: "pointer",
+                fontSize: "10px", // Ensure consistent font size
+                textAlign: "center", // Center text
               }}
             >
               {record.resp_unit || "N/A"}
@@ -945,61 +946,109 @@ const Survey = ({ theme, currentUser }) => {
       title: "Remarks",
       dataIndex: "remarks",
       key: "remarks",
-      align: "left",
+      align: "center",
       ...getColumnSearchProps("remarks"),
       width: 150,
     },
     {
       title: "Survey Status",
-      key: "date_surveyed",
-      ...getColumnSearchProps("date_surveyed"),
+      key: "survey_status", // Changed key for clarity
+      ...getColumnSearchProps("iis_no"), // Assuming iis_no is the primary search field here
       render: (_, record) => (
         <div className="industry-label">
-          <div>
-            {record.date_surveyed && (
-              <div>
-                <Tooltip title="Date Surveyed">
-                  <MonitorOutlined
-                    style={{ marginRight: 8, color: "#1890ff" }}
-                  />
-                  {record.date_surveyed || "N/A"}
+          {" "}
+          {/* Reused industry-label for consistent styling */}
+          {record.date_surveyed && (
+            <p>
+              <Tooltip title="Date Surveyed">
+                <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+                {record.date_surveyed}
+              </Tooltip>
+            </p>
+          )}
+          {record.date_routed && (
+            <p>
+              <Tooltip title="Date Routed to IIS">
+                <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
+                {record.date_routed}
+              </Tooltip>
+            </p>
+          )}
+          {record.date_signed && (
+            <p>
+              <Tooltip title="Date Report Signed">
+                <CheckCircleFilled
+                  style={{ marginRight: 8, color: "#faad14" }}
+                />
+                {record.date_signed}
+              </Tooltip>
+            </p>
+          )}
+          {record.iis_no && record.iis_no !== "N/A" && (
+            <p className="survey-iis-label">
+              <span>
+                <Tooltip title="IIS Transaction No.">
+                  <TagsOutlined style={{ color: "#1890ff", marginRight: 8 }} />
                 </Tooltip>
-              </div>
-            )}
-            {record.date_routed && (
-              <div>
-                <Tooltip title="Date Routed to IIS">
-                  <GlobalOutlined
-                    style={{ marginRight: 8, color: "#52c41a" }}
-                  />
-                  {record.date_routed || "N/A"}
-                </Tooltip>
-              </div>
-            )}
-            {record.date_signed && (
-              <div>
-                <Tooltip title="Date Report Signed">
-                  <CheckCircleFilled
-                    style={{ marginRight: 8, color: "#faad14" }}
-                  />
-                  {record.date_signed || "N/A"}
-                </Tooltip>
-              </div>
-            )}
-          </div>
+                {record.iis_no.split(/\s+/)[0] && (
+                  <a
+                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                      record.iis_no.split(/\s+/)[0].trim()
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="iis-link survey-iis-link"
+                    style={{ color: "#1890ff", textDecoration: "none" }}
+                  >
+                    {record.iis_no.split(/\s+/)[0].trim()}
+                  </a>
+                )}
+              </span>
+              {record.iis_no.split(/\s+/).map(
+                (iis, index) =>
+                  index > 0 && (
+                    <span
+                      key={index}
+                      style={{
+                        display: "block",
+                        lineHeight: "1.2",
+                        marginLeft: "26px",
+                      }}
+                    >
+                      <a
+                        href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                          iis.trim()
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="iis-link survey-iis-link"
+                        style={{ color: "#1890ff", textDecoration: "none" }}
+                      >
+                        {iis.trim()}
+                      </a>
+                    </span>
+                  )
+              )}
+            </p>
+          )}
         </div>
       ),
       width: 150,
-      align: "left",
+      align: "center",
     },
     {
       title: "Actions",
       key: "actions",
-      align: "left",
+      align: "center",
       width: 100,
-      fixed: "right",
       render: (_, record) => (
-        <div style={{ display: "flex", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <Button
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
@@ -1014,11 +1063,11 @@ const Survey = ({ theme, currentUser }) => {
             size="small"
             onClick={() => handleSave(record)}
             className="btn-modify"
-            disabled={!record.modifiedApplicableLaws}
+            disabled={!modifiedRows[record.id_no]?.modifiedApplicableLaws} // Disable if not modified
           >
             <span style={{ position: "relative", display: "inline-block" }}>
               <SaveOutlined />
-              {record.modifiedApplicableLaws && (
+              {modifiedRows[record.id_no]?.modifiedApplicableLaws && (
                 <span
                   style={{
                     position: "absolute",
@@ -1039,96 +1088,88 @@ const Survey = ({ theme, currentUser }) => {
   ];
 
   return (
-    <div className={`header-panel ${theme}`}>
-      <div className="header-content">
-        <Select
-          value={selectedSurvey}
-          onChange={(value) => {
-            setSelectedSurvey(value);
-            fetchData(value.replace("Survey ", "")); // Ensure only the year is passed
-          }}
-          className="survey-dropdown"
-          style={{ width: 180 }}
-        >
-          <Option value="Survey 2025">Survey 2025</Option>
-          <Option value="Survey 2024">Survey 2024</Option>
-        </Select>
-        <Tooltip title="Reload Table">
-          <Button
-            type="primary"
-            className="refresh-button"
-            icon={<ReloadOutlined />}
-            onClick={fetchData}
-            loading={loading}
-          />
-        </Tooltip>
-        <Tooltip title="Export Data">
-          <Button
-            type="primary"
-            className="refresh-button"
-            icon={<ExportOutlined />}
-            //onClick={() => handleExportPDF(capitalizedProvinceName)}
-          />
-        </Tooltip>
-        <Tooltip title="Mark Row As">
-          <Dropdown
-            overlay={colorMenu}
-            open={colorMenuVisible}
-            onOpenChange={(visible) => setColorMenuVisible(visible)}
-            placement="bottomLeft"
+    <div className={`survey-container-card ${theme}-theme`}>
+      <div className="header-content-survey">
+        <h3 className="header-title-survey">Survey Data ({selectedSurvey})</h3>
+        <div className="header-action-buttons">
+          <Select
+            value={selectedSurvey}
+            onChange={(value) => {
+              setSelectedSurvey(value);
+              fetchData(value.replace("Survey ", ""));
+            }}
+            className="survey-year-dropdown"
           >
+            <Select.Option value="Survey 2025">Survey 2025</Select.Option>
+            <Select.Option value="Survey 2024">Survey 2024</Select.Option>
+          </Select>
+          <Tooltip title="Reload Table">
             <Button
               type="primary"
-              className="refresh-button"
-              icon={<BgColorsOutlined />}
+              icon={<ReloadOutlined />}
+              onClick={() => fetchData(selectedSurvey.replace("Survey ", ""))}
+              loading={loading && progress < 100} // Show loading on button if fetching
             />
-          </Dropdown>
-        </Tooltip>
-        <Button
-          type="primary"
-          className="add-industry-button"
-          style={{
-            backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
-          }}
-          onClick={showAddModal}
-        >
-          Add Industry
-        </Button>
-        <AddSurvey visible={isAddModalVisible} onCancel={handleAddCancel} />
+          </Tooltip>
+          <Tooltip title="Export Data">
+            <Button
+              type="primary"
+              className="action-button"
+              icon={<ExportOutlined />}
+              //onClick={() => handleExportPDF(capitalizedProvinceName)} // Add export functionality
+            />
+          </Tooltip>
+          <Tooltip title="Mark Row As">
+            <Dropdown
+              overlay={colorMenu} // Use overlay prop for AntD v5+
+              open={colorMenuVisible}
+              onOpenChange={(visible) => setColorMenuVisible(visible)}
+              placement="bottomLeft"
+            >
+              <Button
+                type="primary"
+                className="action-button"
+                icon={<BgColorsOutlined />}
+              />
+            </Dropdown>
+          </Tooltip>
+          <Button
+            type="primary"
+            className="add-survey-button"
+            onClick={showAddModal}
+          >
+            Add Survey Data
+          </Button>
+          <AddSurvey visible={isAddModalVisible} onCancel={handleAddCancel} />
+        </div>
       </div>
 
       <div className="filter-container">
         <div className="total-rows">
           Industry Count: {formatNumber(filteredData.length)}
         </div>
-        <div className="filter-inputs">
+        <div className="filter-controls-group">
           <Input
-            placeholder="Search..."
+            placeholder="Search keyword here..."
             prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => {
-              setSearchText(e.target.value);
-              handleSearchKeyWord(e);
-            }}
-            className="search-input-survey"
+            onChange={handleSearchKeyWord}
+            className="search-input-survey global-search-input"
+            allowClear
           />
           <div className="custom-select-input">
             <ConfigProvider
               theme={{
-                components: {
-                  Select: {
-                    fontSize: 12,
-                  },
-                },
+                components: { Select: { fontSize: 12 } },
               }}
             >
               <Select
-                placeholder="Select Industry Class"
+                placeholder="Filter by Industry Class"
                 value={filterValue}
                 onChange={handleFilterChange}
                 className="select-input"
+                allowClear
               >
-                <Option value="">All Industry Classification</Option>
+                <Option value="">All Industry Classes</Option>
                 {industryClasses.map((industryClass) => (
                   <Option key={industryClass} value={industryClass}>
                     {industryClass}
@@ -1137,11 +1178,23 @@ const Survey = ({ theme, currentUser }) => {
               </Select>
             </ConfigProvider>
           </div>
+
+          <div className="survey-pagination-controls">
+            <Pagination
+              simple
+              current={currentPage}
+              total={filteredData.length}
+              pageSize={pageSize}
+              onChange={handlePageChange}
+              size="small"
+              className="custom-pagination"
+            />
+          </div>
         </div>
       </div>
 
       <Modal
-        visible={isModalVisible}
+        open={isModalVisible}
         title={
           <div className="modal-title-container">
             <span className="modal-title">
@@ -1153,7 +1206,7 @@ const Survey = ({ theme, currentUser }) => {
             <span className="modal-iis">
               <a
                 href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                  viewedRecord?.iis_no
+                  viewedRecord?.iis_no || ""
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -1172,19 +1225,26 @@ const Survey = ({ theme, currentUser }) => {
             record={viewedRecord}
             isEditing={isEditing}
             setIsEditing={setIsEditing}
-            onToggleEdit={handleToggleEdit}
-            onClose={handleCloseModal}
+            // onToggleEdit={handleToggleEdit} // This prop might not be needed if SurveyModal handles its own edit state
+            // onClose={handleCloseModal} // This prop might not be needed if SurveyModal handles its own close
             handleReload={handleReload}
             centered
             currentUser={currentUser}
+            theme={theme} // Pass theme to SurveyModal
           />
         )}
       </Modal>
 
-      {/* Table for displaying survey data */}
       <div className="survey-table">
-        {loading ? (
-          <Spin size="large" />
+        {loading && progress < 100 ? (
+          <div className="loading-progress-container">
+            <span>Loading Survey Data ({selectedSurvey})...</span> <br />
+            <Progress
+              percent={progress}
+              status="active"
+              style={{ width: "50%" }}
+            />
+          </div>
         ) : (
           <Table
             rowSelection={{
@@ -1193,30 +1253,29 @@ const Survey = ({ theme, currentUser }) => {
                 setSelectedRowKeys(newSelectedRowKeys);
               },
               getCheckboxProps: (record) => ({
-                name: record.name,
+                name: record.name, // This might be incorrect, should be record.project_title or similar
                 checked: selectedRows[record.id_no],
                 onChange: (e) => {
+                  // This onChange logic for rowSelection seems complex and might conflict with handleRowSelect
+                  // Consider simplifying or ensuring it works as intended.
                   if (e.target.checked) {
                     setSelectedRows((prevSelectedRows) => ({
                       ...prevSelectedRows,
                       [record.id_no]: true,
                     }));
                   } else {
+                    // Handle uncheck if needed
                   }
                 },
               }),
             }}
             size="small"
+            scroll={{ y: 950 }}
             className="custom-table"
             columns={columns}
-            dataSource={filteredData}
+            dataSource={paginatedData}
             rowKey="id_no"
-            pagination={{ pageSize: 10 }}
-            rowClassName={(record) => {
-              const rowId = record.id_no;
-              const colorValue = selectedRowColors[rowId] || record.color || "";
-              return "";
-            }}
+            pagination={false}
             onRow={(record) => ({
               onClick: () => {
                 handleRowClick(record);
@@ -1224,15 +1283,16 @@ const Survey = ({ theme, currentUser }) => {
               },
               style: {
                 cursor: "pointer",
-                backgroundColor:
-                  selectedRowColors[record.id_no] ||
-                  record.color ||
-                  "transparent",
+                ...((selectedRowColors[record.id_no] || record.color) && {
+                  backgroundColor:
+                    selectedRowColors[record.id_no] || record.color,
+                }),
               },
-              badge:
-                modifiedRows && modifiedRows[record.id_no] ? (
-                  <Badge status="warning" />
-                ) : null,
+              // badge prop is not standard for onRow, this might be custom logic
+              // badge:
+              //   modifiedRows && modifiedRows[record.id_no] ? (
+              //     <Badge status="warning" />
+              //   ) : null,
             })}
           />
         )}

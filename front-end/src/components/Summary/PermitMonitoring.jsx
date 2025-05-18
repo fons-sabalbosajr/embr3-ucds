@@ -10,8 +10,13 @@ import {
   Space,
   Select,
   Pagination,
+  message,
 } from "antd";
-import { SearchOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  EditOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import {
   storeData,
   getCachedData,
@@ -37,7 +42,7 @@ const idPrefixes = [
   { label: "Zambales", value: "ZA" },
 ];
 
-const PermitMonitoringModal = ({ visible, onClose }) => {
+const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
@@ -46,22 +51,28 @@ const PermitMonitoringModal = ({ visible, onClose }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
+  const [isReloading, setIsReloading] = useState(false);
+  const [selectedPrefixes, setSelectedPrefixes] = React.useState([]);
+  const [page, setPage] = React.useState(1);
+  const [totalCount, setTotalCount] = React.useState(0);
 
-  // Fetch data from the server
-  const fetchPermits = async () => {
-    setLoading(true);
+  const fetchPermits = React.useCallback(async () => {
     try {
-      const response = await axios.get(
-        `http://localhost:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}&search=${searchText}&permitType=${permitsFilter}&idPrefix=${idPrefixFilter}`
+      const prefixQuery = selectedPrefixes.join(","); // convert array to CSV string
+
+      const res = await fetch(
+        `http://localhost:8081/api/permits-summary?page=${page}&pageSize=${pageSize}&prefixes=${prefixQuery}`
       );
-      setData(response.data.data || []);
-      setTotal(response.data.total || 0);
+      if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+
+      const json = await res.json();
+
+      setData(json.data);
+      setTotalCount(json.total);
     } catch (err) {
       console.error("Error fetching permits:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [page, pageSize, selectedPrefixes]);
 
   useEffect(() => {
     if (visible) {
@@ -76,22 +87,17 @@ const PermitMonitoringModal = ({ visible, onClose }) => {
     idPrefixFilter,
   ]);
 
-  const filteredData = useMemo(() => {
-    return data.filter((item) => {
-      const searchLower = searchText.toLowerCase();
-      const matchesSearch =
-        item.id_no.toLowerCase().includes(searchLower) ||
-        item.title.toLowerCase().includes(searchLower);
+  const filteredData = React.useMemo(() => {
+    if (!searchText.trim()) return data;
 
-      const matchesPermit =
-        !permitsFilter || item.permits.some((p) => p.type === permitsFilter);
+    const lowerSearch = searchText.toLowerCase();
 
-      const matchesPrefix =
-        !idPrefixFilter || item.id_no.startsWith(idPrefixFilter);
-
-      return matchesSearch && matchesPermit && matchesPrefix;
-    });
-  }, [data, searchText, permitsFilter, idPrefixFilter]);
+    return data.filter(
+      (item) =>
+        (item.id_no && item.id_no.toLowerCase().includes(lowerSearch)) ||
+        (item.title && item.title.toLowerCase().includes(lowerSearch))
+    );
+  }, [data, searchText]);
 
   const getColumnSearchProps = (dataIndex, placeholder) => ({
     filterDropdown: ({
@@ -149,6 +155,20 @@ const PermitMonitoringModal = ({ visible, onClose }) => {
   const handlePageSizeChange = (current, size) => {
     setPageSize(size);
     setCurrentPage(1); // Reset to the first page when page size changes
+  };
+
+  const handleReload = async () => {
+    setIsReloading(true);
+    const hide = message.loading("Refreshing data...", 0);
+    try {
+      await fetchPermits();
+      message.success("Permit data updated.");
+    } catch (error) {
+      message.error("Failed to reload data.");
+    } finally {
+      hide();
+      setIsReloading(false);
+    }
   };
 
   const columns = [
@@ -286,6 +306,19 @@ const PermitMonitoringModal = ({ visible, onClose }) => {
           onChange={(e) => setSearchText(e.target.value)}
           style={{ maxWidth: 300 }}
         />
+        <Button
+          type="default"
+          icon={<ReloadOutlined />}
+          loading={isReloading}
+          onClick={handleReload}
+          style={{
+            borderColor: "#1890ff",
+            color: "#1890ff",
+            fontWeight: "bold",
+          }}
+        >
+          Reload
+        </Button>
 
         {/* Pagination Controls */}
         <Pagination

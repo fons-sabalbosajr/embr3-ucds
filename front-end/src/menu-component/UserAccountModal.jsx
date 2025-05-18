@@ -206,97 +206,99 @@ const UserAccountModal = ({ userHandle, user }) => {
 
   if (!user) return null;
 
-  return (
+ return (
     <div className="profile-container">
-      <div className="avatar-container">
-        {editableUser ? (
-          <AvatarWithName userHandle={editableUser.username} size="100px" />
-        ) : (
-          <Avatar
-            size={100}
-            icon={<UserOutlined />}
-            style={{ verticalAlign: "middle" }}
-          />
-        )}
-      </div>
-
-      <div className="user-info">
-        <div className="user-info-column">
-          <p className="label-user">Employee ID:</p>
-          <Input
-            placeholder="Employee ID"
-            value={editableUser ? editableUser.empid : ""}
-            onChange={(e) => handleChange("empid", e.target.value)}
-            className="input-label"
-          />
-          <p className="label-user">Name:</p>
-          <Input
-            placeholder="Enter Name"
-            value={editableUser ? editableUser.name : ""}
-            onChange={(e) => handleChange("name", e.target.value)}
-            className="input-label"
-          />
-          <p className="label-user">Division/Section:</p>
-          <Input
-            placeholder="Enter Division/Section"
-            value={editableUser ? editableUser.division : ""}
-            onChange={(e) => handleChange("division", e.target.value)}
-            className="input-label"
-          />
-          <p className="label-user">Designation:</p>
-          <Input
-            placeholder="Enter Designation"
-            value={editableUser ? editableUser.designation : ""}
-            onChange={(e) => handleChange("designation", e.target.value)}
-            className="input-label"
-          />
+      <div className="profile-top-section">
+        <div className="avatar-container">
+          {editableUser ? (
+            <AvatarWithName userHandle={editableUser.username} size="100px" />
+          ) : (
+            <Avatar
+              size={100}
+              icon={<UserOutlined />}
+              style={{ verticalAlign: "middle" }}
+            />
+          )}
         </div>
-      </div>
 
-      <div className="user-info-column">
-        <p className="label-user">Email Address:</p>
-        <Input
-          placeholder="Enter Email Address"
-          value={editableUser ? editableUser.email : ""}
-          onChange={(e) => handleChange("email", e.target.value)}
-          className="input-label"
-        />
-        <p className="label-user">Office:</p>
-        <Input
-          placeholder="Enter Office"
-          value={editableUser ? editableUser.office : ""}
-          onChange={(e) => handleChange("office", e.target.value)}
-          className="input-label"
-        />
-        <p className="label-user">Region:</p>
-        <Input
-          placeholder="Enter Region"
-          value={editableUser ? editableUser.region : ""}
-          onChange={(e) => handleChange("region", e.target.value)}
-          className="input-label"
-        />
-        <p className="label-user">Permission:</p>
-        <ConfigProvider
-          theme={{
-            components: {
-              Select: {
-                fontSize: 11,
-              },
-            },
-          }}
-        >
-          <Select
-            value={editableUser ? editableUser.permission : "user"}
-            className="select-permission"
-            disabled={!isEditing}
-            onChange={(value) => handleChange("permission", value)}
-          >
-            <Select.Option value="viewer">Viewer</Select.Option>
-            <Select.Option value="contributor">Contributor</Select.Option>
-            <Select.Option value="admin">Admin</Select.Option>
-            <Select.Option value="developer">Developer</Select.Option>
-          </Select>
-        </ConfigProvider>
+        <div className="user-info-columns-container">
+          <div className="user-info-column">
+            <p className="label-user">Employee ID:</p>
+            <Input
+              placeholder="Employee ID"
+              value={editableUser ? editableUser.empid : ""}
+              onChange={(e) => handleChange("empid", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Name:</p>
+            <Input
+              placeholder="Enter Name"
+              value={editableUser ? editableUser.name : ""}
+              onChange={(e) => handleChange("name", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Division/Section:</p>
+            <Input
+              placeholder="Enter Division/Section"
+              value={editableUser ? editableUser.division : ""}
+              onChange={(e) => handleChange("division", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Designation:</p>
+            <Input
+              placeholder="Enter Designation"
+              value={editableUser ? editableUser.designation : ""}
+              onChange={(e) => handleChange("designation", e.target.value)}
+              className="input-label"
+            />
+          </div>
+
+          <div className="user-info-column">
+            <p className="label-user">Email Address:</p>
+            <Input
+              placeholder="Enter Email Address"
+              value={editableUser ? editableUser.email : ""}
+              onChange={(e) => handleChange("email", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Office:</p>
+            <Input
+              placeholder="Enter Office"
+              value={editableUser ? editableUser.office : ""}
+              onChange={(e) => handleChange("office", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Region:</p>
+            <Input
+              placeholder="Enter Region"
+              value={editableUser ? editableUser.region : ""}
+              onChange={(e) => handleChange("region", e.target.value)}
+              className="input-label"
+            />
+            <p className="label-user">Permission:</p>
+            <ConfigProvider
+              theme={{
+                components: {
+                  Select: {
+                    fontSize: 11,
+                  },
+                },
+              }}
+            >
+              <Select
+                value={editableUser ? editableUser.permission : "user"}
+                className="select-permission"
+                disabled={!isEditing}
+                onChange={(value) => handleChange("permission", value)}
+              >
+                <Select.Option value="viewer">Viewer</Select.Option>
+                <Select.Option value="contributor">Contributor</Select.Option>
+                <Select.Option value="admin">Admin</Select.Option>
+                <Select.Option value="developer">Developer</Select.Option>
+              </Select>
+            </ConfigProvider>
+          </div>
+        </div>
       </div>
 
       <div className="tab-container">

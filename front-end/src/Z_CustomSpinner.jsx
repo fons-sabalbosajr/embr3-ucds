@@ -16,7 +16,7 @@ const Z_CustomSpinner = ({ loading, errorMessage, onRetry }) => {
         <Spin size="large" tip="Loading, please wait..." />
       ) : (
         errorMessage && (
-          <Card className="spinner-card" bordered={false}>
+          <Card className="spinner-card" variant={false}>
             <ExclamationCircleOutlined style={{ fontSize: '50px', color: '#ff4d4f' }} />
             <div className="error-text">{errorMessage}</div>
             <div className="spinner-actions">

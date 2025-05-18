@@ -7,11 +7,13 @@ import {
   BulbOutlined,
   LogoutOutlined,
 } from "@ant-design/icons";
-import Profile from "./Settings/Profile/Profile"; // Directly import Profile
+import Profile from "./Settings/Profile/Profile";
+import Help from "./Settings/Help/Help";
+import Suggestion from "./Settings/Suggestion/Suggestion";
 
 const { Text } = Typography;
 
-const UserPopover = ({ name, userHandle, handleLogout, selection }) => {
+const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalContent, setModalContent] = useState("");
   const [prefetchedUserData, setPrefetchedUserData] = useState(null);
@@ -29,12 +31,10 @@ const UserPopover = ({ name, userHandle, handleLogout, selection }) => {
     switch (modalContent) {
       case "profile":
         return <Profile name={name} username={userHandle} />; // Pass name and username
-      case "settings":
-        return <div>Settings content</div>;
       case "help":
-        return <div>Help content</div>;
+        return <Help name={name} username={userHandle} theme={theme} />;
       case "feature":
-        return <div>Suggest a feature content</div>;
+        return <Suggestion name={name} username={userHandle} theme={theme} />;
       default:
         return null;
     }
@@ -99,19 +99,19 @@ const UserPopover = ({ name, userHandle, handleLogout, selection }) => {
       <Modal
         title={
           modalContent === "profile"
-            ? "Profile Details"
-            : modalContent === "settings"
-            ? "Settings"
+            ? ""
             : modalContent === "help"
-            ? "Help"
+            ? ""
             : modalContent === "feature"
-            ? "Suggest a Feature"
+            ? ""
             : ""
         }
         open={isModalVisible}
         onCancel={handleCloseModal}
         footer={null}
-        width={400}
+        width={
+          modalContent === "help" ? 700 : modalContent === "feature" ? 600 : 400
+        }
       >
         {renderModalContent()}
       </Modal>

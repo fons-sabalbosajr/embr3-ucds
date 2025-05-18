@@ -322,6 +322,15 @@
   display: inline-block;
 }
 
+.custom-span-red { /* For expired permits */
+  background-color: #cf1322; /* Bright red */
+  color: white;
+  font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
 .modal-title-container {
   display: flex;
   justify-content: space-between; /* Align elements to opposite sides */
@@ -341,7 +350,6 @@
 }
 
 .section-result {
-  margin-top: 10px;
   margin-bottom: 10px;
 }
 
@@ -531,4 +539,19 @@ button {
 
 button:hover {
   background-color: var(--button-hover);
+}
+
+.custom-page-size-selector-container {
+  display: flex;
+  justify-content: center; /* Center the select component */
+  margin-top: 10px; /* Space below the page numbers */
+  margin-bottom: 15px;
+}
+
+.custom-pagination{
+  margin-top: -5px;
+}
+
+.monitoring-status-container-province{
+  text-align: left;
 }

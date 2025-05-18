@@ -15,7 +15,6 @@ const MongoStore = require("connect-mongo");
 const cron = require("node-cron");
 const nodemailer = require("nodemailer"); // Nodemailer for sending emails
 const crypto = require("crypto"); // Crypto for generating a reset token
-const { OpenAI } = require("openai");
 const bodyParser = require("body-parser");
 
 const app = express();
@@ -1793,7 +1792,7 @@ app.use("/uploads", express.static(uploadsDir));
 
 //////////////////////////////////////////////////////////////////////////////////////////
 app.get("/api/permits-summary", async (req, res) => {
-  const { page = 1, pageSize = 5 } = req.query;
+  const { page = 1, pageSize = 5, prefixes = "" } = req.query;
   const currentPage = parseInt(page, 10);
   const pageSizeInt = parseInt(pageSize, 10);
   const skip = (currentPage - 1) * pageSizeInt;
@@ -1810,23 +1809,34 @@ app.get("/api/permits-summary", async (req, res) => {
 
     const isExpired = (expiryDate) => now > expiryDate;
 
-    // 1. Fetch ALL records but only needed fields (still optimize fields)
-    const allData = await ucdsCollection
-      .find({}, {
-        projection: {
-          id_no: 1,
-          title: 1,
-          name: 1,
-          ecc_cnc: 1,
-          pto_issued: 1,
-          wwdp_issued: 1,
-          pco_validity: 1,
-        },
-      })
-      .toArray();
+    // Parse comma-separated prefixes from query
+    const prefixList = prefixes
+      .split(",")
+      .map((p) => p.trim().toUpperCase())
+      .filter((p) => p !== "");
 
-    // 2. Process and filter
-    const processedData = allData.map((record) => {
+    const allData = await ucdsCollection.find({}, {
+      projection: {
+        id_no: 1,
+        title: 1,
+        name: 1,
+        ecc_cnc: 1,
+        pto_issued: 1,
+        wwdp_issued: 1,
+        pco_validity: 1,
+      },
+    }).toArray();
+
+    // Apply multi-prefix filtering
+    const filteredByPrefix = prefixList.length > 0
+      ? allData.filter((record) => {
+          const idNo = (record.id_no || "").toUpperCase();
+          return prefixList.some((prefix) => idNo.startsWith(prefix));
+        })
+      : allData; // If no prefix specified, return all
+
+    // Process permits
+    const processedData = filteredByPrefix.map((record) => {
       const permits = [];
 
       if (record.pto_issued) {
@@ -1878,21 +1888,18 @@ app.get("/api/permits-summary", async (req, res) => {
       return null;
     }).filter((record) => record !== null);
 
-    // 3. Paginate AFTER filtering
     const paginatedData = processedData.slice(skip, skip + limit);
-
-    // 4. Get total count (only matching filtered)
-    const totalRecords = processedData.length;
 
     res.json({
       data: paginatedData,
-      total: totalRecords,
+      total: processedData.length,
     });
   } catch (err) {
     console.error("Error in /api/permits-summary:", err);
     res.status(500).send("Internal Server Error");
   }
 });
+
 
 app.get("/api/draft-report", async (req, res) => {
   try {
@@ -3114,6 +3121,36 @@ app.get("/api/users", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+// GET /api/user/details?username=merlinda
+app.get("/api/user/details", async (req, res) => {
+  const { username } = req.query;
+
+  if (!username) {
+    return res.status(400).json({ message: "Username is required" });
+  }
+
+  try {
+    const user = await userCollection.findOne(
+      { username },
+      {
+        projection: {
+          password: 0 // Never send hashed passwords to client
+        }
+      }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error("Error retrieving user details:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 // Fetch all login statuses
 app.get("/api/login-status", async (req, res) => {

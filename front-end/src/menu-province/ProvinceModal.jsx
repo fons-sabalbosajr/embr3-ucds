@@ -144,7 +144,6 @@ const ProvinceModal = ({
       );
 
       if (existingLog) {
-        console.log("Initial data already logged for ecc_cnc:", record.ecc_cnc);
         isLogging = false;
         return;
       }
@@ -152,7 +151,7 @@ const ProvinceModal = ({
       let transactionCounter = 1;
 
       if (!transactions || transactions.length === 0) {
-        console.log("No transactions found");
+        // No transactions found, counter remains 1
       } else {
         const lastTransaction = transactions[transactions.length - 1];
         if (!lastTransaction) {
@@ -308,7 +307,6 @@ const ProvinceModal = ({
             // Save the log entry to the ucds-log collection
             try {
               await axios.post("http://localhost:8081/api/ucds-log", logData);
-              console.log("Log entry created successfully");
             } catch (error) {
               console.error("Error creating log entry:", error);
             }
@@ -358,6 +356,27 @@ const ProvinceModal = ({
   const handleTabChange = (key) => {
     setActiveTab(key);
   };
+
+  // Helper function to get the permission key for the current province
+  const getProvincePermissionKey = (provinceNameFromRecord) => {
+    if (!provinceNameFromRecord) return null;
+    const name = String(provinceNameFromRecord).toUpperCase(); // Ensure it's a string and standardize to uppercase
+    switch (name) {
+      case 'AURORA': return 'aurora';
+      case 'BATAAN': return 'bataan';
+      case 'BULACAN': return 'bulacan';
+      case 'NUEVA ECIJA': return 'nuevaEcija';
+      case 'PAMPANGA': return 'pampanga';
+      case 'TARLAC': return 'tarlac';
+      case 'ZAMBALES': return 'zambales';
+      default:
+        console.warn(`Unknown province name for permission key: ${provinceNameFromRecord}`);
+        return null;
+    }
+  };
+
+  const provinceKey = getProvincePermissionKey(record?.province);
+  const canShowEditButton = currentUser?.provinceStringPermissions?.[provinceKey] === 'readWrite';
 
   return (
     <div className={`modal-container ${theme}-theme`} >
@@ -516,7 +535,7 @@ const ProvinceModal = ({
                       <Button onClick={handleCancelEdit}>Cancel</Button>
                     </>
                   ) : (
-                    <Button
+                    canShowEditButton && <Button // Conditionally render Edit button
                       onClick={() => setIsEditing(true)}
                       type="primary"
                       icon={<EditOutlined />}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Layout,
   Button,
@@ -13,6 +13,7 @@ import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import "./index.css";
+import CryptoJS from "crypto-js";
 import Dashboard from "./menu-component/Dashboard";
 import Province from "./menu-province/Province";
 import Survey from "./menu-survey/Survey";
@@ -54,9 +55,21 @@ const Universe = () => {
   const [popoverContents, setPopoverContents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showThemeHint, setShowThemeHint] = useState(false);
+  const [userProvinceStringPermissions, setUserProvinceStringPermissions] = useState({});
+  const [userRole, setUserRole] = useState(""); // New state for the user's role string
 
   const backendUrl = "http://localhost:8081";
   const navigate = useNavigate();
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
+  const [provinceAccess, setProvinceAccess] = useState({
+    aurora: false,
+    bataan: false,
+    bulacan: false,
+    nuevaEcija: false,
+    pampanga: false,
+    tarlac: false,
+    zambales: false,
+  });
 
   const checkAuth = async () => {
     try {
@@ -72,26 +85,43 @@ const Universe = () => {
           ? `${backendUrl}${data.avatar}`
           : "path/to/default-avatar.png"
       );
-      setPermissions(
-        data.permissions?.length
-          ? data.permissions
-          : [
-              data.canGenerateData,
-              data.canManageData,
-              data.canViewAdminPanel,
-              data.canViewDataHistory,
-              data.canAccessRangePicker,
-              data.aurora,
-              data.bataan,
-              data.bulacan,
-              data.nuevaEcija,
-              data.pampanga,
-              data.tarlac,
-              data.zambales,
-            ]
-      );
+
+      // Process base permissions (ensure they are boolean)
+      const basePermissions = [
+        !!data.canGenerateData,
+        !!data.canManageData,
+        !!data.canViewAdminPanel,
+        !!data.canViewDataHistory,
+        !!data.canAccessRangePicker,
+      ];
+
+      // Process province permissions (convert "view"/"readWrite" to true, "none" or others to false)
+      const provinceKeys = ['aurora', 'bataan', 'bulacan', 'nuevaEcija', 'pampanga', 'tarlac', 'zambales'];
+      const provincePermissionsAsBooleans = provinceKeys.map(key => {
+        const permissionString = data[key];
+        return permissionString === 'view' || permissionString === 'readWrite';
+      });
+
+      const newProvinceStringPermissions = {};
+      provinceKeys.forEach(key => {
+        newProvinceStringPermissions[key] = data[key] || 'none'; // Store "view", "readWrite", or "none"
+      });
+      setUserProvinceStringPermissions(newProvinceStringPermissions);
+
+      setUserRole(data.permission || "viewer"); // Store the user's role, default to 'viewer'
+      setPermissions([...basePermissions, ...provincePermissionsAsBooleans]);
+
       setUserHandle(data.username);
       setDivision(data.division || "");
+
+      // Set provinceAccess state for components like Dashboard
+      const newProvinceAccessState = {};
+      provinceKeys.forEach(key => {
+        const permissionString = data[key];
+        newProvinceAccessState[key] = permissionString === 'view' || permissionString === 'readWrite';
+      });
+      setProvinceAccess(newProvinceAccessState);
+
       setAuth(true);
       setErrorMessage("");
     } catch {
@@ -108,11 +138,10 @@ const Universe = () => {
     checkAuth();
   }, []);
 
-  useEffect(() => {
-    if (!auth) return;
-
-    const fetchDataIssues = async () => {
-      setIsLoading(true);
+  // Define fetchDataIssues outside of useEffect, memoized with useCallback
+  const fetchDataIssues = useCallback(async () => {
+    if (!auth) return; // Ensure auth is true before fetching
+      setIsLoading(true); // Set loading for notifications
       try {
         const dataIssuesRes = await axios.post(`${backendUrl}/api/check-data`);
         const duplicateIssuesRes = await axios.get(
@@ -131,25 +160,38 @@ const Universe = () => {
 
         const combined = [...dataIssues, ...duplicateIssues];
         setNotifications(combined);
-        setPopoverContents(combined);
+        // setPopoverContents(combined); // REMOVE THIS LINE
       } catch (err) {
         console.error("Fetch error:", err);
         const errorMsg = ["Error fetching data issues."];
         setNotifications(errorMsg);
-        setPopoverContents(errorMsg);
+        // setPopoverContents(errorMsg); // REMOVE THIS LINE
       } finally {
-        setIsLoading(false);
+        setIsLoading(false); // Clear loading for notifications
       }
-    };
-
-    fetchDataIssues();
-  }, [auth]);
+  }, [auth, backendUrl, setIsLoading, setNotifications]); // Add dependencies
 
   useEffect(() => {
-    const hintHidden = localStorage.getItem("hideThemeHint");
-    if (!hintHidden) {
-      setShowThemeHint(true);
+    if (!auth) return; // Only fetch if authenticated
+    fetchDataIssues();
+    // If you need polling, you can set it up here, calling the memoized fetchDataIssues
+  }, [auth, fetchDataIssues]); // fetchDataIssues is now a dependency
+
+  useEffect(() => {
+    const encrypted = localStorage.getItem("hideThemeHint");
+    if (encrypted && encryptionKey) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, encryptionKey);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        if (decrypted === "true") {
+          setShowThemeHint(false);
+          return;
+        }
+      } catch (err) {
+        // fallback: show the hint if decryption fails
+      }
     }
+    setShowThemeHint(true);
   }, []);
 
   const handleRetry = () => {
@@ -167,21 +209,16 @@ const Universe = () => {
   };
 
   const handleLogout = async () => {
+    // Clear localStorage and force reload immediately
+    localStorage.clear();
+    window.location.replace("/login");
+
+    // Optionally, notify the backend (this runs in the background)
     try {
-      const res = await axios.post(
-        `${backendUrl}/logout`,
-        {},
-        { withCredentials: true }
-      );
-      if (res.status === 200) {
-        localStorage.clear();
-        navigate("/login");
-      } else {
-        message.error("Logout failed. Please try again.");
-      }
+      await axios.post(`${backendUrl}/logout`, {}, { withCredentials: true });
     } catch (err) {
-      console.error("Logout error:", err);
-      message.error("Logout failed. Please try again.");
+      // Even if the backend fails, the user is logged out on the client
+      // Optionally log error
     }
   };
 
@@ -190,7 +227,12 @@ const Universe = () => {
   };
 
   const handleDontShowAgainHint = () => {
-    localStorage.setItem("hideThemeHint", "true");
+    if (encryptionKey) {
+      const encrypted = CryptoJS.AES.encrypt("true", encryptionKey).toString();
+      localStorage.setItem("hideThemeHint", encrypted);
+    } else {
+      localStorage.setItem("hideThemeHint", "true");
+    }
     setShowThemeHint(false);
   };
 
@@ -218,12 +260,21 @@ const Universe = () => {
     },
   };
 
+  const provinceKeysForCurrentUser = ['aurora', 'bataan', 'bulacan', 'nuevaEcija', 'pampanga', 'tarlac', 'zambales'];
+  const provinceStringPermissions = {};
+  provinceKeysForCurrentUser.forEach(key => {
+    provinceStringPermissions[key] = permissions 
+  });
+
+
   const currentUser = {
     name,
     username: userHandle,
     avatar,
     division,
     permissions,
+    role: userRole, // Add the user's role string
+    provinceStringPermissions: userProvinceStringPermissions, // Add this line
   };
 
   return (
@@ -236,6 +287,7 @@ const Universe = () => {
             setCollapsed={setCollapsed}
             permissions={permissions}
             currentUser={currentUser}
+            provinceAccess={provinceAccess}
           />
           <Layout>
             <Header className={`header-container ${theme}-theme`}>
@@ -245,13 +297,14 @@ const Universe = () => {
                     {name} | {division}
                   </span>
 
-                  <NotificationsPopover
-                    popoverContent={popoverContents}
+                    <NotificationsPopover
+                    // popoverContent={popoverContents} // REMOVE THIS PROP
                     theme={theme}
                     notifications={notifications}
-                    isLoading={isLoading}
+                    isLoading={isLoading} // Pass the loading state for notifications
                     className="notification-icon"
                     currentUser={currentUser}
+                    refreshNotifications={fetchDataIssues} // Pass the refresh handler
                   />
 
                   <Popover
@@ -262,6 +315,7 @@ const Universe = () => {
                         toggleTheme={toggleTheme}
                         userHandle={userHandle}
                         userData={currentUser}
+                        theme={theme}
                       />
                     }
                     trigger="click"
@@ -340,7 +394,7 @@ const Universe = () => {
                 <Route
                   path="dashboard"
                   element={
-                    <Dashboard avatar={avatar} name={name} theme={theme} />
+                    <Dashboard avatar={avatar} name={name} theme={theme} provinceAccess={provinceAccess}  />
                   }
                 />
                 <Route

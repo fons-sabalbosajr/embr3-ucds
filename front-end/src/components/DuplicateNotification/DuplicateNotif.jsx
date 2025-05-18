@@ -8,7 +8,7 @@ import "./duplicatenotif.css";
 const DuplicateNotif = ({
   duplicateData,
   onDuplicateResolved,
-  setWarnings, theme
+  theme
 }) => {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState([]);
@@ -338,15 +338,11 @@ const DuplicateNotif = ({
       // Remove the archived record from the records state
       setRecords((prev) => prev.filter((record) => record.id_no !== id_no));
 
-      // Remove the archived record from the warnings state
-      setWarnings((prevWarnings) =>
-        prevWarnings.filter((warning) => !warning.idNos.includes(id_no))
-      );
-
       // Notify the parent component about the resolved duplicate
       if (typeof onDuplicateResolved === "function") {
         onDuplicateResolved(id_no);
       }
+      setIsModalVisible(false); // Close the archive selection modal
     } catch (error) {
       console.error("Error during transfer operation:", error);
 
@@ -354,6 +350,7 @@ const DuplicateNotif = ({
         content: `Failed to archive the record. Details: ${error.message}`,
         placement: "topRight", // Show the message on the right side
       });
+      // Potentially do not close the modal on error, or handle as needed
     }
   };
 
@@ -398,18 +395,30 @@ const DuplicateNotif = ({
       key: `record${index + 1}`,
       align: "center",
       className: "table-header-center",
-      render: (text, record) => {
-        const original = originalRecords[index];
-        const fieldName = record.field;
-        const changed = original && original[fieldName] !== text;
+      render: (cellValue, tableRowRecord) => { // cellValue is the text for this cell, tableRowRecord is the row data for the AntD table (e.g., { field: 'ecc_cnc', record1: 'val1', ...})
+        const fieldKey = tableRowRecord.field; // The field name for this row (e.g., 'ecc_cnc', 'title')
+
+        let isDuplicateField = false;
+        if (records.length > 1) {
+          const allValuesForThisField = records.map(r => r[fieldKey]);
+          const firstValue = allValuesForThisField[0];
+
+          // Check if the first value is meaningful (not null, undefined, or an empty/whitespace string)
+          // and if all other values strictly match it.
+          if (firstValue !== null &&
+              firstValue !== undefined &&
+              String(firstValue).trim() !== '' && // Ensures "  " is treated as empty
+              allValuesForThisField.every(val => val === firstValue)) {
+            isDuplicateField = true;
+          }
+        }
 
         return (
           <div
-            style={{
-              textAlign: "left",
-            }}
+            className={isDuplicateField ? 'duplicate-data-text' : ''} // Apply class if data is duplicate
+            style={{ textAlign: "left" }}
           >
-            {text || "N/A"}
+            {cellValue === null || cellValue === undefined || String(cellValue).trim() === '' ? "N/A" : String(cellValue)}
           </div>
         );
       },
@@ -476,7 +485,7 @@ const DuplicateNotif = ({
   return loading ? (
     <Spin />
   ) : (
-     <div className={`${theme}-theme`}> 
+     <div className={`${theme}-theme`}> {/* Ensure this line exists and uses the theme prop */}
       <Table
         components={{
           body: {
@@ -491,13 +500,22 @@ const DuplicateNotif = ({
         locale={{
           emptyText: loading ? <Spin /> : "No duplicate records found.",
         }}
-        rowClassName={(record) => {
-          const values = records.map(
-            (_, index) => record[`record${index + 1}`]
-          );
-          return values.every((val) => val === values[0])
-            ? "highlight-row table-row"
-            : "table-row";
+        rowClassName={(tableRowRecord) => {
+          // 'records' is the component's state: array of original data objects
+          // 'tableRowRecord' is a row from 'dataSource', representing one field across all original records
+          // e.g., tableRowRecord = { field: 'ecc_cnc', record1: 'val1', record2: 'val2', ... }
+
+          if (records.length < 2) {
+            return "table-row"; // No comparison or highlight if less than 2 original records
+          }
+
+          const fieldValuesInRow = [];
+          for (let i = 0; i < records.length; i++) {
+            fieldValuesInRow.push(tableRowRecord[`record${i + 1}`]);
+          }
+
+          const allSame = fieldValuesInRow.every((val) => val === fieldValuesInRow[0]);
+          return "table-row"; // Remove row-level class, cell-level styling will handle it
         }}
         scroll={{ y: 400 }} // Set the height for vertical scrolling
       />

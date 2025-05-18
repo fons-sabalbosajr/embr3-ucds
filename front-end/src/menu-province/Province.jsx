@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useRef } from "react";
+import React, { useContext, useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import {
   Table,
@@ -12,6 +12,7 @@ import {
   Pagination,
   Popover,
   DatePicker,
+  Select as AntSelect, // Renaming Select to avoid conflict if you have other Selects
   ConfigProvider,
   Progress,
 } from "antd";
@@ -26,6 +27,8 @@ import {
   CheckCircleFilled,
   InfoCircleOutlined,
   ClockCircleFilled,
+  TagsOutlined,
+  ExclamationCircleOutlined, // For expired indicator
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import ProvinceModal from "./ProvinceModal";
@@ -35,13 +38,14 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import SectionDetailsModal from "./sectiondetails/SectionDetailsModal";
 import AddProvinceModal from "./actions/AddProvinceModal";
+import moment from "moment"; // Import moment for date calculations
 import "./province.css";
 
-const capitalizeFirstLetter = (str) => {
+// Helper function to format province name for display (e.g., "Nueva_Ecija" to "Nueva Ecija")
+const formatProvinceNameForDisplay = (str) => {
   if (!str) return "";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  return str.replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
 };
-
 const { RangePicker } = DatePicker;
 
 const tourContent = (
@@ -61,8 +65,8 @@ const Province = ({ theme, currentUser }) => {
     useContext(DataContext);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const capitalizedProvinceName = capitalizeFirstLetter(provinceName);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]); // For table row selection
+  const displayProvinceName = formatProvinceNameForDisplay(provinceName);
   const [tags, setTags] = useState([]);
   const [inputVisible, setInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -73,7 +77,7 @@ const Province = ({ theme, currentUser }) => {
   const [isModalVisibleAdd, setIsModalVisibleAdd] = useState(false);
   const [isModalDuplicateVisible, setIsModalDuplicateVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // For ProvinceModal
   const [originalData, setOriginalData] = useState([]);
   const [duplicates, setDuplicates] = useState({});
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
@@ -82,7 +86,7 @@ const Province = ({ theme, currentUser }) => {
   const [filterDuplicates, setFilterDuplicates] = useState(false);
   const [searchedColumn, setSearchedColumn] = useState("");
   const [searchText, setSearchText] = useState("");
-  const [dateRange, setDateRange] = useState([null, null]);
+  const [dateRange, setDateRange] = useState(null); // Initialize as null for clarity
   const [filteredData, setFilteredData] = useState(originalData);
   const [sectionCounts, setSectionCounts] = useState({});
   const [isDateRangeApplied, setIsDateRangeApplied] = useState(false);
@@ -102,64 +106,17 @@ const Province = ({ theme, currentUser }) => {
   const canViewDataHistory = permissions[3];
   const canAccessRangePicker = permissions[4];
 
-  // Province codes and their human-readable names
-  const provinceCodes = {
-    BA: "Bataan",
-    BU: "Bulacan",
-    NE: "Nueva_Ecija",
-    PA: "Pampanga",
-    TA: "Tarlac",
-    ZA: "Zambales",
-    AU: "Aurora",
-  };
-
-  // Whenever the provinceName changes, fetch and sort the data for that province
   useEffect(() => {
-    if (provinceName && provinceCodes[provinceName]) {
-      setCurrentProvince(provinceCodes[provinceName]); // Set current province's name
-      handleReload(provinceName); // Call handleReload whenever provinceName changes
+    if (provinceName) {
+      setCurrentProvince(provinceName);
+      handleReload(provinceName);
     }
-  }, [provinceName]);
+  }, [provinceName, setCurrentProvince]); // Removed fetchData from deps as handleReload calls it
 
-  const handleReload = async (provinceName) => {
-    setLoading(true);
-    setProgress(0); // Reset progress
+  const filterData = useCallback(() => {
+    if (!originalData || originalData.length === 0) return [];
 
-    try {
-      // Simulate progress increment
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval); // Stop at 90% until data is fetched
-            return prev;
-          }
-          return prev + 10; // Increment progress by 10%
-        });
-      }, 200);
-
-      const fetchedData = await fetchData(provinceName); // Fetch data for the selected province
-      if (fetchedData) {
-        setFilteredData(fetchedData);
-        setOriginalData(fetchedData);
-
-        // Calculate section counts
-        const newSectionCounts = calculateSectionCounts(fetchedData);
-        setSectionCounts(newSectionCounts);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      clearInterval(progressInterval); // Clear progress interval
-      setProgress(100); // Set progress to 100% when loading is complete
-      setTimeout(() => setLoading(false), 500); // Hide progress bar after a short delay
-    }
-  };
-
-  const filterData = () => {
-    if (!data || data.length === 0) return [];
-
-    // Filter based on the tags, inputValue, and dateRange
-    return data.filter((record) => {
+    return originalData.filter((record) => {
       const searchableFields = [
         record.id_no,
         record.title,
@@ -262,60 +219,99 @@ const Province = ({ theme, currentUser }) => {
         record.mbu_survey_request,
         record.dp_universe,
         record.color,
-      ].map((field) => (typeof field === "string" ? field : "").toLowerCase()); // Normalize fields to lowercase
+      ].map((field) => (field != null ? String(field) : "").toLowerCase());
 
-      // Check if all tags match cumulatively
-      const isMatchingTags =
-        tags.length === 0 ||
-        tags.every((tag) =>
+      // 1. Date Range Filter
+      const recordDateSigned = record.date_signed ? new Date(record.date_signed) : null;
+      const matchesDateRange =
+        !dateRange || // If dateRange is null (cleared), consider it a match
+        !dateRange[0] ||
+        !dateRange[1] ||
+        (recordDateSigned && recordDateSigned >= dateRange[0] && recordDateSigned <= dateRange[1]);
+
+      if (!matchesDateRange) {
+        return false;
+      }
+
+      // 2. Keyword Filters (tags and inputValue)
+      // If no active keyword filters after date filter, the record passes
+      if (tags.length === 0 && !inputValue) {
+        return true;
+      }
+
+      let matchesAllTags = true;
+      if (tags.length > 0) {
+        matchesAllTags = tags.every((tag) =>
           searchableFields.some((field) => field.includes(tag.toLowerCase()))
         );
+      }
 
-      // Check if input value matches any record detail cumulatively
-      const isMatchingInput =
-        !inputValue || // If no inputValue, consider it a match
-        searchableFields.some((field) =>
-          field.includes(inputValue.toLowerCase())
-        );
-
-      const isMatchingPismuTracking =
-        inputValue &&
-        (inputValue.toLowerCase().includes("received") ||
-          inputValue.toLowerCase().includes("pismu") ||
-          inputValue.toLowerCase().includes("planning")) &&
-        record.pismu_tracking === "✔"; // Check if pismu_tracking is marked
-
-      const isMatchingDateSigned =
-        inputValue.toLowerCase() === "date signed" && record.date_signed; // Ensure date_signed exists
-
-      const dateSigned = new Date(record.date_signed);
-
-      const isMatchingDateRange =
-        !dateRange || // If dateRange is null or undefined, consider it a match
-        !dateRange[0] ||
-        !dateRange[1] || // If no specific range is selected, consider it a match
-        (dateSigned >= dateRange[0] && dateSigned <= dateRange[1]);
-
-      return (
-        isMatchingTags &&
-        (isMatchingInput || isMatchingPismuTracking || isMatchingDateSigned) &&
-        isMatchingDateRange // Combine filters
-      );
+      let matchesInputValueCriteria = true; // True if inputValue is empty
+      if (inputValue) {
+        const lowerInputValue = inputValue.toLowerCase();
+        const generalInputMatch = searchableFields.some((field) => field.includes(lowerInputValue));
+        const pismuMatch = (lowerInputValue.includes("received") || lowerInputValue.includes("pismu") || lowerInputValue.includes("planning")) && record.pismu_tracking === "✔";
+        const dateSignedMatch = lowerInputValue === "date signed" && record.date_signed;
+        matchesInputValueCriteria = generalInputMatch || pismuMatch || dateSignedMatch;
+      }
+      
+      if (tags.length > 0 && inputValue) {
+        return matchesAllTags && matchesInputValueCriteria;
+      } else if (tags.length > 0) {
+        return matchesAllTags;
+      } else if (inputValue) {
+        return matchesInputValueCriteria;
+      }
+      
+      return false; // Fallback, should be covered by above conditions
     });
-  };
+  }, [originalData, dateRange, tags, inputValue]);
 
   useEffect(() => {
-    setLoading(true);
+    // This useEffect is responsible for updating filteredData and sectionCounts
+    // whenever the source data or any primary filter criteria change.
     const filtered = filterData();
     setFilteredData(filtered);
 
     const counts = calculateSectionCounts(filtered);
     setSectionCounts(counts);
+  }, [filterData]); // Depends on the memoized filterData function
 
-    //console.log("Section Counts:", counts);
+  const handleReload = async (provinceNameForReload) => {
+    setLoading(true);
+    setProgress(0);
+    let intervalId = null;
 
-    setLoading(false);
-  }, [data, tags, inputValue, dateRange]);
+    try {
+      intervalId = setInterval(() => {
+        setProgress(prev => Math.min(prev + 10, 90)); // Cap at 90 during loading
+      }, 200);
+
+      const fetchedData = await fetchData(provinceNameForReload);
+      
+      if (intervalId) clearInterval(intervalId);
+      intervalId = null;
+
+      if (fetchedData) {
+        setOriginalData(fetchedData); // This will trigger the useEffect above to filter and set counts
+      }
+      // If fetchedData is null/error, originalData might remain as is or be empty.
+      // The useEffect will still run with the current originalData.
+      
+      setProgress(100); // Mark as complete
+    } catch (error) {
+      console.error("Error fetching data in handleReload:", error);
+      if (intervalId) clearInterval(intervalId);
+      setProgress(100); 
+    } finally {
+      if (intervalId) clearInterval(intervalId); // Ensure clearance
+      
+      setTimeout(() => {
+        setLoading(false);
+        setProgress(0); // Reset for next time
+      }, 500);
+    }
+  };
 
   useEffect(() => {
     if (inputVisible) {
@@ -418,33 +414,19 @@ const Province = ({ theme, currentUser }) => {
       !dates[0] ||
       !dates[1]
     ) {
-      setIsDateRangeApplied(false); // Date range is not applied
-      setFilteredData(originalData); // Reset to original data if no date range
-      setSectionCounts(calculateSectionCounts(originalData)); // Reset section counts
-      console.log("No valid date range selected. Resetting to original data.");
-      return; // Exit early if dates are invalid
+      setDateRange(null); // Clear the date range state
+      setIsDateRangeApplied(false);
+      // The main filtering useEffect will handle updates with dateRange set to null.
+    } else {
+      setDateRange(dates);
+      setIsDateRangeApplied(true);
+      // The main filtering useEffect will handle updates with the new dateRange.
     }
-
-    // Proceed with filtering if dates are valid
-    setDateRange(dates);
-    setIsDateRangeApplied(true); // Date range is applied
-
-    const filteredByDate = originalData.filter((record) => {
-      const dateSigned = new Date(record.date_signed); // Assuming date_signed is in a valid format
-      return dateSigned >= dates[0] && dateSigned <= dates[1];
-    });
-
-    setFilteredData(filteredByDate);
-
-    // Calculate section counts for filtered data
-    const counts = calculateSectionCounts(filteredByDate);
-    setSectionCounts(counts);
   };
 
   const onRowClick = (record) => {
     const selectedIndex = selectedRowKeys.indexOf(record.id_no);
     const newSelectedRowKeys = [...selectedRowKeys];
-
     if (selectedIndex >= 0) {
       newSelectedRowKeys.splice(selectedIndex, 1);
     } else {
@@ -455,9 +437,12 @@ const Province = ({ theme, currentUser }) => {
   };
 
   const handlePageChange = (page) => {
-    setLoading(true);
     setCurrentPage(page);
-    setLoading(false);
+  };
+
+  const handlePageSizeChange = (value) => {
+    setPageSize(value);
+    setCurrentPage(1); // Reset to the first page when page size changes
   };
 
   const startIndex = (currentPage - 1) * pageSize;
@@ -698,7 +683,9 @@ const Province = ({ theme, currentUser }) => {
     clearFilters();
     setSearchText("");
     setSearchedColumn("");
-    setFilteredData(data);
+    // This reset is for the AntD column filter.
+    // If it needs to affect global filters, this logic would need to change.
+    // For now, it resets the column's specific filter.
   };
 
   const measureTextWidth = (text, font = "14px Poppins") => {
@@ -781,14 +768,8 @@ const Province = ({ theme, currentUser }) => {
         setFilterDuplicates(false); // Reset filter if other keyword is entered
       }
     }
-    setInputVisible(false);
-    setInputValue("");
-
-    // Re-filter the data and update section counts
-    const filtered = filterData();
-    setFilteredData(filtered);
-    const filteredSectionCounts = calculateFilteredSectionCounts(filtered);
-    setSectionCounts(filteredSectionCounts); // Update section counts for filtered data
+    setInputVisible(false); 
+    setInputValue(""); // Clearing inputValue will trigger the main filtering useEffect
   };
 
   const tagPlusStyle = {
@@ -1048,7 +1029,6 @@ const Province = ({ theme, currentUser }) => {
 
   const handleDelist = () => {
     // Perform the delisting action with selectedRowKeys
-    console.log("Selected Row Keys for Delisting:", selectedDuplicateRowKeys);
 
     // Implement your delist logic here
     // For example, call an API to delist the selected records
@@ -1109,6 +1089,31 @@ const Province = ({ theme, currentUser }) => {
     setIsModalVisibleAdd(false);
     setButtonColor("primary");
   };
+
+  // Helper function to get permit status
+  const getPermitStatus = (expirationDateStr) => {
+    if (!expirationDateStr || expirationDateStr === "N/A") {
+      return { status: "unknown", daysRemaining: null, color: null, icon: null };
+    }
+    const expirationDate = moment(expirationDateStr, ["MM/DD/YYYY", "YYYY-MM-DD"], true); // Strict parsing
+    if (!expirationDate.isValid()) {
+      return { status: "invalid_date", daysRemaining: null, color: null, icon: null };
+    }
+    const today = moment().startOf('day');
+    const daysRemaining = expirationDate.diff(today, 'days');
+
+    if (daysRemaining < 0) {
+      return { status: "expired", daysRemaining, color: "#cf1322", icon: <ExclamationCircleOutlined style={{ color: 'white', marginLeft: '4px' }} /> }; // Bright red for expired
+    } else if (daysRemaining <= 30) {
+      return { status: "nearly_expired", daysRemaining, color: "#faad14", icon: null }; // Orange/Yellow for nearly expired
+    }
+    return { status: "active", daysRemaining, color: null, icon: null }; // Null color means use default
+  };
+
+  const checkPendingStatus = (value) =>
+    typeof value === "string" &&
+    (value.toLowerCase().includes("app. no") || value.toLowerCase().includes("in process") || value.toLowerCase().includes("on process") || value.toLowerCase().includes("application no"));
+
 
   // Assuming sectionCounts is the original data you provided
   const mergedSectionCounts = mergeSections(sectionCounts);
@@ -1232,12 +1237,7 @@ const Province = ({ theme, currentUser }) => {
       key: "permits_clearances",
       width: 150,
       render: (text, record) => {
-        const checkPendingStatus = (value) =>
-          typeof value === "string" &&
-          (value.includes("App. No") ||
-            value.includes("In process") ||
-            value.includes("On process") ||
-            value.includes("Application No"));
+        // checkPendingStatus is now defined outside this render function
 
         const LabelWithIcon = ({ text, isPending, className }) => (
           <span
@@ -1258,6 +1258,10 @@ const Province = ({ theme, currentUser }) => {
             )}
           </span>
         );
+
+        const ptoStatus = getPermitStatus(record.pto_expiration);
+        const wwdpStatus = getPermitStatus(record.wwdp_expiration);
+        const pcoStatus = getPermitStatus(record.pco_validity); // Assuming pco_validity is the expiration date
 
         return (
           <div
@@ -1305,17 +1309,21 @@ const Province = ({ theme, currentUser }) => {
                     <div>PTO Information</div>
                     <div>Code: {record.pto_code}</div>
                     <div>Date Issued: {record.pto_issued}</div>
-                    <div>Date of Expiration: {record.pto_expiration}</div>
+                    <div>Date of Expiration: {record.pto_expiration}
+                      {ptoStatus.status === "nearly_expired" && ` (Expires in ${ptoStatus.daysRemaining} days)`}
+                      {ptoStatus.status === "expired" && " (Expired)"}
+                    </div>
                   </div>
                 }
-                color="#643c6a"
+                color={ptoStatus.color || "#643c6a"} // Use status color if available
               >
                 <span>
                   <LabelWithIcon
                     text="PTO"
                     isPending={checkPendingStatus(record.pto_code)}
-                    className="custom-span-blue"
+                    className={ptoStatus.status === 'expired' ? "custom-span-red" : "custom-span-blue"}
                   />
+                  {ptoStatus.icon}
                 </span>
               </Tooltip>
             )}
@@ -1328,17 +1336,21 @@ const Province = ({ theme, currentUser }) => {
                     <div>WWDP Information</div>
                     <div>Code: {record.wwdp_code}</div>
                     <div>Date Issued: {record.wwdp_issued}</div>
-                    <div>Date of Expiration: {record.wwdp_expiration}</div>
+                    <div>Date of Expiration: {record.wwdp_expiration}
+                      {wwdpStatus.status === "nearly_expired" && ` (Expires in ${wwdpStatus.daysRemaining} days)`}
+                      {wwdpStatus.status === "expired" && " (Expired)"}
+                    </div>
                   </div>
                 }
-                color="#b45248"
+                color={wwdpStatus.color || "#b45248"}
               >
                 <span>
                   <LabelWithIcon
                     text="WWDP"
                     isPending={checkPendingStatus(record.wwdp_code)}
-                    className="custom-span-orange"
+                    className={wwdpStatus.status === 'expired' ? "custom-span-red" : "custom-span-orange"}
                   />
+                  {wwdpStatus.icon}
                 </span>
               </Tooltip>
             )}
@@ -1373,17 +1385,21 @@ const Province = ({ theme, currentUser }) => {
                     <div>PCO Accreditation Certificate</div>
                     <div>PCO No: {record.pco_no}</div>
                     <div>PCO Name: {record.pco_name}</div>
-                    <div>PCO Validity: {record.pco_validity}</div>
+                    <div>PCO Validity (Expires): {record.pco_validity}
+                      {pcoStatus.status === "nearly_expired" && ` (Expires in ${pcoStatus.daysRemaining} days)`}
+                      {pcoStatus.status === "expired" && " (Expired)"}
+                    </div>
                   </div>
                 }
-                color="#242726"
+                color={pcoStatus.color || "#242726"}
               >
                 <span>
                   <LabelWithIcon
                     text="PCO"
                     isPending={checkPendingStatus(record.pco_no)}
-                    className="custom-span-stone"
+                    className={pcoStatus.status === 'expired' ? "custom-span-red" : "custom-span-stone"}
                   />
+                  {pcoStatus.icon}
                 </span>
               </Tooltip>
             )}
@@ -1463,75 +1479,98 @@ const Province = ({ theme, currentUser }) => {
     },
     {
       title: "Monitoring Status",
-      key: "iis_no",
+      key: "monitoringStatus", // Changed key for clarity
       ...getColumnSearchProps("iis_no"), // Ensure this is set to the correct dataIndex
       render: (text, record) => (
-        <div>
-          <a
-            href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-              record.iis_no
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {record.iis_no || ""}
-          </a>
-
-          <div>
-            {/* Date Monitored */}
-            {record.date_monitored && (
-              <div>
-                <Tooltip title="Date Monitored">
-                  <MonitorOutlined
-                    style={{ marginRight: 8, color: "#1890ff" }}
-                  />{" "}
-                  {record.date_monitored}
-                </Tooltip>
-              </div>
-            )}
-
-            {/* Date Routed */}
-            {record.date_routed && (
-              <div>
-                <Tooltip title="Date Routed to IIS">
-                  <GlobalOutlined
-                    style={{ marginRight: 8, color: "#52c41a" }}
-                  />{" "}
-                  {record.date_routed}
-                </Tooltip>
-              </div>
-            )}
-
-            {/* Date Signed */}
-            {record.date_signed && (
-              <div>
-                <Tooltip title="Date Report Signed">
-                  <CheckCircleFilled
-                    style={{ marginRight: 8, color: "#faad14" }}
-                  />{" "}
-                  {record.date_signed}
-                </Tooltip>
-              </div>
-            )}
-
-            {/* PISMU Tracking */}
-            <div>
-              <Tooltip title="PISMU Tracking of Report">
-                {record.pismu_tracking === "✔" ? (
-                  <span>
-                    <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
-                    <span style={{ marginLeft: 8 }}>Received by PISMU</span>
-                  </span>
-                ) : (
-                  <span></span>
-                )}
+        <div className="monitoring-status-container-province">
+          {record.date_monitored && (
+            <p className="monitoring-label">
+              <Tooltip title="Date Monitored">
+                <MonitorOutlined
+                  style={{ marginRight: 8, color: "#1890ff" }}
+                />
+                {record.date_monitored}
               </Tooltip>
-            </div>
-          </div>
+            </p>
+          )}
+
+          {record.date_routed && (
+            <p className="monitoring-label">
+              <Tooltip title="Date Routed to IIS">
+                <GlobalOutlined
+                  style={{ marginRight: 8, color: "#52c41a" }}
+                />
+                {record.date_routed}
+              </Tooltip>
+            </p>
+          )}
+
+          {record.date_signed && (
+            <p className="monitoring-label">
+              <Tooltip title="Date Report Signed">
+                <CheckCircleFilled
+                  style={{ marginRight: 8, color: "#faad14" }}
+                />
+                {record.date_signed}
+              </Tooltip>
+            </p>
+          )}
+
+          {record.iis_no && record.iis_no !== "N/A" && (
+            <p className="monitoring-label">
+              
+              {record.iis_no.split(/\s+/).map((iis, index) => (
+                
+                <span key={index} style={{ display: 'block', lineHeight: '1.2' }}> {/* Ensure each link is on a new line */}
+                  <a
+                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                      iis.trim()
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "#ff4d4f", textDecoration: "none" }}
+                    
+                  >
+                    {iis.trim()}
+                  </a>
+                </span>
+              ))}
+            </p>
+          )}
+
+          {record.iis_no_2025 && record.iis_no_2025 !== "N/A" && (
+            <p className="monitoring-label">
+              
+              {record.iis_no_2025.split(/\s+/).map((iis, index) => (
+                <span key={index} style={{ display: 'block', lineHeight: '1.2' }}> {/* Ensure each link is on a new line */}
+                  <a
+                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                      iis.trim()
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "#52c41a", textDecoration: "none" }}
+                  >
+                    {iis.trim()}
+                  </a>
+                </span>
+              ))}
+            </p>
+          )}
+
+          {record.pismu_tracking === "✔" && (
+            <p className="monitoring-label">
+              <Tooltip title="PISMU Tracking of Report">
+                <span>
+                  <CheckCircleFilled style={{ color: "#0D92F4", marginRight: 8 }} />
+                  Received by PISMU
+                </span>
+              </Tooltip>
+            </p>
+          )}
         </div>
       ),
-      width: 150, // Adjust as needed
-      align: "center",
+      width: 180, // Adjust as needed
       onFilter: (value, record) => {
         const lowerValue = value.toLowerCase();
 
@@ -1588,7 +1627,7 @@ const Province = ({ theme, currentUser }) => {
   return (
     <div className="province-container-card">
       <div className="header-content">
-        <h3 className="header-title">{`${capitalizedProvinceName} Universe of Firms and Industries`}</h3>
+        <h3 className="header-title">{`${displayProvinceName} Universe of Firms and Industries`}</h3>
         <Button
           type="primary"
           className="refresh-button"
@@ -1603,7 +1642,7 @@ const Province = ({ theme, currentUser }) => {
           type="primary"
           className="refresh-button"
           icon={<ExportOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
-          onClick={() => handleExportPDF(capitalizedProvinceName)}
+          onClick={() => handleExportPDF(displayProvinceName)}
           title="Export Data"
         />
 
@@ -1705,7 +1744,7 @@ const Province = ({ theme, currentUser }) => {
             </span>
           </div>
         }
-        visible={isModalDuplicateVisible}
+        open={isModalDuplicateVisible}
         onOk={handleModalOk}
         width={1200}
         onCancel={handleModalCancel}
@@ -1768,7 +1807,7 @@ const Province = ({ theme, currentUser }) => {
         >
           <div
             className="total-count"
-            style={{ margin: "5px 0", textAlign: "left" }}
+            style={{textAlign: "left" }}
           >
             <div
               style={{
@@ -1815,7 +1854,7 @@ const Province = ({ theme, currentUser }) => {
                     <RangePicker
                       style={{ marginLeft: 16 }}
                       onChange={handleDateChange}
-                      value={dateRange}
+                      value={dateRange || undefined} // Pass undefined if dateRange is null for RangePicker
                       format="MM/DD/YYYY" // Set the desired format
                       placeholder={["Start Date", "End Date"]}
                       allowClear={true}
@@ -1833,8 +1872,23 @@ const Province = ({ theme, currentUser }) => {
                   showSizeChanger={false}
                   pageSize={pageSize}
                   size="small"
-                  style={{ marginLeft: 16 }}
+                  className="custom-pagination"
                 />
+                {!loading && !error && filteredDuplicateData.length > 0 && (
+                  <div className="custom-page-size-selector-container">
+                    <AntSelect
+                      value={pageSize}
+                      onChange={handlePageSizeChange}
+                      size="small"
+                    >
+                      <AntSelect.Option value={10}>10 / page</AntSelect.Option>
+                      <AntSelect.Option value={50}>50 / page</AntSelect.Option>
+                      <AntSelect.Option value={100}>
+                        100 / page
+                      </AntSelect.Option>
+                    </AntSelect>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1964,12 +2018,7 @@ const Province = ({ theme, currentUser }) => {
             rowKey="id_no"
             size="small"
             className="custom-table"
-            pagination={{
-              pageSize,
-              showSizeChanger: true,
-              pageSizeOptions: ["10", "50", "100"],
-              onShowSizeChange: (current, size) => setPageSize(size),
-            }}
+            pagination={false}
             onRow={(record) => ({
               onClick: () => onRowClick(record),
             })}

@@ -247,9 +247,9 @@ const LegalUnit = ({
                   <strong>Docket No.</strong>
                   <Input
                     value={localRecord.docket_no || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input"
+                    className="textbox-label"
                     onChange={(e) =>
                       handleInputChange("docket_no", e.target.value)
                     }
@@ -262,9 +262,9 @@ const LegalUnit = ({
                   <strong>DENR PAB Case No.</strong>
                   <Input
                     value={localRecord.pab_case_no || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
-                    className="textbox-label disabled-input"
+                    className="textbox-label"
                     onChange={(e) =>
                       handleInputChange("pab_case_no", e.target.value)
                     }
@@ -357,7 +357,7 @@ const LegalUnit = ({
                   </span>
                   <Input
                     value={daysDfDa}
-                    disabled
+                    readOnly
                     placeholder="No data"
                     className="disabled-input-legal-days"
                   />
@@ -416,7 +416,7 @@ const LegalUnit = ({
                   <strong>Violation PD1586:</strong>
                   <TextArea
                     value={localRecord.v_pd1586 || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className=""
                     onChange={(e) =>
@@ -429,7 +429,7 @@ const LegalUnit = ({
                   <strong>Violation RA9275:</strong>
                   <TextArea
                     value={localRecord.v_ra9275 || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className=""
                     onChange={(e) =>
@@ -442,7 +442,7 @@ const LegalUnit = ({
                   <strong>Violation RA8749:</strong>
                   <TextArea
                     value={localRecord.v_ra8749 || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className=""
                     onChange={(e) =>
@@ -455,7 +455,7 @@ const LegalUnit = ({
                   <strong>Violation HAZWASTE:</strong>
                   <TextArea
                     value={localRecord.v_haz || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className=""
                     onChange={(e) => handleInputChange("v_haz", e.target.value)}
@@ -466,7 +466,7 @@ const LegalUnit = ({
                   <strong>Violation TOXIC CHEM:</strong>
                   <TextArea
                     value={localRecord.v_toxichem || ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className=""
                     onChange={(e) =>
@@ -590,7 +590,6 @@ const LegalUnit = ({
                       use12Hours
                       format="hh:mm A"
                       minuteStep={15}
-                      className="custom-time-picker"
                       style={{ width: "100%" }}
                     />
                   </ConfigProvider>
@@ -601,7 +600,7 @@ const LegalUnit = ({
                   <strong>Assigned Legal Officer:</strong>
                   <LegalOfficer
                     value={localRecord.tc_legal_officer || ""} // Handle undefined handler
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     onChange={(value) =>
                       handleInputChange("tc_legal_officer", value)
@@ -628,7 +627,7 @@ const LegalUnit = ({
                   >
                     <TextArea
                       value={localRecord.tc_commitment || ""}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       onChange={(e) => {
                         const newValue = e.target.value;
@@ -703,7 +702,7 @@ const LegalUnit = ({
                   <div style={{ position: "relative", width: "100%" }}>
                     <TextArea
                       value={localRecord.pos_paper || ""}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       onChange={(e) => {
                         const newValue = e.target.value;
@@ -902,7 +901,7 @@ const LegalUnit = ({
                   <Form.Item name="tc_compliance_remarks" noStyle>
                     <TextArea
                       value={localRecord.tc_compliance_remarks || ""}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       onChange={(e) => {
                         const newValue = e.target.value;
@@ -953,7 +952,7 @@ const LegalUnit = ({
                   <Form.Item name="order_status" noStyle>
                     <TextArea
                       value={localRecord.order_status || ""}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       onChange={(e) => {
                         const newValue = e.target.value;

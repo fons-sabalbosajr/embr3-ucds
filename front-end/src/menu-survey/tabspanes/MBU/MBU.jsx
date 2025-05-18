@@ -47,9 +47,9 @@ const MBU = ({ editedRecord, handleChange, isEditing }) => {
 
               <Input
                 value={localRecord.lat || ""}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
-                className="textbox-label disabled-input"
+                className="textbox-label"
                 onChange={(e) => handleInputChange("lat", e.target.value)}
               />
             </Paragraph>
@@ -58,9 +58,9 @@ const MBU = ({ editedRecord, handleChange, isEditing }) => {
 
               <Input
                 value={localRecord.long || ""}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
-                className="textbox-label disabled-input"
+                className="textbox-label"
                 onChange={(e) => handleInputChange("long", e.target.value)}
               />
             </Paragraph>
@@ -69,9 +69,9 @@ const MBU = ({ editedRecord, handleChange, isEditing }) => {
 
               <Input
                 value={localRecord.cong_district || ""}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
-                className="textbox-label disabled-input"
+                className="textbox-label"
                 onChange={(e) =>
                   handleInputChange("cong_district", e.target.value)
                 }
@@ -84,10 +84,10 @@ const MBU = ({ editedRecord, handleChange, isEditing }) => {
 
               <TextArea
                 value={localRecord.address || ""}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 rows={2}
-                className="textbox-label disabled-input"
+                className="textbox-label"
                 onChange={(e) => handleInputChange("address", e.target.value)}
               />
             </Paragraph>
@@ -97,9 +97,9 @@ const MBU = ({ editedRecord, handleChange, isEditing }) => {
               <strong>Receiving Waterbody/River System</strong>
               <Input
                 value={localRecord.waterbody || ""}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
-                className="textbox-label disabled-input"
+                className="textbox-label"
                 onChange={(e) => handleInputChange("waterbody", e.target.value)}
               />
             </Paragraph>

@@ -109,13 +109,13 @@ const AccountPermission = ({
   const [initialAccessList, setInitialAccessList] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [provinceAccessList, setProvinceAccessList] = useState([
-    { key: "aurora", name: "Aurora", isGranted: false },
-    { key: "bataan", name: "Bataan", isGranted: false },
-    { key: "bulacan", name: "Bulacan", isGranted: false },
-    { key: "nuevaEcija", name: "Nueva Ecija", isGranted: false },
-    { key: "pampanga", name: "Pampanga", isGranted: false },
-    { key: "tarlac", name: "Tarlac", isGranted: false },
-    { key: "zambales", name: "Zambales", isGranted: false },
+    { key: "aurora", name: "Aurora", canView: false, canReadWrite: false, isAllowAll: false },
+    { key: "bataan", name: "Bataan", canView: false, canReadWrite: false, isAllowAll: false },
+    { key: "bulacan", name: "Bulacan", canView: false, canReadWrite: false, isAllowAll: false },
+    { key: "nuevaEcija", name: "Nueva Ecija", canView: false, canReadWrite: false, isAllowAll: false },
+    { key: "pampanga", name: "Pampanga", canView: false, canReadWrite: false, isAllowAll: false },
+    { key: "tarlac", name: "Tarlac", canView: false, canReadWrite: false, isAllowAll: false },
+    { key: "zambales", name: "Zambales", canView: false, canReadWrite: false, isAllowAll: false },
   ]);
   const [initialProvinceAccessList, setInitialProvinceAccessList] = useState(
     []
@@ -153,12 +153,32 @@ const AccountPermission = ({
         setInitialAccessList([...updatedAccess]);
   
         // Update Province Access List
-        const updatedProvinceAccess = provinceAccessList.map((item) => ({
-          ...item,
-          isGranted: !!currentUser[item.key],
-        }));
+        const updatedProvinceAccess = provinceAccessList.map((provinceItem) => {
+          const permissionString = currentUser[provinceItem.key]; // e.g., "view", "readWrite", "none"
+          let canView = false;
+          let canReadWrite = false;
+          // isAllowAll is generally a UI concept for setting both, so initialize to false
+          // unless your backend specifically sends an "allowAll" state.
+          // For now, we'll derive it based on readWrite.
+
+          if (permissionString === "readWrite") {
+            canView = true;
+            canReadWrite = true;
+          } else if (permissionString === "view") {
+            canView = true;
+            canReadWrite = false;
+          }
+          // If "none" or undefined, both remain false
+
+          return {
+            ...provinceItem,
+            canView: canView,
+            canReadWrite: canReadWrite,
+            isAllowAll: false, // isAllowAll is primarily a UI control, initialize to false
+          };
+        });
         setProvinceAccessList(updatedProvinceAccess);
-        setInitialProvinceAccessList([...updatedProvinceAccess]);
+        setInitialProvinceAccessList(JSON.parse(JSON.stringify(updatedProvinceAccess))); // Deep copy
       } catch (error) {
         console.error("Error fetching user data:", error);
         message.error("Error fetching user data");
@@ -180,13 +200,36 @@ const AccountPermission = ({
     });
   };
   
-  const toggleProvinceAccess = (key) => {
+  const toggleProvinceAccess = (key, type, value) => {
     setProvinceAccessList((prevList) => {
-      const updatedList = prevList.map((item) =>
-        item.key === key ? { ...item, isGranted: !item.isGranted } : item
-      );
-      checkForProvinceChanges(updatedList);
-      return updatedList;
+      const newList = prevList.map((item) => {
+        if (item.key === key) {
+          const newItem = { ...item };
+          if (type === 'allowAll') {
+            newItem.isAllowAll = value;
+            if (value) { // AllowAll turned ON
+              newItem.canView = true;
+              newItem.canReadWrite = true;
+            }
+            // If AllowAll is turned OFF, canView and canReadWrite retain their state,
+            // and their switches become enabled for individual toggling.
+          } else if (type === 'readWrite') {
+            newItem.canReadWrite = value;
+            if (value) { // ReadWrite turned ON
+              newItem.canView = true; // Force view ON
+            }
+          } else if (type === 'view') {
+            newItem.canView = value;
+            if (!value) { // View turned OFF
+              newItem.canReadWrite = false; // Force readWrite OFF if view is off
+            }
+          }
+          return newItem;
+        }
+        return item;
+      });
+      checkForProvinceChanges(newList);
+      return newList;
     });
   };
   
@@ -203,7 +246,11 @@ const AccountPermission = ({
   const checkForProvinceChanges = (updatedList) => {
     const isChanged = updatedList.some((item, index) => {
       const initialItem = initialProvinceAccessList[index];
-      return initialItem && item.isGranted !== initialItem.isGranted;
+      return initialItem && (
+        item.canView !== initialItem.canView ||
+        item.canReadWrite !== initialItem.canReadWrite ||
+        item.isAllowAll !== initialItem.isAllowAll
+      );
     });
     setHasChanges(isChanged);
   };
@@ -214,12 +261,17 @@ const AccountPermission = ({
       return acc;
     }, {});
 
-    const updatedProvincePermissions = provinceAccessList.reduce(
+    const provincePermissionsPayload = provinceAccessList.reduce(
       (acc, item) => {
-        acc[item.key] = item.isGranted;
+        let permissionValue = 'none';
+        if (item.isAllowAll || item.canReadWrite) {
+          permissionValue = 'readWrite';
+        } else if (item.canView) {
+          permissionValue = 'view';
+        }
+        acc[item.key] = permissionValue;
         return acc;
-      },
-      {}
+      }, {}
     );
 
     const result = await Swal.fire({
@@ -243,7 +295,7 @@ const AccountPermission = ({
         // Send province permissions to the province permissions endpoint
         await axios.patch(
           `http://localhost:8081/api/users/${userData.email}/province-permissions`,
-          updatedProvincePermissions
+          provincePermissionsPayload
         );
 
         await Swal.fire({
@@ -257,8 +309,9 @@ const AccountPermission = ({
         if (onPermissionsUpdate) {
           onPermissionsUpdate();
         }
-        setInitialAccessList(updatedPermissions);
-        setInitialProvinceAccessList(updatedProvincePermissions);
+        // Update initial states to reflect saved changes for both access lists
+        setInitialAccessList(JSON.parse(JSON.stringify(accessList)));
+        setInitialProvinceAccessList(JSON.parse(JSON.stringify(provinceAccessList)));
       } catch (error) {
         await Swal.fire({
           icon: "error",
@@ -279,7 +332,10 @@ const AccountPermission = ({
 
     const provinceChanged = provinceAccessList.some((item, index) => {
       const initialItem = initialProvinceAccessList[index];
-      return initialItem && item.isGranted !== initialItem.isGranted;
+      if (!initialItem) return true; 
+      return item.canView !== initialItem.canView ||
+             item.canReadWrite !== initialItem.canReadWrite ||
+             item.isAllowAll !== initialItem.isAllowAll;
     });
 
     return !accessChanged && !provinceChanged; // Return true if neither has changed
@@ -325,14 +381,27 @@ const AccountPermission = ({
       align: "left",
     },
     {
-      title: "Granted",
-      dataIndex: "isGranted",
-      key: "isGranted",
+      title: "Viewing",
+      key: "view",
       align: "center",
-      render: (isGranted, record) => (
+      render: (text, record) => (
         <Switch
-          checked={isGranted}
-          onChange={() => toggleProvinceAccess(record.key)}
+          checked={record.canView}
+          disabled={record.isAllowAll} // Only disable if AllowAll is on. Read/Write will force View ON via logic.
+          onChange={(checked) => toggleProvinceAccess(record.key, 'view', checked)}
+          size="small"
+        />
+      ),
+    },
+    {
+      title: "Read and Write",
+      key: "readWrite",
+      align: "center",
+      render: (text, record) => (
+        <Switch
+          checked={record.canReadWrite}
+          disabled={record.isAllowAll} // Disabled if AllowAll is on
+          onChange={(checked) => toggleProvinceAccess(record.key, 'readWrite', checked)}
           size="small"
         />
       ),
@@ -380,7 +449,14 @@ const AccountPermission = ({
             pagination={false}
           />
         </TabPane>
-        <TabPane tab="Province Access" key="2">
+        <TabPane tab="Monitoring Plan Access" key="2">
+          <Table
+            dataSource={provinceAccessList}
+            columns={provinceColumns}
+            pagination={false}
+          />
+        </TabPane>
+        <TabPane tab="Survey Access" key="3">
           <Table
             dataSource={provinceAccessList}
             columns={provinceColumns}

@@ -120,10 +120,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Total No. of Employees</strong>
             <Input
               value={localRecord.employee_no || ""}
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               onChange={(e) => handleInputChange("employee_no", e.target.value)}
-              className="textbox-label disabled-input"
+              className="textbox-label"
             />
           </Paragraph>
 
@@ -131,10 +131,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             <strong>Bio-Oxygen Demand (kg/day)</strong>
             <Input
               value={localRecord.bod || ""} // Handle undefined bod
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="No data"
               onChange={(e) => handleInputChange("bod", e.target.value)}
-              className="textbox-label disabled-input"
+              className="textbox-label"
             />
           </Paragraph>
 
@@ -167,7 +167,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           <Input
             value={localRecord.iis_no || ""}
             onChange={(e) => handleChange("iis_no", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
             className="textbox-label"
           />
@@ -255,7 +255,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   <Input
                     value={days}
                     onChange={(e) => handleChange("total_days", e.target.value)}
-                    disabled
+                    readOnly
                     placeholder="No data"
                     className="textbox-label"
                   />
@@ -293,11 +293,11 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               <strong>Remarks/Recommendations</strong>
               <TextArea
                 value={localRecord.remarks || ""} // Handle undefined remarks
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 rows={4}
                 onChange={(e) => handleInputChange("remarks", e.target.value)}
-                className="textbox-label disabled-input"
+                className="textbox-label"
               />
             </Paragraph>
           </Card>

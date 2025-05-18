@@ -22,6 +22,7 @@
   gap: 8px; /* Add spacing between buttons */
   z-index: 1;
   margin-top: -2px;
+  text-align: right;
 }
 
 .issues-section {
@@ -38,16 +39,28 @@
   text-align: right; /* Align pagination controls to the right */
 }
 
-/* Default styles for highlighted rows */
-.highlight-row {
-  background-color: #a6a6a6; /* Light green for matching rows */
+.duplicate-data-text {
+  /* This class is applied, but it doesn't have a font color style yet */
+  /* background-color: #fffbe6; /* Example: light yellow background for duplicate fields */
+  /* color: #faad14; /* Example: orange text for duplicate fields */
+  color: #d4380d; /* A reddish-orange color for highlighted duplicate text */
+  font-weight: 500; /* Slightly bolder to make it stand out */
+  /* You can also add a background color if desired, e.g., background-color: #fff1f0; */
 }
 
+/* Font color for duplicated data text */
+/* These will be applied if the parent div has the theme class and the cell div has 'duplicate-data-text' */
 
 /* Dark theme styles */
-.dark-theme .highlight-row {
-  background-color: #2e3b4e; /* Darker background for highlighted rows */
-  color: #e0e0e0; /* Light text color for dark theme */
+.dark-theme td div.duplicate-data-text { /* More specific selector */
+  color: #87CEFA !important; /* LightSkyBlue - for duplicate text on dark theme */
+}
+
+.dark-theme .duplicate-data-text {
+  /* background-color: #423b00; /* Darker yellow for dark theme */
+  /* color: #ffc53d; /* Lighter orange for dark theme */
+  color: #ff7a45; /* A lighter, distinct orange/red for dark theme */
+  font-weight: 500;
 }
 
 .dark-theme .table-row:hover {
@@ -55,17 +68,21 @@
   color: #ffffff; /* White font color on hover */
 }
 
-/* Light theme styles */
-.light-theme .highlight-row {
-  background-color: #e8f5e9; /* Light green for highlighted rows */
-  color: #333; /* Dark text color for light theme */
+/* More specific hover for dark theme if needed */
+.dark-theme .table-row:hover td {
+  background-color: #3a4a63 !important; /* Use !important sparingly if AntD overrides */
+  color: #ffffff !important;
 }
 
+/* Light theme styles */
+.light-theme td div.duplicate-data-text { /* More specific selector */
+  color: #D9534F !important; /* A distinct red/coral for duplicate text on light theme */
+}
 .light-theme .table-row:hover {
   background-color: #f0f8ff; /* Light blue for hover effect */
   color: #000; /* Black font color on hover */
 }
 
-.modal-button-group button {
-  margin-right: 10px;
+.table-header-center {
+  text-align: center !important; /* Center the header text */
 }

@@ -104,7 +104,7 @@ const Home = () => {
             </p>
             <div className="button_container">
               <NavLink to="/login">
-                <Button type="primary" className="btn-learn-more">Get Started</Button>
+                <Button type="primary" className="get-started">Get Started</Button>
               </NavLink>
             </div>
           </div>

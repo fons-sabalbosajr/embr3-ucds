@@ -133,7 +133,6 @@ const Bulletin = ({ theme = "dark" }) => {
                   />
                 </Typography.Paragraph>
                 <Button
-                  type="primary"
                   className={`bulletin-button ${buttonClass}`} // Apply button class
                   onClick={() => handleView(bulletin)}
                 >

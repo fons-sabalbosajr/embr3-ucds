@@ -1,18 +1,30 @@
 .profile-container {
   display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  flex-wrap: wrap;
+  flex-direction: column; /* Stack top section and tabs vertically */
+  gap: 24px; /* Gap between top section and tabs */
+}
+
+.profile-top-section {
+  display: flex;
+  align-items: flex-start; /* Align avatar and info columns at the top */
+  gap: 24px; /* Gap between avatar and info columns container */
+  width: 100%;
 }
 
 .avatar-container {
   min-width: 120px;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start; /* Align avatar to the top */
+  padding-top: 20px; /* Optional: Add some padding if needed */
 }
 
-.user-info,
+.user-info-columns-container {
+  display: flex;
+  flex: 1; /* Allow this container to take remaining space */
+  gap: 24px; /* Gap between the two user-info-column */
+}
+
 .user-info-column {
   flex: 1;
   min-width: 200px;

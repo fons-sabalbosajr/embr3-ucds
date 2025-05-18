@@ -59,7 +59,6 @@ const SideMenu = ({ theme, currentUser }) => {
   const handleProvinceSelect = (province) => {
     setCurrentProvince(province); // Set the selected province
     navigate(`/universe/province/${province}`); // Navigate to the province page
-    handleReload(province); // Trigger data reload for the selected province
   };
 
   const menuItems = [

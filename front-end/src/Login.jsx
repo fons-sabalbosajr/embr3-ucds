@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { Form, Input, Button } from "antd";
+import { Input, Button, ConfigProvider } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import CryptoJS from "crypto-js"; // Import the crypto-js library
+import CryptoJS from "crypto-js";
 import "./login.css";
 import homelogo from "./assets/UCDSInformation.png";
 
@@ -14,7 +14,10 @@ const Login = () => {
 
   // Access the encryption key using Vite's import.meta.env
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
-
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  
+  
   const handleSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
@@ -32,96 +35,109 @@ const Login = () => {
       );
 
       if (response.data.status === "success") {
-        // Encrypt the username and permission before saving to localStorage
-        const encryptedUsername = CryptoJS.AES.encrypt(
-          response.data.username,
-          encryptionKey
-        ).toString();
-
-        const encryptedPermission = CryptoJS.AES.encrypt(
-          JSON.stringify(response.data.permission),
-          encryptionKey
-        ).toString();
-
-        // Save encrypted values in localStorage
-        localStorage.setItem("username", encryptedUsername);
-        localStorage.setItem("permission", encryptedPermission);
-
-        // Navigate to the /universe page
+        const { password, ...safeProfile } = response.data;
+        // No longer storing the full profile in localStorage
         navigate("/universe");
       } else {
-        setError("Login failed. Please try again.");
+        setError("Login failed. Please check your credentials.");
       }
     } catch (error) {
       console.error("Error during login:", error);
-      setError("Invalid username or password.");
+      if (error.response && error.response.data && error.response.data.message) {
+        setError(error.response.data.message);
+      } else {
+        setError("Invalid username or password. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="background-login">
-      <div className="background-form">
-        <div className="form">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <img src={homelogo} width="100" height="100" alt="Logo" />
+    <ConfigProvider
+      theme={{
+        // By providing an empty theme object, or specific overrides,
+        // we can prevent inheritance from a global ConfigProvider.
+        // For a more complete "reset" to Ant Design defaults if needed:
+        // import { theme as antdTheme } from 'antd';
+        // token: antdTheme.defaultSeed,
+      }}
+    >
+      <div className="background-login">
+        <div className="animated-circles-container">
+          {[...Array(10)].map((_, i) => ( // Creates 10 circles
+            <div key={i} className="circle"></div>
+          ))}
+        </div>
+        <div className="login-form-wrapper"> {/* Renamed class */}
+          <div className="login-card"> {/* Renamed class */}
+            <div className="login-logo-container"> {/* New container for logo */}
+              <img
+                src={homelogo}
+                alt="UCDS Logo"
+                className="login-logo" /* Added class for styling, width/height in CSS */
+              />
+            </div>
+            <div className="login-title-container"> {/* New container for titles */}
+              <p className="login-title-main">
+                ENVIRONMENTAL MANAGEMENT BUREAU REGION III
+              </p>
+              <p className="login-title-sub">
+                Universe Centralized Database System
+              </p>
+            </div>
+
+            {error && (
+              <p className="login-error-message">{error}</p> /* Added class for styling */
+            )}
+
+            <Input
+              placeholder="Enter Username"
+              size="large"
+              autoComplete="off"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              style={{ marginBottom: "20px", fontSize:"14px" }} 
+            />
+            <Input.Password
+              placeholder="Enter Password"
+              autoComplete="off"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ marginBottom: "20px" }}
+            />
+
+            <Button
+              type="primary"
+              block
+              size="large"
+              icon={isLoading ? <LoadingOutlined spin /> : null}
+              onClick={() => handleSubmit({username: username, password: password})} // Call handleSubmit with values
+            >
+              {isLoading ? "Logging in..." : "Login"}
+            </Button>
+
+            <div style={{ marginTop: "20px" }}>
+              {/* Use div for consistent spacing around the link buttons */}
+
+              <div style={{ marginTop: "10px" }}>
+                <Link to="/register" style={{ display: 'block' }}> {/* Make Link block for Button to take full width */}
+                  <Button block size="large">
+                    Create Account
+                  </Button>
+                </Link>
+              </div>
+
+              <div style={{ marginBottom: 0, textAlign: 'center' }}> {/* Center link button, remove excess bottom margin */}
+                  <Link to="/forgot-password">
+                      <Button type="link">Forgot Password?</Button>
+                  </Link>
+              </div>
+            </div>
           </div>
-          <p className="centered">
-            <br />
-            ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-            <br />
-            Universe Centralized Database System
-          </p>
-          {error && <p style={{ color: "red" }}>{error}</p>}
-          <Form onFinish={handleSubmit} layout="vertical">
-            <Form.Item
-              name="username"
-              label="Username"
-              rules={[{ required: true, message: "Username is required" }]}
-            >
-              <Input placeholder="Enter Username" size="large" />
-            </Form.Item>
-
-            <Form.Item
-              name="password"
-              label="Password"
-              rules={[{ required: true, message: "Password is required" }]}
-            >
-              <Input.Password placeholder="Enter Password" size="large" className="password-login" />
-            </Form.Item>
-
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                block
-                size="large"
-                disabled={isLoading}
-                icon={isLoading ? <LoadingOutlined spin /> : null}
-              >
-                {isLoading ? "Logging in..." : "Login"}
-              </Button>
-            </Form.Item>
-
-            <Link to="/register">
-              <Button block size="large">Create Account</Button>
-            </Link>
-
-            {/* Added Forgot Password Button */}
-            <Link to="/forgot-password">
-              <Button type="link" block>Forgot Password?</Button>
-            </Link>
-          </Form>
         </div>
       </div>
-    </div>
+    </ConfigProvider>
   );
 };
 

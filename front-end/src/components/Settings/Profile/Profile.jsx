@@ -1,224 +1,237 @@
-import React, { useState, useEffect } from "react";
-import { Row, Col, Button, Input, Typography, Progress } from "antd";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Row,
+  Col,
+  Button,
+  Input,
+  Typography,
+  Progress,
+  Skeleton,
+  message,
+  Empty,
+} from "antd";
 import {
   CameraFilled,
   UploadOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
-import "./profile.css"; // Import the CSS file
+import CryptoJS from "crypto-js";
+import "./profile.css";
 
 const { Paragraph } = Typography;
 
 const Profile = ({ username }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showUploadButtons, setShowUploadButtons] = useState(false);
 
-  // Fetch user data based on username
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await fetch(
-          `http://localhost:8081/api/users?username=${username}`
-        );
-        const data = await response.json();
-        if (data && data.length > 0) {
-          setUserData(data[0]); // Assume the first result is the correct user
-        } else {
-          console.error("No user data found for the given username.");
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
+  // Load from localStorage
+  useEffect(() => {
+    const encrypted = localStorage.getItem("ucds_user_profile");
+    if (encrypted && encryptionKey) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, encryptionKey);
+        const decrypted = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+        if (decrypted && decrypted.username === username) {
+          setUserData(decrypted);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.warn("Failed to decrypt user profile from cache.");
+      }
+    }
+  }, [username, encryptionKey]);
+
+  const fetchUserData = useCallback(async () => {
+    setFetching(true);
+    try {
+      const res = await fetch(
+        `http://localhost:8081/api/user/details?username=${username}`
+      );
+      const data = await res.json();
+      if (res.ok && data) {
+        setUserData(data);
+        if (encryptionKey) {
+          const encrypted = CryptoJS.AES.encrypt(
+            JSON.stringify(data),
+            encryptionKey
+          ).toString();
+          localStorage.setItem("ucds_user_profile", encrypted);
+        }
+      } else {
+        message.error("No user data found.");
+      }
+    } catch (error) {
+      message.error("Error fetching user details.");
+    } finally {
+      setLoading(false);
+      setFetching(false);
+    }
+  }, [username, encryptionKey]);
+
+  useEffect(() => {
     fetchUserData();
-  }, [username]);
+  }, [fetchUserData]);
 
   const handlePhotoChange = (event) => {
     const file = event.target.files[0];
     if (file) {
-      setPhoto({
-        file,
-        url: URL.createObjectURL(file),
-      });
+      setPhoto({ file, url: URL.createObjectURL(file) });
       setShowUploadButtons(true);
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
+    if (!photo?.file) {
+      message.error("Please select an image to upload.");
+      return;
+    }
     setUploading(true);
-    // Simulate upload process
-    setTimeout(() => {
+    const formData = new FormData();
+    formData.append("photo", photo.file);
+    formData.append("username", username);
+
+    try {
+      const res = await fetch("http://localhost:8081/api/users/update", {
+        method: "POST",
+        body: formData,
+      });
+      const updatedUser = await res.json();
+      if (res.ok) {
+        setUserData(updatedUser);
+        if (encryptionKey) {
+          const encrypted = CryptoJS.AES.encrypt(
+            JSON.stringify(updatedUser),
+            encryptionKey
+          ).toString();
+          localStorage.setItem("ucds_user_profile", encrypted);
+        }
+        message.success("Profile photo updated successfully!");
+        setPhoto(null);
+        setShowUploadButtons(false);
+      } else {
+        message.error(updatedUser.message || "Failed to update photo.");
+      }
+    } catch (error) {
+      message.error("Error updating photo.");
+    } finally {
       setUploading(false);
-      setShowUploadButtons(false);
-      console.log("Photo uploaded successfully!");
-    }, 2000);
+    }
   };
 
   const handleCancel = () => {
     setPhoto(null);
     setShowUploadButtons(false);
+    document.getElementById("file-input").value = "";
   };
 
   const triggerFileInput = () => {
     document.getElementById("file-input").click();
   };
 
-  if (loading) {
-    return <p>Loading user data...</p>;
+  const renderProfileField = (label, value) => {
+    if (!value || value.trim() === "") return null;
+    return (
+      <Paragraph className="paragraph-input">
+        <span className="label-title-profile">{label}</span>
+        <Input value={value} className="input-field" readOnly />
+      </Paragraph>
+    );
+  };
+
+  if (loading || fetching) {
+    return (
+      <div className="profile-container">
+        <Skeleton.Avatar size={80} shape="circle" active />
+        <Skeleton paragraph={{ rows: 6 }} active />
+      </div>
+    );
   }
 
   if (!userData) {
-    return <p>No user data found.</p>;
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <Empty description="No user data found" />
+      </div>
+    );
   }
 
   return (
     <div className="profile-container">
-      <Row gutter={16} justify="center" className="row-avatar">
+      <Row gutter={16} className="row-avatar">
         <Col>
           <div className="avatar-container">
-            {photo ? (
-              <img
-                src={photo.url}
-                alt="Selected Photo"
-                className="profile-avatar"
-              />
-            ) : (
-              <img
-                src={`http://localhost:8081${userData.avatar}`}
-                alt="Profile Avatar"
-                className="profile-avatar"
-              />
-            )}
+            <img
+              src={photo ? photo.url : `http://localhost:8081${userData.avatar}`}
+              alt="Profile Avatar"
+              className="profile-avatar"
+            />
           </div>
-        </Col>
-      </Row>
-      <Row gutter={16} justify="center" className="row-avatar">
-        <Col span={24}>
-          <input
-            type="file"
-            accept="image/*"
-            id="file-input"
-            onChange={handlePhotoChange}
-            style={{ display: "none" }}
-          />
           <div className="button-container">
+            <input
+              type="file"
+              accept="image/*"
+              id="file-input"
+              onChange={handlePhotoChange}
+              style={{ display: "none" }}
+            />
             <Button
               type="primary"
               onClick={triggerFileInput}
-              className="save-button"
               size="small"
               icon={<CameraFilled />}
+              className="button-avatar"
             >
               Update Photo
             </Button>
-            {showUploadButtons && (
-              <>
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={handleUpload}
-                  loading={uploading}
-                  icon={<UploadOutlined />}
-                >
-                  Upload
-                </Button>
-                <Button
-                  type="primary"
-                  danger
-                  size="small"
-                  onClick={handleCancel}
-                  icon={<DeleteOutlined />}
-                >
-                  Cancel
-                </Button>
-                {uploading && (
-                  <Progress percent={uploading ? 50 : 100} size="small" />
-                )}
-              </>
-            )}
           </div>
         </Col>
       </Row>
+
+      {showUploadButtons && (
+        <Row gutter={16} justify="center" className="button-row-avatar">
+          <Col>
+            <Button
+              type="primary"
+              size="small"
+              onClick={handleUpload}
+              loading={uploading}
+              icon={<UploadOutlined />}
+              style={{ marginRight: 8 }}
+            >
+              Upload
+            </Button>
+            <Button
+              type="primary"
+              danger
+              size="small"
+              onClick={handleCancel}
+              icon={<DeleteOutlined />}
+            >
+              Cancel
+            </Button>
+            {uploading && (
+              <Progress percent={50} size="small" style={{ marginTop: 8 }} />
+            )}
+          </Col>
+        </Row>
+      )}
+
       <Row gutter={16} justify="left">
         <Col span={24} className="profile-info">
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Employee ID:</span>
-            <Input
-              value={userData.empid || ""}
-              className="input-field"
-              placeholder="Employee ID"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Full Name:</span>
-            <Input
-              value={userData.name || "N/A"}
-              className="input-field"
-              placeholder="Full Name"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Email:</span>
-            <Input
-              value={userData.email || ""}
-              className="input-field"
-              placeholder="Email Address"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Designation:</span>
-            <Input
-              value={userData.designation || ""}
-              className="input-field"
-              placeholder="Designation"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Division:</span>
-            <Input
-              value={userData.division || ""}
-              className="input-field"
-              placeholder="Division"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Office:</span>
-            <Input
-              value={userData.office || ""}
-              className="input-field"
-              placeholder="Office"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Region:</span>
-            <Input
-              value={userData.region || ""}
-              className="input-field"
-              placeholder="Region"
-              readOnly
-            />
-          </Paragraph>
-          <Paragraph className="paragraph-input">
-            <span className="label-title-profile">Account Created:</span>
-            <Input
-              value={userData.accountCreated || ""}
-              className="input-field"
-              placeholder="Account Created"
-              readOnly
-            />
-          </Paragraph>
+          {renderProfileField("Employee ID:", userData.empid)}
+          {renderProfileField("Full Name:", userData.name)}
+          {renderProfileField("Email:", userData.email)}
+          {renderProfileField("Designation:", userData.designation)}
+          {renderProfileField("Division:", userData.division)}
+          {renderProfileField("Office:", userData.office)}
+          {renderProfileField("Region:", userData.region)}
+          {renderProfileField("Account Created:", userData.accountCreated)}
         </Col>
       </Row>
     </div>
