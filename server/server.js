@@ -22,6 +22,8 @@ const router = express.Router();
 app.use(bodyParser.json());
 const PORT = process.env.PORT || 8081;
 
+//#region FUNCTIONS
+
 // Function to capitalize the first letter of each word
 function capitalizeFirstLetter(input) {
   return input
@@ -43,6 +45,9 @@ function generateRandomPassword(length) {
   return password;
 }
 
+//#endregion functions setup
+
+//#region DB CONNECTION
 //////////////////////////////////////////////////////////////////////////////////////////
 const allowedOrigins = ["http://localhost:5173"];
 
@@ -90,7 +95,6 @@ app.use(
   })
 );
 
-// Connect to MongoDB once when the server starts
 async function connectToMongo() {
   try {
     await client.connect();
@@ -149,8 +153,10 @@ app.use(cookieParser());
 app.use(express.json());
 app.set("trust proxy", 1);
 
-app.use("/api", router);
+//#endregion database connection
 
+//#region AUTHENTICATION
+app.use("/api", router);
 
 // Utility function to check if a value is expired
 const isExpired = (expiryDate) => {
@@ -462,38 +468,43 @@ router.post("/ucds/update-duplicates", async (req, res) => {
       return res.status(400).json({ error: "Invalid updates format." });
     }
 
-    const updateOps = updates.map((update) => {
-      const { id_no, ...rest } = update;
+    const updateOps = updates
+      .map((update) => {
+        const { id_no, ...rest } = update;
 
-      if (!id_no) return null;
+        if (!id_no) return null;
 
-      return {
-        updateOne: {
-          filter: { id_no: id_no },
-          update: { $set: rest },
-        },
-      };
-    }).filter(Boolean); // Remove nulls if any
+        return {
+          updateOne: {
+            filter: { id_no: id_no },
+            update: { $set: rest },
+          },
+        };
+      })
+      .filter(Boolean); // Remove nulls if any
 
     if (updateOps.length === 0) {
       return res.status(400).json({ error: "No valid updates provided." });
     }
 
     const result = await ucdsCollection.bulkWrite(updateOps);
-    return res.status(200).json({ message: "Records updated successfully", result });
+    return res
+      .status(200)
+      .json({ message: "Records updated successfully", result });
   } catch (error) {
     console.error("Error updating duplicates:", error);
     return res.status(500).json({ error: "Failed to update records." });
   }
 });
 
-
 router.post("/archive-data", async (req, res) => {
   const { id_no } = req.body;
 
   if (!id_no || typeof id_no !== "string" || id_no.trim() === "") {
     console.error("Invalid or missing id_no in the request body.");
-    return res.status(400).json({ message: "Invalid or missing id_no in the request body." });
+    return res
+      .status(400)
+      .json({ message: "Invalid or missing id_no in the request body." });
   }
 
   //console.log(`Attempting to archive record with id_no: ${id_no}`);
@@ -516,7 +527,9 @@ router.post("/archive-data", async (req, res) => {
       //console.log(`Record found: ${JSON.stringify(record)}`);
 
       // Insert the record into archive-data
-      const archiveResult = await archiveCollection.insertOne(record, { session });
+      const archiveResult = await archiveCollection.insertOne(record, {
+        session,
+      });
       if (!archiveResult.acknowledged) {
         console.error("Failed to archive the record.");
         throw new Error("Failed to archive the record.");
@@ -531,23 +544,30 @@ router.post("/archive-data", async (req, res) => {
       );
 
       if (deleteResult.deletedCount === 0) {
-        console.error(`Failed to delete the record from ucds-data. id_no: ${id_no}`);
-        throw new Error("Failed to delete the record from ucds-data after archiving.");
+        console.error(
+          `Failed to delete the record from ucds-data. id_no: ${id_no}`
+        );
+        throw new Error(
+          "Failed to delete the record from ucds-data after archiving."
+        );
       }
 
       //console.log(`Record successfully deleted from ucds-data: ${JSON.stringify(deleteResult)}`);
     });
 
     // If the transaction completes successfully
-    res.status(201).json({ message: "Record successfully transferred to archive-data." });
+    res
+      .status(201)
+      .json({ message: "Record successfully transferred to archive-data." });
   } catch (error) {
     console.error("Error transferring record:", error);
-    res.status(500).json({ message: error.message || "Failed to transfer the record." });
+    res
+      .status(500)
+      .json({ message: error.message || "Failed to transfer the record." });
   } finally {
     await session.endSession(); // End the session
   }
 });
-
 
 router.get("/ucds-data/:id_no", async (req, res) => {
   const { id_no } = req.params;
@@ -565,7 +585,9 @@ router.get("/ucds-data/:id_no", async (req, res) => {
       });
 
       if (!record) {
-        return res.status(404).json({ message: `Record with id_no: ${id_no} not found.` });
+        return res
+          .status(404)
+          .json({ message: `Record with id_no: ${id_no} not found.` });
       }
 
       // Optionally, you could indicate this is from the archive
@@ -579,10 +601,152 @@ router.get("/ucds-data/:id_no", async (req, res) => {
   }
 });
 
-
 module.exports = router;
 
-///////////////////////////////////////  AI HELPER  WITHIN THE ENTIRE UCDS  ///////////////////////////////////////////////////
+const logActivity = async (req, res, next) => {
+  const { method, path, body } = req;
+
+  if (!["POST", "PUT", "PATCH", "GET"].includes(method)) {
+    return next();
+  }
+
+  if (!req.session || !req.session.user) {
+    return res.status(401).send("Unauthorized: No session found");
+  }
+
+  const userId = req.session.user.userId;
+  const username = req.session.user.username;
+
+  let actionType;
+  let actionLabel;
+  let changes = null;
+
+  let collectionName = "";
+  if (path.includes("/survey/")) {
+    const year = body.year || "2025";
+    collectionName = `survey-data-${year}`;
+  } else if (path.includes("/update-data/")) {
+    collectionName = "ucds-data";
+  } else if (path.includes("/postings/")) {
+    collectionName = "postings";
+  } else if (path.includes("/draft-reports/")) {
+    collectionName = "draft-reports";
+  } else if (path.includes("/users/")) {
+    collectionName = "users";
+  } else if (path.includes("/encode-logs/")) {
+    collectionName = "encode-logs";
+  } else if (path.includes("/sessions/")) {
+    collectionName = "sessions";
+  } else if (path.includes("/sign-up/")) {
+    collectionName = "sign-up";
+  } else {
+    collectionName = null;
+  }
+
+  if (collectionName) {
+    let filter;
+    const { id } = req.params;
+
+    // Define filter logic based on ID type
+    if (id) {
+      if (/^[a-fA-F\d]{24}$/.test(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id_no: id }; // supports "BU-201" and other alphanumeric IDs
+      }
+    }
+
+    try {
+      if (!client.topology.isConnected()) {
+        await client.connect();
+      }
+
+      const collection = db.collection(collectionName);
+
+      if (method === "PUT" || method === "PATCH") {
+        const originalData = await collection.findOne(filter);
+        if (!originalData) {
+          console.warn("Original data not found for ID:", id);
+          return next();
+        }
+
+        changes = {};
+        for (let key in body) {
+          if (body[key] !== originalData[key]) {
+            changes[key] = {
+              old: originalData[key],
+              new: body[key],
+            };
+          }
+        }
+
+        actionType = method === "PUT" ? "Update Data" : "Patch";
+        actionLabel = `Updated/Modify fields: ${JSON.stringify(changes)}`;
+      } else if (method === "POST") {
+        actionType = "Added Data";
+        actionLabel = `Added data: ${JSON.stringify(body)}`;
+      } else if (method === "GET") {
+        const viewedData = await collection.findOne(filter);
+        if (!viewedData) {
+          console.warn("Viewed data not found for ID:", id);
+          return next();
+        }
+
+        const dataName = viewedData.project_title || "Unknown";
+        actionType = "View";
+        actionLabel = `Viewed data: ${dataName}`;
+      }
+    } catch (error) {
+      console.error("Error during activity logging:", error);
+      return next(); // Continue processing even if logging fails
+    }
+  } else {
+    actionType = "Generic Action";
+    actionLabel = `Performed action on path: ${path}`;
+  }
+
+  const activityLog = {
+    userId,
+    username,
+    method,
+    path,
+    actionType,
+    actionLabel,
+    requestData: body,
+    timestamp: new Date(),
+  };
+
+  try {
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const activityLogsCollection = db.collection("app-logs");
+    await activityLogsCollection.insertOne(activityLog);
+    // console.log("Activity logged:", activityLog);
+  } catch (error) {
+    console.error("Error logging activity:", error);
+  }
+
+  next();
+};
+
+module.exports = logActivity;
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+const authenticateSession = (req, res, next) => {
+  //console.log("Current session:", req.session);
+  if (req.session && req.session.user) {
+    return next();
+  }
+  //console.log("User not authenticated:", req.session);
+  res.status(401).json({ message: "User not authenticated" });
+};
+
+//#endregion routes setup and authentication
+
+//#region POST routes
 
 // Public Routes (e.g., Registration Route)
 app.post("/register", async (req, res) => {
@@ -619,183 +783,6 @@ app.post("/register", async (req, res) => {
       .json({ error: "An error occurred during registration" });
   }
 });
-
-const logActivity = async (req, res, next) => {
-  const { method, path, body } = req;
-
-  // Only log POST (add), PUT (update), PATCH (partial update), and GET (view) requests
-  if (!["POST", "PUT", "PATCH", "GET"].includes(method)) {
-    return next();
-  }
-
-  // Ensure the user is authenticated via session
-  if (!req.session || !req.session.user) {
-    return res.status(401).send("Unauthorized: No session found");
-  }
-
-  // Extract user information from the session
-  const userId = req.session.user.userId;
-  const username = req.session.user.username;
-
-  // Determine action type and label
-  let actionType;
-  let actionLabel;
-  let changes = null; // For logging changes
-
-  // Determine collection based on route path
-  let collectionName = "";
-  if (path.includes("/survey/")) {
-    collectionName = "survey-data";
-  } else if (path.includes("/update-data/")) {
-    collectionName = "ucds-data";
-  } else if (path.includes("/postings/")) {
-    collectionName = "postings";
-  } else if (path.includes("/draft-reports/")) {
-    collectionName = "draft-reports";
-  } else if (path.includes("/users/")) {
-    collectionName = "users";
-  } else if (path.includes("/encode-logs/")) {
-    collectionName = "encode-logs";
-  } else if (path.includes("/sessions/")) {
-    collectionName = "sessions";
-  } else if (path.includes("/sign-up/")) {
-    collectionName = "sign-up";
-  } else {
-    collectionName = null;
-  }
-
-  if (collectionName) {
-    let filter;
-    if (method === "PUT" || method === "PATCH") {
-      const { id } = req.params;
-
-      if (ObjectId.isValid(id)) {
-        filter = { _id: new ObjectId(id) };
-      } else if (!isNaN(id)) {
-        filter = { id_no: parseInt(id, 10) };
-      } else {
-        console.error("Invalid ID format:", id);
-        return next();
-      }
-
-      try {
-        if (!client.topology.isConnected()) {
-          await client.connect();
-        }
-
-        const collection = db.collection(collectionName);
-
-        const originalData = await collection.findOne(filter);
-        if (!originalData) {
-          console.error("Original data not found for ID:", id);
-          return next();
-        }
-
-        // Determine changes
-        changes = {};
-        for (let key in body) {
-          if (body[key] !== originalData[key]) {
-            changes[key] = {
-              old: originalData[key],
-              new: body[key],
-            };
-          }
-        }
-
-        actionType = method === "PUT" ? "Update Data" : "Patch";
-        actionLabel = `Updated/Modify fields: ${JSON.stringify(changes)}`;
-      } catch (error) {
-        console.error("Error fetching original data:", error);
-        return next(); // Exit on error
-      }
-    } else if (method === "POST") {
-      actionType = "Added Data";
-      actionLabel = `Added data: ${JSON.stringify(body)}`;
-    } else if (method === "GET") {
-      const { id } = req.params;
-
-      if (id) {
-        if (ObjectId.isValid(id)) {
-          filter = { _id: new ObjectId(id) };
-        } else if (!isNaN(id)) {
-          filter = { id_no: parseInt(id, 10) };
-        } else {
-          console.error("Invalid ID format:", id);
-          return next();
-        }
-
-        try {
-          if (!client.topology.isConnected()) {
-            await client.connect();
-          }
-
-          const collection = db.collection(collectionName);
-
-          // Fetch the viewed data
-          const viewedData = await collection.findOne(filter);
-          if (!viewedData) {
-            console.error("Viewed data not found for ID:", id);
-            return next(); // Exit if viewed data not found
-          }
-
-          // Construct the action label with the name of the data
-          const dataName = viewedData.project_title || "Unknown"; // Use 'project_title' as the name of the data
-          actionLabel = `Viewed data: ${dataName}`;
-        } catch (error) {
-          console.error("Error fetching viewed data:", error);
-          return next(); // Exit on error
-        }
-      } else {
-        actionLabel = `Viewed data`;
-      }
-    }
-  } else {
-    // Fallback for paths that do not map to a known collection
-    actionType = "Generic Action";
-    actionLabel = `Performed action on path: ${path}`;
-  }
-
-  // Construct the activity log
-  const activityLog = {
-    userId: userId,
-    username: username,
-    method,
-    path,
-    actionType,
-    actionLabel,
-    requestData: body,
-    timestamp: new Date(),
-  };
-
-  // Ensure connection to the database
-  try {
-    if (!client.topology.isConnected()) {
-      await client.connect();
-    }
-
-    const activityLogsCollection = db.collection("app-logs");
-
-    await activityLogsCollection.insertOne(activityLog);
-    //console.log("Activity logged:", activityLog);
-  } catch (error) {
-    console.error("Error logging activity:", error);
-  }
-
-  next();
-};
-
-module.exports = logActivity;
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-const authenticateSession = (req, res, next) => {
-  //console.log("Current session:", req.session);
-  if (req.session && req.session.user) {
-    return next();
-  }
-  //console.log("User not authenticated:", req.session);
-  res.status(401).json({ message: "User not authenticated" });
-};
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -1788,6 +1775,10 @@ app.post("/api/ucds/add-establishment", async (req, res) => {
   }
 });
 
+//#endregion
+
+//#region GET routes
+
 app.use("/uploads", express.static(uploadsDir));
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1815,78 +1806,86 @@ app.get("/api/permits-summary", async (req, res) => {
       .map((p) => p.trim().toUpperCase())
       .filter((p) => p !== "");
 
-    const allData = await ucdsCollection.find({}, {
-      projection: {
-        id_no: 1,
-        title: 1,
-        name: 1,
-        ecc_cnc: 1,
-        pto_issued: 1,
-        wwdp_issued: 1,
-        pco_validity: 1,
-      },
-    }).toArray();
+    const allData = await ucdsCollection
+      .find(
+        {},
+        {
+          projection: {
+            id_no: 1,
+            title: 1,
+            name: 1,
+            ecc_cnc: 1,
+            pto_issued: 1,
+            wwdp_issued: 1,
+            pco_validity: 1,
+          },
+        }
+      )
+      .toArray();
 
     // Apply multi-prefix filtering
-    const filteredByPrefix = prefixList.length > 0
-      ? allData.filter((record) => {
-          const idNo = (record.id_no || "").toUpperCase();
-          return prefixList.some((prefix) => idNo.startsWith(prefix));
-        })
-      : allData; // If no prefix specified, return all
+    const filteredByPrefix =
+      prefixList.length > 0
+        ? allData.filter((record) => {
+            const idNo = (record.id_no || "").toUpperCase();
+            return prefixList.some((prefix) => idNo.startsWith(prefix));
+          })
+        : allData; // If no prefix specified, return all
 
     // Process permits
-    const processedData = filteredByPrefix.map((record) => {
-      const permits = [];
+    const processedData = filteredByPrefix
+      .map((record) => {
+        const permits = [];
 
-      if (record.pto_issued) {
-        const expiry = new Date(record.pto_issued);
-        expiry.setFullYear(expiry.getFullYear() + 2);
-        permits.push({
-          type: "PTO",
-          expiry,
-          isNearExpiry: isNearExpiration(expiry),
-          isExpired: isExpired(expiry),
-        });
-      }
+        if (record.pto_issued) {
+          const expiry = new Date(record.pto_issued);
+          expiry.setFullYear(expiry.getFullYear() + 2);
+          permits.push({
+            type: "PTO",
+            expiry,
+            isNearExpiry: isNearExpiration(expiry),
+            isExpired: isExpired(expiry),
+          });
+        }
 
-      if (record.wwdp_issued) {
-        const expiry = new Date(record.wwdp_issued);
-        expiry.setFullYear(expiry.getFullYear() + 1);
-        permits.push({
-          type: "WWDP",
-          expiry,
-          isNearExpiry: isNearExpiration(expiry),
-          isExpired: isExpired(expiry),
-        });
-      }
+        if (record.wwdp_issued) {
+          const expiry = new Date(record.wwdp_issued);
+          expiry.setFullYear(expiry.getFullYear() + 1);
+          permits.push({
+            type: "WWDP",
+            expiry,
+            isNearExpiry: isNearExpiration(expiry),
+            isExpired: isExpired(expiry),
+          });
+        }
 
-      if (record.pco_validity) {
-        const expiry = new Date(record.pco_validity);
-        expiry.setFullYear(expiry.getFullYear() + 3);
-        permits.push({
-          type: "PCO",
-          expiry,
-          isNearExpiry: isNearExpiration(expiry),
-          isExpired: isExpired(expiry),
-        });
-      }
+        if (record.pco_validity) {
+          const expiry = new Date(record.pco_validity);
+          expiry.setFullYear(expiry.getFullYear() + 3);
+          permits.push({
+            type: "PCO",
+            expiry,
+            isNearExpiry: isNearExpiration(expiry),
+            isExpired: isExpired(expiry),
+          });
+        }
 
-      const validPermits = permits.filter(
-        (p) => p.isNearExpiry || p.isExpired
-      );
+        const validPermits = permits.filter(
+          (p) => p.isNearExpiry || p.isExpired
+        );
 
-      if (validPermits.length > 0) {
-        return {
-          id_no: record.id_no,
-          title: record.title || record.name || "Untitled",
-          ecc_cnc: record.ecc_cnc || "",
-          permits: validPermits,
-        };
-      }
+        if (validPermits.length > 0) {
+          return {
+            id_no: record.id_no,
+            title: record.title || record.name || "Untitled",
+            ecc_cnc: record.ecc_cnc || "",
+            permits: validPermits,
+          };
+        }
 
-      return null;
-    }).filter((record) => record !== null);
+        return null;
+      })
+      .filter((record) => record !== null);
 
     const paginatedData = processedData.slice(skip, skip + limit);
 
@@ -1899,7 +1898,6 @@ app.get("/api/permits-summary", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
 
 app.get("/api/draft-report", async (req, res) => {
   try {
@@ -3102,7 +3100,7 @@ app.get("/api/extract-province-data", async (req, res) => {
   }
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/api/users", async (req, res) => {
   const { username } = req.query; // Get the username from the query parameters
@@ -3135,8 +3133,8 @@ app.get("/api/user/details", async (req, res) => {
       { username },
       {
         projection: {
-          password: 0 // Never send hashed passwords to client
-        }
+          password: 0, // Never send hashed passwords to client
+        },
       }
     );
 
@@ -3150,7 +3148,6 @@ app.get("/api/user/details", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 
 // Fetch all login statuses
 app.get("/api/login-status", async (req, res) => {
@@ -3438,9 +3435,9 @@ app.get("/api/survey-log", async (req, res) => {
 app.get("/api/ucds-log", async (req, res) => {
   const { ecc_cnc } = req.query;
   try {
-    // If iis_no is provided, filter by it; otherwise, return all logs
+    // Match logs where ecc_cnc matches (case-insensitive)
     const query = ecc_cnc
-      ? { newValue: { $regex: ecc_cnc, $options: "i" } }
+      ? { ecc_cnc: { $regex: ecc_cnc, $options: "i" } }
       : {};
 
     const logs = await ucdsLogCollection.find(query).toArray();
@@ -3558,50 +3555,63 @@ app.get("/api/tsd", async (req, res) => {
   }
 });
 
+//#endregion
+
+//#region UPDATE Data
 //Update the data per provinces
 app.put("/api/update-data/:id", logActivity, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // id like "BU-201" or ObjectId string
     const newData = req.body;
-    const updatedBy = req.body.updated_by; // Assuming you pass the user who updated the data
+    const updatedBy = req.body.updated_by;
 
-    // Ensure connection to the database
     if (!client.topology.isConnected()) {
       await client.connect();
     }
 
     const database = client.db("universe-db");
     const collection = database.collection("ucds-data");
+    const logsCollection = database.collection("ucds-log");
 
-    // Fetch the existing document before updating
-    const oldDocument = await collection.findOne({ id_no: parseInt(id) });
+    // Build query for the document to update
+    let query = {};
+    if (/^[a-fA-F0-9]{24}$/.test(id)) {
+      query = { _id: new ObjectId(id) };
+    } else {
+      query = { id_no: id };
+    }
 
+    // Fetch old document
+    const oldDocument = await collection.findOne(query);
     if (!oldDocument) {
       return res.status(404).json({ error: "Data not found" });
     }
 
-    // Perform the update operation
-    const result = await collection.updateOne(
-      { id_no: parseInt(id) },
-      { $set: newData }
-    );
+    // Update the document with new data
+    const result = await collection.updateOne(query, { $set: newData });
 
     if (result.modifiedCount === 1) {
-      // If the update was successful, create an audit log
-      const updatedDocument = await collection.findOne({ id_no: parseInt(id) });
+      // Generate incrementing transactionID for the log
+      const latestLog = await logsCollection
+        .find({})
+        .sort({ transactionID: -1 })
+        .limit(1)
+        .toArray();
 
-      // Create an audit log to track changes
-      const auditLog = {
-        updated_by: updatedBy,
-        updated_at: new Date(),
-        ecc_cnc: newData.ecc_cnc, // Include the ecc_cnc if relevant to your data
-        changes: [],
-      };
+      let newTransactionNumber = 1;
+      if (latestLog.length && latestLog[0].transactionID) {
+        const lastTxnNum = parseInt(latestLog[0].transactionID.replace("TRXM-", ""), 10);
+        if (!isNaN(lastTxnNum)) {
+          newTransactionNumber = lastTxnNum + 1;
+        }
+      }
+      const transactionID = `TRXM-${newTransactionNumber.toString().padStart(4, "0")}`;
 
-      // Compare old and new data to find changes
+      // Prepare audit log entry with only changed fields
+      const changes = [];
       Object.keys(newData).forEach((key) => {
         if (oldDocument[key] !== newData[key]) {
-          auditLog.changes.push({
+          changes.push({
             field: key,
             old_value: oldDocument[key],
             new_value: newData[key],
@@ -3609,8 +3619,22 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
         }
       });
 
-      // Return the audit log in the response
-      res.status(200).json(auditLog);
+      const logEntry = {
+        transactionID,
+        transactionDate: new Date().toLocaleString("en-US", { hour12: true }),
+        actionType: "Modified",
+        ecc_cnc: newData.ecc_cnc || oldDocument.ecc_cnc,
+        userActed: updatedBy,
+        dateActed: new Date().toLocaleString("en-US", { hour12: true }),
+        changes,
+      };
+
+      // Insert audit log entry
+      await logsCollection.insertOne(logEntry);
+
+      // Respond success with audit log info
+      res.status(200).json(logEntry);
+
     } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
       res.status(200).json({ message: "No changes were made to the data" });
     } else {
@@ -3618,9 +3642,72 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     }
   } catch (error) {
     console.error("Error updating data:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to update data. Please try again later." });
+    res.status(500).json({ error: "Failed to update data. Please try again later." });
+  }
+});
+
+
+
+
+app.put("/api/revert-by-ecc", logActivity, async (req, res) => {
+  try {
+    const { ecc_cnc, field, oldValue, updated_by } = req.body;
+
+    if (!ecc_cnc || !field || oldValue === undefined) {
+      return res.status(400).json({
+        error: "Missing required fields: ecc_cnc, field, or oldValue.",
+      });
+    }
+
+    if (!client.topology.isConnected()) {
+      await client.connect();
+    }
+
+    const db = client.db("universe-db");
+    const dataCollection = db.collection("ucds-data");
+    const logsCollection = db.collection("ucds-log"); // 👈 updated here
+
+    const filter = { ecc_cnc: ecc_cnc };
+    const originalDoc = await dataCollection.findOne(filter);
+
+    if (!originalDoc) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+
+    // Update the document with the old value
+    const update = {
+      $set: {
+        [field]: oldValue,
+        updated_by,
+        updated_at: new Date(),
+      },
+    };
+
+    const result = await dataCollection.updateOne(filter, update);
+
+    if (result.modifiedCount === 1) {
+      // Log the revert operation in ucds-log
+      const revertLog = {
+        transactionID: `REVERT-${Date.now()}`,
+        transactionDate: new Date().toLocaleString(),
+        actionType: "Reverted",
+        ecc_cnc,
+        field,
+        oldValue,
+        newValue: originalDoc[field], // what it was before revert
+        userActed: updated_by,
+        dateActed: new Date().toLocaleString(),
+      };
+
+      await logsCollection.insertOne(revertLog);
+
+      return res.status(200).json({ message: "Revert successful", revertLog });
+    } else {
+      return res.status(200).json({ message: "No changes were made" });
+    }
+  } catch (err) {
+    console.error("Error in /api/revert-by-ecc:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -3948,41 +4035,36 @@ app.put("/api/status/:id", logActivity, async (req, res) => {
 app.put("/api/survey/:id", logActivity, async (req, res) => {
   const { id } = req.params;
   const update = req.body;
+  const year = req.body.year || "2025";
 
   try {
-    // Fetch the current record by _id
-    const currentRecord = await surveyCollection.findOne({
-      _id: new ObjectId(id),
-    });
-    //console.log("Current Record Before Update:", currentRecord);
+    const collection = db.collection(`survey-data-${year}`);
+
+    // Try both number and string for id_no
+    let filter = [{ id_no: isNaN(id) ? id : parseInt(id, 10) }, { id_no: id }];
+
+    // Try to find the record by id_no (number or string)
+    let currentRecord = await collection.findOne(filter[0]);
+    if (!currentRecord) {
+      currentRecord = await collection.findOne(filter[1]);
+    }
 
     if (!currentRecord) {
       return res.status(404).json({ message: "Record not found" });
     }
 
-    // Update the record using _id
-    const result = await surveyCollection.updateOne(
-      { _id: new ObjectId(id) }, // Find by '_id'
-      {
-        $set: update,
-      }
+    // Update the record using the correct filter
+    const result = await collection.updateOne(
+      { _id: currentRecord._id },
+      { $set: update }
     );
-
-    // Fetch the updated record
-    const updatedRecord = await surveyCollection.findOne({
-      _id: new ObjectId(id),
-    });
-    //console.log("Updated Record After Update:", updatedRecord);
 
     if (result.modifiedCount > 0) {
       return res.status(200).json({ message: "Update successful!" });
     } else {
-      return res
-        .status(404)
-        .json({ message: "No changes made or record not found" });
+      return res.status(200).json({ message: "No changes made" });
     }
   } catch (error) {
-    //console.error("Error updating record:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -4079,7 +4161,9 @@ app.put(
       }
 
       // Fetch current posting before update
-      const currentPosting = await postingCollection.findOne({ _id: new ObjectId(id) });
+      const currentPosting = await postingCollection.findOne({
+        _id: new ObjectId(id),
+      });
       if (!currentPosting) {
         return res.status(404).json({ error: "Posting not found" });
       }
@@ -4112,6 +4196,9 @@ app.put(
   }
 );
 
+//#endregion
+
+//#region PATCH Data
 app.patch("/api/postings/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params;
@@ -4233,8 +4320,9 @@ app.patch("/api/users/:email/province-permissions", async (req, res) => {
   }
 });
 
-/////////////////////////////////////////////////////////////////
+//#endregion
 
+//#region DELETE Data
 app.delete("/api/postings/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -4309,7 +4397,8 @@ app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-/////////////////////////////////////////////////////////////////
+
+//#endregion
 
 // Start server
 app.listen(8081, () => {

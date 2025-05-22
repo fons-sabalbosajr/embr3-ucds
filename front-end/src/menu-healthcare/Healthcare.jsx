@@ -12,6 +12,7 @@ import {
   Pagination,
   Popover,
   DatePicker,
+  Progress,
   ConfigProvider,
   message,
 } from "antd";
@@ -55,6 +56,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const [editingKey, setEditingKey] = useState("");
   const [dataSource, setDataSource] = useState(data);
   const [currentValue, setCurrentValue] = useState("");
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,18 +73,13 @@ const Healthcare = ({ theme, currentUser, data }) => {
         }
 
         const result = await response.json();
-        const sortedResult = result.sort((a, b) => {
-          if (a.idNo && b.idNo) {
-            return a.idNo - b.idNo; // Sort by ID No
-          }
-          return 0;
-        });
+        const sortedResult = sortByIdNo(result);
         setFilteredData(sortedResult);
-        setFilteredCount(sortedResult.length); // Set initial count
+        setFilteredCount(sortedResult.length);
 
-        if (result.length > 0) {
-          setCurrentRecord(result[0]);
-          setOriginalRecord(result[0]);
+        if (sortedResult.length > 0) {
+          setCurrentRecord(sortedResult[0]);
+          setOriginalRecord(sortedResult[0]);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -105,6 +102,64 @@ const Healthcare = ({ theme, currentUser, data }) => {
     }
   }, [filteredData]);
 
+  useEffect(() => {
+    let interval;
+    if (loading) {
+      setProgress(0);
+      interval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev < 95) return prev + 5;
+          return prev;
+        });
+      }, 100);
+    } else {
+      setProgress(100);
+      setTimeout(() => setProgress(0), 500);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch("http://localhost:8081/api/healthcare", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText);
+        }
+
+        const result = await response.json();
+        const sortedResult = sortByIdNo(result);
+        setFilteredData(sortedResult);
+        setFilteredCount(sortedResult.length);
+
+        if (sortedResult.length > 0) {
+          setCurrentRecord(sortedResult[0]);
+          setOriginalRecord(sortedResult[0]);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const sortByIdNo = (arr) => {
+    return [...arr].sort((a, b) => {
+      const aId = Number(a.id_no || a.idNo || 0);
+      const bId = Number(b.id_no || b.idNo || 0);
+      return aId - bId;
+    });
+  };
+
   const handleReload = async () => {
     setLoading(true);
     try {
@@ -118,14 +173,9 @@ const Healthcare = ({ theme, currentUser, data }) => {
         throw new Error(errorText);
       }
       const result = await response.json();
-      const sortedResult = result.sort((a, b) => {
-        if (a.idNo && b.idNo) {
-          return a.idNo - b.idNo; // Sort by ID No
-        }
-        return 0;
-      });
+      const sortedResult = sortByIdNo(result);
       setFilteredData(sortedResult);
-      setFilteredCount(sortedResult.length); // Update count
+      setFilteredCount(sortedResult.length);
     } catch (error) {
       console.error("Error fetching healthcare data:", error.message);
     } finally {
@@ -144,8 +194,9 @@ const Healthcare = ({ theme, currentUser, data }) => {
           String(val).toLowerCase().includes(selectedKeys[0].toLowerCase())
         )
       );
-      setFilteredData(filtered);
-      setFilteredCount(filtered.length); // Update count
+      const sortedFiltered = sortByIdNo(filtered);
+      setFilteredData(sortedFiltered);
+      setFilteredCount(sortedFiltered.length);
     }
   };
 
@@ -169,15 +220,14 @@ const Healthcare = ({ theme, currentUser, data }) => {
           )
         )
     );
-    setFilteredData(filtered);
-    setFilteredCount(filtered.length); // Update count
+    const sortedFiltered = sortByIdNo(filtered);
+    setFilteredData(sortedFiltered);
+    setFilteredCount(sortedFiltered.length);
   };
 
   const handleInputConfirm = () => {
     if (inputValue) {
-      // Add the input value as a tag
       setTags((prevTags) => [...prevTags, inputValue]);
-
       const filtered = filteredData.filter((item) =>
         tags
           .concat(inputValue)
@@ -187,8 +237,9 @@ const Healthcare = ({ theme, currentUser, data }) => {
             )
           )
       );
-      setFilteredData(filtered);
-      setFilteredCount(filtered.length); // Update count
+      const sortedFiltered = sortByIdNo(filtered);
+      setFilteredData(sortedFiltered);
+      setFilteredCount(sortedFiltered.length);
     } else {
       handleReload();
     }
@@ -207,10 +258,10 @@ const Healthcare = ({ theme, currentUser, data }) => {
         )
       )
     );
-    setFilteredData(filtered.length > 0 ? filtered : filteredData);
-    setFilteredCount(
-      filtered.length > 0 ? filtered.length : filteredData.length
-    ); // Update count
+    const sortedFiltered =
+      filtered.length > 0 ? sortByIdNo(filtered) : sortByIdNo(filteredData);
+    setFilteredData(sortedFiltered);
+    setFilteredCount(sortedFiltered.length);
     clearFilters();
   };
 
@@ -776,28 +827,31 @@ const Healthcare = ({ theme, currentUser, data }) => {
   ];
 
   return (
-    <div className={`header-panel ${theme}`}>
-      <div className="header-content">
-        <h3 className="header-title">Universe of Industries (Healthcare)</h3>
-
-        <Button
-          type="primary"
-          className="refresh-button"
-          icon={<ReloadOutlined />}
-          onClick={handleReload}
-          loading={loading}
-          title="Reload Table"
-        />
-
-        <Button
-          type="primary"
-          className="add-industry-button"
-          style={{
-            backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
-          }}
-        >
-          Add Industry
-        </Button>
+    <div className={`healthcare-container-card ${theme}-theme`}>
+      <div className="header-content-survey">
+        <h3 className="header-title-survey">
+          Universe of Industries (Healthcare)
+        </h3>
+        <div className="header-action-buttons">
+          <Button
+            type="primary"
+            className="refresh-button"
+            icon={<ReloadOutlined />}
+            onClick={handleReload}
+            loading={loading}
+            title="Reload Table"
+          />
+          <Button
+            type="primary"
+            className="add-industry-button"
+            style={{
+              backgroundColor:
+                buttonColor === "primary" ? "#1890ff" : "#03396c",
+            }}
+          >
+            Add Industry
+          </Button>
+        </div>
       </div>
 
       <div className="healthcare-table-header">
@@ -845,11 +899,44 @@ const Healthcare = ({ theme, currentUser, data }) => {
         pagination={{
           position: ["topRight"],
           simple: true,
-          size: "small", // Make pagination smaller
+          size: "small",
         }}
-        loading={loading}
+        scroll={{ x: "max-content", y: "calc(100vh - 300px)" }} 
+        loading={{
+          spinning: loading,
+          indicator: (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                padding: 24,
+                top: "20%",
+              }}
+            >
+              <Progress
+                percent={progress}
+                status={progress < 100 ? "active" : "success"}
+                showInfo={true}
+                style={{ width: 500 }}
+              />
+              <div
+                style={{
+                  fontWeight: 500,
+                  fontSize: 12,
+                  textAlign: "center",
+                  color: "#aaa",
+                  width: 300,
+                  padding: 8,
+                }}
+              >
+                Loading Healthcare Universe
+              </div>
+            </div>
+          ),
+        }}
         onChange={(pagination, filters, sorter, extra) => {
-          setFilteredCount(extra.currentDataSource.length); // Update count on table change
+          setFilteredCount(extra.currentDataSource.length);
         }}
       />
 

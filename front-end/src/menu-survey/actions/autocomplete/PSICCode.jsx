@@ -61,7 +61,6 @@ const PSICCode = ({ selectedIndustryClass, onIndustryTypeChange }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            backgroundColor: "#f5f5f5", // Light gray background
             color: "#a9a9a9", // Gray text color
             cursor: "not-allowed", // Change cursor to indicate disabled
           }}

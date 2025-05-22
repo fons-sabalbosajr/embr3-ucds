@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { ConfigProvider, AutoComplete, Input } from "antd";
-import './month.css';
+import "./month.css";
 
 // Get the current year
 const currentYear = new Date().getFullYear();
@@ -20,7 +20,7 @@ const MonthOptions = [
   { value: `DECEMBER ${currentYear}` },
 ];
 
-const Month = ({ value, disabled, onChange }) => {
+const Month = ({ value, disabled, readOnly, onChange }) => {
   const [autoCompleteValue, setAutoCompleteValue] = useState(
     `${MonthOptions[0].value}`
   );
@@ -32,8 +32,9 @@ const Month = ({ value, disabled, onChange }) => {
   }, [value]);
 
   const handleChange = (newValue) => {
-    const [month, year] = newValue.split(' '); // Split the input value into month and year
-    if (year === undefined) { // If year is not provided, use the current year
+    const [month, year] = newValue.split(" "); // Split the input value into month and year
+    if (year === undefined) {
+      // If year is not provided, use the current year
       setAutoCompleteValue(`${month} ${currentYear}`);
     } else {
       setAutoCompleteValue(newValue);
@@ -61,12 +62,7 @@ const Month = ({ value, disabled, onChange }) => {
           width: "100%",
           fontSize: "11px",
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
-        }}
         options={MonthOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
         value={autoCompleteValue}
         disabled={disabled}
         onChange={handleChange}
@@ -79,6 +75,8 @@ const Month = ({ value, disabled, onChange }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
+            cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
           placeholder="select month"
           placeholderStyle={{

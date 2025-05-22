@@ -119,7 +119,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <Input
                     value={record ? record.docket_no : ""}
                     onChange={(e) => handleChange("docket_no", e.target.value)}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className="text-area-legal"
                   />
@@ -134,7 +134,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                     onChange={(e) =>
                       handleChange("denr_pab_case_no", e.target.value)
                     }
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     className="text-area-legal"
                   />
@@ -181,7 +181,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <TextArea
                     value={record ? record.v_pd1586 : ""}
                     onChange={(e) => handleChange("v_pd1586", e.target.value)}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     rows={3}
                     className="text-area-legal"
@@ -194,7 +194,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <TextArea
                     value={record ? record.v_ra9275 : ""}
                     onChange={(e) => handleChange("v_ra9275", e.target.value)}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     rows={3}
                     className="text-area-legal"
@@ -207,7 +207,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <TextArea
                     value={record ? record.v_ra8749 : ""}
                     onChange={(e) => handleChange("v_ra8749", e.target.value)}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     rows={3}
                     className="text-area-legal"
@@ -220,7 +220,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <TextArea
                     value={record ? record.v_ra6969 : ""}
                     onChange={(e) => handleChange("v_ra6969", e.target.value)}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     rows={3}
                     className="text-area-legal"
@@ -233,7 +233,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <TextArea
                     value={record ? record.v_tchem : ""}
                     onChange={(e) => handleChange("v_tchem", e.target.value)}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     rows={3}
                     className="text-area-legal"
@@ -269,7 +269,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                     }}
                     disabled={!isEditing}
                     format="MM/DD/YYYY"
-                    className="text-area-legal custom-date-picker"
+                    className="text-area-legal"
                     style={{ width: "100%" }}
                   />
                 </Paragraph>
@@ -280,12 +280,12 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <strong>Assigned Legal Officer:</strong>
                   <LegalOfficers
                     value={record ? record.legal_officer : ""}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                     placeholder="No data"
                     onChange={(value) =>
                       handleInputChange("legal_officer", value)
                     }
-                    className="textbox_legal"
+                    className="text-area-legal"
                   />
                 </Paragraph>
               </Col>
@@ -299,7 +299,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <div style={{ position: "relative", width: "100%" }}>
                     <TextArea
                       value={record ? record.tc_commitment : ""}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       onChange={(e) => {
                         const newValue = e.target.value;
@@ -345,7 +345,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   <div style={{ position: "relative", width: "100%" }}>
                     <TextArea
                       value={record ? record.pos_paper : ""}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       onChange={(e) => {
                         const newValue = e.target.value;
@@ -512,7 +512,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
               <TextArea
                 value={record ? record.remarks : ""}
                 onChange={(e) => handleChange("remarks", e.target.value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 rows={3}
                 className="text-area-legal"
@@ -529,6 +529,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
                   )
                 }
                 disabled={!isEditing}
+                cursor="not-allowed"
                 style={{ fontSize: "12px" }}
               >
                 <span className="permit-label"></span>
@@ -555,7 +556,7 @@ const Legal = ({ record, handleChange, isEditing }) => {
               <TextArea
                 value={record ? record.order_status : ""}
                 onChange={(e) => handleChange("order_status", e.target.value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 className="text-area-legal"
               />

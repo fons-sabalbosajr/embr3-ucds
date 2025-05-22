@@ -8,6 +8,7 @@ import {
   AutoComplete,
   DatePicker,
   Card,
+  Checkbox,
 } from "antd";
 import "./legalunitadd.css";
 import dayjs from "dayjs";
@@ -75,7 +76,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>
@@ -103,7 +104,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>
@@ -169,7 +170,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                     marginTop: "-10px",
                   }}
                   rows={5}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </ConfigProvider>
             </Col>
@@ -197,7 +198,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                     marginTop: "-10px",
                   }}
                   rows={5}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </ConfigProvider>
             </Col>
@@ -225,7 +226,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                     marginTop: "-10px",
                   }}
                   rows={5}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </ConfigProvider>
             </Col>{" "}
@@ -253,7 +254,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                     marginTop: "-10px",
                   }}
                   rows={5}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </ConfigProvider>
             </Col>
@@ -321,7 +322,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       backgroundColor: "#f1f1f1",
                     }}
                     options={legalOfficerOptions}
-                    dropdownClassName="custom-autocomplete-dropdown"
+                    popupClassName="custom-autocomplete-dropdown"
                     value={legalOfficersOptions}
                     onChange={setlegaOfficersOptions}
                     filterOption={(inputValue, option) =>
@@ -330,7 +331,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                         .includes(inputValue.toLowerCase())
                     }
                     allowClear={true}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   >
                     <Input
                       style={{
@@ -339,7 +340,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                         padding: "4px 8px",
                       }}
                       placeholder="Select Legal Officer"
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                     />
                   </AutoComplete>
                 </ConfigProvider>
@@ -369,7 +370,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       fontSize: "11px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>
@@ -466,7 +467,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>
@@ -488,13 +489,13 @@ const LegalUnitAdd = ({ isEditing }) => {
                   <Input
                     value={ORNumber}
                     onChange={(e) => setORNumber(e.target.value)}
-                    placeholder="Enter amount"
+                    placeholder="#123456789"
                     style={{
                       fontSize: "11px",
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>
@@ -504,28 +505,29 @@ const LegalUnitAdd = ({ isEditing }) => {
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={24} md={24} lg={24} className="modalcol">
               <Paragraph>
-                <strong>Compliance with TC Commitment/Order</strong>
                 <ConfigProvider
                   theme={{
                     components: {
-                      TextArea: {
+                      Checkbox: {
                         fontSize: "11px",
                         padding: "4px 8px",
                       },
                     },
                   }}
                 >
-                  <TextArea
-                    rows={3}
-                    value={tcCommitment}
-                    onChange={(e) => settcCommitment(e.target.value)}
-                    placeholder=""
+                  <Checkbox
+                    checked={tcCompliance === "✔"}
+                    onChange={(e) =>
+                      settcCompliance(e.target.checked ? "✔" : "")
+                    }
+                    disabled={!isEditing}
                     style={{
                       fontSize: "11px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
-                  />
+                  >
+                    <strong>Compliance with TC Commitment/Order</strong>
+                  </Checkbox>
                 </ConfigProvider>
               </Paragraph>
             </Col>
@@ -553,7 +555,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       fontSize: "11px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>
@@ -561,7 +563,11 @@ const LegalUnitAdd = ({ isEditing }) => {
           </Row>
         </Card>
 
-        <Card title="FOR ORDER AND RESOLUTION" size="small" className="card-order">
+        <Card
+          title="FOR ORDER AND RESOLUTION"
+          size="small"
+          className="card-order"
+        >
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
               <Paragraph>
@@ -612,11 +618,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                   }}
                 >
                   <DatePicker
-                    value={
-                      dateOrder
-                        ? dayjs(dateOrder, "MM/DD/YYYY")
-                        : null
-                    }
+                    value={dateOrder ? dayjs(dateOrder, "MM/DD/YYYY") : null}
                     onChange={(date, dateString) => setOrder(dateString)}
                     format="MM/DD/YYYY"
                     style={{
@@ -655,7 +657,7 @@ const LegalUnitAdd = ({ isEditing }) => {
                       fontSize: "11px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
               </Paragraph>

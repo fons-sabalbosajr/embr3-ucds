@@ -50,14 +50,14 @@ const SectionInCharge = ({ value, onChange, isEditing }) => {
             backgroundColor: "#f1f1f1",
           }}
           options={sectionOptions}
-          dropdownClassName="custom-autocomplete-dropdown"
+          popupClassName="custom-autocomplete-dropdown"
           value={section}
           onChange={handleSectionChange}
           filterOption={(inputValue, option) =>
             option.value.toLowerCase().includes(inputValue.toLowerCase())
           }
           allowClear={true}
-          disabled={!isEditing}
+          readOnly={!isEditing}
         >
           <Input
             style={{
@@ -69,7 +69,7 @@ const SectionInCharge = ({ value, onChange, isEditing }) => {
             placeholderStyle={{
               fontSize: "9px",
             }}
-            disabled={!isEditing}
+            readOnly={!isEditing}
           />
         </AutoComplete>
       </Paragraph>

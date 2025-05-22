@@ -1,26 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { Table, Tag, Button, Tooltip, Modal } from "antd";
-import {
-  EyeOutlined,
-  RollbackOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+import { RollbackOutlined, DeleteOutlined } from "@ant-design/icons";
 import moment from "moment";
 import axios from "axios";
 import Swal from "sweetalert2";
 import CryptoJS from "crypto-js";
 import "./provtransaction.css";
 
-const ProvTransaction = ({ editedRecord, currentUser }) => {
+const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
   const [transactions, setTransactions] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
-  const [userData, setUserData] = useState(null);
+  const [userMap, setUserMap] = useState({});
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [revertRecord, setRevertRecord] = useState(null);
-
-  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
@@ -29,112 +23,69 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
   const canViewAdminPanel = permissions[2];
   const canViewDataHistory = permissions[3];
 
-  const decryptUsername = (encryptedUsername) => {
-    const decryptedBytes = CryptoJS.AES.decrypt(
-      encryptedUsername,
-      encryptionKey
-    );
-    const decryptedUsername = decryptedBytes.toString(CryptoJS.enc.Utf8);
-    return decryptedUsername;
-  };
-
-  useEffect(() => {
-    if (editedRecord && editedRecord.ecc_cnc) {
-      //console.log("ECC_CNC Reference No:", editedRecord.ecc_cnc);
-    } else {
-      console.log("No ECC No found in editedRecord");
-    }
-  }, [editedRecord]);
-
   useEffect(() => {
     const fetchTransactions = async () => {
-      if (editedRecord?.ecc_cnc) {
-        try {
-          const response = await axios.get(
-            "http://localhost:8081/api/ucds-log",
-            {
-              params: { ecc_cnc: editedRecord.ecc_cnc },
-            }
-          );
-
-          if (
-            response.data.message === "No logs found for the provided ecc_cnc"
-          ) {
-            setTransactions([]);
-          } else {
-            const fetchedTransactions = response.data;
-            const uniqueTransactions = [
-              ...new Map(
-                fetchedTransactions.map((transaction) => [
-                  transaction.transactionID,
-                  transaction,
-                ])
-              ).values(),
-            ];
-            setTransactions(uniqueTransactions);
-            setTotalItems(uniqueTransactions.length);
-          }
-        } catch (error) {
-          console.error("Error fetching transactions:", error);
-        }
+      if (!editedRecord?.ecc_cnc) {
+        setTransactions([]);
+        setUserMap({});
+        return;
+      }
+      try {
+        const response = await axios.get("http://localhost:8081/api/ucds-log", {
+          params: { ecc_cnc: editedRecord.ecc_cnc },
+        });
+        const fetchedTransactions = Array.isArray(response.data)
+          ? response.data
+          : [];
+        // Get unique usernames
+        const uniqueUsernames = [
+          ...new Set(
+            fetchedTransactions.map((t) => t.userActed).filter((u) => !!u)
+          ),
+        ];
+        // Fetch user data for all unique usernames
+        const userFetches = uniqueUsernames.map((username) =>
+          axios
+            .get("http://localhost:8081/api/users", { params: { username } })
+            .then((res) => ({
+              username,
+              user: res.data && res.data.length > 0 ? res.data[0] : null,
+            }))
+            .catch(() => ({ username, user: null }))
+        );
+        const userResults = await Promise.all(userFetches);
+        const userMapObj = {};
+        userResults.forEach(({ username, user }) => {
+          userMapObj[username] = user;
+        });
+        // Remove duplicate transactions by transactionID
+        const uniqueTransactions = [
+          ...new Map(
+            fetchedTransactions.map((transaction) => [
+              transaction.transactionID,
+              transaction,
+            ])
+          ).values(),
+        ];
+        setTransactions(uniqueTransactions);
+        setUserMap(userMapObj);
+        setTotalItems(uniqueTransactions.length);
+      } catch (error) {
+        setTransactions([]);
+        setUserMap({});
+        console.error("Error fetching transactions:", error);
       }
     };
 
     fetchTransactions();
 
     const intervalId = setInterval(fetchTransactions, 1000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
+    return () => clearInterval(intervalId);
   }, [editedRecord]);
-
-
-
-  // Fetch and decrypt the username from local storage
-  const fetchUsername = () => {
-    const encryptedUsername = localStorage.getItem("username");
-    if (encryptedUsername) {
-      const username = decryptUsername(encryptedUsername);
-      //console.log("Decrypted Username:", username);
-      return username;
-    }
-    return null; // Return null if not found
-  };
-
-  const fetchUserByUsername = async (username) => {
-    try {
-      const response = await axios.get(`http://localhost:8081/api/users`, {
-        params: { username },
-      });
-      return response.data.length > 0 ? response.data[0] : null;
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      return null; // Return null on error
-    }
-  };
-
-  useEffect(() => {
-    const username = fetchUsername();
-    if (username) {
-      const fetchUser = async () => {
-        const user = await fetchUserByUsername(username);
-        setUserData(user);
-      };
-      fetchUser();
-    }
-  }, []);
-
 
   const handleTableChange = (pagination) => {
     setCurrentPage(pagination.current);
     setPageSize(pagination.pageSize);
-  };
-
-  // Function to show the modal and set the record to be reverted
-  const showRevertModal = (record) => {
-    setRevertRecord(record);
-    setIsModalVisible(true);
   };
 
   // Function to close the modal
@@ -143,13 +94,45 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
     setRevertRecord(null); // Clear the record after closing
   };
 
-  const handleRevertConfirm = () => {
-    Swal.fire({
-      icon: "success",
-      title: "Revert Successful",
-      text: "The changes have been reverted.",
-    });
-    handleModalClose();
+  // Revert logic
+  const handleRevertConfirm = async (record) => {
+    if (!record || !record.ecc_cnc) {
+      Swal.fire({
+        icon: "error",
+        title: "Revert Failed",
+        text: "ECC/CNC value is missing in this transaction.",
+      });
+      return;
+    }
+    // Support both oldValue or changes array
+    let field = "date_approved";
+    let oldValue = record.oldValue;
+    if (Array.isArray(record.changes) && record.changes.length > 0) {
+      field = record.changes[0].field;
+      oldValue = record.changes[0].old_value;
+    }
+    const payload = {
+      ecc_cnc: record.ecc_cnc,
+      field,
+      oldValue,
+      updated_by: currentUser?.username,
+    };
+    try {
+      await axios.put("http://localhost:8081/api/revert-by-ecc", payload);
+      Swal.fire({
+        icon: "success",
+        title: "Revert Successful",
+        text: "The changes have been reverted successfully.",
+      });
+      if (typeof handleReload === "function") handleReload();
+    } catch (error) {
+      console.error("Revert error:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Revert Failed",
+        text: "Something went wrong while reverting the data.",
+      });
+    }
   };
 
   const handleDeleteTransaction = async (transactionID) => {
@@ -191,14 +174,20 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
     }
   };
 
-  const columns = [
-    {
+  const columns = [];
+
+  // Only show Trans. ID if canManageData is true (dev mode)
+  if (canManageData) {
+    columns.push({
       title: <span className="table-header">Trans. ID</span>,
       dataIndex: "transactionID",
       key: "transactionID",
       align: "center",
-      width: 60,
-    },
+      width: 90,
+    });
+  }
+
+  columns.push(
     {
       title: <span className="table-header">Date</span>,
       dataIndex: "transactionDate",
@@ -248,13 +237,61 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       key: "oldValue",
       align: "center",
       width: 200,
-      render: (oldValue) => {
-        if (!oldValue) return null; // Handle undefined or null oldValue
-        // Split the oldValue by new lines
-        const filteredValues = oldValue
+      render: (_, record) => {
+        if (record.actionType === "Initial Data") {
+          if (!record.oldValue || record.oldValue === "-")
+            return <span>-</span>;
+          return record.oldValue
+            .split("\n")
+            .filter((val) => val !== "undefined" && val !== "0")
+            .map((val, idx) => (
+              <div key={idx}>
+                <div>{val}</div>
+              </div>
+            ));
+        }
+        if (Array.isArray(record.changes) && record.changes.length > 0) {
+          // Only show fields that have changed and are not empty
+          const filteredChanges = record.changes.filter(
+            (chg) =>
+              chg.old_value !== chg.new_value &&
+              chg.field &&
+              chg.old_value !== undefined &&
+              chg.old_value !== null &&
+              chg.old_value !== "" // Only show if old_value is not empty
+          );
+          if (filteredChanges.length === 0) return <span>-</span>;
+          return (
+            <div>
+              {filteredChanges.map((chg, idx) => (
+                <div key={idx} style={{ marginBottom: 8 }}>
+                  <div>{chg.old_value}</div>
+                  {canManageData && (
+                    <div
+                      style={{
+                        fontSize: "9px",
+                        color: "#888",
+                        fontWeight: 400,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      {chg.field}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        }
+        if (!record.oldValue || record.oldValue === "-") return <span>-</span>;
+        return record.oldValue
           .split("\n")
-          .filter((val) => val !== "undefined" && val !== "0");
-        return filteredValues.map((val, index) => <p key={index}>{val}</p>);
+          .filter((val) => val !== "undefined" && val !== "0")
+          .map((val, idx) => (
+            <div key={idx} style={{ marginBottom: 8 }}>
+              <div>{val}</div>
+            </div>
+          ));
       },
     },
     {
@@ -263,13 +300,96 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       key: "newValue",
       align: "center",
       width: 200,
-      render: (newValue) => {
-        const [ecc_cnc, project_title] = newValue.split("\n");
-
+      render: (_, record) => {
+        if (record.actionType === "Initial Data") {
+          if (!record.newValue) return <span>-</span>;
+          const [ecc_cnc, project_title] = record.newValue.split("\n");
+          return (
+            <div>
+              {ecc_cnc && (
+                <div style={{ marginBottom: 8 }}>
+                  <div>{ecc_cnc}</div>
+                </div>
+              )}
+              {project_title && (
+                <div style={{ marginBottom: 8 }}>
+                  <div>{project_title}</div>
+                </div>
+              )}
+            </div>
+          );
+        }
+        if (Array.isArray(record.changes) && record.changes.length > 0) {
+          // Only show fields that have changed and are not empty
+          const filteredChanges = record.changes.filter(
+            (chg) =>
+              chg.old_value !== chg.new_value &&
+              chg.field &&
+              chg.new_value !== undefined &&
+              chg.new_value !== null &&
+              chg.new_value !== "" // Only show if new_value is not empty
+          );
+          if (filteredChanges.length === 0) return <span>-</span>;
+          return (
+            <div>
+              {filteredChanges.map((chg, idx) => (
+                <div key={idx} style={{ marginBottom: 8 }}>
+                  <div>{chg.new_value}</div>
+                  {canManageData && (
+                    <div
+                      style={{
+                        fontSize: "9px",
+                        color: "#888",
+                        fontWeight: 400,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      {chg.field}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        }
+        if (!record.newValue) return <span>-</span>;
+        const [ecc_cnc, project_title] = record.newValue.split("\n");
         return (
           <div>
-            <p>{ecc_cnc}</p>
-            <p>{project_title}</p>
+            {ecc_cnc && (
+              <div style={{ marginBottom: 8 }}>
+                <div>{ecc_cnc}</div>
+                {canManageData && (
+                  <div
+                    style={{
+                      fontSize: "9px",
+                      color: "#888",
+                      fontWeight: 400,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    ECC/CNC
+                  </div>
+                )}
+              </div>
+            )}
+            {project_title && (
+              <div style={{ marginBottom: 8 }}>
+                <div>{project_title}</div>
+                {canManageData && (
+                  <div
+                    style={{
+                      fontSize: "9px",
+                      color: "#888",
+                      fontWeight: 400,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Project Title
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
       },
@@ -279,66 +399,109 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       dataIndex: "userActed",
       key: "userActed",
       align: "center",
-      render: () =>
-        userData ? (
-          <>
-            {userData.name}
-            <br />
-            {userData.division}
-          </>
-        ) : (
-          "Loading..."
-        ),
-    },    
-  ].concat(
-    canManageData
-      ? [
-          {
-            title: <span className="table-header">Actions</span>,
-            key: "actions",
-            align: "center",
-            render: (_, record) => (
-              <div className="action-buttons">
-                {/* Conditionally render delete button */}
-                {record.actionType !== "Initial Data" && (
-                  <Tooltip title="Delete Transaction">
-                    <Button
-                      type="primary"
-                      danger
-                      icon={<DeleteOutlined />}
-                      className="action-button button-danger"
-                      size="small"
-                      onClick={async () => {
-                        const result = await Swal.fire({
-                          title: "Are you sure?",
-                          text: "This will permanently delete the transaction!",
-                          icon: "warning",
-                          showCancelButton: true,
-                          confirmButtonColor: "#d33",
-                          cancelButtonColor: "#3085d6",
-                          confirmButtonText: "Yes, delete it!",
-                          cancelButtonText: "Cancel",
-                        });
-
-                        if (result.isConfirmed) {
-                          await handleDeleteTransaction(record.transactionID);
-                        }
-                      }}
-                    />
-                  </Tooltip>
-                )}
-              </div>
-            ),
-          },
-        ]
-      : []
+      render: (userActed) => {
+        const user = userMap[userActed];
+        if (user) {
+          return (
+            <>
+              <span>{user.name}</span>
+              <br />
+              <span style={{ fontSize: "10px", color: "#888" }}>
+                {user.division}
+              </span>
+            </>
+          );
+        }
+        return <span>{userActed || "Unknown"}</span>;
+      },
+    }
   );
+
+  // Conditionally add the Actions column if the user can manage data
+  if (canManageData) {
+    columns.push({
+      title: <span className="table-header">Actions</span>,
+      key: "actions",
+      align: "center",
+      render: (_, record) => (
+        <div className="action-buttons">
+          {/* Revert Button */}
+          {record.actionType !== "Initial Data" && (
+            <Tooltip title="Revert to Old Value">
+              <Button
+                type="primary"
+                icon={<RollbackOutlined />}
+                className="action-button"
+                size="small"
+                style={{ marginRight: 20 }}
+                onClick={async () => {
+                  const result = await Swal.fire({
+                    title: "Revert Changes?",
+                    html: `
+                    <div style='text-align:left'>
+                      <b>Transaction ID:</b> ${record.transactionID}<br/>
+                      <b>User Acted:</b> ${
+                        userMap[record.userActed]?.name || "N/A"
+                      }<br/>
+                      <b>Date Acted:</b> ${moment(record.dateActed).format(
+                        "MM/DD/yyyy hh:mm A"
+                      )}<br/>
+                      <b>Old Value:</b> ${record.oldValue}
+                    </div>
+                  `,
+                    icon: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#3085d6",
+                    cancelButtonColor: "#d33",
+                    confirmButtonText: "Confirm Revert",
+                    cancelButtonText: "Cancel",
+                    width: 600,
+                  });
+                  if (result.isConfirmed) {
+                    await handleRevertConfirm(record);
+                  }
+                }}
+              />
+            </Tooltip>
+          )}
+          {/* Delete Button */}
+          {record.actionType !== "Initial Data" && (
+            <Tooltip title="Delete Transaction">
+              <Button
+                type="primary"
+                danger
+                icon={<DeleteOutlined />}
+                className="action-button button-danger"
+                size="small"
+                onClick={async () => {
+                  const result = await Swal.fire({
+                    title: "Are you sure?",
+                    text: "This will permanently delete the transaction!",
+                    icon: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#d33",
+                    cancelButtonColor: "#3085d6",
+                    confirmButtonText: "Yes, delete it!",
+                    cancelButtonText: "Cancel",
+                  });
+
+                  if (result.isConfirmed) {
+                    await handleDeleteTransaction(record.transactionID);
+                  }
+                }}
+              />
+            </Tooltip>
+          )}
+        </div>
+      ),
+    });
+  }
 
   return (
     <div>
       <Modal
         title="Revert Changes?"
-        visible={isModalVisible}
+        open={isModalVisible}
         onCancel={handleModalClose}
         width={800}
         footer={[
@@ -429,7 +592,7 @@ const ProvTransaction = ({ editedRecord, currentUser }) => {
       <Table
         columns={columns}
         dataSource={transactions}
-        rowKey={(record) => record.transactionID}
+        rowKey={(record) => record.transactionID || record._id?.$oid}
         rowClassName={() => "table-row"}
         pagination={{
           current: currentPage,

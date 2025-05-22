@@ -8,14 +8,23 @@ import {
   Card,
   Checkbox,
   DatePicker,
+  AutoComplete,
+  ConfigProvider,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
 import SectionInCharge from "../../../components/Autocomplete/SectionInCharge";
 import Inspectors from "../../../components/Autocomplete/Inspectors";
+import WWTFType from "../../../components/Autocomplete/WWTFType";
 import "./focalperson.css";
 
 const { Paragraph } = Typography;
+
+const pismuTrackingOptions = [
+  { value: "Ms. Alyanna Y. Patdu" },
+  { value: "Mr. Christian M. Abad" },
+  { value: "Mr. Marshalle Julluice V. Catua" },
+];
 
 function calculateWeekdayDiff(startDate, endDate) {
   const startDayjs = dayjs(startDate);
@@ -39,6 +48,15 @@ function calculateWeekdayDiff(startDate, endDate) {
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
   const [localRecord, setLocalRecord] = useState(editedRecord || {});
+  const [pismuTracking, setPismuTracking] = useState(
+    editedRecord?.pismu_tracking_receiver || ""
+  );
+
+  const [empNoTotal, setEmpNoTotal] = useState(
+    editedRecord?.emp_no_total || ""
+  );
+  const [wwtftype, setWwtftype] = useState(editedRecord?.wwtftype || "");
+  const [bod, setBod] = useState(editedRecord?.bod || "");
 
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
@@ -66,6 +84,26 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
     }
   };
 
+  const calculateBOD = (empNoTotal, wwtfType) => {
+    let bod = 0;
+    const wwtfTypeValues = {
+      WWTF: 0.6,
+      "SEPTIC TANK": 0.25,
+      "DIRECT DISCHARGE": 1,
+      "N/A": 0,
+    };
+    const v1 = wwtfTypeValues[String(wwtfType || "").toUpperCase()] ?? 0;
+    const v2 = Number(empNoTotal);
+    if (!v2) {
+      bod = "";
+    } else if (String(wwtfType || "").toUpperCase() === "DIRECT DISCHARGE") {
+      bod = (v2 * 0.0378).toFixed(4);
+    } else {
+      bod = (v2 * 0.0378 * (1 - v1)).toFixed(4);
+    }
+    return bod ? bod + " kg/day" : "";
+  };
+
   const padZero = (num) => {
     return (num < 10 ? "0" : "") + num;
   };
@@ -76,6 +114,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
   const formattedDateSigned = convertToMMDDYYYY(editedRecord.date_signed);
 
   const [days, setDays] = useState(editedRecord ? editedRecord.total_days : 0);
+  const [daysRoutedToSigned, setDaysRoutedToSigned] = useState("");
 
   useEffect(() => {
     if (formattedDateSurveyed && formattedDateRouted) {
@@ -89,7 +128,25 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
   }, [formattedDateSurveyed, formattedDateRouted]);
 
   useEffect(() => {
+    if (formattedDateRouted && formattedDateSigned) {
+      const newDaysRoutedToSigned = calculateWeekdayDiff(
+        formattedDateRouted,
+        formattedDateSigned
+      );
+      setDaysRoutedToSigned(newDaysRoutedToSigned);
+      handleChange("total_days_routed_signed", newDaysRoutedToSigned);
+    } else {
+      setDaysRoutedToSigned("");
+      handleChange("total_days_routed_signed", "");
+    }
+  }, [formattedDateRouted, formattedDateSigned]);
+
+  useEffect(() => {
     setLocalRecord(editedRecord);
+    setPismuTracking(editedRecord?.pismu_tracking_receiver || "");
+    setEmpNoTotal(editedRecord?.emp_no_total || "");
+    setWwtftype(editedRecord?.wwtftype || "");
+    setBod(editedRecord?.bod || "");
   }, [editedRecord]);
 
   const handleInputChange = (field, value) => {
@@ -101,6 +158,30 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
   const handleCheckboxChange = (field, e) => {
     const value = e.target.checked ? "✔" : "";
     handleInputChange(field, value);
+  };
+
+  const handleEmpNoTotalChange = (e) => {
+    const value = e.target.value;
+    setEmpNoTotal(value);
+    handleInputChange("emp_no_total", value);
+    if (wwtftype) {
+      const bodValue = calculateBOD(value, wwtftype);
+      setBod(bodValue);
+      handleInputChange("bod", bodValue);
+    }
+  };
+
+  const handleWwtftypeChange = (value) => {
+    setWwtftype(value);
+    handleInputChange("wwtftype", value);
+    if (empNoTotal) {
+      const bodValue = calculateBOD(empNoTotal, value);
+      setBod(bodValue);
+      handleInputChange("bod", bodValue);
+    } else {
+      setBod("");
+      handleInputChange("bod", "");
+    }
   };
 
   return (
@@ -122,18 +203,27 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               value={localRecord.employee_no || ""}
               readOnly={!isEditing}
               placeholder="No data"
-              onChange={(e) => handleInputChange("employee_no", e.target.value)}
+             onChange={handleEmpNoTotalChange}
               className="textbox-label"
+            />
+          </Paragraph>
+
+           <Paragraph>
+            <strong>Type of WWTF</strong>
+            <WWTFType
+              value={wwtftype}
+              onChange={handleWwtftypeChange}
+              readOnly={!isEditing}
+              placeholder="No data"
             />
           </Paragraph>
 
           <Paragraph>
             <strong>Bio-Oxygen Demand (kg/day)</strong>
             <Input
-              value={localRecord.bod || ""} // Handle undefined bod
-              readOnly={!isEditing}
+              value={bod}
+              readOnly
               placeholder="No data"
-              onChange={(e) => handleInputChange("bod", e.target.value)}
               className="textbox-label"
             />
           </Paragraph>
@@ -159,20 +249,17 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
           </Paragraph>
         </Col>
 
-        
-
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
-        <Paragraph>
-          <strong>IIS Reference No.</strong>
-          <Input
-            value={localRecord.iis_no || ""}
-            onChange={(e) => handleChange("iis_no", e.target.value)}
-            readOnly={!isEditing}
-            placeholder="No data"
-            className="textbox-label"
-          />
-        </Paragraph>
-
+          <Paragraph>
+            <strong>IIS Reference No.</strong>
+            <Input
+              value={localRecord.iis_no || ""}
+              onChange={(e) => handleChange("iis_no", e.target.value)}
+              readOnly={!isEditing}
+              placeholder="No data"
+              className="textbox-label"
+            />
+          </Paragraph>
 
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
@@ -261,6 +348,23 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   />
                 </Paragraph>
               </Col>
+              <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+                <Paragraph>
+                  <span className="label_container">
+                    <strong className="label_title">Total No. of Days:</strong>
+                    <p className="label">(Date Routed vs. Date Signed)</p>
+                  </span>
+                  <Input
+                    value={daysRoutedToSigned}
+                    onChange={(e) =>
+                      handleChange("total_days_routed_signed", e.target.value)
+                    }
+                    readOnly
+                    placeholder="No data"
+                    className="textbox-label"
+                  />
+                </Paragraph>
+              </Col>
             </Row>
 
             <Paragraph>
@@ -273,6 +377,61 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   Tracking of Reports (Routed to Assigned Section/Unit)
                 </strong>
               </Checkbox>
+
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={24} md={15} lg={15} className="modalcol">
+                  {" "}
+                  <Paragraph>
+                    <ConfigProvider
+                      theme={{
+                        components: {
+                          AutoComplete: {
+                            optionFontSize: 10,
+                            colorTextPlaceholder: "#555",
+                            fontSize: "11px",
+                            boxShadow: "none",
+                          },
+                        },
+                      }}
+                    >
+                      <AutoComplete
+                        style={{
+                          width: "100%",
+                          fontSize: "11px",
+                        }}
+                        dropdownStyle={{
+                          boxShadow: "none",
+                          backgroundColor: "#f1f1f1",
+                        }}
+                        options={pismuTrackingOptions}
+                        popupClassName="custom-autocomplete-dropdown"
+                        value={pismuTracking}
+                        onChange={(value) => {
+                          setPismuTracking(value);
+                          handleChange("pismu_tracking_receiver", value);
+                        }}
+                        filterOption={(inputValue, option) =>
+                          option.value
+                            .toLowerCase()
+                            .includes(inputValue.toLowerCase())
+                        }
+                        allowClear={true}
+                        readOnly={!isEditing}
+                      >
+                        <Input
+                          style={{
+                            fontSize: "11px",
+                            height: "29px",
+                            padding: "4px 8px",
+                          }}
+                          placeholder="Select PISMU Staff"
+                          readOnly={!isEditing}
+                        />
+                      </AutoComplete>
+                    </ConfigProvider>
+                  </Paragraph>
+                </Col>
+              </Row>
             </Paragraph>
 
             <Paragraph>

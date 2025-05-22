@@ -28,27 +28,33 @@
 }
 
 .skyblue-row {
-  background-color: #add1f9 !important;
+  background-color: transparent !important;
+  //color: #005A9C !important; /* Darker Sky Blue for font */
 }
 
 .orange-row {
-  background-color: #ffd0a1 !important;
+  background-color: transparent !important;
+  //color: #C65102 !important; /* Darker Orange for font */
 }
 
 .yellow-row {
-  background-color: #f3f0ca !important;
+  background-color: transparent !important;
+  //color: #7D7000 !important; /* Darker Yellow/Olive for font */
 }
 
 .green-row {
-  background-color: #d4ed9e !important;
+  background-color: transparent !important;
+  //color: #38761D !important; /* Darker Green for font */
 }
 
 .blue-row {
-  background-color: #adc0f9 !important;
+  background-color: transparent !important;
+  //color: #0B5394 !important; /* Darker Blue for font */
 }
 
 .gray-row {
-  background-color: #e4e4e4 !important;
+  background-color: transparent !important;
+  //color: #555555 !important; /* Darker Gray for font */
 }
 
 .dropdown-container {
@@ -94,15 +100,16 @@
 .data-container {
   display: flex;
   flex-wrap: wrap;
-  background-color: #ededed;
   border-radius: 5px;
   padding: 10px;
+  background-color: transparent;
 }
 
 .data-ul {
   flex: 1;
   margin-right: 20px;
   font-size: 10px;
+  color: bisque;
 }
 
 .data-p {

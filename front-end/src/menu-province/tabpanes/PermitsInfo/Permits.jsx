@@ -2,647 +2,1003 @@ import React, { useState, useEffect } from "react";
 import {
   Table,
   Button,
-  Modal,
   Row,
   Col,
-  Checkbox,
-  Typography,
-  Card,
   Input,
-  notification,
+  ConfigProvider,
+  AutoComplete,
 } from "antd";
 import "./permits.css";
-import TextArea from "antd/es/input/TextArea";
 
-const { Paragraph } = Typography;
-const { confirm } = Modal;
+const ECCOptions = [
+  { value: "ECC Manual" },
+  { value: "ECC Online" },
+  { value: "ECC EMB CO" },
+  { value: "CNC Manual" },
+  { value: "CNC Online" },
+];
+
+const HAZ_PROCESS_OPTIONS = [{ value: "MANUAL" }, { value: "ONLINE" }];
+
+const PD1586_COLUMNS = [
+  {
+    title: "ECC/CNC Reference No.",
+    dataIndex: "ecc_cnc",
+    key: "ecc_cnc",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("ecc_cnc", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Permit Process Source",
+    dataIndex: "permit_process",
+    key: "permit_process",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <ConfigProvider
+          theme={{
+            components: {
+              AutoComplete: {
+                optionFontSize: 10,
+                colorTextPlaceholder: "#555",
+                fontSize: "11px",
+                boxShadow: "none",
+              },
+            },
+          }}
+        >
+          <AutoComplete
+            style={{
+              width: "100%",
+              fontSize: "11px",
+            }}
+            options={ECCOptions}
+            value={value}
+            onChange={(val) =>
+              record.handleChange("permit_process", val, record.key)
+            }
+            filterOption={(inputValue, option) =>
+              option.value.toLowerCase().includes(inputValue.toLowerCase())
+            }
+            allowClear={true}
+            disabled={!record.isEditing}
+          >
+            <Input
+              style={{
+                marginTop: "2px",
+              }}
+              placeholder="-"
+              readOnly={!record.isEditing}
+            />
+          </AutoComplete>
+        </ConfigProvider>
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date Approved",
+    dataIndex: "date_approved",
+    key: "date_approved",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("date_approved", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date Amended",
+    dataIndex: "date_amended",
+    key: "date_amended",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("date_amended", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Remarks",
+    dataIndex: "pd1586_remarks",
+    key: "pd1586_remarks",
+    align: "center",
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pd1586_remarks", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+];
+
+const RA8749_COLUMNS = [
+  {
+    title: "PTO Code",
+    dataIndex: "pto_code",
+    key: "pto_code",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pto_code", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date Issued",
+    dataIndex: "pto_issued",
+    key: "pto_issued",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pto_issued", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date of Expiration",
+    dataIndex: "pto_expiration",
+    key: "pto_expiration",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      renderWithExpiryCheck(value, record, "pto_expiration"),
+  },
+  {
+    title: "Remarks",
+    dataIndex: "ra8749_remarks",
+    key: "ra8749_remarks",
+    align: "center",
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("ra8749_remarks", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+];
+
+const RA9275_COLUMNS = [
+  {
+    title: "WWDP Code",
+    dataIndex: "wwdp_code",
+    key: "wwdp_code",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("wwdp_code", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date Issued",
+    dataIndex: "wwdp_issued",
+    key: "wwdp_issued",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("wwdp_issued", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date of Expiration",
+    dataIndex: "wwdp_expiration",
+    key: "wwdp_expiration",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      renderWithExpiryCheck(value, record, "wwdp_expiration"),
+  },
+  {
+    title: "Remarks",
+    dataIndex: "ra9275_remarks",
+    key: "ra9275_remarks",
+    align: "center",
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("ra9275_remarks", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+];
+
+const RA6969_COLUMNS = [
+  {
+    title: "Hazwaste ID",
+    dataIndex: "haz_id",
+    key: "haz_id",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("haz_id", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Hazwaste Process Source",
+    dataIndex: "haz_process_source",
+    key: "haz_process_source",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <AutoComplete
+          style={{ width: "100%", fontSize: "11px" }}
+          options={HAZ_PROCESS_OPTIONS}
+          value={value}
+          onChange={(val) =>
+            record.handleChange("haz_process_source", val, record.key)
+          }
+          filterOption={(inputValue, option) =>
+            option.value.toLowerCase().includes(inputValue.toLowerCase())
+          }
+          allowClear={true}
+          disabled={!record.isEditing}
+        >
+          <Input
+            style={{ marginTop: "2px" }}
+            placeholder="-"
+            readOnly={!record.isEditing}
+          />
+        </AutoComplete>
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Date Issued",
+    dataIndex: "haz_issued",
+    key: "haz_issued",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("haz_issued", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Remarks",
+    dataIndex: "ra6969_remarks",
+    key: "ra6969_remarks",
+    align: "center",
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("ra6969_remarks", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+];
+
+const PCO_COLUMNS = [
+  {
+    title: "PCO No.",
+    dataIndex: "pco_no",
+    key: "pco_no",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pco_no", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Validity",
+    dataIndex: "pco_validity",
+    key: "pco_validity",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      renderWithExpiryCheck(value, record, "pco_validity"),
+  },
+  {
+    title: "Name",
+    dataIndex: "pco_name",
+    key: "pco_name",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pco_name", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Tel. No.",
+    dataIndex: "pco_tel_no",
+    key: "pco_tel_no",
+    align: "center",
+    width: 200,
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pco_tel_no", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+  {
+    title: "Remarks",
+    dataIndex: "pco_remarks",
+    key: "pco_remarks",
+    align: "center",
+    render: (value, record) =>
+      record.isEditing ? (
+        <Input
+          value={value}
+          onChange={(e) =>
+            record.handleChange("pco_remarks", e.target.value, record.key)
+          }
+          placeholder="-"
+        />
+      ) : (
+        <span>{value || "-"}</span>
+      ),
+  },
+];
+
+function splitMultiValue(str = "") {
+  // Split by comma, semicolon, or newline, trim, and filter out empty
+  return str
+    .split(/[,;\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function expandRowsFromRecord(record, keys, handler, isEditing) {
+  // Find the field with the most values
+  const splitFields = keys.map((k) => splitMultiValue(record?.[k]));
+  const maxLen = Math.max(...splitFields.map((arr) => arr.length), 1);
+
+  // Build rows, filling missing values with ""
+  return Array.from({ length: maxLen }).map((_, idx) => {
+    const row = { key: (idx + 1).toString(), isEditing, handleChange: handler };
+    keys.forEach((k, i) => {
+      row[k] = splitFields[i][idx] || "";
+    });
+    return row;
+  });
+}
+
+function isExpired(dateStr) {
+  if (!dateStr) return false;
+  // Accepts YYYY-MM-DD, MM/DD/YYYY, or similar
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  return d < today;
+}
+
+function renderWithExpiryCheck(value, record, field) {
+  const expired =
+    field === "pto_expiration" ||
+    field === "wwdp_expiration" ||
+    field === "pco_validity"
+      ? isExpired(value)
+      : false;
+  const style = expired
+    ? { background: "#ffcccc", color: "#a00", fontWeight: "bold" }
+    : {};
+  if (record.isEditing) {
+    return (
+      <Input
+        value={value}
+        onChange={(e) => record.handleChange(field, e.target.value, record.key)}
+        placeholder="-"
+        style={style}
+      />
+    );
+  }
+  return <span style={style}>{value || "-"}</span>;
+}
 
 const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
-  const [dataSource, setDataSource] = useState([]);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [pd1586Data, setPd1586Data] = useState([]);
+  const [ra8749Data, setRa8749Data] = useState([]);
+  const [ra9275Data, setRa9275Data] = useState([]);
+  const [ra6969Data, setRa6969Data] = useState([]);
+  const [pcoData, setPcoData] = useState([]);
 
   useEffect(() => {
     if (editedRecord) {
-      setDataSource([
-        {
-          key: "1",
-          permitNo: editedRecord?.chemical_permit || "",
-          permitIssued: editedRecord?.chem_permit_issued || "",
-          permitExpiration: editedRecord?.chem_permit_exp || "",
-        },
-      ]);
+      setPd1586Data(
+        expandRowsFromRecord(
+          editedRecord,
+          [
+            "ecc_cnc",
+            "permit_process",
+            "date_approved",
+            "date_amended",
+            "pd1586_remarks",
+          ],
+          handleFieldChangePD1586,
+          isEditing
+        )
+      );
+      setRa8749Data(
+        expandRowsFromRecord(
+          editedRecord,
+          ["pto_code", "pto_issued", "pto_expiration", "ra8749_remarks"],
+          handleFieldChangeRA8749,
+          isEditing
+        )
+      );
+      setRa9275Data(
+        expandRowsFromRecord(
+          editedRecord,
+          ["wwdp_code", "wwdp_issued", "wwdp_expiration", "ra9275_remarks"],
+          handleFieldChangeRA9275,
+          isEditing
+        )
+      );
+      setRa6969Data(
+        expandRowsFromRecord(
+          editedRecord,
+          ["haz_id", "haz_process_source", "haz_issued", "ra6969_remarks"],
+          handleFieldChangeRA6969,
+          isEditing
+        )
+      );
+      setPcoData(
+        expandRowsFromRecord(
+          editedRecord,
+          ["pco_no", "pco_validity", "pco_name", "pco_tel_no", "pco_remarks"],
+          handleFieldChangePCO,
+          isEditing
+        )
+      );
     }
-  }, [editedRecord]);
+    // eslint-disable-next-line
+  }, [editedRecord, isEditing]);
 
-  const showModal = () => {
-    setIsModalVisible(true);
-  };
+  // PD1586 handlers
+  function handleFieldChangePD1586(field, value, key) {
+    setPd1586Data((prev) =>
+      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
+    );
+    if (key === "1") handleChange(field, value);
+  }
 
-  const handleOk = () => {
-    setIsModalVisible(false);
-  };
-
-  const handleCancelPermit = () => {
-    setIsModalVisible(false);
-  };
-
-  const handleSavePermit = () => {
-    confirm({
-      title: "Save Changes",
-      content: "Are you sure you want to save the changes?",
-      okText: "Save",
-      cancelText: "Cancel",
-      onOk() {
-        console.log("onOk triggered");
-
-        // Update the editedRecord with the current dataSource values
-        const updatedRecord = { ...editedRecord };
-        updatedRecord.chemical_permit = dataSource[0].permitNo;
-        updatedRecord.chem_permit_issued = dataSource[0].permitIssued;
-        updatedRecord.chem_permit_exp = dataSource[0].permitExpiration;
-
-        // Update the dataSource state with the new values
-        setDataSource([
-          {
-            key: "1",
-            permitNo: updatedRecord.chemical_permit,
-            permitIssued: updatedRecord.chem_permit_issued,
-            permitExpiration: updatedRecord.chem_permit_exp,
-          },
-        ]);
-
-        // Trigger the parent component's save function
-        onSaveChanges(updatedRecord, false);
-
-        notification.success({
-          message: "Success",
-          description: "Your changes have been saved successfully.",
-        });
+  function handleRemoveLastRowPD1586() {
+    setPd1586Data((prev) =>
+      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
+    );
+  }
+  const handleAddNewDataPD1586 = () => {
+    const newKey = (pd1586Data.length + 1).toString();
+    setPd1586Data([
+      ...pd1586Data,
+      {
+        key: newKey,
+        isEditing: true,
+        handleChange: handleFieldChangePD1586,
+        ecc_cnc: "",
+        permit_process: "",
+        date_approved: "",
+        date_amended: "",
+        pd1586_remarks: "",
       },
-      onCancel() {
-        console.log("Changes discarded");
+    ]);
+  };
+
+  // RA8749 handlers
+  function handleFieldChangeRA8749(field, value, key) {
+    setRa8749Data((prev) =>
+      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
+    );
+    if (key === "1") handleChange(field, value);
+  }
+  function handleRemoveLastRowRA8749() {
+    setRa8749Data((prev) =>
+      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
+    );
+  }
+
+  const handleAddNewDataRA8749 = () => {
+    const newKey = (ra8749Data.length + 1).toString();
+    setRa8749Data([
+      ...ra8749Data,
+      {
+        key: newKey,
+        isEditing: true,
+        handleChange: handleFieldChangeRA8749,
+        pto_code: "",
+        pto_issued: "",
+        pto_expiration: "",
+        ra8749_remarks: "",
       },
-    });
+    ]);
   };
 
-  const renderTextArea = (text, record, dataIndex) => (
-    <TextArea
-      value={record[dataIndex]}
-      onChange={(e) => {
-        const newDataSource = [...dataSource];
-        const index = newDataSource.findIndex(
-          (item) => item.key === record.key
-        );
-        newDataSource[index][dataIndex] = e.target.value;
-        setDataSource(newDataSource);
-      }}
-      autoSize={{ minRows: 7 }}
-      size="small"
-    />
-  );
-
-  const handleValueChange = (field, newValue) => {
-    const oldValue = editedRecord[field]; // Capture the old value
-    // console.log(
-    //   `Field: ${field}, Old Value: ${oldValue}, New Value: ${newValue}`
-    // );
+  // RA9275 handlers
+  function handleFieldChangeRA9275(field, value, key) {
+    setRa9275Data((prev) =>
+      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
+    );
+    if (key === "1") handleChange(field, value);
+  }
+  function handleRemoveLastRowRA9275() {
+    setRa9275Data((prev) =>
+      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
+    );
+  }
+  const handleAddNewDataRA9275 = () => {
+    const newKey = (ra9275Data.length + 1).toString();
+    setRa9275Data([
+      ...ra9275Data,
+      {
+        key: newKey,
+        isEditing: true,
+        handleChange: handleFieldChangeRA9275,
+        wwdp_code: "",
+        wwdp_issued: "",
+        wwdp_expiration: "",
+      },
+    ]);
   };
 
-  const columns = [
-    {
-      title: "Permit No.",
-      dataIndex: "permitNo",
-      key: "permitNo",
-      width: "300px",
-      align: "left",
-      render: (text, record) => renderTextArea(text, record, "permitNo"),
-    },
-    {
-      title: "Permit Issued",
-      dataIndex: "permitIssued",
-      key: "permitIssued",
-      align: "left",
-      render: (text, record) => renderTextArea(text, record, "permitIssued"),
-    },
-    {
-      title: "Permit Expiration",
-      dataIndex: "permitExpiration",
-      key: "permitExpiration",
-      align: "left",
-      render: (text, record) =>
-        renderTextArea(text, record, "permitExpiration"),
-    },
-  ];
+  // RA6969 handlers
+  function handleFieldChangeRA6969(field, value, key) {
+    setRa6969Data((prev) =>
+      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
+    );
+    if (key === "1") handleChange(field, value);
+  }
+  function handleRemoveLastRowRA6969() {
+    setRa6969Data((prev) =>
+      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
+    );
+  }
+  const handleAddNewDataRA6969 = () => {
+    const newKey = (ra6969Data.length + 1).toString();
+    setRa6969Data([
+      ...ra6969Data,
+      {
+        key: newKey,
+        isEditing: true,
+        handleChange: handleFieldChangeRA6969,
+        haz_id: "",
+        haz_process_source: "",
+        haz_issued: "",
+      },
+    ]);
+  };
+
+  // PCO handlers
+  function handleFieldChangePCO(field, value, key) {
+    setPcoData((prev) =>
+      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
+    );
+    if (key === "1") handleChange(field, value);
+  }
+  function handleRemoveLastRowPCO() {
+    setPcoData((prev) =>
+      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
+    );
+  }
+  const handleAddNewDataPCO = () => {
+    const newKey = (pcoData.length + 1).toString();
+    setPcoData([
+      ...pcoData,
+      {
+        key: newKey,
+        isEditing: true,
+        handleChange: handleFieldChangePCO,
+        pco_no: "",
+        pco_validity: "",
+        pco_name: "",
+        pco_tel_no: "",
+        pco_remarks: "",
+      },
+    ]);
+  };
+
+  const tableDataPD1586 = isEditing
+    ? [...pd1586Data, { key: "add-row", isAddRow: true }]
+    : pd1586Data;
+  const tableDataRA8749 = isEditing
+    ? [...ra8749Data, { key: "add-row", isAddRow: true }]
+    : ra8749Data;
+  const tableDataRA9275 = isEditing
+    ? [...ra9275Data, { key: "add-row", isAddRow: true }]
+    : ra9275Data;
+  const tableDataRA6969 = isEditing
+    ? [...ra6969Data, { key: "add-row", isAddRow: true }]
+    : ra6969Data;
+  const tableDataPCO = isEditing
+    ? [...pcoData, { key: "add-row", isAddRow: true }]
+    : pcoData;
 
   return (
     <div>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={12} lg={12}>
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={editedRecord?.pd1586 === "REQUIRED ECC"}
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED ECC"
-                      : "NOT REQUIRED ECC";
-                    handleValueChange("pd1586", newValue); // Log and handle the value change
-                    handleChange("pd1586", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.pd1586 === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">PD1586</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>ECC/CNC Reference No.</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.ecc_cnc : ""}
-                    onChange={(e) => handleChange("ecc_cnc", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Permit Process Source</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.permit_process : ""}
-                    onChange={(e) =>
-                      handleChange("permit_process", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12} className="row-bot">
-                <Paragraph>
-                  <strong>Date Approved</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.date_approved : ""}
-                    onChange={(e) =>
-                      handleChange("date_approved", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="No data"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12} className="row-bot">
-                <Paragraph>
-                  <strong>Date Amended</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.date_amended : ""}
-                    onChange={(e) =>
-                      handleChange("date_amended", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={editedRecord?.ra8749 === "REQUIRED PTO"}
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED PTO"
-                      : "NOT REQUIRED PTO";
-                    handleValueChange("ra8749", newValue); // Log and handle the value change
-                    handleChange("ra8749", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.ra8749 === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">RA8749</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={8} lg={8}>
-                <Paragraph>
-                  <strong>PTO Code</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pto_code : ""}
-                    onChange={(e) => handleChange("pto_code", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-
-              <Col xs={24} sm={24} md={8} lg={8}>
-                <Paragraph>
-                  <strong>PTO Date Issued</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pto_issued : ""}
-                    onChange={(e) => handleChange("pto_issued", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={8} lg={8}>
-                <Paragraph>
-                  <strong>PTO Date of Expiration</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pto_expiration : ""}
-                    onChange={(e) =>
-                      handleChange("pto_expiration", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={editedRecord?.ra9275 === "REQUIRED WWDP"}
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED WWDP"
-                      : "NOT REQUIRED WWDP";
-                    handleValueChange("ra9275", newValue); // Log and handle the value change
-                    handleChange("ra9275", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.ra9275 === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">RA9275</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={8} lg={8}>
-                <Paragraph>
-                  <strong>WWDP Code</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.wwdp_code : ""}
-                    onChange={(e) => handleChange("wwdp_code", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={8} lg={8}>
-                <Paragraph>
-                  <strong>WWDP Date Issued</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.wwdp_issued : ""}
-                    onChange={(e) =>
-                      handleChange("wwdp_issued", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={8} lg={8}>
-                <Paragraph>
-                  <strong>WWDP Date of Expiration</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.wwdp_expiration : ""}
-                    onChange={(e) =>
-                      handleChange("wwdp_expiration", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={24} md={12} lg={12}>
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={editedRecord?.ra6969 === "REQUIRED HAZWASTE PERMIT"}
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED HAZWASTE PERMIT"
-                      : "NOT REQUIRED HAZWASTE PERMIT";
-                    handleValueChange("ra6969", newValue); // Log and handle the value change
-                    handleChange("ra6969", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.ra6969 === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">RA6969</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Haz-waste ID</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.haz_id : ""}
-                    onChange={(e) => handleChange("haz_id", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Haz-waste ID Date Issued</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.haz_issued : ""}
-                    onChange={(e) => handleChange("haz_issued", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 10,
-            }}
-            size="small"
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Checkbox
-                  checked={editedRecord?.pco === "REQUIRED PCO Accreditation"}
-                  disabled={!isEditing}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "REQUIRED PCO Accreditation"
-                      : "NOT REQUIRED PCO Accreditation";
-                    handleValueChange("pco", newValue); // Log and handle the value change
-                    handleChange("pco", newValue); // Keep the existing handleChange for parent component
-                  }}
-                  style={{ fontSize: "15px" }}
-                >
-                  {/* {editedRecord?.pco === "REQUIRED" ? "" : ""} */}
-                  <span className="permit-label">PCO Accreditation</span>
-                </Checkbox>
-              </div>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>Certificate of Accreditation No.:</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pco_no : ""}
-                    onChange={(e) => handleChange("pco_no", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>PCO Validity Date:</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pco_validity : ""}
-                    onChange={(e) =>
-                      handleChange("pco_validity", e.target.value)
-                    }
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>PCO Name:</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pco_name : ""}
-                    onChange={(e) => handleChange("pco_name", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-              <Col xs={24} sm={24} md={12} lg={12}>
-                <Paragraph>
-                  <strong>PCO Contact No.:</strong>
-                  <TextArea
-                    value={editedRecord ? editedRecord.pco_tel_no : ""}
-                    onChange={(e) => handleChange("pco_tel_no", e.target.value)}
-                    readOnly={!isEditing}
-                    placeholder="-"
-                    style={{
-                      cursor: isEditing ? "text" : "not-allowed",
-                      color: isEditing ? "" : "#aaa",
-                    }}
-                    rows={2}
-                  />
-                </Paragraph>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-
-        <Modal
-          title={
-            <div className="modal-title-container-permit">
-              <span className="modal-title-permit">
-                Record ID: {editedRecord ? editedRecord.id_no : ""}
-              </span>
-              <span
-                className="modal-title-permit"
-                style={{
-                  whiteSpace: "normal",
-                  textAlign: "center",
-                  width: "50%",
-                }}
-              >
-                {editedRecord ? editedRecord.title : ""}
-              </span>
-              <span
-                className="modal-title-permit"
-                style={{ whiteSpace: "normal", textAlign: "right" }}
-              >
-                {editedRecord ? editedRecord.ecc_cnc : ""}
-              </span>
-            </div>
-          }
-          open={isModalVisible}
-          onCancel={handleCancelPermit}
-          footer={[
-            <Button key="cancel" onClick={handleCancelPermit}>
-              Cancel
-            </Button>,
-            <Button key="save" type="primary" onClick={handleSavePermit}>
-              Save
-            </Button>,
-          ]}
-          width={1000}
-        >
+        <Col xs={24} sm={24} md={24} lg={24}>
+          <div className="card-head pd1586">PD1586</div>
           <Table
-            dataSource={dataSource}
-            columns={columns}
+            columns={PD1586_COLUMNS}
+            dataSource={tableDataPD1586}
+            size="small"
             pagination={false}
             bordered
-            className="custom-table"
+            showHeader={true}
+            style={{ marginBottom: 24 }}
+            rowKey="key"
+            components={{
+              body: {
+                row: (props) => {
+                  if (props["data-row-key"] === "add-row") {
+                    return (
+                      <tr>
+                        <td
+                          colSpan={PD1586_COLUMNS.length}
+                          style={{ textAlign: "center" }}
+                        >
+                          <Button
+                            type="primary"
+                            onClick={handleAddNewDataPD1586}
+                            style={{ marginRight: 8 }}
+                            size="small"
+                            className="add-new-data-btn"
+                          >
+                            Add New
+                          </Button>
+                          <Button
+                            danger
+                            type="primary"
+                            onClick={handleRemoveLastRowPD1586}
+                            disabled={pd1586Data.length <= 1}
+                            size="small"
+                            className="remove-row-data-btn"
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return <tr {...props} />;
+                },
+              },
+            }}
           />
-        </Modal>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={24} md={24} lg={24}>
+          <div className="card-head ra8749">RA8749</div>
+          <Table
+            columns={RA8749_COLUMNS}
+            dataSource={tableDataRA8749}
+            size="small"
+            pagination={false}
+            bordered
+            showHeader={true}
+            style={{ marginBottom: 24 }}
+            rowKey="key"
+            components={{
+              body: {
+                row: (props) => {
+                  if (props["data-row-key"] === "add-row") {
+                    return (
+                      <tr>
+                        <td
+                          colSpan={RA8749_COLUMNS.length}
+                          style={{ textAlign: "center" }}
+                        >
+                          <Button
+                            type="primary"
+                            onClick={handleAddNewDataRA8749}
+                            style={{ marginRight: 8 }}
+                            size="small"
+                            className="add-new-data-btn"
+                          >
+                            Add New
+                          </Button>
+                          <Button
+                            danger
+                            type="primary"
+                            onClick={handleRemoveLastRowRA8749}
+                            disabled={ra8749Data.length <= 1}
+                            size="small"
+                            className="remove-row-data-btn"
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return <tr {...props} />;
+                },
+              },
+            }}
+          />
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={24} md={24} lg={24}>
+          <div className="card-head ra9275">RA9275</div>
+          <Table
+            columns={RA9275_COLUMNS}
+            dataSource={tableDataRA9275}
+            size="small"
+            pagination={false}
+            bordered
+            showHeader={true}
+            style={{ marginBottom: 24 }}
+            rowKey="key"
+            components={{
+              body: {
+                row: (props) => {
+                  if (props["data-row-key"] === "add-row") {
+                    return (
+                      <tr>
+                        <td
+                          colSpan={RA9275_COLUMNS.length}
+                          style={{ textAlign: "center" }}
+                        >
+                          <Button
+                            type="primary"
+                            onClick={handleAddNewDataRA9275}
+                            style={{ marginRight: 8 }}
+                            size="small"
+                            className="add-new-data-btn"
+                          >
+                            Add New
+                          </Button>
+                          <Button
+                            danger
+                            type="primary"
+                            onClick={handleRemoveLastRowRA9275}
+                            disabled={ra9275Data.length <= 1}
+                            size="small"
+                            className="remove-row-data-btn"
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return <tr {...props} />;
+                },
+              },
+            }}
+          />
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={24} md={24} lg={24}>
+          <div className="card-head ra6969">RA6969</div>
+          <Table
+            columns={RA6969_COLUMNS}
+            dataSource={tableDataRA6969}
+            size="small"
+            pagination={false}
+            bordered
+            showHeader={true}
+            style={{ marginBottom: 24 }}
+            rowKey="key"
+            components={{
+              body: {
+                row: (props) => {
+                  if (props["data-row-key"] === "add-row") {
+                    return (
+                      <tr>
+                        <td
+                          colSpan={RA6969_COLUMNS.length}
+                          style={{ textAlign: "center" }}
+                        >
+                          <Button
+                            type="primary"
+                            onClick={handleAddNewDataRA6969}
+                            style={{ marginRight: 8 }}
+                            size="small"
+                            className="add-new-data-btn"
+                          >
+                            Add New
+                          </Button>
+                          <Button
+                            danger
+                            type="primary"
+                            onClick={handleRemoveLastRowRA6969}
+                            disabled={ra6969Data.length <= 1}
+                            size="small"
+                            className="remove-row-data-btn"
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return <tr {...props} />;
+                },
+              },
+            }}
+          />
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={24} md={24} lg={24}>
+          <div className="card-head pco">PCO Accreditation</div>
+          <Table
+            columns={PCO_COLUMNS}
+            dataSource={tableDataPCO}
+            size="small"
+            pagination={false}
+            bordered
+            showHeader={true}
+            style={{ marginBottom: 24 }}
+            rowKey="key"
+            components={{
+              body: {
+                row: (props) => {
+                  if (props["data-row-key"] === "add-row") {
+                    return (
+                      <tr>
+                        <td
+                          colSpan={PCO_COLUMNS.length}
+                          style={{ textAlign: "center" }}
+                        >
+                          <Button
+                            type="primary"
+                            onClick={handleAddNewDataPCO}
+                            style={{ marginRight: 8 }}
+                            size="small"
+                            className="add-new-data-btn"
+                          >
+                            Add New
+                          </Button>
+                          <Button
+                            danger
+                            type="primary"
+                            onClick={handleRemoveLastRowPCO}
+                            disabled={pcoData.length <= 1}
+                            size="small"
+                            className="remove-row-data-btn"
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return <tr {...props} />;
+                },
+              },
+            }}
+          />
+        </Col>
       </Row>
     </div>
   );

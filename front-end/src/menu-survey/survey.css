@@ -149,40 +149,6 @@
   margin-right: 8px; /* Space before page size selector */
 }
 
-/* Table Specific Styles */
-.survey-table .custom-table .ant-table {
-  /* Target the table */
-  background-color: var(
-    --card-background-light
-  ) !important; /* Ensure this applies */
-}
-
-.light-theme .survey-table .custom-table .ant-table-row {
-  background-color: #f4f4f4 !important; /* Use the light card background variable */
-}
-
-.dark-theme .survey-table .custom-table .ant-table-row {
-  background-color: #121212 !important;
-}
-
-.survey-table .custom-table .ant-table-thead > tr > th {
-  background-color: var(--header-background) !important;
-  color: var(--text-color) !important;
-  font-weight: 600; /* Bolder header text */
-  font-size: 10px; /* Consistent header font size */
-  text-align: center;
-  /* Theme-aware border */
-}
-
-.survey-table .custom-table .ant-table-tbody > tr > td {
-  color: var(--text-color);
-  font-size: 10px; /* Slightly smaller body text */
-}
-
-.survey-table .custom-table .ant-table-tbody > tr:hover > td {
-  background-color: var(--page-background-color) !important;
-}
-
 /* Checkbox styling in table */
 .checkbox-container {
   display: flex;
@@ -244,12 +210,6 @@
   margin-top: 10px;
 }
 
-/* Default row color */
-.survey-table .custom-table .ant-table-row {
-  background-color: inherit !important;
-  transition: background-color 0.3s;
-}
-
 .industry-label {
   font-size: 10px;
   text-align: left;
@@ -261,17 +221,6 @@
   font-weight: 600;
 }
 
-.survey-table .custom-table .ant-table-row td,
-.survey-table .custom-table .ant-table-row th {
-  background-color: inherit;
-}
-
-.custom-table-row {
-  height: 30px;
-  line-height: 30px;
-  padding-top: 5px;
-  padding-bottom: 5px;
-}
 /* Removed .survey-dropdown as it's now .survey-year-dropdown and styled with .header-action-buttons */
 
 /* Theme specific icon colors if needed, AntD usually handles this */
@@ -309,4 +258,8 @@
 .survey-iis-label {
   /* Specific styling for IIS label in Survey Status column */
   margin-top: 4px; /* Add some space above the IIS number if needed */
+}
+.colored-row {
+  background-color: var(--highlight-color, #ffefc5) !important;
+  opacity: 0.3;
 }

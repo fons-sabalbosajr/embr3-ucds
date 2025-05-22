@@ -1,4 +1,4 @@
-import React from "react";
+import { React, useState, useEffect } from "react";
 import { Input, Select, Tabs, Row, Col, Checkbox, Typography } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import styled from "styled-components";
@@ -14,6 +14,51 @@ const BoldTab = styled.span`
 `;
 
 const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
+  const [lat, setLat] = useState(editedRecord?.lat || "");
+  const [long, setLong] = useState(editedRecord?.long || "");
+
+  useEffect(() => {
+    const fetchCoordinates = async () => {
+      const { province, city, brgy } = editedRecord || {};
+      if (
+        province &&
+        city &&
+        brgy &&
+        province.toLowerCase() !== "n/a" &&
+        city.toLowerCase() !== "n/a" &&
+        brgy.toLowerCase() !== "n/a"
+      ) {
+        const address = [brgy, city, province].join(", ");
+        try {
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+              address
+            )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+          );
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            const location = data.results[0].geometry.location;
+            setLong(location.lng);
+            setLat(location.lat);
+            handleChange("long", location.lng);
+            handleChange("lat", location.lat);
+          }
+        } catch (error) {
+          // If error, do not update
+        }
+      }
+    };
+    fetchCoordinates();
+    // Only run when address fields change
+    // eslint-disable-next-line
+  }, [editedRecord?.province, editedRecord?.city, editedRecord?.brgy]);
+
+  // Keep local state in sync with editedRecord changes (manual edit)
+  useEffect(() => {
+    setLat(editedRecord?.lat || "");
+    setLong(editedRecord?.long || "");
+  }, [editedRecord?.lat, editedRecord?.long]);
+
   return (
     <div>
       <Row gutter={[16, 16]}>
@@ -21,10 +66,7 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
           <Row gutter={[16, 16]}>
             <Col span={23}>
               {/* Embed Google Maps with the fetched coordinates */}
-              <R3MapAutoComplete
-                latitude={editedRecord ? editedRecord.lat : ""}
-                longitude={editedRecord ? editedRecord.long : ""}
-              />
+              <R3MapAutoComplete latitude={lat} longitude={long} />
             </Col>
           </Row>
         </Col>
@@ -33,8 +75,11 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
             <Paragraph>
               <strong>Latitude</strong>
               <Input
-                value={editedRecord ? editedRecord.lat : ""}
-                onChange={(e) => handleChange("lat", e.target.value)}
+                value={lat}
+                onChange={(e) => {
+                  setLat(e.target.value);
+                  handleChange("lat", e.target.value);
+                }}
                 readOnly={!isEditing}
                 placeholder="no data"
                 style={{
@@ -49,8 +94,11 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
             <Paragraph>
               <strong>Longitude</strong>
               <Input
-                value={editedRecord ? editedRecord.long : ""}
-                onChange={(e) => handleChange("long", e.target.value)}
+                value={long}
+                onChange={(e) => {
+                  setLong(e.target.value);
+                  handleChange("long", e.target.value);
+                }}
                 readOnly={!isEditing}
                 placeholder="no data"
                 style={{

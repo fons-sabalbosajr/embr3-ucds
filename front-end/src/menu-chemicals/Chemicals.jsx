@@ -13,6 +13,7 @@ import {
   Popover,
   DatePicker,
   ConfigProvider,
+  Progress,
   message,
 } from "antd";
 import {
@@ -24,7 +25,7 @@ import {
   MonitorOutlined,
   GlobalOutlined,
   CheckCircleFilled,
-  InfoCircleOutlined,
+  TagsOutlined,
   EditOutlined,
   ClockCircleFilled,
 } from "@ant-design/icons";
@@ -32,8 +33,16 @@ import Highlighter from "react-highlight-words";
 import axios from "axios";
 import "./chemicals.css";
 import Swal from "sweetalert2";
-import ChemicalModal from "./ChemicalModal"
+import ChemicalModal from "./ChemicalModal";
 
+const sortByIdNo = (arr) => {
+  return [...arr].sort((a, b) => {
+    // Try both id_no and idNo for compatibility
+    const aId = Number(a.id_no ?? a.idNo ?? 0);
+    const bId = Number(b.id_no ?? b.idNo ?? 0);
+    return aId - bId;
+  });
+};
 
 const Chemicals = ({ theme, currentUser, data }) => {
   const [loading, setLoading] = useState(false);
@@ -56,6 +65,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
   const [editingKey, setEditingKey] = useState("");
   const [dataSource, setDataSource] = useState(data);
   const [currentValue, setCurrentValue] = useState("");
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,18 +82,13 @@ const Chemicals = ({ theme, currentUser, data }) => {
         }
 
         const result = await response.json();
-        const sortedResult = result.sort((a, b) => {
-          if (a.idNo && b.idNo) {
-            return a.idNo - b.idNo; // Sort by ID No
-          }
-          return 0;
-        });
+        const sortedResult = sortByIdNo(result);
         setFilteredData(sortedResult);
-        setFilteredCount(sortedResult.length); // Set initial count
+        setFilteredCount(sortedResult.length);
 
-        if (result.length > 0) {
-          setCurrentRecord(result[0]);
-          setOriginalRecord(result[0]);
+        if (sortedResult.length > 0) {
+          setCurrentRecord(sortedResult[0]);
+          setOriginalRecord(sortedResult[0]);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -119,14 +124,9 @@ const Chemicals = ({ theme, currentUser, data }) => {
         throw new Error(errorText);
       }
       const result = await response.json();
-      const sortedResult = result.sort((a, b) => {
-        if (a.idNo && b.idNo) {
-          return a.idNo - b.idNo; // Sort by ID No
-        }
-        return 0;
-      });
+      const sortedResult = sortByIdNo(result);
       setFilteredData(sortedResult);
-      setFilteredCount(sortedResult.length); // Update count
+      setFilteredCount(sortedResult.length);
     } catch (error) {
       console.error("Error fetching chemical data:", error.message);
     } finally {
@@ -145,8 +145,9 @@ const Chemicals = ({ theme, currentUser, data }) => {
           String(val).toLowerCase().includes(selectedKeys[0].toLowerCase())
         )
       );
-      setFilteredData(filtered);
-      setFilteredCount(filtered.length); // Update count
+      const sortedFiltered = sortByIdNo(filtered);
+      setFilteredData(sortedFiltered);
+      setFilteredCount(sortedFiltered.length);
     }
   };
 
@@ -170,13 +171,13 @@ const Chemicals = ({ theme, currentUser, data }) => {
           )
         )
     );
-    setFilteredData(filtered);
-    setFilteredCount(filtered.length); // Update count
+    const sortedFiltered = sortByIdNo(filtered);
+    setFilteredData(sortedFiltered);
+    setFilteredCount(sortedFiltered.length);
   };
 
   const handleInputConfirm = () => {
     if (inputValue) {
-      // Add the input value as a tag
       setTags((prevTags) => [...prevTags, inputValue]);
 
       const filtered = filteredData.filter((item) =>
@@ -188,8 +189,9 @@ const Chemicals = ({ theme, currentUser, data }) => {
             )
           )
       );
-      setFilteredData(filtered);
-      setFilteredCount(filtered.length); // Update count
+      const sortedFiltered = sortByIdNo(filtered);
+      setFilteredData(sortedFiltered);
+      setFilteredCount(sortedFiltered.length);
     } else {
       handleReload();
     }
@@ -201,18 +203,22 @@ const Chemicals = ({ theme, currentUser, data }) => {
     const newTags = tags.filter((tag) => tag !== tagToRemove);
     setTags(newTags);
 
-    const filtered = filteredData.filter((item) =>
-      newTags.some((tag) =>
-        Object.values(item).some((val) =>
-          String(val).toLowerCase().includes(tag.toLowerCase())
+    if (newTags.length === 0) {
+      // If no tags left, reset filter and reload all data
+      handleReload();
+    } else {
+      const filtered = filteredData.filter((item) =>
+        newTags.some((tag) =>
+          Object.values(item).some((val) =>
+            String(val).toLowerCase().includes(tag.toLowerCase())
+          )
         )
-      )
-    );
-    setFilteredData(filtered.length > 0 ? filtered : filteredData);
-    setFilteredCount(
-      filtered.length > 0 ? filtered.length : filteredData.length
-    ); // Update count
-    clearFilters();
+      );
+      const sortedFiltered =
+        filtered.length > 0 ? sortByIdNo(filtered) : sortByIdNo(filteredData);
+      setFilteredData(sortedFiltered);
+      setFilteredCount(sortedFiltered.length);
+    }
   };
 
   const getColumnSearchProps = (dataIndex) => ({
@@ -222,7 +228,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
       confirm,
       clearFilters,
     }) => (
-      <div className="chemical-custom-filter-dropdown">
+      <div style={{ fontSize: 10 }}>
         <Input
           ref={searchInput}
           placeholder={`Search ${dataIndex}`}
@@ -233,6 +239,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
           }}
           onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
           className="chemical-custom-filter-input"
+          style={{ fontSize: 10 }}
         />
         <Space>
           <Button
@@ -241,6 +248,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
             icon={<SearchOutlined />}
             size="small"
             className="chemical-custom-filter-button"
+            style={{ fontSize: 10 }}
           >
             Search
           </Button>
@@ -248,6 +256,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
             onClick={() => handleReset(clearFilters)}
             size="small"
             className="chemical-custom-filter-button"
+            style={{ fontSize: 10 }}
           >
             Reset
           </Button>
@@ -255,7 +264,9 @@ const Chemicals = ({ theme, currentUser, data }) => {
       </div>
     ),
     filterIcon: (filtered) => (
-      <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+      <SearchOutlined
+        style={{ color: filtered ? "#1890ff" : undefined, fontSize: 12 }}
+      />
     ),
     onFilter: (value, record) =>
       record[dataIndex]
@@ -272,13 +283,17 @@ const Chemicals = ({ theme, currentUser, data }) => {
     render: (text) =>
       searchedColumn === dataIndex ? (
         <Highlighter
-          highlightStyle={{ backgroundColor: "#ffc069", padding: 0 }}
+          highlightStyle={{
+            backgroundColor: "#ffc069",
+            padding: 0,
+            fontSize: 10,
+          }}
           searchWords={[searchText]}
           autoEscape
           textToHighlight={text ? text.toString() : ""}
         />
       ) : (
-        text
+        <span style={{ fontSize: 10 }}>{text}</span>
       ),
   });
 
@@ -306,12 +321,16 @@ const Chemicals = ({ theme, currentUser, data }) => {
           theme={{
             components: {
               Dropdown: {
-                fontSize: 10, // Adjust the font size as needed
+                fontSize: 10, // Reduced font size for dropdown menu
+                optionFontSize: 10, // Also reduce option font size if supported
+              },
+              Menu: {
+                itemFontSize: 10, // Reduce font size for menu items
               },
             },
           }}
         >
-          <div>{menu}</div>
+          <div style={{ fontSize: 10 }}>{menu}</div>
         </ConfigProvider>
       ),
     };
@@ -367,7 +386,9 @@ const Chemicals = ({ theme, currentUser, data }) => {
                   <div>Date Approved: {record.date_approved}</div>
                 </div>
               }
-              color={String(record.ecc_cnc).includes("ECC") ? "#083f50" : "#8a5200"}
+              color={
+                String(record.ecc_cnc).includes("ECC") ? "#083f50" : "#8a5200"
+              }
             >
               <span
                 className={
@@ -397,7 +418,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
               </span>
             </Tooltip>
           )}
-  
+
         {/* PTO */}
         {record.pto_code &&
           record.pto_code !== "no records found per OPMS" &&
@@ -413,7 +434,10 @@ const Chemicals = ({ theme, currentUser, data }) => {
               }
               color="#321838"
             >
-              <span className="custom-button-blue" style={{ position: "relative" }}>
+              <span
+                className="custom-button-blue"
+                style={{ position: "relative" }}
+              >
                 PTO
                 {(String(record.pto_code).includes("App") ||
                   String(record.pto_code).includes("Application") ||
@@ -434,7 +458,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
               </span>
             </Tooltip>
           )}
-  
+
         {/* WWDP */}
         {record.wwdp_code &&
           record.wwdp_code !== "no records found per OPMS" &&
@@ -450,7 +474,10 @@ const Chemicals = ({ theme, currentUser, data }) => {
               }
               color="#873c34"
             >
-              <span className="custom-button-orange" style={{ position: "relative" }}>
+              <span
+                className="custom-button-orange"
+                style={{ position: "relative" }}
+              >
                 WWDP
                 {(String(record.wwdp_code).includes("App") ||
                   String(record.wwdp_code).includes("Application") ||
@@ -471,7 +498,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
               </span>
             </Tooltip>
           )}
-  
+
         {/* HAZWASTE */}
         {record.haz_id &&
           record.haz_id !== "no records found per OPMS" &&
@@ -486,7 +513,10 @@ const Chemicals = ({ theme, currentUser, data }) => {
               }
               color="#2d4115"
             >
-              <span className="custom-button-skyblue" style={{ position: "relative" }}>
+              <span
+                className="custom-button-skyblue"
+                style={{ position: "relative" }}
+              >
                 HWG ID
                 {String(record.haz_id).includes("App") ||
                 String(record.haz_id).includes("Application") ||
@@ -507,7 +537,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
               </span>
             </Tooltip>
           )}
-  
+
         {/* PCO */}
         {record.pco_np &&
           record.pco_np !== "no records found per OPMS" &&
@@ -524,7 +554,10 @@ const Chemicals = ({ theme, currentUser, data }) => {
               }
               color="#181a19"
             >
-              <span className="custom-button-stone" style={{ position: "relative" }}>
+              <span
+                className="custom-button-stone"
+                style={{ position: "relative" }}
+              >
                 PCO
                 {(String(record.pco_np).includes("App") ||
                   String(record.pco_np).includes("Application") ||
@@ -548,8 +581,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
       </div>
     ),
   });
-  
-  
+
   const showModal = (record) => {
     setCurrentRecord(record);
     setIsModalVisible(true);
@@ -589,30 +621,34 @@ const Chemicals = ({ theme, currentUser, data }) => {
       ...getColumnSearchProps("project_details"),
       render: (text, record) => (
         <div>
-          <div>{record.name}</div>
           <div style={{ fontWeight: "bold" }}>{record.title}</div>
-          <div>{record.address}</div>
+          <div>Proponent Name: {record.name}</div>
+          <div>Address: {record.address}</div>
           <div>
-            {/* Check if ecc_cnc is defined and check the value */}
+            ECC/CNC Ref. No.:{" "}
             <a
               href={
                 record.ecc_cnc && String(record.ecc_cnc).startsWith("ECC-OL")
                   ? `https://ecconline.emb.gov.ph/live/Secured/Search.aspx?refCode=${record.ecc_cnc}`
-                  : record.ecc_cnc && String(record.ecc_cnc).startsWith("CNC-OL")
+                  : record.ecc_cnc &&
+                    String(record.ecc_cnc).startsWith("CNC-OL")
                   ? `https://cnconline.emb.gov.ph/live/CNC/Projects.aspx?refCode=${record.ecc_cnc}`
+                  : record.ecc_cnc && String(record.ecc_cnc).includes("CNC")
+                  ? "https://cnconline.emb.gov.ph/live/Default.aspx"
                   : "#"
               }
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => {
-                // Only prevent default and show SweetAlert for values that do NOT start with "ECC-OL" or "CNC-OL"
+                // Only prevent default and show SweetAlert for values that do NOT start with "ECC-OL" or "CNC-OL" or contain "CNC"
                 if (
                   record.ecc_cnc &&
                   !String(record.ecc_cnc).startsWith("ECC-OL") &&
-                  !String(record.ecc_cnc).startsWith("CNC-OL")
+                  !String(record.ecc_cnc).startsWith("CNC-OL") &&
+                  !String(record.ecc_cnc).includes("CNC")
                 ) {
                   e.preventDefault(); // Prevent the default link action
-    
+
                   // Show SweetAlert
                   Swal.fire({
                     title:
@@ -637,7 +673,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
           </div>
         </div>
       ),
-    },    
+    },
     {
       title: "Industry Classification",
       dataIndex: "industry_class",
@@ -647,9 +683,13 @@ const Chemicals = ({ theme, currentUser, data }) => {
       ...getColumnDropdownProps("industry_class", industryOptions),
     },
     {
-      title: "Permit/Clearances",
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Permit/Clearances
+        </div>
+      ),
       key: "permit_clearances",
-      align: "center",
+      align: "left",
       ...getPermitClearancesFilterProps(),
     },
     {
@@ -658,16 +698,6 @@ const Chemicals = ({ theme, currentUser, data }) => {
       align: "center",
       render: (text, record) => (
         <div className="industry-label">
-          <a
-            href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-              record.iis_no
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {record.iis_no || ""}
-          </a>
-
           <div>
             {/* Date Monitored */}
             {record.date_monitored && (
@@ -716,6 +746,28 @@ const Chemicals = ({ theme, currentUser, data }) => {
                   {record.date_signed}
                 </Tooltip>
               </div>
+            )}
+
+            {/* IIS Transaction No. */}
+            {record.iis_no && (
+              <a
+                href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                  record.iis_no
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "inline-flex", alignItems: "center" }}
+              >
+                <Tooltip
+                  title={
+                    <div style={{ fontSize: "10px" }}>IIS Transaction No.</div>
+                  }
+                  color="#0a6bbf"
+                >
+                  <TagsOutlined style={{ color: "#1890ff", marginRight: 8 }} />
+                </Tooltip>
+                {record.iis_no || ""}
+              </a>
             )}
 
             {/* PISMU Tracking */}
@@ -768,28 +820,31 @@ const Chemicals = ({ theme, currentUser, data }) => {
   ];
 
   return (
-    <div className={`header-panel ${theme}`}>
-      <div className="header-content">
-        <h3 className="header-title">Universe of Industries (Chemicals)</h3>
-
-        <Button
-          type="primary"
-          className="refresh-button"
-          icon={<ReloadOutlined />}
-          onClick={handleReload}
-          loading={loading}
-          title="Reload Table"
-        />
-
-        <Button
-          type="primary"
-          className="add-industry-button"
-          style={{
-            backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
-          }}
-        >
-          Add Industry
-        </Button>
+    <div className={`healthcare-container-card ${theme}-theme`}>
+      <div className="header-content-survey">
+        <h3 className="header-title-survey">
+          Universe of Industries (Chemicals)
+        </h3>
+        <div className="header-action-buttons">
+          <Button
+            type="primary"
+            className="refresh-button"
+            icon={<ReloadOutlined />}
+            onClick={handleReload}
+            loading={loading}
+            title="Reload Table"
+          />
+          <Button
+            type="primary"
+            className="add-industry-button"
+            style={{
+              backgroundColor:
+                buttonColor === "primary" ? "#1890ff" : "#03396c",
+            }}
+          >
+            Add Industry
+          </Button>
+        </div>
       </div>
 
       <div className="chemical-table-header">
@@ -837,11 +892,44 @@ const Chemicals = ({ theme, currentUser, data }) => {
         pagination={{
           position: ["topRight"],
           simple: true,
-          size: "small", // Make pagination smaller
+          size: "small",
         }}
-        loading={loading}
+        scroll={{ x: "max-content", y: "calc(100vh - 300px)" }} // maximize table height to available viewport
+        loading={{
+          spinning: loading,
+          indicator: (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                padding: 24,
+                top: "20%",
+              }}
+            >
+              <Progress
+                percent={progress}
+                status={progress < 100 ? "active" : "success"}
+                showInfo={true}
+                style={{ width: 500 }}
+              />
+              <div
+                style={{
+                  fontWeight: 500,
+                  fontSize: 12,
+                  textAlign: "center",
+                  color: "#aaa",
+                  width: 300,
+                  padding: 8,
+                }}
+              >
+                Loading Chemical Industries
+              </div>
+            </div>
+          ),
+        }}
         onChange={(pagination, filters, sorter, extra) => {
-          setFilteredCount(extra.currentDataSource.length); // Update count on table change
+          setFilteredCount(extra.currentDataSource.length);
         }}
       />
 

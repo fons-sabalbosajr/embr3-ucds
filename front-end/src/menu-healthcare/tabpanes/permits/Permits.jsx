@@ -14,7 +14,6 @@ const Permits = ({ record, isEditing, handleChange }) => {
           size="small"
           title={<div className="card-title pd1586">PD1586</div>}
           headStyle={{ padding: 0, borderRadius: 0 }}
-          
         >
           <Row gutter={[8, 8]}>
             <Col xs={24} sm={12}>
@@ -23,7 +22,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.ecc_cnc || ""}
                   onChange={(e) => handleChange("ecc_cnc", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -38,7 +37,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                   onChange={(e) =>
                     handleChange("permit_process", e.target.value)
                   }
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -53,7 +52,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                   onChange={(e) =>
                     handleChange("date_approved", e.target.value)
                   }
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -66,7 +65,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.date_amended || ""}
                   onChange={(e) => handleChange("date_amended", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -89,7 +88,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.pto_code || ""}
                   onChange={(e) => handleChange("pto_code", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -102,7 +101,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.pto_issued || ""}
                   onChange={(e) => handleChange("pto_issued", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -117,7 +116,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                   onChange={(e) =>
                     handleChange("pto_expiration", e.target.value)
                   }
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -140,7 +139,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.wwdp_code || ""}
                   onChange={(e) => handleChange("wwdp_code", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -153,7 +152,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.wwdp_issued || ""}
                   onChange={(e) => handleChange("wwdp_issued", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -168,7 +167,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                   onChange={(e) =>
                     handleChange("wwdp_expiration", e.target.value)
                   }
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -193,7 +192,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.haz_id || ""}
                   onChange={(e) => handleChange("haz_id", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -206,7 +205,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.haz_issued || ""}
                   onChange={(e) => handleChange("haz_issued", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -229,7 +228,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.pco_no || ""}
                   onChange={(e) => handleChange("pco_no", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -242,7 +241,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.pco_validity || ""}
                   onChange={(e) => handleChange("pco_validity", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -257,7 +256,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.pco_name || ""}
                   onChange={(e) => handleChange("pco_name", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"
@@ -270,7 +269,7 @@ const Permits = ({ record, isEditing, handleChange }) => {
                 <TextArea
                   value={record?.pco_tel_no || ""}
                   onChange={(e) => handleChange("pco_tel_no", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={1}
                   className="text-area-permit"

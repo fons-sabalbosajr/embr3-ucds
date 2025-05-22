@@ -4,7 +4,7 @@ import { Modal, Tabs, Spin, Button } from "antd";
 import Swal from "sweetalert2";
 import GenInfo from "./tabpanes/survey_geninfo/Survey_AddGenInfo";
 import FocalPerson from "./tabpanes/survey_focalperson/Survey_AddFocalPerson";
-import Permits from "./tabpanes/survey_permit/Survey_AddPermits";
+import LegalUnit from "./tabpanes/survey_legal/Survey_AddLegal";
 import "./addsurvey.css";
 
 const { TabPane } = Tabs;
@@ -120,12 +120,17 @@ const AddSurvey = ({ currentUser, visible, onCancel, onCreate }) => {
           />
         </TabPane>
         <TabPane className="custom-tab" tab="Monitoring Data" key="2">
-          <FocalPerson isEditing={isEditing} />
+          <FocalPerson
+            isEditing={isEditing}
+            handleInputChange={handleInputChange}
+          />
         </TabPane>
-        <TabPane className="custom-tab" tab="Permits" key="3">
-          <Permits isEditing={isEditing} />
+        <TabPane className="custom-tab" tab="Legal Unit" key="3">
+          <LegalUnit
+            isEditing={isEditing}
+            handleInputChange={handleInputChange}
+          />
         </TabPane>
-        <TabPane className="custom-tab" tab="Legal Unit" key="4"></TabPane>
       </Tabs>
     </Modal>
   );

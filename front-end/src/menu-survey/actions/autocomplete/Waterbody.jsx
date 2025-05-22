@@ -55,7 +55,6 @@ const Waterbody = ({ selectedMunicipality }) => {
             height: "29px",
             padding: "4px 8px",
             marginTop: "4px",
-            backgroundColor: "#f5f5f5", // Light gray background
             color: "#a9a9a9", // Gray text color
             cursor: "not-allowed", // Change cursor to indicate disabled
           }}

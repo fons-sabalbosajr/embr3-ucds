@@ -125,7 +125,7 @@ const ECC_CNC = ({ isEditing }) => {
         style={{ width: "100%", fontSize: "11px" }}
         dropdownStyle={{ boxShadow: "none", backgroundColor: "#f1f1f1" }}
         options={options}
-        dropdownClassName="custom-autocomplete-dropdown"
+        popupClassName="custom-autocomplete-dropdown"
         onSearch={handleSearch}
         onSelect={handleSelect}
         notFoundContent={
@@ -137,14 +137,14 @@ const ECC_CNC = ({ isEditing }) => {
           ) : null
         }
         allowClear
-        disabled={!isEditing}
+        readOnly={!isEditing}
       >
         <TextArea
           style={{ fontSize: "11px", height: "29px", padding: "4px 8px" }}
           placeholder="Enter Reference No."
           value={inputValue}
           onChange={handleChange}
-          disabled={!isEditing}
+          readOnly={!isEditing}
         />
       </AutoComplete>
     </ConfigProvider>

@@ -65,14 +65,14 @@ const Handler = ({ selectedSection, isEditing }) => {
             backgroundColor: "#f1f1f1",
           }}
           options={handlerOptions}
-          dropdownClassName="custom-autocomplete-dropdown"
+          popupClassName="custom-autocomplete-dropdown"
           value={handler}
           onChange={handleHandlerChange}
           filterOption={(inputValue, option) =>
             option.value.toLowerCase().includes(inputValue.toLowerCase())
           }
           allowClear={true}
-          disabled={!isEditing}
+          readOnly={!isEditing}
         >
           <Input
             style={{
@@ -84,7 +84,7 @@ const Handler = ({ selectedSection, isEditing }) => {
             placeholderStyle={{
               fontSize: "9px",
             }}
-            disabled={!isEditing}
+            readOnly={!isEditing}
           />
         </AutoComplete>
       </Paragraph>

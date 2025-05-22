@@ -26,6 +26,8 @@ const FocalPerson = ({
   isEditing,
   handleChange,
 }) => {
+
+
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
       const date = new Date(Math.round((dateString - 25569) * 86400 * 1000));
@@ -160,7 +162,7 @@ const FocalPerson = ({
                 name="emp_no_total"
                 value={safeRecord?.emp_no_total || ""}
                 onChange={handleEmpNoTotalChange}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 className="textbox-label"
               />
@@ -172,7 +174,7 @@ const FocalPerson = ({
               <WWTFType
                 value={safeRecord?.wwtftype || ""}
                 onChange={handleWwtftypeChange}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -183,7 +185,7 @@ const FocalPerson = ({
               <Input
                 value={safeRecord?.bod || ""}
                 onChange={(e) => handleChange("bod", e.target.value)}
-                disabled
+                readOnly
                 placeholder="No data"
                 className="textbox-label"
               />
@@ -198,7 +200,7 @@ const FocalPerson = ({
               <SectionInCharged
                 value={safeRecord?.section_incharge || ""}
                 onChange={(value) => handleChange("section_incharge", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -209,7 +211,7 @@ const FocalPerson = ({
               <Inspector
                 value={safeRecord?.handler || ""}
                 onChange={(value) => handleChange("handler", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -223,7 +225,7 @@ const FocalPerson = ({
               <Month
                 value={safeRecord?.monitoring_sched || ""}
                 onChange={(value) => handleChange("monitoring_sched", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -233,7 +235,7 @@ const FocalPerson = ({
               <ProjectStatus
                 value={safeRecord?.project_status || ""}
                 onChange={(value) => handleChange("project_status", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -248,7 +250,7 @@ const FocalPerson = ({
           <Input
             value={safeRecord?.iis_no || ""}
             onChange={(e) => handleChange("iis_no", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
             className="textbox-label"
           />
@@ -261,7 +263,7 @@ const FocalPerson = ({
               <InspectionType
                 value={safeRecord?.insp_type || ""}
                 onChange={(value) => handleChange("insp_type", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -273,7 +275,7 @@ const FocalPerson = ({
               <ReportType
                 value={safeRecord?.report_type || ""}
                 onChange={(value) => handleChange("report_type", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -348,7 +350,7 @@ const FocalPerson = ({
                     </span>
                     <Input
                       value={daysDmds}
-                      disabled
+                      readOnly
                       placeholder="No data"
                       className="textbox-label"
                     />
@@ -366,7 +368,7 @@ const FocalPerson = ({
                     </span>
                     <Input
                       value={daysDsdrs}
-                      disabled
+                      readOnly
                       placeholder="No data"
                       className="textbox-label"
                     />
@@ -378,7 +380,7 @@ const FocalPerson = ({
                 <TextArea
                   value={safeRecord?.remarks_recommendations || ""}
                   onChange={(e) => handleChange("remarks_recommendations", e.target.value)}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   placeholder="No data"
                   rows={3}
                   className="text-area"

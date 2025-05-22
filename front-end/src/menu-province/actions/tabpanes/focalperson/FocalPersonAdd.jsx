@@ -207,7 +207,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     height: "29px",
                     padding: "4px 8px",
                   }}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </ConfigProvider>
             </Paragraph>
@@ -246,7 +246,6 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     fontSize: "11px",
                     height: "29px",
                     padding: "4px 8px",
-                    backgroundColor: "#f5f5f5", // Light gray background
                     color: "#a9a9a9", // Gray text color
                     cursor: "not-allowed", // Change cursor to indicate disabled
                   }}
@@ -301,7 +300,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     backgroundColor: "#f1f1f1",
                   }}
                   options={monthOptions}
-                  dropdownClassName="custom-autocomplete-dropdown"
+                  popupClassName="custom-autocomplete-dropdown"
                   value={monitoringSchedule}
                   onChange={setMonitoringSchedule}
                   filterOption={(inputValue, option) =>
@@ -310,7 +309,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                       .includes(inputValue.toLowerCase())
                   }
                   allowClear={true}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 >
                   <Input
                     style={{
@@ -322,7 +321,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     placeholderStyle={{
                       fontSize: "9px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </AutoComplete>
               </ConfigProvider>
@@ -355,7 +354,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     backgroundColor: "#f1f1f1",
                   }}
                   options={inspectionTypeOptions}
-                  dropdownClassName="custom-autocomplete-dropdown"
+                  popupClassName="custom-autocomplete-dropdown"
                   value={inspectionType}
                   onChange={setInspectionType}
                   filterOption={(inputValue, option) =>
@@ -364,7 +363,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                       .includes(inputValue.toLowerCase())
                   }
                   allowClear={true}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 >
                   <Input
                     style={{
@@ -376,7 +375,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     placeholderStyle={{
                       fontSize: "9px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </AutoComplete>
               </ConfigProvider>
@@ -410,7 +409,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     height: "29px",
                     padding: "4px 8px",
                   }}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </ConfigProvider>
             </Paragraph>
@@ -533,7 +532,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     backgroundColor: "#f1f1f1",
                   }}
                   options={reportTypeOptions}
-                  dropdownClassName="custom-autocomplete-dropdown"
+                  popupClassName="custom-autocomplete-dropdown"
                   value={reportType}
                   onChange={setReportType}
                   filterOption={(inputValue, option) =>
@@ -542,7 +541,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                       .includes(inputValue.toLowerCase())
                   }
                   allowClear={true}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 >
                   <Input
                     style={{
@@ -554,7 +553,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                     placeholderStyle={{
                       fontSize: "9px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </AutoComplete>
               </ConfigProvider>
@@ -596,10 +595,10 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                           fontSize: "11px",
                           height: "29px",
                           padding: "4px 8px",
-                          backgroundColor: "#f5f5f5", // Light gray background
                           color: "#a9a9a9", // Gray text color
-                          cursor: "not-allowed", // Change cursor to indicate disabled
+                          cursor: "not-allowed",
                         }}
+                         placeholder="0 days"
                       />
                     </ConfigProvider>
                   </Paragraph>
@@ -634,10 +633,10 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                           fontSize: "11px",
                           height: "29px",
                           padding: "4px 8px",
-                          backgroundColor: "#f5f5f5", // Light gray background
-                          color: "#a9a9a9", // Gray text color
-                          cursor: "not-allowed", // Change cursor to indicate disabled
+                          cursor: "not-allowed", 
+                          // Change cursor to indicate disabled
                         }}
+                        placeholder="0 days"
                       />
                     </ConfigProvider>
                   </Paragraph>
@@ -670,7 +669,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                         padding: "4px 8px",
                         marginTop: "-10px",
                       }}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                     />
                   </ConfigProvider>
                 </Col>
@@ -704,7 +703,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                           backgroundColor: "#f1f1f1",
                         }}
                         options={pismuTrackingOptions}
-                        dropdownClassName="custom-autocomplete-dropdown"
+                        popupClassName="custom-autocomplete-dropdown"
                         value={pismuTracking}
                         onChange={setpismuTracking}
                         filterOption={(inputValue, option) =>
@@ -713,7 +712,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                             .includes(inputValue.toLowerCase())
                         }
                         allowClear={true}
-                        disabled={!isEditing}
+                        readOnly={!isEditing}
                       >
                         <Input
                           style={{
@@ -725,7 +724,7 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                           placeholderStyle={{
                             fontSize: "9px",
                           }}
-                          disabled={!isEditing}
+                          readOnly={!isEditing}
                         />
                       </AutoComplete>
                     </ConfigProvider>

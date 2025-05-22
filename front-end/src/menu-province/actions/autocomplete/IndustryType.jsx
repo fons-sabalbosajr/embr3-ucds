@@ -4,7 +4,7 @@ import { parsePSICCode } from "../../../../data/utils/parsePSICCode";
 
 const { Paragraph } = Typography;
 
-const IndustryType = ({ selectedIndustryClass }) => {
+const IndustryType = ({ selectedIndustryClass, readOnly }) => {
   const [psicCodeMap, setPsicCodeMap] = useState({});
   const [industryType, setIndustryType] = useState("n/a");
 
@@ -19,15 +19,13 @@ const IndustryType = ({ selectedIndustryClass }) => {
   }, []);
 
   useEffect(() => {
-    //console.log("Selected Industry Class:", selectedIndustryClass);
-    //console.log("PSIC Code Map:", psicCodeMap);
     if (selectedIndustryClass && psicCodeMap[selectedIndustryClass]) {
       const { industryType } = psicCodeMap[selectedIndustryClass];
       setIndustryType(industryType);
       //console.log("Industry Type Set:", industryType);
     } else {
       setIndustryType("n/a");
-     // console.log("Industry Type Reset");
+      // console.log("Industry Type Reset");
     }
   }, [selectedIndustryClass, psicCodeMap]);
 
@@ -39,9 +37,6 @@ const IndustryType = ({ selectedIndustryClass }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            backgroundColor: "#f5f5f5", // Light gray background
-            color: "#a9a9a9", // Gray text color
-            cursor: "not-allowed", // Change cursor to indicate disabled
           },
         },
       }}
@@ -56,9 +51,8 @@ const IndustryType = ({ selectedIndustryClass }) => {
             height: "29px",
             padding: "4px 8px",
             marginTop: "4px",
-            backgroundColor: "#f5f5f5", // Light gray background
-            color: "#a9a9a9", // Gray text color
-            cursor: "not-allowed", // Change cursor to indicate disabled
+            cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
         />
       </Paragraph>

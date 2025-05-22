@@ -74,7 +74,7 @@ const PermitsAdd = ({ isEditing }) => {
                     backgroundColor: "#f1f1f1",
                   }}
                   options={ECCOptions}
-                  dropdownClassName="custom-autocomplete-dropdown"
+                  popupClassName="custom-autocomplete-dropdown"
                   value={ECCTracking}
                   onChange={setECCTracking}
                   filterOption={(inputValue, option) =>
@@ -83,7 +83,7 @@ const PermitsAdd = ({ isEditing }) => {
                       .includes(inputValue.toLowerCase())
                   }
                   allowClear={true}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 >
                   <TextArea
                     style={{
@@ -92,7 +92,7 @@ const PermitsAdd = ({ isEditing }) => {
                       padding: "4px 8px",
                     }}
                     placeholder="Select ECC Process Permit Type"
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </AutoComplete>
               </ConfigProvider>
@@ -104,7 +104,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Date Approve"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
             <Col span={6}>
@@ -114,10 +114,16 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Date Amended"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
           </Row>
+
+
+
+
+
+          
         </Card>
       </Col>
       <Col xs={24}>
@@ -138,7 +144,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="PTO Date Issued"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
             <Col span={6}>
@@ -148,7 +154,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="PTO Code Expiration"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
           </Row>
@@ -172,7 +178,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Hazwaste ID Date Issued"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
             <Col span={6}>
@@ -182,7 +188,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Date of Expiration"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
           </Row>
@@ -222,7 +228,7 @@ const PermitsAdd = ({ isEditing }) => {
                     backgroundColor: "#f1f1f1",
                   }}
                   options={HAZOptions}
-                  dropdownClassName="custom-autocomplete-dropdown"
+                  popupClassName="custom-autocomplete-dropdown"
                   value={HAZTracking}
                   onChange={setHAZTracking}
                   filterOption={(inputValue, option) =>
@@ -231,7 +237,7 @@ const PermitsAdd = ({ isEditing }) => {
                       .includes(inputValue.toLowerCase())
                   }
                   allowClear={true}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 >
                   <TextArea
                     style={{
@@ -240,7 +246,7 @@ const PermitsAdd = ({ isEditing }) => {
                       padding: "4px 8px",
                     }}
                     placeholder="Select Hazwaste Permit Type"
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </AutoComplete>
               </ConfigProvider>
@@ -252,7 +258,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Date Issued"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
           </Row>
@@ -279,7 +285,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Contact"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
             <Col span={6}>
@@ -289,7 +295,7 @@ const PermitsAdd = ({ isEditing }) => {
                 placeholder="Validity Date"
                 autoSize
                 style={{ fontSize: "11px" }}
-                disabled={!isEditing}
+                readOnly={!isEditing}
               />
             </Col>
           </Row>

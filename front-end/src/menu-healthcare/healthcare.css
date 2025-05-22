@@ -1,6 +1,46 @@
+/* Theme Variables */
+:root {
+  --page-background-color: #ffffff; /* Overall page background for light theme */
+  --card-background-light: #f4f4f4; /* Light gray shade for cards in light theme */
+  --text-color: #000000;
+  --button-background: #1890ff;
+  --button-hover: #40a9ff;
+  --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --border-color: #d9d9d9;
+}
+
+.dark-theme {
+  --page-background-color: #1e1e1e; /* Overall page background for dark theme */
+  --card-background-dark: #2a2a2a; /* Dark gray shade for cards in dark theme */
+  --text-color: #e0e0e0; /* Light text for dark theme */
+  --header-background: #1e1e1e; /* Darker shade for table headers in dark mode */
+  --button-background: #0d77ce;
+  --button-hover: #64b5f6;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --border-color: #434343;
+}
+
+/* Main Page Container - Card Style */
+.healthcare-container-card {
+  background-color: var(
+    --card-background-light
+  ); /* Light gray for light theme */
+  color: var(--text-color);
+  padding: 10px;
+  border-radius: 8px; /* Slightly more rounded */
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: calc(100vh - 100px);
+}
+
+.dark-theme.healthcare-container-card {
+  /* Specific for dark theme card background */
+  background-color: var(--card-background-dark);
+  color: #f5f5f5;
+}
+
 .healthcare-header-panel {
   padding: 16px;
-  background-color: #f5f5f5;
+  margin-bottom: 20px;
 }
 
 .healthcare-header-content {

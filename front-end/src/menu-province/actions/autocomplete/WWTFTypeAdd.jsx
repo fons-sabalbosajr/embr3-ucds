@@ -34,9 +34,9 @@ const WWTFOptions = [
           backgroundColor: "#f1f1f1",
         }}
         options={WWTFOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
+        popupClassName="custom-autocomplete-dropdown"
         value={value} // Controlled component
-        disabled={!isEditing}
+        readOnly={!isEditing}
         onChange={(selectedValue) => {
           //console.log("Selected WWTF Type:", selectedValue); // Debugging log
           onChange(selectedValue); // Update parent state

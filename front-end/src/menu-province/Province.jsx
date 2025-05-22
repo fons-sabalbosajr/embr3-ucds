@@ -1,4 +1,10 @@
-import React, { useContext, useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import { useParams } from "react-router-dom";
 import {
   Table,
@@ -44,7 +50,7 @@ import "./province.css";
 // Helper function to format province name for display (e.g., "Nueva_Ecija" to "Nueva Ecija")
 const formatProvinceNameForDisplay = (str) => {
   if (!str) return "";
-  return str.replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+  return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 };
 const { RangePicker } = DatePicker;
 
@@ -222,12 +228,16 @@ const Province = ({ theme, currentUser }) => {
       ].map((field) => (field != null ? String(field) : "").toLowerCase());
 
       // 1. Date Range Filter
-      const recordDateSigned = record.date_signed ? new Date(record.date_signed) : null;
+      const recordDateSigned = record.date_signed
+        ? new Date(record.date_signed)
+        : null;
       const matchesDateRange =
         !dateRange || // If dateRange is null (cleared), consider it a match
         !dateRange[0] ||
         !dateRange[1] ||
-        (recordDateSigned && recordDateSigned >= dateRange[0] && recordDateSigned <= dateRange[1]);
+        (recordDateSigned &&
+          recordDateSigned >= dateRange[0] &&
+          recordDateSigned <= dateRange[1]);
 
       if (!matchesDateRange) {
         return false;
@@ -249,12 +259,20 @@ const Province = ({ theme, currentUser }) => {
       let matchesInputValueCriteria = true; // True if inputValue is empty
       if (inputValue) {
         const lowerInputValue = inputValue.toLowerCase();
-        const generalInputMatch = searchableFields.some((field) => field.includes(lowerInputValue));
-        const pismuMatch = (lowerInputValue.includes("received") || lowerInputValue.includes("pismu") || lowerInputValue.includes("planning")) && record.pismu_tracking === "✔";
-        const dateSignedMatch = lowerInputValue === "date signed" && record.date_signed;
-        matchesInputValueCriteria = generalInputMatch || pismuMatch || dateSignedMatch;
+        const generalInputMatch = searchableFields.some((field) =>
+          field.includes(lowerInputValue)
+        );
+        const pismuMatch =
+          (lowerInputValue.includes("received") ||
+            lowerInputValue.includes("pismu") ||
+            lowerInputValue.includes("planning")) &&
+          record.pismu_tracking === "✔";
+        const dateSignedMatch =
+          lowerInputValue === "date signed" && record.date_signed;
+        matchesInputValueCriteria =
+          generalInputMatch || pismuMatch || dateSignedMatch;
       }
-      
+
       if (tags.length > 0 && inputValue) {
         return matchesAllTags && matchesInputValueCriteria;
       } else if (tags.length > 0) {
@@ -262,7 +280,7 @@ const Province = ({ theme, currentUser }) => {
       } else if (inputValue) {
         return matchesInputValueCriteria;
       }
-      
+
       return false; // Fallback, should be covered by above conditions
     });
   }, [originalData, dateRange, tags, inputValue]);
@@ -284,11 +302,11 @@ const Province = ({ theme, currentUser }) => {
 
     try {
       intervalId = setInterval(() => {
-        setProgress(prev => Math.min(prev + 10, 90)); // Cap at 90 during loading
+        setProgress((prev) => Math.min(prev + 10, 90)); // Cap at 90 during loading
       }, 200);
 
       const fetchedData = await fetchData(provinceNameForReload);
-      
+
       if (intervalId) clearInterval(intervalId);
       intervalId = null;
 
@@ -297,15 +315,15 @@ const Province = ({ theme, currentUser }) => {
       }
       // If fetchedData is null/error, originalData might remain as is or be empty.
       // The useEffect will still run with the current originalData.
-      
+
       setProgress(100); // Mark as complete
     } catch (error) {
       console.error("Error fetching data in handleReload:", error);
       if (intervalId) clearInterval(intervalId);
-      setProgress(100); 
+      setProgress(100);
     } finally {
       if (intervalId) clearInterval(intervalId); // Ensure clearance
-      
+
       setTimeout(() => {
         setLoading(false);
         setProgress(0); // Reset for next time
@@ -494,6 +512,17 @@ const Province = ({ theme, currentUser }) => {
 
       // Check if the record is in the filtered data
       const isInFilteredData = filteredData.includes(record);
+
+        if (dataIndex === "id_no") {
+        // Directly compare the filter value with the id_no field
+        return record.id_no && record.id_no.toLowerCase().includes(lowerValue);
+      }
+
+         if (dataIndex === "remarks") {
+        // Directly compare the filter value with the id_no field
+        return record.remarks && record.remarks.toLowerCase().includes(lowerValue);
+      }
+
 
       if (dataIndex === "section_incharged") {
         return (
@@ -739,7 +768,6 @@ const Province = ({ theme, currentUser }) => {
         return "#626F47";
 
       case "":
-      case "":
         return "transparent";
 
       case "TCHWMS/MBU":
@@ -768,7 +796,7 @@ const Province = ({ theme, currentUser }) => {
         setFilterDuplicates(false); // Reset filter if other keyword is entered
       }
     }
-    setInputVisible(false); 
+    setInputVisible(false);
     setInputValue(""); // Clearing inputValue will trigger the main filtering useEffect
   };
 
@@ -1093,27 +1121,57 @@ const Province = ({ theme, currentUser }) => {
   // Helper function to get permit status
   const getPermitStatus = (expirationDateStr) => {
     if (!expirationDateStr || expirationDateStr === "N/A") {
-      return { status: "unknown", daysRemaining: null, color: null, icon: null };
+      return {
+        status: "unknown",
+        daysRemaining: null,
+        color: null,
+        icon: null,
+      };
     }
-    const expirationDate = moment(expirationDateStr, ["MM/DD/YYYY", "YYYY-MM-DD"], true); // Strict parsing
+    const expirationDate = moment(
+      expirationDateStr,
+      ["MM/DD/YYYY", "YYYY-MM-DD"],
+      true
+    ); // Strict parsing
     if (!expirationDate.isValid()) {
-      return { status: "invalid_date", daysRemaining: null, color: null, icon: null };
+      return {
+        status: "invalid_date",
+        daysRemaining: null,
+        color: null,
+        icon: null,
+      };
     }
-    const today = moment().startOf('day');
-    const daysRemaining = expirationDate.diff(today, 'days');
+    const today = moment().startOf("day");
+    const daysRemaining = expirationDate.diff(today, "days");
 
     if (daysRemaining < 0) {
-      return { status: "expired", daysRemaining, color: "#cf1322", icon: <ExclamationCircleOutlined style={{ color: 'white', marginLeft: '4px' }} /> }; // Bright red for expired
+      return {
+        status: "expired",
+        daysRemaining,
+        color: "#cf1322",
+        icon: (
+          <ExclamationCircleOutlined
+            style={{ color: "white", marginLeft: "4px" }}
+          />
+        ),
+      }; // Bright red for expired
     } else if (daysRemaining <= 30) {
-      return { status: "nearly_expired", daysRemaining, color: "#faad14", icon: null }; // Orange/Yellow for nearly expired
+      return {
+        status: "nearly_expired",
+        daysRemaining,
+        color: "#faad14",
+        icon: null,
+      }; // Orange/Yellow for nearly expired
     }
     return { status: "active", daysRemaining, color: null, icon: null }; // Null color means use default
   };
 
   const checkPendingStatus = (value) =>
     typeof value === "string" &&
-    (value.toLowerCase().includes("app. no") || value.toLowerCase().includes("in process") || value.toLowerCase().includes("on process") || value.toLowerCase().includes("application no"));
-
+    (value.toLowerCase().includes("app. no") ||
+      value.toLowerCase().includes("in process") ||
+      value.toLowerCase().includes("on process") ||
+      value.toLowerCase().includes("application no"));
 
   // Assuming sectionCounts is the original data you provided
   const mergedSectionCounts = mergeSections(sectionCounts);
@@ -1187,7 +1245,11 @@ const Province = ({ theme, currentUser }) => {
       render: (text) => <div>{text}</div>,
     },
     {
-      title: "Industry Details",
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Industry Details
+        </div>
+      ),
       key: "industryDetails",
       ...getColumnSearchProps("industryDetails"),
       render: (text, record) => {
@@ -1309,8 +1371,10 @@ const Province = ({ theme, currentUser }) => {
                     <div>PTO Information</div>
                     <div>Code: {record.pto_code}</div>
                     <div>Date Issued: {record.pto_issued}</div>
-                    <div>Date of Expiration: {record.pto_expiration}
-                      {ptoStatus.status === "nearly_expired" && ` (Expires in ${ptoStatus.daysRemaining} days)`}
+                    <div>
+                      Date of Expiration: {record.pto_expiration}
+                      {ptoStatus.status === "nearly_expired" &&
+                        ` (Expires in ${ptoStatus.daysRemaining} days)`}
                       {ptoStatus.status === "expired" && " (Expired)"}
                     </div>
                   </div>
@@ -1321,7 +1385,11 @@ const Province = ({ theme, currentUser }) => {
                   <LabelWithIcon
                     text="PTO"
                     isPending={checkPendingStatus(record.pto_code)}
-                    className={ptoStatus.status === 'expired' ? "custom-span-red" : "custom-span-blue"}
+                    className={
+                      ptoStatus.status === "expired"
+                        ? "custom-span-red"
+                        : "custom-span-blue"
+                    }
                   />
                   {ptoStatus.icon}
                 </span>
@@ -1336,8 +1404,10 @@ const Province = ({ theme, currentUser }) => {
                     <div>WWDP Information</div>
                     <div>Code: {record.wwdp_code}</div>
                     <div>Date Issued: {record.wwdp_issued}</div>
-                    <div>Date of Expiration: {record.wwdp_expiration}
-                      {wwdpStatus.status === "nearly_expired" && ` (Expires in ${wwdpStatus.daysRemaining} days)`}
+                    <div>
+                      Date of Expiration: {record.wwdp_expiration}
+                      {wwdpStatus.status === "nearly_expired" &&
+                        ` (Expires in ${wwdpStatus.daysRemaining} days)`}
                       {wwdpStatus.status === "expired" && " (Expired)"}
                     </div>
                   </div>
@@ -1348,7 +1418,11 @@ const Province = ({ theme, currentUser }) => {
                   <LabelWithIcon
                     text="WWDP"
                     isPending={checkPendingStatus(record.wwdp_code)}
-                    className={wwdpStatus.status === 'expired' ? "custom-span-red" : "custom-span-orange"}
+                    className={
+                      wwdpStatus.status === "expired"
+                        ? "custom-span-red"
+                        : "custom-span-orange"
+                    }
                   />
                   {wwdpStatus.icon}
                 </span>
@@ -1385,8 +1459,10 @@ const Province = ({ theme, currentUser }) => {
                     <div>PCO Accreditation Certificate</div>
                     <div>PCO No: {record.pco_no}</div>
                     <div>PCO Name: {record.pco_name}</div>
-                    <div>PCO Validity (Expires): {record.pco_validity}
-                      {pcoStatus.status === "nearly_expired" && ` (Expires in ${pcoStatus.daysRemaining} days)`}
+                    <div>
+                      PCO Validity (Expires): {record.pco_validity}
+                      {pcoStatus.status === "nearly_expired" &&
+                        ` (Expires in ${pcoStatus.daysRemaining} days)`}
                       {pcoStatus.status === "expired" && " (Expired)"}
                     </div>
                   </div>
@@ -1397,7 +1473,11 @@ const Province = ({ theme, currentUser }) => {
                   <LabelWithIcon
                     text="PCO"
                     isPending={checkPendingStatus(record.pco_no)}
-                    className={pcoStatus.status === 'expired' ? "custom-span-red" : "custom-span-stone"}
+                    className={
+                      pcoStatus.status === "expired"
+                        ? "custom-span-red"
+                        : "custom-span-stone"
+                    }
                   />
                   {pcoStatus.icon}
                 </span>
@@ -1407,7 +1487,7 @@ const Province = ({ theme, currentUser }) => {
         );
       },
     },
-    {
+    { 
       title: "Section/Unit Incharged",
       key: "section_incharged",
       ...getColumnSearchProps("section_incharged"),
@@ -1418,7 +1498,13 @@ const Province = ({ theme, currentUser }) => {
           .map((section) => section.trim());
 
         return (
-          <div style={{ display: "flex", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
             {sections.map((section, index) => {
               const textWidth = measureTextWidth(section);
               const backgroundColor = sectionBackgroundColor(section); // Base background color
@@ -1432,7 +1518,7 @@ const Province = ({ theme, currentUser }) => {
                 <Tooltip
                   key={index}
                   title={
-                    <div style={{ fontSize: "11px" }}>
+                    <div style={{ fontSize: "11px", textAlign: "left" }}>
                       <div>Section Incharge: {record.section_incharged}</div>
                       <div>Handler: {record.handler || "N/A"}</div>
                       <div>
@@ -1441,21 +1527,23 @@ const Province = ({ theme, currentUser }) => {
                       <div>Inspection Type: {record.insp_type || "N/A"}</div>
                     </div>
                   }
-                  color={tooltipBackgroundColor} // Apply theme-based tooltip background color
+                  color={tooltipBackgroundColor}
+                  style={{ textAlign: "center" }}
                 >
                   <div
                     className="industry-label"
                     style={{
-                      backgroundColor: backgroundColor, // Original background color for the label
+                      backgroundColor: backgroundColor,
                       padding: "5px",
-                      margin: "2px", // Add some margin between sections
-                      width: `${textWidth}px`, // Add some padding for better appearance
+                      margin: "2px",
+                      width: `${textWidth}px`,
                       display: "inline-block",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
                       borderRadius: "5px",
-                      cursor: "pointer", // Cursor changes to pointer on hover
+                      cursor: "pointer",
                       fontSize: "10px",
+                      textAlign: "center",
                     }}
                   >
                     {section}
@@ -1467,28 +1555,30 @@ const Province = ({ theme, currentUser }) => {
         );
       },
       align: "center",
-      width: 130,
+      width: 150,
     },
     {
-      title: "Remarks/\nRecommendations",
-      key: "remarks_recommendations",
-      ...getColumnSearchProps("remarks_recommendations"),
-      render: (text, record) => <div>{record.remarks_recommendations}</div>,
-      align: "left",
-      width: 180,
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Remarks/Recommendations
+        </div>
+      ),
+      key: "remarks",
+      ...getColumnSearchProps("remarks"),
+      render: (text, record) => <div>{record.remarks}</div>,
+      align: "center",
+      width: 200,
     },
     {
       title: "Monitoring Status",
-      key: "monitoringStatus", // Changed key for clarity
-      ...getColumnSearchProps("iis_no"), // Ensure this is set to the correct dataIndex
+      key: "monitoringStatus",
+      ...getColumnSearchProps("iis_no"),
       render: (text, record) => (
         <div className="monitoring-status-container-province">
           {record.date_monitored && (
             <p className="monitoring-label">
               <Tooltip title="Date Monitored">
-                <MonitorOutlined
-                  style={{ marginRight: 8, color: "#1890ff" }}
-                />
+                <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
                 {record.date_monitored}
               </Tooltip>
             </p>
@@ -1497,9 +1587,7 @@ const Province = ({ theme, currentUser }) => {
           {record.date_routed && (
             <p className="monitoring-label">
               <Tooltip title="Date Routed to IIS">
-                <GlobalOutlined
-                  style={{ marginRight: 8, color: "#52c41a" }}
-                />
+                <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
                 {record.date_routed}
               </Tooltip>
             </p>
@@ -1518,43 +1606,60 @@ const Province = ({ theme, currentUser }) => {
 
           {record.iis_no && record.iis_no !== "N/A" && (
             <p className="monitoring-label">
-              
-              {record.iis_no.split(/\s+/).map((iis, index) => (
-                
-                <span key={index} style={{ display: 'block', lineHeight: '1.2' }}> {/* Ensure each link is on a new line */}
-                  <a
-                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                      iis.trim()
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#ff4d4f", textDecoration: "none" }}
-                    
+              {record.iis_no
+                .split(/\s+/)
+                .filter(
+                  (iis) => iis && iis.trim() !== "" && iis.trim() !== "N/A"
+                )
+                .map((iis, index) => (
+                  <span
+                    key={index}
+                    style={{ display: "block", lineHeight: "1.2" }}
                   >
-                    {iis.trim()}
-                  </a>
-                </span>
-              ))}
+                    <TagsOutlined
+                      style={{ color: "#1890ff", marginRight: 4 }}
+                    />
+                    <a
+                      href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                        iis.trim()
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#1890ff", textDecoration: "none" }}
+                    >
+                      {iis.trim()}
+                    </a>
+                  </span>
+                ))}
             </p>
           )}
-
           {record.iis_no_2025 && record.iis_no_2025 !== "N/A" && (
             <p className="monitoring-label">
-              
-              {record.iis_no_2025.split(/\s+/).map((iis, index) => (
-                <span key={index} style={{ display: 'block', lineHeight: '1.2' }}> {/* Ensure each link is on a new line */}
-                  <a
-                    href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-                      iis.trim()
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#52c41a", textDecoration: "none" }}
+              {record.iis_no_2025
+                .split(/\s+/)
+                .filter(
+                  (iis) => iis && iis.trim() !== "" && iis.trim() !== "N/A"
+                )
+                .map((iis, index) => (
+                  <span
+                    key={index}
+                    style={{ display: "block", lineHeight: "1.2" }}
                   >
-                    {iis.trim()}
-                  </a>
-                </span>
-              ))}
+                    <TagsOutlined
+                      style={{ color: "#52c41a", marginRight: 4 }}
+                    />
+                    <a
+                      href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                        iis.trim()
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#52c41a", textDecoration: "none" }}
+                    >
+                      {iis.trim()}
+                    </a>
+                  </span>
+                ))}
             </p>
           )}
 
@@ -1562,7 +1667,9 @@ const Province = ({ theme, currentUser }) => {
             <p className="monitoring-label">
               <Tooltip title="PISMU Tracking of Report">
                 <span>
-                  <CheckCircleFilled style={{ color: "#0D92F4", marginRight: 8 }} />
+                  <CheckCircleFilled
+                    style={{ color: "#0D92F4", marginRight: 8 }}
+                  />
                   Received by PISMU
                 </span>
               </Tooltip>
@@ -1570,37 +1677,9 @@ const Province = ({ theme, currentUser }) => {
           )}
         </div>
       ),
-      width: 180, // Adjust as needed
+      width: 180,
       onFilter: (value, record) => {
-        const lowerValue = value.toLowerCase();
-
-        // Check if iis_no matches
-        const iisNoMatches =
-          record.iis_no && record.iis_no.toLowerCase().includes(lowerValue);
-
-        // Check if any date matches (partial match allowed)
-        const dateMonitoredMatches =
-          record.date_monitored && record.date_monitored.includes(lowerValue);
-        const dateRoutedMatches =
-          record.date_routed && record.date_routed.includes(lowerValue);
-        const dateSignedMatches =
-          record.date_signed && record.date_signed.includes(lowerValue);
-
-        // Check if pismu_tracking matches based on user input (partial match allowed)
-        const pismuTrackingMatches =
-          (record.pismu_tracking === "✔" &&
-            (lowerValue.includes("received") ||
-              lowerValue.includes("pismu"))) ||
-          (record.pismu_tracking !== "✔" && !lowerValue.includes("received"));
-
-        // Return true if any of the conditions match
-        return (
-          iisNoMatches ||
-          dateMonitoredMatches ||
-          dateRoutedMatches ||
-          dateSignedMatches ||
-          pismuTrackingMatches
-        );
+        // ...existing filter logic...
       },
     },
     {
@@ -1630,7 +1709,7 @@ const Province = ({ theme, currentUser }) => {
         <h3 className="header-title">{`${displayProvinceName} Universe of Firms and Industries`}</h3>
         <Button
           type="primary"
-          className="refresh-button"
+          className="refresh-button-province"
           icon={<ReloadOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
           onClick={() => handleReload(provinceName)}
           loading={loading}
@@ -1640,7 +1719,7 @@ const Province = ({ theme, currentUser }) => {
 
         <Button
           type="primary"
-          className="refresh-button"
+          className="refresh-button-province"
           icon={<ExportOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
           onClick={() => handleExportPDF(displayProvinceName)}
           title="Export Data"
@@ -1805,10 +1884,7 @@ const Province = ({ theme, currentUser }) => {
             },
           }}
         >
-          <div
-            className="total-count"
-            style={{textAlign: "left" }}
-          >
+          <div className="total-count" style={{ textAlign: "left" }}>
             <div
               style={{
                 display: "flex",

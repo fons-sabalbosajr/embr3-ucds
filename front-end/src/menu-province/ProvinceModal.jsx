@@ -32,7 +32,7 @@ const ProvinceModal = ({
   setShouldRefreshTable,
   handleReload,
   currentUser,
-  theme
+  theme,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(null);
@@ -134,6 +134,7 @@ const ProvinceModal = ({
     ).padStart(2, "0")}`;
 
     try {
+      // Fetch all logs to determine the next transaction number
       const response = await axios.get("http://localhost:8081/api/ucds-log");
       const transactions = response.data;
 
@@ -150,34 +151,19 @@ const ProvinceModal = ({
 
       let transactionCounter = 1;
 
-      if (!transactions || transactions.length === 0) {
-        // No transactions found, counter remains 1
-      } else {
+      if (transactions && transactions.length > 0) {
         const lastTransaction = transactions[transactions.length - 1];
-        if (!lastTransaction) {
-          console.error("Last transaction is undefined");
-        } else {
-          if (lastTransaction.transactionID) {
-            const lastTransactionID = lastTransaction.transactionID;
-            const lastTransactionNumber = parseInt(
-              lastTransactionID.replace("TRXM-", "")
-            );
-            transactionCounter = lastTransactionNumber + 1;
-          } else {
-            console.error("Last transaction ID is undefined");
-          }
+        if (lastTransaction && lastTransaction.transactionID) {
+          const lastTransactionID = lastTransaction.transactionID;
+          const lastTransactionNumber = parseInt(
+            lastTransactionID.replace("TRXM-", "")
+          );
+          transactionCounter = lastTransactionNumber + 1;
         }
       }
 
-      // Decrypt the username
-      const encryptedUsername = localStorage.getItem("username");
-      const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY; // Get the encryption key from your environment variable
-      let username = null;
-
-      if (encryptedUsername) {
-        const bytes = CryptoJS.AES.decrypt(encryptedUsername, encryptionKey);
-        username = bytes.toString(CryptoJS.enc.Utf8);
-      }
+      // Use currentUser.username directly
+      const username = currentUser?.username || null;
 
       const logData = {
         transactionID: `TRXM-${String(transactionCounter).padStart(4, "0")}`,
@@ -185,23 +171,16 @@ const ProvinceModal = ({
         actionType: "Initial Data",
         oldValue: "-",
         newValue: `${record.ecc_cnc} \n ${record.title}`,
-        userActed: username, // Use the decrypted username
+        userActed: username,
         dateActed: transactionDate,
         ecc_cnc: record.ecc_cnc,
       };
 
-      try {
-        const response = await axios.post(
-          "http://localhost:8081/api/ucds-log",
-          logData
-        );
-      } catch (error) {
-        console.error("Error logging initial data:", error);
-      } finally {
-        isLogging = false;
-      }
+      // Save the log to ucds-log (POST)
+      await axios.post("http://localhost:8081/api/ucds-log", logData);
     } catch (error) {
-      console.error("Error fetching transactions:", error);
+      console.error("Error logging initial data:", error);
+    } finally {
       isLogging = false;
     }
   };
@@ -209,6 +188,14 @@ const ProvinceModal = ({
   useEffect(() => {
     setEditedRecord(record);
   }, [record]);
+
+  useEffect(() => {
+    // Only log if modal is visible and record is valid
+    if (visible && record && record.ecc_cnc && record.title) {
+      logInitialData(record);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, record]);
 
   const handleChange = (field, value) => {
     setEditedRecord({
@@ -231,21 +218,26 @@ const ProvinceModal = ({
         try {
           const { _id, ...recordToUpdate } = editedRecord;
 
-          const currentUsername = localStorage.getItem("username");
+          const currentUsername = currentUser?.username;
           const updatedRecord = {
             ...recordToUpdate,
             ecc_cnc: editedRecord.ecc_cnc,
-            updated_by: currentUsername, // Add the username to the request body
+            updated_by: currentUsername, // Add username
           };
 
+          const fullIdNo = editedRecord.id_no;
+
+          if (!fullIdNo) {
+            console.error("Missing id_no in editedRecord");
+            return;
+          }
+
           const response = await axios.put(
-            `http://localhost:8081/api/update-data/${editedRecord.id_no}`,
+            `http://localhost:8081/api/update-data/${fullIdNo}`,
             updatedRecord
           );
 
           if (response.status === 200) {
-            const auditLog = response.data; // Assuming this contains audit log information
-
             if (showNotification) {
               Swal.fire("Success", "Changes saved successfully!", "success");
             }
@@ -253,63 +245,9 @@ const ProvinceModal = ({
               setShouldRefreshTable(true);
             }
             setIsEditing(false);
-            //handleReload();
+            // handleReload(); // Optional reload if needed
 
-            // Get the latest transaction ID from the ucds-log collection
-            const logResponse = await axios.get(
-              "http://localhost:8081/api/ucds-log"
-            );
-            const transactions = logResponse.data;
-
-            let transactionCounter = 1;
-            if (transactions.length > 0) {
-              const lastTransaction = transactions[transactions.length - 1];
-              const lastTransactionID = lastTransaction.transactionID;
-              const lastTransactionNumber = parseInt(
-                lastTransactionID.replace("TRXM-", "")
-              );
-              transactionCounter = lastTransactionNumber + 1;
-            }
-
-            const transactionDate = new Date().toLocaleString();
-
-            // Safely handle missing or empty changes
-            const changes = auditLog.changes || []; // Default to empty array if changes is undefined
-            const oldValues = changes.length
-              ? changes.map((change) => `${change.old_value}`).join("\n")
-              : "-"; // Use "-" if there are no changes
-            const newValues = changes.length
-              ? `${auditLog.ecc_cnc} \n${changes
-                  .map((change) => `${change.new_value}`)
-                  .join("\n")}`
-              : `${auditLog.ecc_cnc || editedRecord.ecc_cnc}`; // Use ecc_cnc directly if no changes
-
-            // Ensure the updated_at field is valid before converting to string
-            const updatedAt = auditLog.updated_at
-              ? new Date(auditLog.updated_at).toLocaleString()
-              : new Date().toLocaleString(); // Use current date if updated_at is invalid
-
-            // Create the log entry based on the audit log returned from the server
-            const logData = {
-              transactionID: `TRXM-${String(transactionCounter).padStart(
-                4,
-                "0"
-              )}`,
-              transactionDate: transactionDate,
-              actionType: "Modified",
-              oldValue: oldValues,
-              newValue: newValues,
-              userActed: auditLog.updated_by || currentUsername, // Fallback to the current user if undefined
-              dateActed: updatedAt,
-              ecc_cnc: auditLog.ecc_cnc || editedRecord.ecc_cnc, // Fallback to the editedRecord ecc_cnc
-            };
-
-            // Save the log entry to the ucds-log collection
-            try {
-              await axios.post("http://localhost:8081/api/ucds-log", logData);
-            } catch (error) {
-              console.error("Error creating log entry:", error);
-            }
+            // No need to manually create logs here — backend handles it
           } else {
             Swal.fire("Error", "Failed to save changes", "error");
           }
@@ -362,24 +300,34 @@ const ProvinceModal = ({
     if (!provinceNameFromRecord) return null;
     const name = String(provinceNameFromRecord).toUpperCase(); // Ensure it's a string and standardize to uppercase
     switch (name) {
-      case 'AURORA': return 'aurora';
-      case 'BATAAN': return 'bataan';
-      case 'BULACAN': return 'bulacan';
-      case 'NUEVA ECIJA': return 'nuevaEcija';
-      case 'PAMPANGA': return 'pampanga';
-      case 'TARLAC': return 'tarlac';
-      case 'ZAMBALES': return 'zambales';
+      case "AURORA":
+        return "aurora";
+      case "BATAAN":
+        return "bataan";
+      case "BULACAN":
+        return "bulacan";
+      case "NUEVA ECIJA":
+        return "nuevaEcija";
+      case "PAMPANGA":
+        return "pampanga";
+      case "TARLAC":
+        return "tarlac";
+      case "ZAMBALES":
+        return "zambales";
       default:
-        console.warn(`Unknown province name for permission key: ${provinceNameFromRecord}`);
+        console.warn(
+          `Unknown province name for permission key: ${provinceNameFromRecord}`
+        );
         return null;
     }
   };
 
   const provinceKey = getProvincePermissionKey(record?.province);
-  const canShowEditButton = currentUser?.provinceStringPermissions?.[provinceKey] === 'readWrite';
+  const canShowEditButton =
+    currentUser?.provinceStringPermissions?.[provinceKey] === "readWrite";
 
   return (
-    <div className={`modal-container ${theme}-theme`} >
+    <div className={`modal-container ${theme}-theme`}>
       {!record || !record.id_no || !editedRecord ? (
         <div style={{ textAlign: "center", padding: 40 }}>
           <Spin size="large" tip="Loading record details..." />
@@ -464,6 +412,7 @@ const ProvinceModal = ({
                 editedRecord={editedRecord}
                 currentUser={currentUser}
                 theme={theme}
+                handleReload={handleReload}
               />
             </TabPane>
           </Tabs>
@@ -532,17 +481,21 @@ const ProvinceModal = ({
                       >
                         Save
                       </Button>
-                      <Button onClick={handleCancelEdit}>Cancel</Button>
+                      <Button onClick={handleCancelEdit} type="primary" danger>
+                        Cancel
+                      </Button>
                     </>
                   ) : (
-                    canShowEditButton && <Button // Conditionally render Edit button
-                      onClick={() => setIsEditing(true)}
-                      type="primary"
-                      icon={<EditOutlined />}
-                      className="button-right"
-                    >
-                      Edit
-                    </Button>
+                    canShowEditButton && (
+                      <Button // Conditionally render Edit button
+                        onClick={() => setIsEditing(true)}
+                        type="primary"
+                        icon={<EditOutlined />}
+                        className="button-right"
+                      >
+                        Edit
+                      </Button>
+                    )
                   )}
                 </Space>
               </div>

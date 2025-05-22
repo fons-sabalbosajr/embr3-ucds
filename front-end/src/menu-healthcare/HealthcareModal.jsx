@@ -117,7 +117,7 @@ const HealthcareModal = ({
         </div>
       }
       width={1000}
-      visible={isModalVisible} // Use isModalVisible instead of true
+      open={isModalVisible} // Use isModalVisible instead of true
       onCancel={() => setIsModalVisible(false)} // Close modal when clicking "X"
       footer={
         isEditing ? (
@@ -125,7 +125,7 @@ const HealthcareModal = ({
             <Button onClick={handleSaveChanges} type="primary">
               Save
             </Button>
-            <Button onClick={handleCancel}>Cancel</Button>
+            <Button onClick={handleCancel} type="primary" danger>Cancel</Button>
           </>
         ) : (
           <Button

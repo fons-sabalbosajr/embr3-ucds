@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Input, Row, Col, Typography, Checkbox } from "antd";
+import { Input, Row, Col, Typography, Checkbox, ConfigProvider } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import IndustryClass from "../../../components/Autocomplete/IndustryClass";
 import IndustryType from "../../../components/Autocomplete/IndustryType";
@@ -15,6 +15,8 @@ const { Paragraph } = Typography;
 const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
   const [localRecord, setLocalRecord] = useState(editedRecord || {});
   const [projectData, setProjectData] = useState({});
+   const [longitude, setLongitude] = useState("");
+  const [latitude, setLatitude] = useState("");
 
   useEffect(() => {
     setLocalRecord(editedRecord);
@@ -56,6 +58,57 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
 
     fetchProjectData();
   }, [localRecord?.industry_class]);
+
+  // --- Detect coordinates based on Province, Municipality, Barangay ---
+  useEffect(() => {
+    const fetchCoordinates = async () => {
+      // Only build address if all are present and not "n/a" or empty
+      const { province, city, brgy } = localRecord;
+      if (
+        province &&
+        city &&
+        brgy &&
+        province.toLowerCase() !== "n/a" &&
+        city.toLowerCase() !== "n/a" &&
+        brgy.toLowerCase() !== "n/a"
+      ) {
+        const address = [brgy, city, province].join(", ");
+        try {
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+              address
+            )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+          );
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            const location = data.results[0].geometry.location;
+            setLongitude(location.lng);
+            setLatitude(location.lat);
+            // Optionally update parent record
+            handleInputChange("longitude", location.lng);
+            handleInputChange("latitude", location.lat);
+          } else {
+            setLongitude("");
+            setLatitude("");
+            handleInputChange("longitude", "");
+            handleInputChange("latitude", "");
+          }
+        } catch (error) {
+          setLongitude("");
+          setLatitude("");
+          handleInputChange("longitude", "");
+          handleInputChange("latitude", "");
+        }
+      } else {
+        setLongitude("");
+        setLatitude("");
+        handleInputChange("longitude", "");
+        handleInputChange("latitude", "");
+      }
+    };
+    fetchCoordinates();
+    // eslint-disable-next-line
+  }, [localRecord.province, localRecord.city, localRecord.brgy]);
 
   const handleInputChange = (field, value) => {
     const updatedRecord = { ...localRecord, [field]: value };
@@ -257,6 +310,67 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               placeholder="No data"
             />
           </Paragraph>
+
+               <Row gutter={[16, 16]}>
+            <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+              <Paragraph style={{ marginTop: "-10px" }}>
+                <strong>Longitude</strong>
+                <ConfigProvider
+                  theme={{
+                    components: {
+                      Input: {
+                        fontSize: "11px",
+                        height: "29px",
+                        padding: "4px 8px",
+                      },
+                    },
+                  }}
+                >
+                  <Input
+                    value={longitude}
+                    onChange={(e) =>
+                      isEditing && setLongitude(e.target.value)
+                    }
+                    style={{
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                    }}
+                    readOnly={!isEditing}
+                  />
+                </ConfigProvider>
+              </Paragraph>
+            </Col>
+            <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+              <Paragraph style={{ marginTop: "-10px" }}>
+                <strong>Latitude</strong>
+                <ConfigProvider
+                  theme={{
+                    components: {
+                      Input: {
+                        fontSize: "11px",
+                        height: "29px",
+                        padding: "4px 8px",
+                      },
+                    },
+                  }}
+                >
+                  <Input
+                    value={latitude}
+                    onChange={(e) =>
+                      isEditing && setLatitude(e.target.value)
+                    }
+                    style={{
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                    }}
+                    readOnly={!isEditing}
+                  />
+                </ConfigProvider>
+              </Paragraph>
+            </Col>
+          </Row>
         </Col>
       </Row>
     </div>

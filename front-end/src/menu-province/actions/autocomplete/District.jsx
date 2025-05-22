@@ -4,7 +4,7 @@ import { parseDistrict } from "../../../../data/utils/parseDistrict";
 
 const { Paragraph } = Typography;
 
-const District = ({ selectedMunicipality }) => {
+const District = ({ selectedMunicipality, readOnly }) => {
   const [districtMap, setDistrictMap] = useState({});
   const [zipCode, setZipCode] = useState("n/a");
 
@@ -38,9 +38,6 @@ const District = ({ selectedMunicipality }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            backgroundColor: "#f5f5f5", // Light gray background
-            color: "#a9a9a9", // Gray text color
-            cursor: "not-allowed", // Change cursor to indicate disabled
           },
         },
       }}
@@ -55,9 +52,8 @@ const District = ({ selectedMunicipality }) => {
             height: "29px",
             padding: "4px 8px",
             marginTop: "4px",
-            backgroundColor: "#f5f5f5", // Light gray background
-            color: "#a9a9a9", // Gray text color
-            cursor: "not-allowed", // Change cursor to indicate disabled
+            cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
         />
       </Paragraph>

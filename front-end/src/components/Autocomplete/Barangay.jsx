@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AutoComplete, ConfigProvider, Input } from "antd";
+import { AutoComplete, Input } from "antd";
 import Papa from "papaparse";
 import "./barangay.css";
 
@@ -7,17 +7,22 @@ const Barangay = ({
   value,
   disabled,
   onChange,
-  editedRecord,
-  handleChange,
-  isEditing,
   selectedProvince,
   selectedMunicipality,
-  style
+  style,
+  readOnly,
 }) => {
   const [barangayOptions, setBarangayOptions] = useState([]);
   const [cityId, setCityId] = useState(null);
   const [provinceId, setProvinceId] = useState(null);
+  const [searchText, setSearchText] = useState("");
 
+  // Sync searchText with value from parent
+  useEffect(() => {
+    setSearchText(value || "");
+  }, [value]);
+
+  // Get provinceId
   useEffect(() => {
     if (selectedProvince) {
       Papa.parse("../../../data/province.csv", {
@@ -25,16 +30,17 @@ const Barangay = ({
         download: true,
         complete: (results) => {
           const province = results.data.find(
-            (row) => row.Province === selectedProvince
+            (row) => row.Province?.trim() === selectedProvince?.trim()
           );
-          if (province) {
-            setProvinceId(province.Prov_ID);
-          }
+          setProvinceId(province ? String(province.Prov_ID).trim() : null);
         },
       });
+    } else {
+      setProvinceId(null);
     }
   }, [selectedProvince]);
 
+  // Get cityId
   useEffect(() => {
     if (selectedMunicipality) {
       Papa.parse("../../../data/city.csv", {
@@ -42,78 +48,83 @@ const Barangay = ({
         download: true,
         complete: (results) => {
           const city = results.data.find(
-            (row) => row.City === selectedMunicipality
+            (row) => row.City?.trim() === selectedMunicipality?.trim()
           );
-          if (city) {
-            setCityId(city.City_ID);
-          }
+          setCityId(city ? String(city.City_ID).trim() : null);
         },
       });
+    } else {
+      setCityId(null);
     }
   }, [selectedMunicipality]);
 
+  // Get barangays for cityId and provinceId
   useEffect(() => {
     if (cityId && provinceId) {
       Papa.parse("../../../data/brgy.csv", {
         header: true,
         download: true,
         complete: (results) => {
+          // Debug: log a sample row and the IDs
+          // console.log("cityId", cityId, "provinceId", provinceId, "sample", results.data[0]);
           const barangays = results.data
             .filter(
               (row) =>
-                row.City_ID === cityId &&
-                row.Prov_ID === provinceId &&
-                row.Brgy !== "" &&
-                row.Brgy !== undefined
+                String(row.City_ID).trim() === cityId &&
+                String(row.Prov_ID).trim() === provinceId &&
+                row.Brgy &&
+                row.Brgy.trim() !== ""
             )
             .map((row) => ({
-              value: row.Brgy,
+              value: row.Brgy.trim(),
             }));
           setBarangayOptions(barangays);
-          //console.log("barangayOptions:", barangayOptions);
         },
       });
+    } else {
+      setBarangayOptions([]);
     }
   }, [cityId, provinceId]);
 
+  const handleSearch = (text) => {
+    setSearchText(text);
+  };
+
+  const handleSelect = (barangay) => {
+    setSearchText(barangay);
+    if (onChange) onChange(barangay);
+  };
 
   return (
     <AutoComplete
       style={{
         width: "100%",
         fontSize: "11px",
-      }}
-      dropdownStyle={{
-        boxShadow: "none",
-        backgroundColor: "#f1f1f1",
+        ...style,
       }}
       options={barangayOptions}
-      popupClassName="custom-autocomplete-dropdown"
-      value={value}
+      value={searchText}
+      onSearch={handleSearch}
+      onSelect={handleSelect}
+      onChange={handleSearch}
       disabled={disabled}
-      onChange={onChange}
-      filterOption={(inputValue, option) => {
-        //console.log("filterOption:", inputValue, option);
-        return (
-          option &&
-          inputValue &&
-          option.value !== undefined &&
-          option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-        );
-      }}
-      allowClear={true}
+      allowClear
+      filterOption={(inputValue, option) =>
+        !inputValue ||
+        (option.value &&
+          option.value.toLowerCase().indexOf(inputValue.toLowerCase()) !== -1)
+      }
     >
       <Input
-         style={{
+        style={{
           fontSize: "11px",
           height: "29px",
           padding: "4px 8px",
-          ...style,
+          cursor: readOnly ? "not-allowed" : "text",
+          color: readOnly ? "#aaa" : "inherit",
         }}
         placeholder="Select barangay"
-        placeholderStyle={{
-          fontSize: "9px",
-        }}
+        disabled={disabled}
       />
     </AutoComplete>
   );

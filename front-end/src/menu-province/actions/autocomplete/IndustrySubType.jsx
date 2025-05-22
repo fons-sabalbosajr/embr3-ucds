@@ -4,7 +4,7 @@ import { parsePSICCode } from "../../../../data/utils/parsePSICCode";
 
 const { Paragraph } = Typography;
 
-const IndustrySubType = ({ selectedIndustryClass }) => {
+const IndustrySubType = ({ selectedIndustryClass, readOnly }) => {
   const [psicCodeMap, setPsicCodeMap] = useState({});
   const [industrySubType, setIndustrySubType] = useState("n/a");
 
@@ -39,9 +39,6 @@ const IndustrySubType = ({ selectedIndustryClass }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            backgroundColor: "#f5f5f5", // Light gray background
-            color: "#a9a9a9", // Gray text color
-            cursor: "not-allowed", // Change cursor to indicate disabled
           },
         },
       }}
@@ -56,9 +53,8 @@ const IndustrySubType = ({ selectedIndustryClass }) => {
             height: "29px",
             padding: "4px 8px",
             marginTop: "4px",
-            backgroundColor: "#f5f5f5", // Light gray background
-            color: "#a9a9a9", // Gray text color
-            cursor: "not-allowed", // Change cursor to indicate disabled
+            cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
         />
       </Paragraph>

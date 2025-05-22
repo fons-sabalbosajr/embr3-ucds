@@ -1,0 +1,24 @@
+.label-title {
+  font-size: 11px;
+}
+
+.label_container {
+  display: flex;
+  font-size: 12px;
+  justify-content: flex-start;
+  height: 24px;
+}
+
+.label_title {
+  width: 130px;
+  height: 5px;
+  align-items: flex-start;
+  font-weight: 400;
+}
+
+.label {
+  font-size: 9px;
+  line-height: 10px;
+  width: 120px;
+  align-items: flex-start;
+}

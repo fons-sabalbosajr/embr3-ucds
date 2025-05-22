@@ -77,15 +77,14 @@
   background-color: #0056b3;
 }
 
-.refresh-button {
+.refresh-button-province {
   margin-right: 5px; /* Add spacing between buttons */
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px; /* Adjust button height */
 }
 
-.refresh-button:hover {
+.refresh-button-province:hover {
   background-color: #40a9ff; /* Darker background color on hover */
 }
 

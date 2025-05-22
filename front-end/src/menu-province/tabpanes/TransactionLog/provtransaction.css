@@ -2,3 +2,12 @@
     margin: 0;
     margin-bottom: 10px;
 }
+
+.table-header{
+    font-size: 9px;
+}
+
+.table-row .ant-table-cell {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+}

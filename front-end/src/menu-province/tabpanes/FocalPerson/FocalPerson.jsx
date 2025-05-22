@@ -9,6 +9,7 @@ import {
   DatePicker,
   ConfigProvider,
   Select,
+  AutoComplete,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
@@ -52,6 +53,7 @@ const FocalPerson = ({
   currentUser,
   theme,
 }) => {
+  const [pismuTracking, setpismuTracking] = useState("");
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
       // Handle Excel date numeric value
@@ -141,7 +143,7 @@ const FocalPerson = ({
   };
 
   const [empNoTotal, setEmpNoTotal] = useState(
-    editedRecord ? editedRecord.emp_no_total : ""
+    editedRecord ? editedRecord.emp_total : ""
   );
   const [wwtftype, setWwtftype] = useState(
     editedRecord ? editedRecord.wwtftype : ""
@@ -181,6 +183,25 @@ const FocalPerson = ({
     // );
   };
 
+  const pismuTrackingOptions = [
+    { value: "Ms. Alyanna Y. Patdu" },
+    { value: "Mr. Christian M. Abad" },
+    { value: "Mr. Marshalle Julluice V. Catua" },
+  ];
+
+  const iisCombined =
+    (editedRecord?.iis_no || "") +
+    (editedRecord?.iis_no_2025 ? " | " + editedRecord.iis_no_2025 : "");
+
+  // Handler for merged input
+  const handleIisCombinedChange = (e) => {
+    const value = e.target.value;
+    // Split by separator " | "
+    const [iis_no, iis_no_2025] = value.split(" | ");
+    handleChange("iis_no", iis_no ? iis_no.trim() : "");
+    handleChange("iis_no_2025", iis_no_2025 ? iis_no_2025.trim() : "");
+  };
+
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
   const canGenerateData = permissions[0];
@@ -189,6 +210,8 @@ const FocalPerson = ({
   const canViewDataHistory = permissions[3];
 
   const isCardDisabled = !canManageData;
+
+  const isPismuTracked = !!editedRecord?.pismu_tracking;
 
   return (
     <Row gutter={[16, 16]}>
@@ -200,7 +223,7 @@ const FocalPerson = ({
               <Input
                 type="number"
                 min="0"
-                name="emp_no_total"
+                name="emp_total"
                 value={empNoTotal}
                 onChange={handleEmpNoTotalChange}
                 readOnly={!isEditing}
@@ -247,10 +270,10 @@ const FocalPerson = ({
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
             <Paragraph>
-              <strong>Current Section In Charge</strong>
+              <strong>Current Section In Charged</strong>
               <SectionInCharged
-                value={editedRecord ? editedRecord.section_incharge : ""}
-                onChange={(value) => handleChange("section_incharge", value)}
+                value={editedRecord ? editedRecord.section_incharged : ""}
+                onChange={(value) => handleChange("section_incharged", value)}
                 readOnly={!isEditing} // Pass readOnly dynamically based on isEditing
                 style={{
                   cursor: isEditing ? "text" : "not-allowed",
@@ -293,8 +316,8 @@ const FocalPerson = ({
             <Paragraph>
               <strong>Project Status</strong>
               <ProjectStatus
-                value={editedRecord ? editedRecord.project_status : ""}
-                onChange={(value) => handleChange("project_status", value)}
+                value={editedRecord ? editedRecord.title_status : ""}
+                onChange={(value) => handleChange("title_status", value)}
                 readOnly={!isEditing}
                 placeholder="No data"
                 style={{
@@ -309,10 +332,10 @@ const FocalPerson = ({
 
       <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
         <Paragraph>
-          <strong>IIS Reference No.</strong>
+          <strong>IIS Reference No. (2024 | 2025)</strong>
           <Input
-            value={editedRecord ? editedRecord.iis_no : ""}
-            onChange={(e) => handleChange("iis_no", e.target.value)}
+            value={iisCombined}
+            onChange={handleIisCombinedChange}
             readOnly={!isEditing}
             placeholder="No data"
             style={{
@@ -536,12 +559,8 @@ const FocalPerson = ({
               <Paragraph>
                 <strong>Remarks/Recommendations:</strong> <br />
                 <TextArea
-                  value={
-                    editedRecord ? editedRecord.remarks_recommendations : ""
-                  }
-                  onChange={(e) =>
-                    handleChange("remarks_recommendations", e.target.value)
-                  }
+                  value={editedRecord ? editedRecord.remarks : ""}
+                  onChange={(e) => handleChange("remarks", e.target.value)}
                   readOnly={!isEditing}
                   placeholder="No data"
                   style={{
@@ -553,25 +572,72 @@ const FocalPerson = ({
               </Paragraph>
               <Paragraph>
                 <Checkbox
-                  checked={
-                    editedRecord?.pismu_tracking ===
-                    "Report Tracked (received/routed to Planning Unit)"
-                  }
-                  disabled={isCardDisabled}
+                  checked={isPismuTracked}
+                  disabled={!isEditing || isCardDisabled} // <-- Disable if not editing
                   onChange={(e) => {
                     const isChecked = e.target.checked;
-                    const newValue = isChecked
-                      ? "Report Tracked (received/routed to Planning Unit)"
-                      : "Report Untracked (not yet received/routed to Planning Unit)";
-                    handleValueChange("pismu_tracking", newValue); // Log and handle the value change
-                    handleChange("pismu_tracking", newValue); // Keep the existing handleChange for parent component
+                    if (!isChecked) {
+                      setpismuTracking("");
+                      handleChange("pismu_tracking", "");
+                    }
                   }}
                   style={{ fontSize: "12px" }}
                 >
                   <span className="permit-label"></span>
                 </Checkbox>
-
                 <strong>Tracking of Reports (Received by Planning Unit)</strong>
+              </Paragraph>
+              <Paragraph>
+                <Row gutter={[16, 16]} className="row-auto">
+                  <Col xs={24} sm={24} md={16} lg={16} className="modalcol">
+                    <Paragraph>
+                      <ConfigProvider
+                        theme={{
+                          components: {
+                            AutoComplete: {
+                              optionFontSize: 10,
+                              colorTextPlaceholder: "#555",
+                              fontSize: "11px",
+                              boxShadow: "none",
+                            },
+                          },
+                        }}
+                      >
+                        <AutoComplete
+                          style={{
+                            width: "100%",
+                            fontSize: "11px",
+                          }}
+                          options={pismuTrackingOptions}
+                          value={editedRecord?.pismu_tracking || pismuTracking}
+                          onChange={(value) => {
+                            setpismuTracking(value);
+                            handleChange("pismu_tracking", value);
+                          }}
+                          filterOption={(inputValue, option) =>
+                            option.value
+                              .toLowerCase()
+                              .includes(inputValue.toLowerCase())
+                          }
+                          allowClear={true}
+                          readOnly={!isEditing || !isPismuTracked}
+                        >
+                          <Input
+                            style={{
+                              fontSize: "11px",
+                              height: "29px",
+                              padding: "4px 8px",
+                              cursor: isEditing ? "text" : "not-allowed",
+                              color: isEditing ? "" : "#aaa",
+                            }}
+                            placeholder="Select PISMU Staff"
+                            readOnly={!isEditing || !isPismuTracked}
+                          />
+                        </AutoComplete>
+                      </ConfigProvider>
+                    </Paragraph>
+                  </Col>
+                </Row>
               </Paragraph>
               <Paragraph>
                 <Checkbox
@@ -588,7 +654,7 @@ const FocalPerson = ({
                   <span className="permit-label"></span>
                 </Checkbox>
 
-                <strong>With previously issued NOV?</strong>
+                <strong>With previously issued NOV</strong>
               </Paragraph>
             </Card>
           </Col>

@@ -230,15 +230,10 @@ const IndustryClass = ({ value, disabled, onChange, theme, style }) => {
           width: "100%",
           fontSize: "11px",
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: theme === "dark" ? "#333333" : "#f1f1f1", // Dynamically set background color
-          color: theme === "dark" ? "#d9d9d9" : "#000000", // Adjust text color based on theme
-        }}
+       
         options={industryClassOptions}
-        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`} // Apply theme class
+       
         value={value}
-        disabled={disabled}
         onChange={onChange}
         filterOption={(inputValue, option) =>
           option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1

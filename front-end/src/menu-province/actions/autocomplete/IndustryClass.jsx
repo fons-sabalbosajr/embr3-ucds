@@ -210,7 +210,7 @@ const industryClassOptions = [
   { value: "Water Treatment" },
 ];
 
-const IndustryClass = ({ value, disabled, onChange }) => {
+const IndustryClass = ({ value, disabled, onChange, readOnly }) => {
   return (
     <ConfigProvider
       theme={{
@@ -229,12 +229,7 @@ const IndustryClass = ({ value, disabled, onChange }) => {
           width: "100%",
           fontSize: "11px",
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
-        }}
         options={industryClassOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
         value={value}
         disabled={disabled}
         onSelect={onChange} // Use onSelect to get the selected value
@@ -249,6 +244,8 @@ const IndustryClass = ({ value, disabled, onChange }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
+            cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
           placeholder="Select industry classification"
           placeholderStyle={{

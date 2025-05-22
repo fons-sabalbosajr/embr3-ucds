@@ -336,7 +336,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
       dataIndex: "id_no",
       key: "id_no",
       align: "center",
-      width: 70,
+      width: 100,
       render: (text) => <div className="industry-label">{text}</div>,
     },
     {
@@ -723,7 +723,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
           {record.iis_no && record.iis_no !== "N/A" && (
             <p className="monitoring-label">
               <Tooltip title="IIS No. (2024)">
-                <TagsOutlined style={{ color: "#ff4d4f", marginRight: 8 }} />
+                <TagsOutlined style={{ color: "#1890ff", marginRight: 8 }} />
               </Tooltip>
               {record.iis_no.split(/\s+/).map((iis, index) => (
                 <span key={index}>
@@ -734,7 +734,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      color: "#ff4d4f",
+                      color: "#1890ff",
                       textDecoration: "none",
                     }}
                     className="iis-link"
@@ -817,7 +817,8 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
         footer={null}
         width={1400}
         style={{
-          maxHeight: "70vh",
+          height: "90vh", // Set modal height to 80% of viewport
+          maxHeight: "90vh",
           overflow: "hidden",
           padding: "16px",
         }}
@@ -865,7 +866,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
               simple: true,
             }}
             scroll={{
-              y: "50vh",
+              y: "70vh",
             }}
             className="custom-table-section"
             onChange={handleTableChange}

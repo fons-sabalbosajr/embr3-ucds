@@ -63,7 +63,7 @@ const ProjectName = ({ isEditing }) => {
           backgroundColor: "#f1f1f1",
         }}
         options={options}
-        dropdownClassName="custom-autocomplete-dropdown"
+        popupClassName="custom-autocomplete-dropdown"
         onSearch={handleSearch}
         notFoundContent={
           loading ? (
@@ -74,7 +74,7 @@ const ProjectName = ({ isEditing }) => {
           ) : null
         }
         allowClear={true}
-        disabled={!isEditing}
+        readOnly={!isEditing}
       >
         <Input
           style={{
@@ -83,7 +83,7 @@ const ProjectName = ({ isEditing }) => {
             padding: "4px 8px",
           }}
           placeholder="Enter Project Name"
-          disabled={!isEditing}
+          readOnly={!isEditing}
         />
       </AutoComplete>
     </ConfigProvider>

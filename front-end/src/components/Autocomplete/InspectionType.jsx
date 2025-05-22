@@ -52,7 +52,8 @@ const InspectionType = ({
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            
+             cursor: readOnly ? "not-allowed" : "text",
+            color: readOnly ? "#aaa" : "inherit",
           }}
           placeholder="select inspection type"
           placeholderStyle={{

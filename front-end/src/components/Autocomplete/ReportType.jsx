@@ -29,12 +29,7 @@ const ReportType = ({ value, disabled, onChange, theme, style, readOnly }) => {
           width: "100%",
           ...style,
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
-        }}
-        options={readOnly ? [] : ReportTypeOptions} // Use predefined suggestions
-        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`}
+        options={ReportTypeOptions} // Use predefined suggestions
         value={value}
         disabled={disabled}
         onChange={!readOnly ? onChange : undefined}

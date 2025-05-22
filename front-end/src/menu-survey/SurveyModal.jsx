@@ -16,7 +16,8 @@ import "./surveymodal.css";
 
 const { TabPane } = Tabs;
 
-const SurveyModal = ({ record, handleReload, currentUser, theme }) => { // Added theme prop
+const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
+  // Added theme prop
   const [isEditing, setIsEditing] = useState(false);
   const [editedRecord, setEditedRecord] = useState(record);
   const [activeTab, setActiveTab] = useState("1");
@@ -414,9 +415,9 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => { // Added
                 resetCheckboxesKey={resetCheckboxesKey}
               />
             </TabPane>
-            <TabPane tab={<span className="tabpane-title">SVR</span>} key="2">
+            {/* <TabPane tab={<span className="tabpane-title">SVR</span>} key="2">
               <SVR editedRecord={editedRecord} onIncludeChange={() => {}} />
-            </TabPane>
+            </TabPane> */}
           </Tabs>
         </div>
       </Modal>
@@ -435,15 +436,21 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => { // Added
           <div className="action-buttons-container">
             {isEditing ? (
               <div>
-                <Button onClick={handleCancelEdit} className="btn-cancel-right">
-                  Cancel
-                </Button>
                 <Button
                   type="primary"
                   icon={<SaveOutlined />}
                   onClick={handleSaveChanges}
+                   className="btn-cancel-right"
                 >
                   Save
+                </Button>
+                <Button
+                  onClick={handleCancelEdit}
+                  type="primary"
+                  danger
+                 
+                >
+                  Cancel
                 </Button>
               </div>
             ) : (

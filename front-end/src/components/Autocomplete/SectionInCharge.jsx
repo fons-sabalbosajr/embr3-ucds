@@ -36,12 +36,9 @@ const SectionInCharged = ({ value, readOnly, onChange, style, theme }) => {
           width: "100%",
           ...style,
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
-        }}
+
         options={readOnly ? [] : UnitOptions}
-        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`} // Apply theme class
+       
         value={value}
         onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>

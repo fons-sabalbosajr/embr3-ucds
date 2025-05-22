@@ -71,7 +71,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <TextArea
             value={record ? record.title : ""}
             onChange={(e) => handleChange("title", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
 
           />
@@ -81,7 +81,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <TextArea
             value={record ? record.name : ""}
             onChange={(e) => handleChange("name", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
             
           />
@@ -94,7 +94,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
               <IndustryClass
                 value={record ? record.industry_class : ""}
                 onChange={(value) => handleChange("industry_class", value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -105,7 +105,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
               <Input
                 value={record ? record.psic_code : ""}
                 onChange={(e) => handleChange("psic_code", e.target.value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
               />
             </Paragraph>
@@ -117,7 +117,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <Input
             value={record ? record.industry_type : ""}
             onChange={(e) => handleChange("industry_type", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
            
           />
@@ -128,7 +128,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <Input
             value={record ? record.industry_subtype : ""}
             onChange={(e) => handleChange("industry_subtype", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
            
           />
@@ -141,7 +141,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
               <Input
                 value={record ? record.lat : ""}
                 onChange={(e) => handleChange("lat", e.target.value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 
               />
@@ -153,7 +153,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
               <Input
                 value={record ? record.long : ""}
                 onChange={(e) => handleChange("long", e.target.value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                
               />
@@ -168,7 +168,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <TextArea
             value={record ? record.address : ""}
             onChange={(e) => handleChange("address", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
            
           />
@@ -178,7 +178,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <TextArea
             value={record ? record.street : ""}
             onChange={(e) => handleChange("street", e.target.value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
             
           />
@@ -188,7 +188,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <Barangays
             value={record ? record.brgy : ""}
             onChange={(value) => handleChange("brgy", value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
             selectedProvince={record ? record.province : ""}
             selectedMunicipality={record ? record.city : ""}
@@ -200,7 +200,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <Municipalities
             value={record ? record.city : ""}
             onChange={(value) => handleChange("city", value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
             selectedProvince={record ? record.province : ""}
           />
@@ -211,7 +211,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
           <Provinces
             value={record ? record.province : ""}
             onChange={(value) => handleChange("province", value)}
-            disabled={!isEditing}
+            readOnly={!isEditing}
             placeholder="No data"
           />
         </Paragraph>
@@ -223,7 +223,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
               <Input
                 value={record ? record.cong_district : ""}
                 onChange={(e) => handleChange("cong_district", e.target.value)}
-                disabled={!isEditing}
+                readOnly={!isEditing}
                 placeholder="No data"
                 
               />

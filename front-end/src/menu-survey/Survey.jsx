@@ -71,8 +71,23 @@ const Survey = ({ theme, currentUser }) => {
   const [progress, setProgress] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [dataSource, setDataSource] = useState([]);
 
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
+
+  const [tableHeight, setTableHeight] = useState(window.innerHeight - 250); // Adjust the 250px based on your layout
+
+  useEffect(() => {
+    const handleResize = () => {
+      const offset = 250; // Adjust this depending on header, margins, buttons above table
+      setTableHeight(window.innerHeight - offset);
+    };
+
+    window.addEventListener("resize", handleResize);
+    handleResize(); // initial run
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const formatNumber = (number) => {
     return new Intl.NumberFormat("en-US").format(number);
@@ -107,6 +122,7 @@ const Survey = ({ theme, currentUser }) => {
       const result = await response.json();
 
       const normalizedResult = result.map((item) => ({
+        _id: item._id,
         id_no: item.id_no ?? null,
         survey_eia: item.survey_eia === true ? "✔" : item.survey_eia || "",
         survey_air: item.survey_air === true ? "✔" : item.survey_air || "",
@@ -158,7 +174,7 @@ const Survey = ({ theme, currentUser }) => {
       const sortedResult = normalizedResult.sort((a, b) => a.id_no - b.id_no);
 
       setData(sortedResult);
-      // setFilteredData(sortedResult); // Filtering will be handled by useEffect
+      setDataSource(sortedResult);
 
       const uniqueUnits = [
         ...new Set(sortedResult.map((item) => item.resp_unit)),
@@ -193,14 +209,17 @@ const Survey = ({ theme, currentUser }) => {
     }
   };
 
-  const handlePageChange = (page, newPageSize) => {
+  // Called when page number changes
+  const handlePageChange = (page, currentPSize) => {
     setCurrentPage(page);
-    if (newPageSize) setPageSize(newPageSize);
+    // pageSize is managed by handlePageSizeChange or is the currentPSize,
+    // so no explicit setPageSize(currentPSize) is needed here.
   };
 
-  const handlePageSizeChange = (value) => {
-    setPageSize(value);
-    setCurrentPage(1);
+  // Called when pageSize changes via the Pagination's size changer
+  const handlePageSizeChange = (current, newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to page 1 when page size changes
   };
 
   useEffect(() => {
@@ -267,15 +286,26 @@ const Survey = ({ theme, currentUser }) => {
 
   const handleFilterChange = (value) => {
     setFilterValue(value);
+
+    if (value === "" || value === undefined) {
+      setSearchText("");
+      setSearchedColumn("");
+      setSelectedKeys([]);
+      // Optionally reset other filters if you have more
+    }
   };
 
   // Centralized useEffect for all filtering
-  useEffect(() => {
-    if (!data || !currentUser || !currentUser.provinceStringPermissions) {
-      setFilteredData([]);
-      return;
-    }
+useEffect(() => {
+  if (!data || !currentUser || !currentUser.provinceStringPermissions) {
+    setFilteredData([]);
+    return;
+  }
 
+  let currentFilteredData = [...data];
+
+  // Apply province permissions ONLY for Survey 2024
+  if (selectedSurvey === "Survey 2024") {
     const allowedProvinceKeys = Object.entries(
       currentUser.provinceStringPermissions
     )
@@ -285,7 +315,7 @@ const Survey = ({ theme, currentUser }) => {
       )
       .map(([key]) => key.toLowerCase().replace(/ /g, "").replace(/_/g, ""));
 
-    let currentFilteredData = data.filter((record) => {
+    currentFilteredData = currentFilteredData.filter((record) => {
       if (!record.province) return false;
       const normalizedRecordProvince = record.province
         .toLowerCase()
@@ -293,43 +323,44 @@ const Survey = ({ theme, currentUser }) => {
         .replace(/_/g, "");
       return allowedProvinceKeys.includes(normalizedRecordProvince);
     });
+  }
 
-    if (selectedKeys.length > 0) {
-      currentFilteredData = currentFilteredData.filter((record) => {
-        const recordValue = record.resp_unit;
-        if (typeof recordValue === "string" && recordValue !== null) {
-          const normalizedRecordValue = recordValue.toLowerCase();
-          const lowerSelectedKeys = selectedKeys.map((key) =>
-            key.toLowerCase()
-          );
-          return lowerSelectedKeys.some(
-            (key) =>
-              normalizedRecordValue.includes(key) ||
-              key.includes(normalizedRecordValue)
-          );
-        }
-        return false;
-      });
-    }
+  if (selectedKeys.length > 0) {
+    currentFilteredData = currentFilteredData.filter((record) => {
+      const recordValue = record.resp_unit;
+      if (typeof recordValue === "string" && recordValue !== null) {
+        const normalizedRecordValue = recordValue.toLowerCase();
+        const lowerSelectedKeys = selectedKeys.map((key) =>
+          key.toLowerCase()
+        );
+        return lowerSelectedKeys.some(
+          (key) =>
+            normalizedRecordValue.includes(key) ||
+            key.includes(normalizedRecordValue)
+        );
+      }
+      return false;
+    });
+  }
 
-    if (searchText) {
-      const lowerSearchText = searchText.toLowerCase();
-      currentFilteredData = currentFilteredData.filter((item) =>
-        Object.values(item).some((value) =>
-          String(value).toLowerCase().includes(lowerSearchText)
-        )
-      );
-    }
+  if (searchText) {
+    const lowerSearchText = searchText.toLowerCase();
+    currentFilteredData = currentFilteredData.filter((item) =>
+      Object.values(item).some((value) =>
+        String(value).toLowerCase().includes(lowerSearchText)
+      )
+    );
+  }
 
-    if (filterValue) {
-      currentFilteredData = currentFilteredData.filter(
-        (item) => item.industry_class === filterValue
-      );
-    }
+  if (filterValue) {
+    currentFilteredData = currentFilteredData.filter(
+      (item) => item.industry_class === filterValue
+    );
+  }
 
-    setFilteredData(currentFilteredData);
-    setCurrentPage(1);
-  }, [data, currentUser, selectedKeys, searchText, filterValue]);
+  setFilteredData(currentFilteredData);
+  setCurrentPage(1);
+}, [data, currentUser, selectedKeys, searchText, filterValue, selectedSurvey]);
 
   const handleReset = (clearFilters) => {
     clearFilters();
@@ -378,24 +409,16 @@ const Survey = ({ theme, currentUser }) => {
       <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
     ),
     onFilter: (value, record) => {
-      const searchTextValue = value.toLowerCase();
-      return (
-        record.project_title.toLowerCase().includes(searchTextValue) ||
-        (record.address &&
-          record.address.toLowerCase().includes(searchTextValue)) ||
-        (record.date_surveyed &&
-          new Date(record.date_surveyed)
-            .toLocaleDateString()
-            .toLowerCase()
-            .includes(searchTextValue)) ||
-        (record.resp_unit &&
-          record.resp_unit.toLowerCase().includes(searchTextValue)) ||
-        (record.iis_no && record.iis_no.toLowerCase().includes(searchTextValue))
-      );
+      const searchTextValue = value ? value.toString().toLowerCase() : "";
+      const recordValue = record[dataIndex];
+
+      // Null/undefined safe search for all columns
+      if (recordValue === null || recordValue === undefined) return false;
+      return recordValue.toString().toLowerCase().includes(searchTextValue);
     },
     onFilterDropdownVisibleChange: (visible) => {
       if (visible) {
-        setTimeout(() => searchInput?.select(), 100); // Added optional chaining
+        setTimeout(() => searchInput?.select(), 100);
       }
     },
     render: (text) =>
@@ -512,18 +535,29 @@ const Survey = ({ theme, currentUser }) => {
       });
 
       const responses = await Promise.all(promises);
+
       const results = await Promise.all(
-        responses.map((response) => {
+        responses.map(async (response, index) => {
           if (response.ok) {
-            return response.json();
+            const data = await response.json();
+            console.log(
+              `✅ Updated record ID: ${ids[index]}, Color: ${color}`,
+              data
+            );
+            return data;
           } else {
-            throw new Error(`Error updating row color: ${response.statusText}`);
+            throw new Error(
+              `❌ Error updating row color for ID ${ids[index]}: ${response.statusText}`
+            );
           }
         })
       );
-      fetchData(selectedSurvey.replace("Survey ", "")); // Refetch data
+
+      console.log("🎨 All row colors updated successfully:", results);
+
+      fetchData(selectedSurvey.replace("Survey ", "")); // Refetch updated table data
     } catch (error) {
-      console.error("Error updating row colors:", error.message);
+      console.error("🚨 Error updating row colors:", error.message);
     } finally {
       setLoading(false);
     }
@@ -626,7 +660,10 @@ const Survey = ({ theme, currentUser }) => {
         });
         return;
       }
-      if (!modifiedRows[record.id_no]?.modifiedApplicableLaws) {
+
+      const modified = modifiedRows[record.id_no];
+
+      if (!modified?.modifiedApplicableLaws) {
         notification.info({
           message: "No Changes",
           description: "No applicable laws were modified for this record.",
@@ -634,29 +671,30 @@ const Survey = ({ theme, currentUser }) => {
         return;
       }
 
-      const payload = {};
-      if (record.modifiedApplicableLaws) {
-        if (record.survey_eia !== initialState.get(record.id_no).survey_eia) {
-          payload.survey_eia = record.survey_eia === "✔" ? true : false;
-        }
-        if (record.survey_air !== initialState.get(record.id_no).survey_air) {
-          payload.survey_air = record.survey_air === "✔" ? true : false;
-        }
-        if (
-          record.survey_water !== initialState.get(record.id_no).survey_water
-        ) {
-          payload.survey_water = record.survey_water === "✔" ? true : false;
-        }
-        if (record.survey_haz !== initialState.get(record.id_no).survey_haz) {
-          payload.survey_haz = record.survey_haz === "✔" ? true : false;
-        }
-        if (record.survey_chem !== initialState.get(record.id_no).survey_chem) {
-          payload.survey_chem = record.survey_chem === "✔" ? true : false;
-        }
+      const year = selectedSurvey.replace("Survey ", "");
+      const payload = { year };
+
+      const updatedRecord = { ...record, ...modified };
+      const initial = initialState.get(record.id_no);
+
+      if (updatedRecord.survey_eia !== initial.survey_eia) {
+        payload.survey_eia = updatedRecord.survey_eia === "✔";
+      }
+      if (updatedRecord.survey_air !== initial.survey_air) {
+        payload.survey_air = updatedRecord.survey_air === "✔";
+      }
+      if (updatedRecord.survey_water !== initial.survey_water) {
+        payload.survey_water = updatedRecord.survey_water === "✔";
+      }
+      if (updatedRecord.survey_haz !== initial.survey_haz) {
+        payload.survey_haz = updatedRecord.survey_haz === "✔";
+      }
+      if (updatedRecord.survey_chem !== initial.survey_chem) {
+        payload.survey_chem = updatedRecord.survey_chem === "✔";
       }
 
       const response = await axios.put(
-        `http://localhost:8081/api/survey/${record._id}`,
+        `http://localhost:8081/api/survey/${record.id_no}`,
         payload
       );
 
@@ -665,6 +703,15 @@ const Survey = ({ theme, currentUser }) => {
           message: "Update Successfully!",
           description: "Data updated successfully.",
         });
+
+        // ✅ Update only the affected row in dataSource
+        setDataSource((prevData) =>
+          prevData.map((item) =>
+            item.id_no === record.id_no
+              ? { ...item, ...payload, ...modified }
+              : item
+          )
+        );
       } else if (response.data.message === "No changes made") {
         notification.info({
           message: "No Changes Made",
@@ -672,14 +719,14 @@ const Survey = ({ theme, currentUser }) => {
         });
       }
 
-      await fetchData(selectedSurvey.replace("Survey ", ""));
-      setModifiedRows({});
+      // ✅ Remove modified row only
+      setModifiedRows((prev) => {
+        const newState = { ...prev };
+        delete newState[record.id_no];
+        return newState;
+      });
     } catch (error) {
-      if (error.response) {
-        console.error("Error updating record:", error.response.data);
-      } else {
-        console.error("Error updating record:", error);
-      }
+      console.error("Error updating record:", error);
       notification.error({
         message: "Update Failed",
         description: "Failed to update data.",
@@ -817,6 +864,15 @@ const Survey = ({ theme, currentUser }) => {
     setIsAddModalVisible(false);
   };
 
+  const convertHexToRgba = (hex, opacity) => {
+    const sanitizedHex = hex.replace("#", "");
+    const bigint = parseInt(sanitizedHex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  };
+
   const paginatedData = useMemo(() => {
     return filteredData.slice(
       (currentPage - 1) * pageSize,
@@ -840,7 +896,10 @@ const Survey = ({ theme, currentUser }) => {
       width: 120,
       render: (_, record) => {
         return (
-          <div className="checkbox-container">
+          <div
+            className="checkbox-container"
+            onClick={(e) => e.stopPropagation()}
+          >
             {[
               "survey_eia",
               "survey_air",
@@ -848,12 +907,17 @@ const Survey = ({ theme, currentUser }) => {
               "survey_haz",
               "survey_chem",
             ].map((field) => (
-              <div key={field} className={`checkbox-wrapper ${field}`}>
+              <div
+                key={field}
+                className={`checkbox-wrapper ${field}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <Checkbox
                   checked={record[field] === "✔" || record[field] === true}
-                  onChange={(e) =>
-                    handleCheckboxChange(field, e.target.checked, record)
-                  }
+                  onChange={(e) => {
+                    e.stopPropagation(); // Prevent triggering row selection
+                    handleCheckboxChange(field, e.target.checked, record);
+                  }}
                 />
                 <span className="checkbox-label">
                   {field.replace("survey_", "").toUpperCase()}
@@ -1111,17 +1175,17 @@ const Survey = ({ theme, currentUser }) => {
               loading={loading && progress < 100} // Show loading on button if fetching
             />
           </Tooltip>
-          <Tooltip title="Export Data">
+          {/* <Tooltip title="Export Data">
             <Button
               type="primary"
               className="action-button"
               icon={<ExportOutlined />}
               //onClick={() => handleExportPDF(capitalizedProvinceName)} // Add export functionality
             />
-          </Tooltip>
-          <Tooltip title="Mark Row As">
+          </Tooltip> */}
+          {/* <Tooltip title="Mark Row As">
             <Dropdown
-              overlay={colorMenu} // Use overlay prop for AntD v5+
+              overlay={colorMenu}
               open={colorMenuVisible}
               onOpenChange={(visible) => setColorMenuVisible(visible)}
               placement="bottomLeft"
@@ -1132,7 +1196,7 @@ const Survey = ({ theme, currentUser }) => {
                 icon={<BgColorsOutlined />}
               />
             </Dropdown>
-          </Tooltip>
+          </Tooltip> */}
           <Button
             type="primary"
             className="add-survey-button"
@@ -1181,11 +1245,14 @@ const Survey = ({ theme, currentUser }) => {
 
           <div className="survey-pagination-controls">
             <Pagination
-              simple
+              // simple // Removed to allow showSizeChanger
               current={currentPage}
               total={filteredData.length}
               pageSize={pageSize}
               onChange={handlePageChange}
+              onShowSizeChange={handlePageSizeChange}
+              showSizeChanger
+              pageSizeOptions={["10", "20", "50", "100"]}
               size="small"
               className="custom-pagination"
             />
@@ -1235,7 +1302,7 @@ const Survey = ({ theme, currentUser }) => {
         )}
       </Modal>
 
-      <div className="survey-table">
+      <div>
         {loading && progress < 100 ? (
           <div className="loading-progress-container">
             <span>Loading Survey Data ({selectedSurvey})...</span> <br />
@@ -1253,25 +1320,24 @@ const Survey = ({ theme, currentUser }) => {
                 setSelectedRowKeys(newSelectedRowKeys);
               },
               getCheckboxProps: (record) => ({
-                name: record.name, // This might be incorrect, should be record.project_title or similar
+                name: record.project_title,
                 checked: selectedRows[record.id_no],
                 onChange: (e) => {
-                  // This onChange logic for rowSelection seems complex and might conflict with handleRowSelect
-                  // Consider simplifying or ensuring it works as intended.
                   if (e.target.checked) {
-                    setSelectedRows((prevSelectedRows) => ({
-                      ...prevSelectedRows,
+                    setSelectedRows((prev) => ({
+                      ...prev,
                       [record.id_no]: true,
                     }));
                   } else {
-                    // Handle uncheck if needed
+                    const newSelected = { ...selectedRows };
+                    delete newSelected[record.id_no];
+                    setSelectedRows(newSelected);
                   }
                 },
               }),
             }}
             size="small"
-            scroll={{ y: 950 }}
-            className="custom-table"
+            scroll={{ y: `calc(100vh - 280px)` }}
             columns={columns}
             dataSource={paginatedData}
             rowKey="id_no"
@@ -1281,18 +1347,6 @@ const Survey = ({ theme, currentUser }) => {
                 handleRowClick(record);
                 handleRowSelect(record.id_no);
               },
-              style: {
-                cursor: "pointer",
-                ...((selectedRowColors[record.id_no] || record.color) && {
-                  backgroundColor:
-                    selectedRowColors[record.id_no] || record.color,
-                }),
-              },
-              // badge prop is not standard for onRow, this might be custom logic
-              // badge:
-              //   modifiedRows && modifiedRows[record.id_no] ? (
-              //     <Badge status="warning" />
-              //   ) : null,
             })}
           />
         )}

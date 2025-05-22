@@ -1,314 +1,453 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Input, Row, Col, Typography, ConfigProvider } from "antd";
+import { Input, Row, Col, Typography, ConfigProvider, Checkbox } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import "./geninfo.css";
-import IndustryClass from "../../../components/Autocomplete/IndustryClass";
-import Provinces from "../../../components/Autocomplete/Province";
-import Municipalities from "../../../components/Autocomplete/Municipalities";
-import Barangays from "../../../components/Autocomplete/Barangay";
+import IndustryClass from "../../actions/autocomplete/IndustryClass";
+import IndustryType from "../../actions/autocomplete/IndustryType";
+import IndustrySubType from "../../actions/autocomplete/IndustrySubType";
+import PSICCode from "../../actions/autocomplete/PSICCode";
+import Province from "../../../components/Autocomplete/Province";
+import Municipality from "../../../components/Autocomplete/Municipalities";
+import Barangay from "../../../components/Autocomplete/Barangay";
+import Waterbody from "../../actions/autocomplete/Waterbody";
+import District from "../../actions/autocomplete/District";
 
 const { Paragraph } = Typography;
 
-const GenInfo = ({
-  editedRecord,
-  setEditedRecord,
-  handleChange,
-  isEditing,
-  theme,
-}) => {
-  const [projectData, setProjectData] = useState({});
+const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
+  // Local state for fields
+  const [proponentName, setProponentName] = useState("");
+  const [projectTitle, setProjectTitle] = useState("");
+  const [selectedIndustryClass, setSelectedIndustryClass] = useState("");
+  const [industryType, setIndustryType] = useState("");
+  const [industrySubType, setIndustrySubType] = useState("");
+  const [psicCode, setPsicCode] = useState("");
+  const [selectedProvince, setSelectedProvince] = useState("");
+  const [selectedMunicipality, setSelectedMunicipality] = useState("");
+  const [selectedBarangay, setSelectedBarangay] = useState("");
+  const [street, setStreet] = useState("");
+  const [fullAddress, setFullAddress] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [withinManilaBayArea, setWithinManilaBayArea] = useState(false);
+
+  // Load data from editedRecord
+  useEffect(() => {
+    if (editedRecord) {
+      setProponentName(editedRecord.name || "");
+      setProjectTitle(editedRecord.title || "");
+      setSelectedIndustryClass(editedRecord.industry_class || "");
+      setIndustryType(editedRecord.industry_type || "");
+      setIndustrySubType(editedRecord.industry_subtype || "");
+      setPsicCode(editedRecord.psic_code || "");
+      setSelectedProvince(editedRecord.province || "");
+      setSelectedMunicipality(editedRecord.city || "");
+      setSelectedBarangay(editedRecord.barangay || editedRecord.brgy || "");
+      setStreet(editedRecord.street || "");
+      setLongitude(
+        editedRecord.long !== undefined &&
+          editedRecord.long !== null &&
+          editedRecord.long !== ""
+          ? editedRecord.long
+          : ""
+      );
+      setLatitude(
+        editedRecord.lat !== undefined &&
+          editedRecord.lat !== null &&
+          editedRecord.lat !== ""
+          ? editedRecord.lat
+          : ""
+      );
+      setWithinManilaBayArea(!!editedRecord.within_manila_bay_area);
+    }
+  }, [editedRecord]);
 
   useEffect(() => {
-    const fetchProjectData = async () => {
-      if (!editedRecord?.industry_class) {
-        // If industry_class is blank, clear the related fields and set default values
-        setProjectData({
-          psic_code: "N/A",
-          industry_type: "N/A",
-          industry_subtype: "N/A",
-        });
-        handleChange("psic_code", "N/A");
-        handleChange("industry_type", "N/A");
-        handleChange("industry_subtype", "N/A");
-        return;
-      }
+    // If all are empty, show "N/A"
+    if (
+      !street &&
+      !selectedBarangay &&
+      !selectedMunicipality &&
+      !selectedProvince
+    ) {
+      setFullAddress("N/A");
+    } else {
+      const addressComponents = [
+        street,
+        selectedBarangay,
+        selectedMunicipality,
+        selectedProvince,
+      ];
+      const filteredComponents = addressComponents.filter(
+        (component) => component
+      );
+      setFullAddress(filteredComponents.join(", "));
+    }
+  }, [street, selectedBarangay, selectedMunicipality, selectedProvince]);
 
-      // Fetch project data when industry_class is not blank
-      try {
-        const response = await axios.get(
-          `http://localhost:8081/api/project_type?industry_class=${editedRecord.industry_class}`
-        );
-        if (response.data) {
-          const { psic_code, project_type, project_subtype } = response.data;
-          // If no valid data from the API, fallback to "N/A"
-          setProjectData({
-            psic_code: psic_code || "N/A",
-            industry_type: project_type || "N/A",
-            industry_subtype: project_subtype || "N/A",
-          });
+  // Optionally update parent editedRecord when local state changes (if editing)
+  useEffect(() => {
+    if (isEditing && setEditedRecord) {
+      setEditedRecord((prev) => ({
+        ...prev,
+        name: proponentName,
+        title: projectTitle,
+        industry_class: selectedIndustryClass,
+        industry_type: industryType,
+        industry_subtype: industrySubType,
+        psic_code: psicCode,
+        province: selectedProvince,
+        city: selectedMunicipality,
+        barangay: selectedBarangay,
+        street,
+        long: longitude,
+        lat: latitude,
+        within_manila_bay_area: withinManilaBayArea,
+      }));
+    }
+    // eslint-disable-next-line
+  }, [
+    proponentName,
+    projectTitle,
+    selectedIndustryClass,
+    industryType,
+    industrySubType,
+    psicCode,
+    selectedProvince,
+    selectedMunicipality,
+    selectedBarangay,
+    street,
+    longitude,
+    latitude,
+    withinManilaBayArea,
+    isEditing,
+  ]);
 
-          // Update fields with fetched data, fallback to "N/A" if data is missing
-          handleChange("psic_code", psic_code || "N/A");
-          handleChange("industry_type", project_type || "N/A");
-          handleChange("industry_subtype", project_subtype || "N/A");
-        }
-      } catch (error) {
-        console.error("Error fetching project data:", error);
-        setProjectData({
-          psic_code: "N/A",
-          industry_type: "N/A",
-          industry_subtype: "N/A",
-        });
-        handleChange("psic_code", "N/A");
-        handleChange("industry_type", "N/A");
-        handleChange("industry_subtype", "N/A");
-      }
-    };
-
-    fetchProjectData();
-  }, [editedRecord?.industry_class]);
+  // Helper for N/A display
+  const isAddressEmpty =
+    !selectedProvince && !selectedMunicipality && !selectedBarangay;
 
   return (
-    <div>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={12} lg={12}>
-          <Paragraph>
-            <strong>Project Title</strong>
-            <TextArea
-              value={editedRecord?.title || ""}
-              onChange={(e) => handleChange("title", e.target.value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
-          <Paragraph>
-            <strong>Proponent Name</strong>
-            <TextArea
-              value={editedRecord?.name || ""}
-              onChange={(e) => handleChange("name", e.target.value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
+    <Row gutter={[16, 16]}>
+      <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+        <Paragraph>
+          <strong>Proponent Name</strong>
+          <TextArea
+            value={proponentName}
+            onChange={(e) => setProponentName(e.target.value)}
+            placeholder="Enter street"
+            style={{
+              fontSize: "11px",
+              padding: "4px 8px",
+              cursor: isEditing ? "text" : "not-allowed",
+              color: isEditing ? "" : "#aaa",
+            }}
+            readOnly={!isEditing}
+            rows={2}
+          />
+        </Paragraph>
+        <Paragraph>
+          <strong>Project Title</strong>
+          <TextArea
+            value={projectTitle}
+            onChange={(e) => setProjectTitle(e.target.value)}
+            placeholder="Enter street"
+            style={{
+              fontSize: "11px",
+              padding: "4px 8px",
+              cursor: isEditing ? "text" : "not-allowed",
+              color: isEditing ? "" : "#aaa",
+            }}
+            readOnly={!isEditing}
+            rows={2}
+          />
+        </Paragraph>
+        <Paragraph>
+          <strong>Industry Classification</strong>
+          <IndustryClass
+            onChange={setSelectedIndustryClass}
+            value={selectedIndustryClass}
+            readOnly={!isEditing}
+          />
+        </Paragraph>
+        <IndustryType
+          selectedIndustryClass={selectedIndustryClass}
+          setIndustryType={setIndustryType}
+          readOnly={!isEditing}
+        />
+        <IndustrySubType
+          selectedIndustryClass={selectedIndustryClass}
+          setIndustrySubType={setIndustrySubType}
+          readOnly={!isEditing}
+        />
+        <PSICCode
+          selectedIndustryClass={selectedIndustryClass}
+          value={psicCode}
+          onChange={setPsicCode}
+          readOnly={!isEditing}
+        />
+      </Col>
 
-
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={24} md={12} lg={12}>
-              <Paragraph>
-                <strong>Industry Classification</strong>
-                <IndustryClass
-                  value={editedRecord?.industry_class || ""}
-                  onChange={(value) => {
-                    handleChange("industry_class", value);
-                    if (!value) {
-                      handleChange("industry_type", "N/A");
-                      handleChange("industry_subtype", "N/A");
-                      handleChange("psic_code", "N/A");
-                    }
-                  }}
-                  placeholder="No data"
+      <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
+            <Paragraph>
+              <strong>Province</strong>
+              <Province
+                value={selectedProvince}
+                onChange={setSelectedProvince}
+                disabled={!isEditing}
+                readOnly={!isEditing}
+              />
+            </Paragraph>
+          </Col>
+          <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
+            <Paragraph>
+              <strong>Municipality</strong>
+              <Municipality
+                value={selectedMunicipality}
+                onChange={setSelectedMunicipality}
+                selectedProvince={selectedProvince}
+                readOnly={!selectedProvince || !isEditing}
+                theme={theme}
+                style={{
+                  cursor:
+                    !selectedProvince || !isEditing ? "not-allowed" : "pointer",
+                }}
+              />
+            </Paragraph>
+          </Col>
+          <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
+            <Paragraph>
+              <strong>Barangay</strong>
+              <Barangay
+                value={selectedBarangay}
+                onChange={setSelectedBarangay}
+                selectedProvince={selectedProvince}
+                selectedMunicipality={selectedMunicipality}
+                readOnly={!selectedMunicipality || !isEditing}
+                style={{
+                  cursor:
+                    !selectedMunicipality || !isEditing
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              />
+            </Paragraph>
+          </Col>
+        </Row>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={24} md={24} lg={24} className="modalcol">
+            <Paragraph style={{ marginTop: "13px" }}>
+              <strong>Street</strong>
+              <ConfigProvider
+                theme={{
+                  components: {
+                    Input: {
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                    },
+                  },
+                }}
+              >
+                <TextArea
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  placeholder="Enter street"
                   style={{
+                    fontSize: "11px",
+                    padding: "4px 8px",
                     cursor: isEditing ? "text" : "not-allowed",
                     color: isEditing ? "" : "#aaa",
                   }}
-                  theme={theme}
+                  readOnly={!isEditing}
+                  rows={2}
                 />
-              </Paragraph>
-            </Col>
-            <Col xs={24} sm={24} md={12} lg={12}>
-              <Paragraph>
-                <strong>PSIC Code</strong>
-                <Input
-                  value={
-                    projectData
-                      ? projectData.psic_code
-                      : editedRecord?.psic_code || ""
-                  }
-                  onChange={(e) => handleChange("psic_code", e.target.value)}
+              </ConfigProvider>
+            </Paragraph>
+          </Col>
+        </Row>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={24} md={24} lg={24} className="modalcol">
+            <Paragraph>
+              <strong>Complete Address</strong>
+              <ConfigProvider
+                theme={{
+                  components: {
+                    Input: {
+                      fontSize: "11px",
+                      height: "29px",
+                      padding: "4px 8px",
+                      cursor: "not-allowed",
+                    },
+                  },
+                }}
+              >
+                <TextArea
+                  value={fullAddress}
                   readOnly
-                  placeholder="No data"
+                  rows={5}
                   style={{
+                    fontSize: "11px",
+                    padding: "4px 8px",
+                    marginTop: "4px",
                     cursor: isEditing ? "text" : "not-allowed",
                     color: isEditing ? "" : "#aaa",
                   }}
                 />
-              </Paragraph>
-            </Col>
-          </Row>
-
-
-          <Paragraph>
-            <strong>Industry Type</strong>
-            <Input
-              value={
-                projectData
-                  ? projectData.industry_type
-                  : editedRecord.industry_type || ""
-              }
-              onChange={(e) => handleChange("industry_type", e.target.value)}
-              readOnly
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
-          
-          <Paragraph className="label-industry-subtype">
-            <strong>Industry Sub-Type</strong>
-            <Input
-              value={
-                projectData
-                  ? projectData.industry_subtype
-                  : editedRecord?.industry_subtype || ""
-              }
-              onChange={(e) => handleChange("industry_subtype", e.target.value)}
-              readOnly
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
-
-          <Row gutter={[16, 16]} className="row-auto">
-            <Col xs={24} sm={24} md={12} lg={12}>
-              <Paragraph className="label-industry-type">
-                <strong>Latitude</strong>
+              </ConfigProvider>
+            </Paragraph>
+          </Col>
+          {/* District removed */}
+          <Col xs={24} sm={24} md={15} lg={15} className="modalcol-zipcode">
+            <Paragraph style={{ marginTop: "-24px" }}>
+              {isAddressEmpty ? (
                 <Input
-                  value={editedRecord?.lat || ""}
-                  onChange={(e) => handleChange("lat", e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="No data"
+                  value="N/A"
+                  readOnly
                   style={{
-                    cursor: isEditing ? "text" : "not-allowed",
-                    color: isEditing ? "" : "#aaa",
+                    fontSize: "11px",
+                    height: "29px",
+                    padding: "4px 8px",
                   }}
                 />
-              </Paragraph>
-            </Col>
-            <Col xs={24} sm={24} md={12} lg={12}>
-              <Paragraph className="label-industry-type">
-                <strong>Longitude</strong>
-                <Input
-                  value={editedRecord?.long || ""}
-                  onChange={(e) => handleChange("long", e.target.value)}
+              ) : (
+                <Waterbody
+                  selectedMunicipality={selectedMunicipality}
                   readOnly={!isEditing}
-                  placeholder="No data"
-                  style={{
-                    cursor: isEditing ? "text" : "not-allowed",
-                    color: isEditing ? "" : "#aaa",
-                  }}
                 />
-              </Paragraph>
-            </Col>
-          </Row>
-        </Col>
+              )}
+            </Paragraph>
+          </Col>
 
-        <Col xs={24} sm={24} md={12} lg={12}>
-          <Paragraph>
-            <strong>Address</strong>
-            <TextArea
-              value={editedRecord?.address || ""}
-              onChange={(e) => handleChange("address", e.target.value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
-          <Paragraph>
-            <strong>Street</strong>
-            <TextArea
-              value={editedRecord?.street || ""}
-              onChange={(e) => handleChange("street", e.target.value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
-          <Paragraph>
-            <strong>Barangay</strong>
-            <Barangays
-              value={editedRecord?.brgy || ""}
-              onChange={(value) => handleChange("brgy", value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-                
-              }}
-              selectedProvince={editedRecord?.province || ""}
-              selectedMunicipality={editedRecord?.city || ""}
-            />
-          </Paragraph>
-          <Paragraph className="margin-top">
-            <strong>City/Municipality</strong>
-            <Municipalities
-              value={editedRecord?.city || ""}
-              onChange={(value) => handleChange("city", value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-              selectedProvince={editedRecord?.province || ""}
-            />
-          </Paragraph>
-          <Paragraph className="margin-top">
-            <strong>Province</strong>
-            <Provinces
-              value={editedRecord?.province || ""}
-              onChange={(value) => handleChange("province", value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
-
-          <Row gutter={[16, 16]} className="row-auto">
-            <Col xs={24} sm={24} md={12} lg={12}>
-              <Paragraph className="paragraph-margin congress">
-                <strong>Congressional District</strong>
+          <Col xs={24} sm={24} md={9} lg={9} className="modalcol-zipcode">
+            <Paragraph style={{ marginTop: "-24px" }}>
+              {isAddressEmpty ? (
                 <Input
-                  value={editedRecord?.cong_district || ""}
-                  onChange={(e) =>
-                    handleChange("cong_district", e.target.value)
-                  }
-                  readOnly={!isEditing}
-                  placeholder="No data"
+                  value="N/A"
+                  readOnly
                   style={{
-                    cursor: isEditing ? "text" : "not-allowed",
-                    color: isEditing ? "" : "#aaa",
+                    fontSize: "11px",
+                    height: "29px",
+                    padding: "4px 8px",
+                    background: "#f5f5f5",
+                    cursor: "not-allowed",
                   }}
                 />
-              </Paragraph>
-            </Col>
-          </Row>
-        </Col>
-      </Row>
-    </div>
+              ) : (
+                <District
+                  selectedMunicipality={selectedMunicipality}
+                  inputHeight="29px"
+                  style={{
+                    cursor: "pointer",
+                  }}
+                  readOnly={!isEditing}
+                />
+              )}
+            </Paragraph>
+          </Col>
+
+          <Col xs={24} sm={24} md={24} lg={24} className="modalcol-zipcode">
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={24} md={24} lg={24} className="modalcol-zipcode">
+                <Row gutter={[16, 16]}>
+                  <Col
+                    xs={24}
+                    sm={24}
+                    md={12}
+                    lg={12}
+                    className="modalcol-zipcode"
+                  >
+                    <Paragraph style={{ marginTop: "-10px" }}>
+                      <strong>Longitude</strong>
+                      <ConfigProvider
+                        theme={{
+                          components: {
+                            Input: {
+                              fontSize: "11px",
+                              height: "29px",
+                              padding: "4px 8px",
+                            },
+                          },
+                        }}
+                      >
+                        <Input
+                          value={
+                            isAddressEmpty
+                              ? "N/A"
+                              : longitude !== ""
+                              ? longitude
+                              : ""
+                          }
+                          onChange={(e) => setLongitude(e.target.value)}
+                          style={{
+                            fontSize: "11px",
+                            height: "29px",
+                            padding: "4px 8px",
+                            cursor: isEditing ? "text" : "not-allowed",
+                            color: isEditing ? "" : "#aaa",
+                          }}
+                          readOnly={!isEditing || isAddressEmpty}
+                          placeholder={
+                            isAddressEmpty ? "N/A" : "Enter longitude"
+                          }
+                        />
+                      </ConfigProvider>
+                    </Paragraph>
+                  </Col>
+                  <Col
+                    xs={24}
+                    sm={24}
+                    md={12}
+                    lg={12}
+                    className="modalcol-zipcode"
+                  >
+                    <Paragraph style={{ marginTop: "-10px" }}>
+                      <strong>Latitude</strong>
+                      <ConfigProvider
+                        theme={{
+                          components: {
+                            Input: {
+                              fontSize: "11px",
+                              height: "29px",
+                              padding: "4px 8px",
+                            },
+                          },
+                        }}
+                      >
+                        <Input
+                          value={
+                            isAddressEmpty
+                              ? "N/A"
+                              : latitude !== ""
+                              ? latitude
+                              : ""
+                          }
+                          onChange={(e) => setLatitude(e.target.value)}
+                          style={{
+                            fontSize: "11px",
+                            height: "29px",
+                            padding: "4px 8px",
+                            cursor: isEditing ? "text" : "not-allowed",
+                            color: isEditing ? "" : "#aaa",
+                          }}
+                          readOnly={!isEditing || isAddressEmpty}
+                          placeholder={
+                            isAddressEmpty ? "N/A" : "Enter latitude"
+                          }
+                        />
+                      </ConfigProvider>
+                    </Paragraph>
+                  </Col>
+                </Row>
+              </Col>
+            </Row>
+          </Col>
+        </Row>
+      </Col>
+    </Row>
   );
 };
 

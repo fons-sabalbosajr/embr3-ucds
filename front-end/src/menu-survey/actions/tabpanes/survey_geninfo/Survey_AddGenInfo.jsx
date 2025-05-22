@@ -185,7 +185,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
             <strong>Project Title</strong>
             <Input
               value={projectTitle} // Bind the value to the projectTitle state
-              disabled={!isEditing}
+              readOnly={!isEditing}
               placeholder="Enter Project Name"
               rows={2}
               className="textbox-label"
@@ -199,7 +199,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                 <strong>Industry Classification</strong>
                 <IndustryClass
                   onChange={setSelectedIndustryClass}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </Paragraph>
             </Col>
@@ -232,7 +232,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                 <Province
                   value={selectedProvince}
                   onChange={setSelectedProvince}
-                  disabled={!isEditing}
+                  readOnly={!isEditing}
                 />
               </Paragraph>
             </Col>
@@ -243,7 +243,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                   value={selectedMunicipality}
                   onChange={setSelectedMunicipality}
                   selectedProvince={selectedProvince}
-                  disabled={!selectedProvince}
+                  readOnly={!selectedProvince}
                 />
                 {showAddressError && !selectedMunicipality && (
                   <Text type="danger" style={{ fontSize: "11px" }}>
@@ -261,7 +261,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                   onChange={setSelectedBarangay}
                   selectedProvince={selectedProvince}
                   selectedMunicipality={selectedMunicipality}
-                  disabled={!selectedMunicipality}
+                  readOnly={!selectedMunicipality}
                 />
                 {showAddressError && !selectedBarangay && (
                   <Text type="danger" style={{ fontSize: "11px" }}>
@@ -286,7 +286,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
                 {showAddressError && !street && (
@@ -345,7 +345,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                 style={{
                   fontSize: "11px",
                   padding: "4px 8px",
-                  backgroundColor: "#f5f5f5", // Light gray background
+                  
                   color: "#a9a9a9", // Gray text color
                   cursor: "not-allowed", // Change cursor to indicate disabled
                 }}
@@ -388,7 +388,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
                 {longitudeError && (
@@ -422,7 +422,7 @@ const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
                       height: "29px",
                       padding: "4px 8px",
                     }}
-                    disabled={!isEditing}
+                    readOnly={!isEditing}
                   />
                 </ConfigProvider>
                 {latitudeError && (
