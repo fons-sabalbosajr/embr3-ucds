@@ -4400,10 +4400,6 @@ app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
 
 //#endregion
 
-// Start server
-app.listen(8081, () => {
-  console.log(`Server running on port ${PORT}`);
-});
 
 // Handle graceful shutdown
 process.on("SIGINT", () => {
@@ -4412,4 +4408,14 @@ process.on("SIGINT", () => {
     console.log("MongoDB connection closed");
   }
   process.exit();
+});
+
+const http = require("http");
+const setupSocket = require("./socket");
+
+const server = http.createServer(app);
+setupSocket(server);
+
+server.listen(8081, () => {
+  console.log(`Server running with Socket.IO and DB Port on port ${PORT}`);
 });

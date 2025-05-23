@@ -18,9 +18,10 @@ import {
   Pagination,
   Popover,
   DatePicker,
-  Select as AntSelect, // Renaming Select to avoid conflict if you have other Selects
+  Select as AntSelect,
   ConfigProvider,
   Progress,
+  Avatar, 
 } from "antd";
 import {
   ReloadOutlined,
@@ -45,6 +46,7 @@ import "jspdf-autotable";
 import SectionDetailsModal from "./sectiondetails/SectionDetailsModal";
 import AddProvinceModal from "./actions/AddProvinceModal";
 import moment from "moment"; // Import moment for date calculations
+import { io } from "socket.io-client";
 import "./province.css";
 
 // Helper function to format province name for display (e.g., "Nueva_Ecija" to "Nueva Ecija")
@@ -100,9 +102,10 @@ const Province = ({ theme, currentUser }) => {
   const [selectedSection, setSelectedSection] = useState("");
   const [sectionDetails, setSectionDetails] = useState([]);
   const [selectedSectionData, setSelectedSectionData] = useState([]);
-  const [sectionDetailsLoading, setSectionDetailsLoading] = useState(false);
   const [buttonColor, setButtonColor] = useState("primary");
   const [progress, setProgress] = useState(0); // Progress state
+  const [provinceViewers, setProvinceViewers] = useState({});
+  const socketRef = useRef(null);
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
@@ -366,6 +369,41 @@ const Province = ({ theme, currentUser }) => {
     }
   }, [data]);
 
+  useEffect(() => {
+    // Connect once
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:8081", {
+        withCredentials: true,
+      });
+    }
+    const socket = socketRef.current;
+
+    // Join province room on mount or province change
+    if (currentUser && displayProvinceName) {
+      socket.emit("joinProvince", {
+        province: displayProvinceName,
+        user: {
+          userId:
+            currentUser._id?.$oid || currentUser._id || currentUser.userId,
+          username: currentUser.username,
+          avatar: currentUser.avatar || currentUser.avatarUrl,
+          name: currentUser.name,
+        },
+      });
+    }
+
+    // Listen for updates
+    socket.on("provinceViewers", (viewers) => {
+      setProvinceViewers(viewers);
+    });
+
+    // Leave province on unmount
+    return () => {
+      socket.emit("leaveProvince");
+      socket.off("provinceViewers");
+    };
+  }, [currentUser, displayProvinceName]);
+
   const calculateSectionCounts = (data) => {
     const counts = {};
     data.forEach((record) => {
@@ -513,16 +551,17 @@ const Province = ({ theme, currentUser }) => {
       // Check if the record is in the filtered data
       const isInFilteredData = filteredData.includes(record);
 
-        if (dataIndex === "id_no") {
+      if (dataIndex === "id_no") {
         // Directly compare the filter value with the id_no field
         return record.id_no && record.id_no.toLowerCase().includes(lowerValue);
       }
 
-         if (dataIndex === "remarks") {
+      if (dataIndex === "remarks") {
         // Directly compare the filter value with the id_no field
-        return record.remarks && record.remarks.toLowerCase().includes(lowerValue);
+        return (
+          record.remarks && record.remarks.toLowerCase().includes(lowerValue)
+        );
       }
-
 
       if (dataIndex === "section_incharged") {
         return (
@@ -1487,7 +1526,7 @@ const Province = ({ theme, currentUser }) => {
         );
       },
     },
-    { 
+    {
       title: "Section/Unit Incharged",
       key: "section_incharged",
       ...getColumnSearchProps("section_incharged"),
@@ -1724,6 +1763,53 @@ const Province = ({ theme, currentUser }) => {
           onClick={() => handleExportPDF(displayProvinceName)}
           title="Export Data"
         />
+
+        {canViewDataHistory &&
+        provinceViewers[displayProvinceName] &&
+        provinceViewers[displayProvinceName].length > 0 && (
+          <div
+            style={{ display: "flex", alignItems: "center", marginLeft: 12 }}
+          >
+            <Avatar.Group
+              max={50}
+              maxStyle={{
+                color: "#f56a00",
+                backgroundColor: "#fde3cf",
+                fontSize: 10,
+              }}
+              size={24}
+            >
+              {provinceViewers[displayProvinceName]
+                // Filter out the dev user by userId or username
+                .filter(
+                  (user) =>
+                    user.username !== "asabalbosa"
+                )
+                .map((user) => (
+                  <Tooltip
+                    key={user.userId}
+                    title={
+                      <span style={{ fontSize: "8px" }}>
+                        {`${user.username} is viewing ${displayProvinceName}`}
+                      </span>
+                    }
+                  >
+                    <Avatar
+                      src={user.avatar}
+                      style={{
+                        marginLeft: 2,
+                        verticalAlign: "middle",
+                      }}
+                    >
+                      {!user.avatar && user.username
+                        ? user.username[0].toUpperCase()
+                        : ""}
+                    </Avatar>
+                  </Tooltip>
+                ))}
+            </Avatar.Group>
+          </div>
+        )}
 
         <Button
           type="primary"

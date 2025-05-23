@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { ConfigProvider, Layout, Menu, Button } from "antd";
+import { ConfigProvider, Layout, Menu, Button, Avatar, Tooltip } from "antd";
 import {
   DashboardFilled,
   CheckCircleFilled,
@@ -14,6 +14,7 @@ import {
 } from "@ant-design/icons";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { DataContext } from "./../menu-province/DataContext";
+import { io } from "socket.io-client";
 import Logo from "./Logo";
 import "./sidemenu.css";
 
@@ -25,8 +26,11 @@ const SideMenu = ({ theme, currentUser }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { setCurrentProvince } = useContext(DataContext);
+  const [provinceViewers, setProvinceViewers] = useState({});
+  const socketRef = React.useRef(null);
 
   const permissions = currentUser?.permissions || [];
+  const canViewDataHistory = permissions[3];
 
   const visibleProvinces = [
     "Aurora",
@@ -56,6 +60,35 @@ const SideMenu = ({ theme, currentUser }) => {
     else setOpenKeys([]);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!canViewDataHistory) return; // Only connect if allowed to view
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:8081", {
+        withCredentials: true,
+      });
+    }
+    const socket = socketRef.current;
+
+    socket.emit("joinSideMenuViewers", {
+      user: {
+        userId:
+          currentUser?._id?.$oid || currentUser?._id || currentUser?.userId,
+        username: currentUser?.username,
+        avatar: currentUser?.avatar || currentUser?.avatarUrl,
+        name: currentUser?.name,
+      },
+    });
+
+    socket.on("provinceViewers", (viewers) => {
+      setProvinceViewers(viewers);
+    });
+
+    return () => {
+      socket.emit("leaveSideMenuViewers");
+      socket.off("provinceViewers");
+    };
+  }, [currentUser, canViewDataHistory]);
+
   const handleProvinceSelect = (province) => {
     setCurrentProvince(province); // Set the selected province
     navigate(`/universe/province/${province}`); // Navigate to the province page
@@ -71,10 +104,61 @@ const SideMenu = ({ theme, currentUser }) => {
       key: "r3-monitoring",
       icon: <CheckCircleFilled />,
       label: "Monitoring Plan",
-      children: visibleProvinces.map((province) => ({
-        key: `/universe/province/${province}`,
-        label: <Link to={`/universe/province/${province}`}>{province}</Link>,
-      })),
+      children: visibleProvinces.map((province) => {
+        // Filter out dev user by username for this province
+        const filteredViewers =
+          provinceViewers[province]?.filter(
+            (user) => user.username !== "asabalbosa"
+          ) || [];
+
+        const avatars =
+          canViewDataHistory && filteredViewers.length > 0 ? (
+            <Avatar.Group
+              max={{ count: 2 }}
+              maxStyle={{
+                color: "#f56a00",
+                backgroundColor: "#fde3cf",
+                fontSize: 10,
+                border: "1px solid #52c41a",
+              }}
+              size={18}
+              style={{ marginLeft: 6 }}
+            >
+              {filteredViewers.map((user) => (
+                <Tooltip
+                  key={user.userId}
+                  title={
+                    <span style={{ fontSize: "10px" }}>
+                      {`${user.username} is here`}
+                    </span>
+                  }
+                >
+                  <Avatar
+                    src={user.avatar}
+                    style={{
+                      marginLeft: 50,
+                      verticalAlign: "middle",
+                    }}
+                  >
+                    {!user.avatar && user.username
+                      ? user.username[0].toUpperCase()
+                      : ""}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </Avatar.Group>
+          ) : null;
+
+        return {
+          key: `/universe/province/${province}`,
+          label: (
+            <span style={{ display: "flex", alignItems: "center" }}>
+              <span>{province}</span>
+              {avatars}
+            </span>
+          ),
+        };
+      }),
     },
     {
       key: "healthcare",

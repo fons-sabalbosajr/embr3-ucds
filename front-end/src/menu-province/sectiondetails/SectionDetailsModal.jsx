@@ -286,8 +286,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
       case "awecmes":
         return "#626F47";
 
-      case "":
-      case "":
+      case "": // Only one empty string case is needed
         return "transparent";
 
       case "TCHWMS/MBU":

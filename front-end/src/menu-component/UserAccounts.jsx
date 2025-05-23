@@ -507,7 +507,7 @@ const UserAccounts = ({ theme = "dark" }) => {
             bgColor = "#973131";
             break;
           default:
-            bgColor = "#f0f0f0";
+            bgColor = "#393E46";
         }
         return (
           <span
@@ -517,7 +517,7 @@ const UserAccounts = ({ theme = "dark" }) => {
               padding: "2px 6px",
               borderRadius: "3px",
               display: "inline-block",
-              fontSize: 11,
+              fontSize: 10,
               minWidth: "60px",
               textAlign: "center",
               fontWeight: 500,
