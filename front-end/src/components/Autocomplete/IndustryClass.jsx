@@ -210,7 +210,14 @@ const industryClassOptions = [
   { value: "Water Treatment" },
 ];
 
-const IndustryClass = ({ value, disabled, onChange, theme, style }) => {
+const IndustryClass = ({
+  value,
+  disabled,
+  onChange,
+  theme,
+  style,
+  isEditing,
+}) => {
   return (
     <ConfigProvider
       theme={{
@@ -230,9 +237,7 @@ const IndustryClass = ({ value, disabled, onChange, theme, style }) => {
           width: "100%",
           fontSize: "11px",
         }}
-       
         options={industryClassOptions}
-       
         value={value}
         onChange={onChange}
         filterOption={(inputValue, option) =>
@@ -246,6 +251,8 @@ const IndustryClass = ({ value, disabled, onChange, theme, style }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
+            cursor: isEditing ? "text" : "not-allowed",
+            color: isEditing ? "" : "#aaa",
             ...style,
           }}
           placeholder="Select industry classification"

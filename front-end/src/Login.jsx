@@ -55,17 +55,10 @@ const Login = () => {
 
   return (
     <ConfigProvider
-      theme={{
-        // By providing an empty theme object, or specific overrides,
-        // we can prevent inheritance from a global ConfigProvider.
-        // For a more complete "reset" to Ant Design defaults if needed:
-        // import { theme as antdTheme } from 'antd';
-        // token: antdTheme.defaultSeed,
-      }}
     >
       <div className="background-login">
         <div className="animated-circles-container">
-          {[...Array(10)].map((_, i) => ( // Creates 10 circles
+          {[...Array(10)].map((_, i) => ( 
             <div key={i} className="circle"></div>
           ))}
         </div>

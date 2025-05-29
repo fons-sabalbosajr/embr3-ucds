@@ -21,6 +21,7 @@ import {
   Pagination, // Import Pagination
   Progress, // Import Progress
   Modal,
+  Avatar,
 } from "antd";
 import {
   ReloadOutlined,
@@ -41,6 +42,8 @@ import debounce from "lodash.debounce";
 import SurveyModal from "./SurveyModal";
 import AddSurvey from "./actions/AddSurvey";
 import CryptoJS from "crypto-js";
+import { io } from "socket.io-client";
+import { useLocation } from "react-router-dom";
 
 const { Option } = Select;
 
@@ -49,7 +52,7 @@ const Survey = ({ theme, currentUser }) => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [searchedColumn, setSearchedColumn] = useState("");
-  const [filteredData, setFilteredData] = useState([]); // Initialize as empty array
+  const [filteredData, setFilteredData] = useState([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [uniqueUnits, setUniqueUnits] = useState([]);
   const [selectedKeys, setSelectedKeys] = useState([]);
@@ -72,7 +75,11 @@ const Survey = ({ theme, currentUser }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [dataSource, setDataSource] = useState([]);
+  const [surveyViewers, setSurveyViewers] = useState([]);
+  const socketRef = useRef(null);
+  const location = useLocation();
 
+  const canViewDataHistory = currentUser?.permissions?.[3];
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
   const [tableHeight, setTableHeight] = useState(window.innerHeight - 250); // Adjust the 250px based on your layout
@@ -88,6 +95,63 @@ const Survey = ({ theme, currentUser }) => {
 
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    // Any authenticated user on the survey page should join the viewers list.
+    // canViewDataHistory will control if they SEE other viewers.
+    if (!currentUser?.username) return;
+
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:8081", {
+        withCredentials: true,
+      });
+    }
+    const socket = socketRef.current;
+
+    const joinUserToSurvey = () => {
+      // Join survey viewers only if on Survey page
+      if (location.pathname === "/universe/survey") {
+        socket.emit("joinSurvey", {
+          user: {
+            username: currentUser.username,
+            avatar: currentUser.avatar || currentUser.avatarUrl,
+            name: currentUser.name,
+          },
+        });
+      }
+    };
+
+    joinUserToSurvey(); // Attempt initial join
+
+    const surveyViewersHandler = (updatedViewers) => {
+      // console.log(
+      //   "[Survey.jsx] Received surveyViewers update:",
+      //   updatedViewers.map((u) => u.username).join(", ")
+      // );
+      setSurveyViewers(updatedViewers);
+    };
+
+    const handleConnect = () => {
+      // Re-emit on reconnect
+      joinUserToSurvey();
+    };
+
+    socket.on("surveyViewers", surveyViewersHandler);
+    socket.on("connect", handleConnect);
+
+    // Cleanup: always emit leaveSurvey and remove listeners
+    return () => {
+      if (socketRef.current) {
+        // This cleanup runs when the component unmounts (user navigates away)
+        // or if dependencies change causing the effect to re-run.
+        // Emitting leaveSurvey here ensures the user is removed from viewers
+        // when they are no longer on the Survey page.
+        socketRef.current.emit("leaveSurvey");
+        socketRef.current.off("surveyViewers", surveyViewersHandler); // Correctly remove the specific handler
+        socketRef.current.off("connect", handleConnect);
+      }
+    };
+  }, [currentUser, location.pathname]); // Removed canViewDataHistory from dependencies as it no longer gates the join
 
   const formatNumber = (number) => {
     return new Intl.NumberFormat("en-US").format(number);
@@ -130,6 +194,7 @@ const Survey = ({ theme, currentUser }) => {
           item.survey_water === true ? "✔" : item.survey_water || "",
         survey_haz: item.survey_haz === true ? "✔" : item.survey_haz || "",
         survey_chem: item.survey_chem === true ? "✔" : item.survey_chem || "",
+         survey_eswm: item.survey_eswm === true ? "✔" : item.survey_eswm || "",
         project_title: item.project_title ?? "N/A",
         project_type: item.project_type ?? "N/A",
         project_subtype: item.project_subtype ?? "N/A",
@@ -154,12 +219,8 @@ const Survey = ({ theme, currentUser }) => {
         date_routed: item.date_routed ?? "N/A",
         date_signed: item.date_signed ?? item.date_report_signed ?? "N/A",
         total_days: item.total_days ?? "N/A",
-        track_report_unit:
-          item.track_report_unit === true ? "✔" : item.track_report_unit || "",
-        track_report_planning:
-          item.track_report_planning === true
-            ? "✔"
-            : item.track_report_planning || "",
+        pismu_tracking: item.pismu_tracking ?? "N/A",
+        pismu_count_month: item.pismu_count_month ?? "N/A",
         remarks: item.remarks ?? "N/A",
         docket_no: item.docket_no ?? "N/A",
         date_approved_legal: item.date_approved_legal ?? "N/A",
@@ -188,6 +249,7 @@ const Survey = ({ theme, currentUser }) => {
           survey_water: item.survey_water,
           survey_haz: item.survey_haz,
           survey_chem: item.survey_chem,
+          survey_eswm: item.survey_eswm,
           color: item.color,
         });
       });
@@ -296,71 +358,78 @@ const Survey = ({ theme, currentUser }) => {
   };
 
   // Centralized useEffect for all filtering
-useEffect(() => {
-  if (!data || !currentUser || !currentUser.provinceStringPermissions) {
-    setFilteredData([]);
-    return;
-  }
+  useEffect(() => {
+    if (!data || !currentUser || !currentUser.provinceStringPermissions) {
+      setFilteredData([]);
+      return;
+    }
 
-  let currentFilteredData = [...data];
+    let currentFilteredData = [...data];
 
-  // Apply province permissions ONLY for Survey 2024
-  if (selectedSurvey === "Survey 2024") {
-    const allowedProvinceKeys = Object.entries(
-      currentUser.provinceStringPermissions
-    )
-      .filter(
-        ([key, permission]) =>
-          permission === "view" || permission === "readWrite"
+    // Apply province permissions ONLY for Survey 2024
+    if (selectedSurvey === "Survey 2024") {
+      const allowedProvinceKeys = Object.entries(
+        currentUser.provinceStringPermissions
       )
-      .map(([key]) => key.toLowerCase().replace(/ /g, "").replace(/_/g, ""));
+        .filter(
+          ([key, permission]) =>
+            permission === "view" || permission === "readWrite"
+        )
+        .map(([key]) => key.toLowerCase().replace(/ /g, "").replace(/_/g, ""));
 
-    currentFilteredData = currentFilteredData.filter((record) => {
-      if (!record.province) return false;
-      const normalizedRecordProvince = record.province
-        .toLowerCase()
-        .replace(/ /g, "")
-        .replace(/_/g, "");
-      return allowedProvinceKeys.includes(normalizedRecordProvince);
-    });
-  }
+      currentFilteredData = currentFilteredData.filter((record) => {
+        if (!record.province) return false;
+        const normalizedRecordProvince = record.province
+          .toLowerCase()
+          .replace(/ /g, "")
+          .replace(/_/g, "");
+        return allowedProvinceKeys.includes(normalizedRecordProvince);
+      });
+    }
 
-  if (selectedKeys.length > 0) {
-    currentFilteredData = currentFilteredData.filter((record) => {
-      const recordValue = record.resp_unit;
-      if (typeof recordValue === "string" && recordValue !== null) {
-        const normalizedRecordValue = recordValue.toLowerCase();
-        const lowerSelectedKeys = selectedKeys.map((key) =>
-          key.toLowerCase()
-        );
-        return lowerSelectedKeys.some(
-          (key) =>
-            normalizedRecordValue.includes(key) ||
-            key.includes(normalizedRecordValue)
-        );
-      }
-      return false;
-    });
-  }
+    if (selectedKeys.length > 0) {
+      currentFilteredData = currentFilteredData.filter((record) => {
+        const recordValue = record.resp_unit;
+        if (typeof recordValue === "string" && recordValue !== null) {
+          const normalizedRecordValue = recordValue.toLowerCase();
+          const lowerSelectedKeys = selectedKeys.map((key) =>
+            key.toLowerCase()
+          );
+          return lowerSelectedKeys.some(
+            (key) =>
+              normalizedRecordValue.includes(key) ||
+              key.includes(normalizedRecordValue)
+          );
+        }
+        return false;
+      });
+    }
 
-  if (searchText) {
-    const lowerSearchText = searchText.toLowerCase();
-    currentFilteredData = currentFilteredData.filter((item) =>
-      Object.values(item).some((value) =>
-        String(value).toLowerCase().includes(lowerSearchText)
-      )
-    );
-  }
+    if (searchText) {
+      const lowerSearchText = searchText.toLowerCase();
+      currentFilteredData = currentFilteredData.filter((item) =>
+        Object.values(item).some((value) =>
+          String(value).toLowerCase().includes(lowerSearchText)
+        )
+      );
+    }
 
-  if (filterValue) {
-    currentFilteredData = currentFilteredData.filter(
-      (item) => item.industry_class === filterValue
-    );
-  }
+    if (filterValue) {
+      currentFilteredData = currentFilteredData.filter(
+        (item) => item.industry_class === filterValue
+      );
+    }
 
-  setFilteredData(currentFilteredData);
-  setCurrentPage(1);
-}, [data, currentUser, selectedKeys, searchText, filterValue, selectedSurvey]);
+    setFilteredData(currentFilteredData);
+    setCurrentPage(1);
+  }, [
+    data,
+    currentUser,
+    selectedKeys,
+    searchText,
+    filterValue,
+    selectedSurvey,
+  ]);
 
   const handleReset = (clearFilters) => {
     clearFilters();
@@ -453,6 +522,8 @@ useEffect(() => {
       }
     });
 
+    displayUnits.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
     return {
       filterDropdown: ({ confirm, clearFilters }) => (
         <div style={{ padding: 8, maxHeight: "200px", overflowY: "auto" }}>
@@ -475,9 +546,7 @@ useEffect(() => {
           <div style={{ marginTop: "8px" }}>
             <Button
               type="primary"
-              onClick={() => {
-                confirm();
-              }}
+              onClick={() => confirm()}
               icon={<SearchOutlined />}
               size="small"
               style={{ width: 90, marginRight: 8 }}
@@ -516,6 +585,7 @@ useEffect(() => {
         }
         return false;
       },
+
       render: (text) => <div className="industry-label">{text}</div>,
     };
   };
@@ -800,31 +870,32 @@ useEffect(() => {
 
   const responsibleUnitBackgroundColor = (unit) => {
     if (!unit) return "transparent";
-    switch (unit.toUpperCase()) {
-      case "PEMU_AURORA":
-        return "#F0F3FF";
-      case "PEMU_BATAAN":
-        return "#FCE5BB";
-      case "PEMU_BULACAN":
-        return "#FCE5BB";
-      case "PEMU_NUEVA ECIJA":
-        return "#FFE225";
-      case "PEMU_PAMPANGA":
-        return "#FFE225";
-      case "PEMU_TARLAC":
-        return "#39C665";
-      case "PEMU_ZAMBALES":
-        return "#d1c4e9";
-      case "MBU":
-        return "#FF9B3E";
-      case "TCHWMS":
-        return "#936DDF";
+
+    const normalizedUnit = unit.toUpperCase();
+
+    switch (normalizedUnit) {
       case "AWECMES":
-        return "#c8e6c9";
-      case "EMED":
-        return "#FFD09B";
-      case "CPD":
-        return "#D2E0FB";
+        return "#c8e6c9"; // light green
+      case "CPD_AWPS":
+      case "CPD_CHWPS":
+      case "CPD_EIAS":
+        return "#D2E0FB"; // light blue
+      case "MBU":
+        return "#FF9B3E"; // orange
+      case "PEMU_AURORA":
+        return "#F0F3FF"; // very light blue
+      case "PEMU_BATAAN":
+      case "PEMU_BULACAN":
+        return "#FCE5BB"; // light peach
+      case "PEMU_NUEVA_ECIJA":
+      case "PEMU_PAMPANGA":
+        return "#FFE225"; // yellow
+      case "PEMU_TARLAC":
+        return "#39C665"; // green
+      case "PEMU_ZAMBALES":
+        return "#d1c4e9"; // lavender gray
+      case "TCHWMS":
+        return "#936DDF"; // purple
       default:
         return "transparent";
     }
@@ -906,6 +977,7 @@ useEffect(() => {
               "survey_water",
               "survey_haz",
               "survey_chem",
+              "survey_eswm",
             ].map((field) => (
               <div
                 key={field}
@@ -972,14 +1044,13 @@ useEffect(() => {
         );
         const textWidth = measureTextWidth(record.resp_unit);
         const darkerBackgroundColor = darkenColor(backgroundColor, -50);
+        const unitText = record.resp_unit || "N/A";
 
         return (
           <Tooltip
             title={
               <div style={{ fontSize: "10px" }}>
-                {" "}
-                {/* Adjusted font size */}
-                <div>Responsible Unit: {record.resp_unit || "N/A"}</div>
+                <div>Responsible Unit: {unitText}</div>
                 <div>Handler: {record.handler || "N/A"}</div>
               </div>
             }
@@ -987,20 +1058,21 @@ useEffect(() => {
           >
             <div
               style={{
-                backgroundColor: backgroundColor,
+                backgroundColor,
                 padding: "5px",
                 borderRadius: "4px",
                 color: backgroundColor !== "transparent" ? "black" : "inherit",
-                width: `${textWidth + 20}px`, // Added padding to width
-                minWidth: "80px", // Ensure a minimum width
+                width: `${textWidth + 20}px`,
+                minWidth: "80px",
                 display: "inline-block",
                 whiteSpace: "nowrap",
                 cursor: "pointer",
-                fontSize: "10px", // Ensure consistent font size
-                textAlign: "center", // Center text
+                fontSize: "10px",
+                textAlign: "center",
+                // border removed
               }}
             >
-              {record.resp_unit || "N/A"}
+              {unitText}
             </div>
           </Tooltip>
         );
@@ -1154,7 +1226,49 @@ useEffect(() => {
   return (
     <div className={`survey-container-card ${theme}-theme`}>
       <div className="header-content-survey">
-        <h3 className="header-title-survey">Survey Data ({selectedSurvey})</h3>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+          <h3
+            className="header-title-survey"
+            style={{ margin: 0, marginRight: 16 }}
+          >
+            Survey Data ({selectedSurvey})
+          </h3>
+          {canViewDataHistory && surveyViewers.length > 0 && (
+            <Avatar.Group
+              max={{ count: 3 }}
+              maxStyle={{
+                color: "#f56a00",
+                backgroundColor: "#fde3cf",
+                fontSize: 11,
+              }}
+              size={24}
+            >
+              {surveyViewers.map((user) => (
+                <Tooltip
+                  key={user.username}
+                  title={
+                    <span style={{ fontSize: "10px" }}>
+                      {`${user.username} is here`}
+                    </span>
+                  }
+                >
+                  <Avatar
+                    src={user.avatar}
+                    style={{
+                      marginLeft: 2,
+                      verticalAlign: "middle",
+                    }}
+                  >
+                    {!user.avatar && user.username
+                      ? user.username[0].toUpperCase()
+                      : ""}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </Avatar.Group>
+          )}
+        </div>
+
         <div className="header-action-buttons">
           <Select
             value={selectedSurvey}

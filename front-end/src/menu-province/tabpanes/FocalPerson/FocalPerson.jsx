@@ -189,16 +189,16 @@ const FocalPerson = ({
     { value: "Mr. Marshalle Julluice V. Catua" },
   ];
 
-  const iisCombined =
-    (editedRecord?.iis_no || "") +
-    (editedRecord?.iis_no_2025 ? " | " + editedRecord.iis_no_2025 : "");
+  const iisCombined = [editedRecord?.iis_no_2024, editedRecord?.iis_no_2025]
+    .filter(Boolean)
+    .join(" | ");
 
   // Handler for merged input
   const handleIisCombinedChange = (e) => {
     const value = e.target.value;
     // Split by separator " | "
-    const [iis_no, iis_no_2025] = value.split(" | ");
-    handleChange("iis_no", iis_no ? iis_no.trim() : "");
+    const [iis_no_2024, iis_no_2025] = value.split(" | ");
+    handleChange("iis_no_2024", iis_no_2024 ? iis_no_2024.trim() : "");
     handleChange("iis_no_2025", iis_no_2025 ? iis_no_2025.trim() : "");
   };
 

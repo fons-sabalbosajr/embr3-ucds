@@ -18,70 +18,88 @@ export const DataProvider = ({ children }) => {
   const [currentProvince, setCurrentProvince] = useState(""); // Default province
   const loaded = useRef(false);
 
-  const fetchData = useCallback(async (province) => {
-    if (!province) {
-      console.warn("No province specified for fetchData.");
-      return null;
-    }
-  
-    try {
-      setLoading(true);
-      setProgress(0);
-  
-      // Check if data is already cached
-      if (dataCache[province]) {
-        setData(dataCache[province]);
-        setLoading(false);
-        setProgress(100);
-        return dataCache[province];
+  const fetchData = useCallback(
+    async (province) => {
+      if (!province) {
+        console.warn("No province specified for fetchData.");
+        return null;
       }
-  
-      const response = await axios.get(
-        "http://localhost:8081/api/get-province-data",
-        {
-          params: { province, _nocache: Date.now() },
+
+      try {
+        setLoading(true);
+        setProgress(0);
+
+        // Check if data is already cached
+        if (dataCache[province]) {
+          setData(dataCache[province]);
+          setLoading(false);
+          setProgress(100);
+          return dataCache[province];
         }
-      );
-  
-      if (response.status >= 200 && response.status < 300) {
-        const fetchedData = response.data;
+
+        const response = await axios.get(
+          "http://localhost:8081/api/get-province-data",
+          {
+            params: { province, _nocache: Date.now() },
+          }
+        );
+
+        if (response.status >= 200 && response.status < 300) {
+          const fetchedData = response.data;
 
           // Log the raw fetched data to check for unexpected values like XX-1, XX-2
-        //console.log("Raw Fetched Data:", fetchedData);
-  
-        const sortedData = fetchedData
-        .filter(item => !item.id_no.startsWith('XX-')) // Filter out entries starting with 'XX-'
-        .sort((a, b) => {
-          const numA = parseInt(a.id_no.replace(/[^0-9]/g, ""), 10);
-          const numB = parseInt(b.id_no.replace(/[^0-9]/g, ""), 10);
-          return numA - numB; // Ascending sort by numeric value
-        });
-  
-        // Cache the sorted data for future use
-        setData(sortedData);
-        setDataCache((prevCache) => ({
-          ...prevCache,
-          [province]: sortedData, // Cache the sorted data for the province
-        }));
-  
+          //console.log("Raw Fetched Data:", fetchedData);
+
+          const formatSortKey = (sortKey) => {
+            if (typeof sortKey !== "string") return sortKey;
+            const [prefix, numberPart] = sortKey.split("-");
+            return `${prefix}-${parseInt(numberPart, 10)}`;
+          };
+
+          const sortedData = fetchedData
+            .filter((item) => {
+              const key = item.sort_key;
+              return (
+                typeof key === "string" &&
+                !key.startsWith("XX-") &&
+                key.includes("-")
+              );
+            })
+            .sort((a, b) => {
+              const numA = parseInt(a.sort_key?.split("-")[1] || "0", 10);
+              const numB = parseInt(b.sort_key?.split("-")[1] || "0", 10);
+              return numA - numB;
+            })
+            .map((item) => ({
+              ...item,
+              formatted_sort_key: formatSortKey(item.sort_key),
+            }));
+
+          // Cache the sorted data for future use
+          setData(sortedData);
+          setDataCache((prevCache) => ({
+            ...prevCache,
+            [province]: sortedData, // Cache the sorted data for the province
+          }));
+
+          setLoading(false);
+          setProgress(100);
+
+          // Return the sorted data
+          return sortedData;
+        } else {
+          throw new Error(`Unexpected response status: ${response.status}`);
+        }
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError("Failed to fetch data. Please check the server or province.");
         setLoading(false);
-        setProgress(100);
-  
-        // Return the sorted data
-        return sortedData;
-      } else {
-        throw new Error(`Unexpected response status: ${response.status}`);
+        return null;
       }
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setError("Failed to fetch data. Please check the server or province.");
-      setLoading(false);
-      return null;
-    }
-  }, [dataCache]);
-  
-  
-  
+    },
+    [dataCache]
+  );
+
   // Fetch data when `currentProvince` changes
   useEffect(() => {
     if (currentProvince) {

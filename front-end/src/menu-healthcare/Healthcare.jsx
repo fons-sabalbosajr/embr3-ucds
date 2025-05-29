@@ -13,6 +13,7 @@ import {
   Popover,
   DatePicker,
   Progress,
+  Avatar, // Added Avatar
   ConfigProvider,
   message,
 } from "antd";
@@ -34,6 +35,7 @@ import axios from "axios";
 import "./healthcare.css";
 import Swal from "sweetalert2";
 import HealthcareModal from "./HealthcareModal";
+import { io } from "socket.io-client"; // Added io
 
 const Healthcare = ({ theme, currentUser, data }) => {
   const [loading, setLoading] = useState(false);
@@ -57,6 +59,10 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const [dataSource, setDataSource] = useState(data);
   const [currentValue, setCurrentValue] = useState("");
   const [progress, setProgress] = useState(0);
+  const [healthcareViewers, setHealthcareViewers] = useState([]); // Added state for viewers
+  const socketRef = useRef(null); // Added socket ref
+
+  const canViewDataHistory = currentUser?.permissions?.[3]; // For Avatar.Group visibility
 
   useEffect(() => {
     const fetchData = async () => {
@@ -151,6 +157,47 @@ const Healthcare = ({ theme, currentUser, data }) => {
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.username) return;
+
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:8081", { withCredentials: true });
+    }
+    const socket = socketRef.current;
+
+    const joinUserToHealthcare = () => {
+      socket.emit("joinHealthcare", {
+        user: {
+          username: currentUser.username,
+          avatar: currentUser.avatar || currentUser.avatarUrl,
+          name: currentUser.name,
+        },
+      });
+    };
+
+    joinUserToHealthcare();
+
+    const healthcareViewersHandler = (updatedViewers) => {
+      // console.log("[Healthcare.jsx] Received healthcareViewers update:", updatedViewers.map(u => u.username).join(', '));
+      setHealthcareViewers(updatedViewers);
+    };
+
+    const handleConnect = () => {
+      joinUserToHealthcare();
+    };
+
+    socket.on("healthcareViewers", healthcareViewersHandler);
+    socket.on("connect", handleConnect);
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.emit("leaveHealthcare");
+        socketRef.current.off("healthcareViewers", healthcareViewersHandler);
+        socketRef.current.off("connect", handleConnect);
+      }
+    };
+  }, [currentUser]);
 
   const sortByIdNo = (arr) => {
     return [...arr].sort((a, b) => {
@@ -829,9 +876,36 @@ const Healthcare = ({ theme, currentUser, data }) => {
   return (
     <div className={`healthcare-container-card ${theme}-theme`}>
       <div className="header-content-survey">
-        <h3 className="header-title-survey">
-          Universe of Industries (Healthcare)
-        </h3>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+          <h3
+            className="header-title-survey"
+            style={{ margin: 0, marginRight: 16 }}
+          >
+            Universe of Industries (Healthcare)
+          </h3>
+          {canViewDataHistory && healthcareViewers.length > 0 && (
+            <Avatar.Group
+              max={{ count: 3 }}
+              maxStyle={{
+                color: "#f56a00",
+                backgroundColor: "#fde3cf",
+                fontSize: 11,
+              }}
+              size={24}
+            >
+              {healthcareViewers.map((user) => (
+                <Tooltip
+                  key={user.username}
+                  title={<span style={{ fontSize: "10px" }}>{`${user.username} is here`}</span>}
+                >
+                  <Avatar src={user.avatar} style={{ marginLeft: 2, verticalAlign: "middle" }}>
+                    {!user.avatar && user.username ? user.username[0].toUpperCase() : ""}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </Avatar.Group>
+          )}
+        </div>
         <div className="header-action-buttons">
           <Button
             type="primary"

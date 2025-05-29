@@ -1,6 +1,6 @@
 import React from "react";
 import { ConfigProvider, AutoComplete, Input } from "antd";
-import "./inspectors.css"
+import "./inspectors.css";
 
 // Define the list of predefined industry types for autocomplete
 const InspectorOptions = [
@@ -86,53 +86,48 @@ const InspectorOptions = [
   { value: "Ms. Victoria Emery P. Ramos" },
 ];
 
-const Inspectors = ({ value, readOnly, onChange, style }) => {
+const Inspectors = ({ value, readOnly, onChange, style, isEditing }) => {
   return (
     <ConfigProvider
-    theme={{
-      components: {
-        AutoComplete: {
-          optionFontSize: 10,
-          colorTextPlaceholder: "#555",
-          fontSize: "11px",
-          boxShadow: "none",
+      theme={{
+        components: {
+          AutoComplete: {
+            optionFontSize: 10,
+            colorTextPlaceholder: "#555",
+            fontSize: "11px",
+            boxShadow: "none",
+          },
         },
-      },
-    }}
-  >
-    <AutoComplete
-      style={{
-        width: "100%",
-        ...style,
       }}
-      dropdownStyle={{
-        boxShadow: "none",
-        backgroundColor: "#f1f1f1",
-      }}
-      options={readOnly ? [] : InspectorOptions} 
-      popupClassName="custom-autocomplete-dropdown"
-      value={value}
-      onChange={!readOnly ? onChange : undefined}
-      filterOption={(inputValue, option) =>
-        option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-      }
-      allowClear={true}
     >
-      <Input
+      <AutoComplete
+        style={{
+          width: "100%",
+          ...style,
+        }}
+        options={readOnly ? [] : InspectorOptions}
+        value={value}
+        onChange={!readOnly ? onChange : undefined}
+        filterOption={(inputValue, option) =>
+          option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+        }
+        allowClear={true}
+      >
+        <Input
           style={{
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            cursor: readOnly ? "not-allowed" : "text",
-            color: readOnly ? "#aaa" : "inherit",
+            cursor: isEditing ? "text" : "not-allowed",
+            color: isEditing ? "" : "#aaa",
           }}
           placeholder="select inspector/handler"
           placeholderStyle={{
             fontSize: "9px",
           }}
         />
-    </AutoComplete>
-  </ConfigProvider>
+      </AutoComplete>
+    </ConfigProvider>
   );
 };
 

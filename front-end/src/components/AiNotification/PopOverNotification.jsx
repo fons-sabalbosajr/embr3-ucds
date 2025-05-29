@@ -18,6 +18,7 @@ import {
   LoadingOutlined,
 } from "@ant-design/icons";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
+import axios from "axios"; // Import axios
 import ProvinceModal from "../../menu-province/ProvinceModal";
 import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import "./popovernotification.css";
@@ -41,17 +42,15 @@ const NotificationsPopover = ({
   theme,
   isLoading, // Prop from Universe.jsx
   currentUser,
-  refreshNotifications, // New prop to trigger data refresh in parent
+  refreshNotifications,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [warningsPage, setWarningsPage] = useState(1);
-  // const [isRepairModalVisible, setIsRepairModalVisible] = useState(false); // Removed
   const [isDuplicateModalVisible, setIsDuplicateModalVisible] = useState(false);
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
-  
   // Granular state for internal processing and processed data
   const [isProcessingNotifications, setIsProcessingNotifications] = useState(false);
   const [isProcessingWarnings, setIsProcessingWarnings] = useState(false);
@@ -182,29 +181,15 @@ const NotificationsPopover = ({
     }
   };
 
-  const handleSettingClick = async (id_no) => {
-    setSelectedRecord({ id_no });
+  const handleSettingClick = (notificationIdNo) => {
+    // notificationIdNo is the ID (e.g., "AU-001") extracted from the notification string.
+    // It's assumed that this notificationIdNo is also the 'sort_key'
+    // that ProvinceModal will use to fetch detailed data via the API endpoint
+    // /api/ucds-data/by-sort-key/:sort_key.
+    setSelectedRecord({ id_no: notificationIdNo, sort_key: notificationIdNo });
     setIsModalVisible(true);
-
-    try {
-      const response = await fetch(
-        `http://localhost:8081/api/ucds-data/${id_no}`
-      );
-      const data = await response.json();
-
-      if (response.ok) {
-        setSelectedRecord((prev) => ({
-          ...prev,
-          title: data.title,
-          ecc_cnc: data.ecc_cnc,
-          ...data,
-        }));
-      } else {
-        console.error("Error fetching record:", data.message);
-      }
-    } catch (error) {
-      console.error("Error fetching record:", error);
-    }
+    // ProvinceModal will receive this selectedRecord and should use its 'sort_key' property for the API call.
+    // The ProvinceModal component will now use the passed 'sort_key' to fetch its own data.
   };
 
   const handleCloseModal = () => {
@@ -551,7 +536,7 @@ const NotificationsPopover = ({
   const popoverContent = (
     <Tabs defaultActiveKey="1" size="small" style={{width: '330px'}}>
       <TabPane tab="Notifications" key="1">
-        {notificationsContent}
+        {/* {notificationsContent} */}
       </TabPane>
       <TabPane tab="Warnings" key="2">
         {warningsContent}
@@ -607,6 +592,7 @@ const NotificationsPopover = ({
             className={`notification-icon ${
               theme === "dark" ? "dark-theme" : "light-theme"
             }`}
+            style={{ color: theme === "dark" ? "#e0e0e0" : "#333333" }}
           />
         </Badge>
       </Popover>

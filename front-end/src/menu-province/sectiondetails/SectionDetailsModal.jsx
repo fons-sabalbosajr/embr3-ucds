@@ -251,16 +251,17 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
 
       case "PEMU_Bataan":
       case "PEMU_BATAAN":
-        return "#FCE5BB"; // Biege. pero pag namonitor na, transparent
+        return "#D2D0A0"; // Biege. pero pag namonitor na, transparent
 
       case "PEMU_Bulacan":
       case "PEMU_BULACAN":
         return "#7A73D1"; // Light purple
 
       case "PEMU_Nueva Ecija":
+      case "PEMU_Nueva_Ecija":
       case "PEMU_NUEVA ECIJA":
       case "PEMU_NUEVA_ECIJA":
-        return "#FFE225"; // Yellow
+        return "#DDA853"; // Yellow
 
       case "PEMU_Pampanga":
       case "PEMU_PAMPANGA":
@@ -286,7 +287,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
       case "awecmes":
         return "#626F47";
 
-      case "": // Only one empty string case is needed
+      case "":
         return "transparent";
 
       case "TCHWMS/MBU":
@@ -332,11 +333,19 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
   const columns = [
     {
       title: "ID No.",
-      dataIndex: "id_no",
-      key: "id_no",
-      align: "center",
-      width: 100,
-      render: (text) => <div className="industry-label">{text}</div>,
+      dataIndex: "sort_key",
+      key: "sort_key",
+      align: "left",
+      width: 70,
+      ...getColumnSearchProps("sort_key"),
+      render: (text) => {
+        if (typeof text !== "string") return text;
+
+        const [prefix, numberPart] = text.split("-");
+        const formatted = `${prefix}-${parseInt(numberPart, 10)}`;
+
+        return <div>{formatted}</div>;
+      },
     },
     {
       title: "Industry Details",
@@ -669,7 +678,7 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
     {
       title: "Monitoring Status",
       key: "monitoringStatus",
-      align: "center", // Header alignment remains centered
+      align: "center",
       width: 200,
       filterDropdown: ({
         setSelectedKeys,
@@ -706,22 +715,46 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
       ),
       render: (text, record) => (
         <div className="monitoring-status-container">
+          {/* Date Monitored */}
           <p className="monitoring-label">
-            <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
-            Date Monitored: {record.date_monitored || "N/A"}
+            <Tooltip
+              title={<div style={{ fontSize: "10px" }}>Date Monitored</div>}
+              color="#1890ff"
+            >
+              <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+            </Tooltip>
+            {record.date_monitored || "N/A"}
           </p>
+
+          {/* Date Routed */}
           <p className="monitoring-label">
-            <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
-            Date Routed: {record.date_routed || "N/A"}
+            <Tooltip
+              title={<div style={{ fontSize: "10px" }}>Date Routed to IIS</div>}
+              color="#52c41a"
+            >
+              <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
+            </Tooltip>
+            {record.date_routed || "N/A"}
           </p>
+
+          {/* Date Signed */}
           <p className="monitoring-label">
-            <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
-            Date Signed: {record.date_signed || "N/A"}
+            <Tooltip
+              title={<div style={{ fontSize: "10px" }}>Date Report Signed</div>}
+              color="#faad14"
+            >
+              <CheckCircleFilled style={{ marginRight: 8, color: "#faad14" }} />
+            </Tooltip>
+            {record.date_signed || "N/A"}
           </p>
-          {/* IIS No. (2024) */}
+
+          {/* IIS No. 2024 */}
           {record.iis_no && record.iis_no !== "N/A" && (
             <p className="monitoring-label">
-              <Tooltip title="IIS No. (2024)">
+              <Tooltip
+                title={<div style={{ fontSize: "10px" }}>IIS No. (2024)</div>}
+                color="#1890ff"
+              >
                 <TagsOutlined style={{ color: "#1890ff", marginRight: 8 }} />
               </Tooltip>
               {record.iis_no.split(/\s+/).map((iis, index) => (
@@ -740,15 +773,19 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
                   >
                     {iis.trim()}
                   </a>
-                  <br /> {/* Add line break */}
+                  <br />
                 </span>
               ))}
             </p>
           )}
-          {/* IIS No. (2025) */}
+
+          {/* IIS No. 2025 */}
           {record.iis_no_2025 && record.iis_no_2025 !== "N/A" && (
             <p className="monitoring-label">
-              <Tooltip title="IIS No. (2025)">
+              <Tooltip
+                title={<div style={{ fontSize: "10px" }}>IIS No. (2025)</div>}
+                color="#52c41a"
+              >
                 <TagsOutlined style={{ color: "#52c41a", marginRight: 8 }} />
               </Tooltip>
               {record.iis_no_2025.split(/\s+/).map((iis, index) => (
@@ -767,20 +804,26 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
                   >
                     {iis.trim()}
                   </a>
-                  <br /> {/* Add line break */}
+                  <br />
                 </span>
               ))}
             </p>
           )}
 
-          {record.pismu_tracking === "✔" && (
+          {/* PISMU Tracking */}
+          {record.pismu_tracking && record.pismu_tracking !== "none" && (
             <p className="monitoring-label">
-              <Tooltip title="PISMU Tracking">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>Received by PISMU</div>
+                }
+                color="#0D92F4"
+              >
                 <span>
-                  <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
-                  <span style={{ marginLeft: 8 }}>
-                    Received by Planning Unit
-                  </span>
+                  <CheckCircleFilled
+                    style={{ color: "#0D92F4", marginRight: 8 }}
+                  />
+                  <span>Received by Planning Unit</span>
                 </span>
               </Tooltip>
             </p>

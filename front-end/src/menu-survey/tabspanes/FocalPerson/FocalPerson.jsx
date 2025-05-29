@@ -48,9 +48,10 @@ function calculateWeekdayDiff(startDate, endDate) {
 
 const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
   const [localRecord, setLocalRecord] = useState(editedRecord || {});
-  const [pismuTracking, setPismuTracking] = useState(
-    editedRecord?.pismu_tracking_receiver || ""
+  const [pismuTracking, setPismuTracking] = React.useState(
+    editedRecord?.pismu_tracking || ""
   );
+  const [isPismuTracked, setIsPismuTracked] = React.useState(!!pismuTracking);
 
   const [empNoTotal, setEmpNoTotal] = useState(
     editedRecord?.emp_no_total || ""
@@ -141,23 +142,47 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
     }
   }, [formattedDateRouted, formattedDateSigned]);
 
-  useEffect(() => {
+useEffect(() => {
+    console.log("[FocalPerson useEffect] Received editedRecord:", JSON.parse(JSON.stringify(editedRecord || {})));
     setLocalRecord(editedRecord);
-    setPismuTracking(editedRecord?.pismu_tracking_receiver || "");
+
+    const currentPismuValue = editedRecord?.pismu_tracking || "";
+    console.log("[FocalPerson useEffect] Setting pismuTracking state to:", currentPismuValue);
+    setPismuTracking(currentPismuValue);
+
+    const currentIsPismuTracked = !!(editedRecord?.pismu_tracking); // More direct from prop
+    console.log("[FocalPerson useEffect] Setting isPismuTracked state to:", currentIsPismuTracked);
+    setIsPismuTracked(currentIsPismuTracked);
+
     setEmpNoTotal(editedRecord?.emp_no_total || "");
     setWwtftype(editedRecord?.wwtftype || "");
-    setBod(editedRecord?.bod || "");
+    const initialBod = calculateBOD(editedRecord?.emp_no_total, editedRecord?.wwtftype);
+    setBod(initialBod);
   }, [editedRecord]);
+
+  const handleCheckboxChange = (e) => {
+    const checked = e.target.checked;
+    setIsPismuTracked(checked);
+
+    if (!checked) {
+      // Clear tracking if unchecked
+      setPismuTracking("");
+      handleChange("pismu_tracking", "");
+    }
+  };
+
+  const handlePismuChange = (value) => {
+    setPismuTracking(value);
+    handleChange("pismu_tracking", value);
+
+    // Automatically check or uncheck checkbox based on value
+    setIsPismuTracked(!!value);
+  };
 
   const handleInputChange = (field, value) => {
     const updatedRecord = { ...localRecord, [field]: value };
     setLocalRecord(updatedRecord);
     handleChange(field, value);
-  };
-
-  const handleCheckboxChange = (field, e) => {
-    const value = e.target.checked ? "✔" : "";
-    handleInputChange(field, value);
   };
 
   const handleEmpNoTotalChange = (e) => {
@@ -203,18 +228,26 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               value={localRecord.employee_no || ""}
               readOnly={!isEditing}
               placeholder="No data"
-             onChange={handleEmpNoTotalChange}
+              onChange={handleEmpNoTotalChange}
               className="textbox-label"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
             />
           </Paragraph>
 
-           <Paragraph>
+          <Paragraph>
             <strong>Type of WWTF</strong>
             <WWTFType
               value={wwtftype}
               onChange={handleWwtftypeChange}
               readOnly={!isEditing}
               placeholder="No data"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
             />
           </Paragraph>
 
@@ -225,6 +258,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               readOnly
               placeholder="No data"
               className="textbox-label"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
             />
           </Paragraph>
 
@@ -235,6 +272,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               disabled={!isEditing}
               placeholder="No data"
               onChange={(value) => handleInputChange("resp_unit", value)}
+              isEditing={isEditing}
             />
           </Paragraph>
 
@@ -245,6 +283,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               disabled={!isEditing}
               placeholder="No data"
               onChange={(value) => handleInputChange("handler", value)}
+              isEditing={isEditing}
             />
           </Paragraph>
         </Col>
@@ -258,6 +297,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
               readOnly={!isEditing}
               placeholder="No data"
               className="textbox-label"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
             />
           </Paragraph>
 
@@ -265,66 +308,102 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
             <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
               <Paragraph>
                 <strong>Date Surveyed</strong>
-                <DatePicker
-                  value={
-                    formattedDateSurveyed
-                      ? dayjs(formattedDateSurveyed, "MM/DD/YYYY")
-                      : null
-                  }
-                  onChange={(date) => {
-                    const newDate = date ? date.format("MM/DD/YYYY") : "";
-                    handleChange("date_surveyed", newDate);
+                <ConfigProvider
+                  theme={{
+                    components: {
+                      DatePicker: {
+                        fontSize: "11px",
+                        height: "29px",
+                        padding: "4px 8px",
+                      },
+                    },
                   }}
-                  disabled={!isEditing}
-                  format="MM/DD/YYYY"
-                  placeholder="MM/DD/YYYY"
-                  className="custom-date-picker"
-                  style={{ width: "100%" }}
-                />
+                >
+                  <DatePicker
+                    value={
+                      formattedDateSurveyed
+                        ? dayjs(formattedDateSurveyed, "MM/DD/YYYY")
+                        : null
+                    }
+                    onChange={(date) => {
+                      const newDate = date ? date.format("MM/DD/YYYY") : "";
+                      handleChange("date_surveyed", newDate);
+                    }}
+                    disabled={!isEditing}
+                    format="MM/DD/YYYY"
+                    placeholder="MM/DD/YYYY"
+                    className="custom-date-picker"
+                    style={{ width: "100%" }}
+                  />
+                </ConfigProvider>
               </Paragraph>
             </Col>
 
             <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
               <Paragraph>
                 <strong>Date Routed</strong>
-                <DatePicker
-                  value={
-                    formattedDateRouted
-                      ? dayjs(formattedDateRouted, "MM/DD/YYYY")
-                      : null
-                  }
-                  onChange={(date) => {
-                    const newDate = date ? date.format("MM/DD/YYYY") : "";
-                    handleChange("date_routed", newDate);
+                <ConfigProvider
+                  theme={{
+                    components: {
+                      DatePicker: {
+                        fontSize: "11px",
+                        height: "29px",
+                        padding: "4px 8px",
+                      },
+                    },
                   }}
-                  disabled={!isEditing}
-                  format="MM/DD/YYYY"
-                  placeholder="MM/DD/YYYY"
-                  className="custom-date-picker"
-                  style={{ width: "100%" }}
-                />
+                >
+                  <DatePicker
+                    value={
+                      formattedDateRouted
+                        ? dayjs(formattedDateRouted, "MM/DD/YYYY")
+                        : null
+                    }
+                    onChange={(date) => {
+                      const newDate = date ? date.format("MM/DD/YYYY") : "";
+                      handleChange("date_routed", newDate);
+                    }}
+                    disabled={!isEditing}
+                    format="MM/DD/YYYY"
+                    placeholder="MM/DD/YYYY"
+                    className="custom-date-picker"
+                    style={{ width: "100%" }}
+                  />
+                </ConfigProvider>
               </Paragraph>
             </Col>
 
             <Col xs={24} sm={24} md={8} lg={8} className="modalcol">
               <Paragraph>
                 <strong>Date Monitored</strong>
-                <DatePicker
-                  value={
-                    formattedDateSigned
-                      ? dayjs(formattedDateSigned, "MM/DD/YYYY")
-                      : null
-                  }
-                  onChange={(date) => {
-                    const newDate = date ? date.format("MM/DD/YYYY") : "";
-                    handleChange("date_signed", newDate);
+                <ConfigProvider
+                  theme={{
+                    components: {
+                      DatePicker: {
+                        fontSize: "11px",
+                        height: "29px",
+                        padding: "4px 8px",
+                      },
+                    },
                   }}
-                  disabled={!isEditing}
-                  format="MM/DD/YYYY"
-                  placeholder="MM/DD/YYYY"
-                  className="custom-date-picker"
-                  style={{ width: "100%" }}
-                />
+                >
+                  <DatePicker
+                    value={
+                      formattedDateSigned
+                        ? dayjs(formattedDateSigned, "MM/DD/YYYY")
+                        : null
+                    }
+                    onChange={(date) => {
+                      const newDate = date ? date.format("MM/DD/YYYY") : "";
+                      handleChange("date_signed", newDate);
+                    }}
+                    disabled={!isEditing}
+                    format="MM/DD/YYYY"
+                    placeholder="MM/DD/YYYY"
+                    className="custom-date-picker"
+                    style={{ width: "100%" }}
+                  />
+                </ConfigProvider>
               </Paragraph>
             </Col>
           </Row>
@@ -342,9 +421,12 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                   <Input
                     value={days}
                     onChange={(e) => handleChange("total_days", e.target.value)}
-                    readOnly
                     placeholder="No data"
                     className="textbox-label"
+                    style={{
+                      cursor: isEditing ? "not-allowed" : "not-allowed",
+                      color: isEditing ? "#aaa" : "#aaa",
+                    }}
                   />
                 </Paragraph>
               </Col>
@@ -362,6 +444,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                     readOnly
                     placeholder="No data"
                     className="textbox-label"
+                    style={{
+                      cursor: isEditing ? "not-allowed" : "not-allowed",
+                      color: isEditing ? "#aaa" : "#aaa",
+                    }}
                   />
                 </Paragraph>
               </Col>
@@ -369,9 +455,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
 
             <Paragraph>
               <Checkbox
+                checked={isPismuTracked}
                 disabled={!isEditing}
-                checked={localRecord.track_report_unit === "✔"}
-                onChange={(e) => handleCheckboxChange("track_report_unit", e)}
+                onChange={handleCheckboxChange}
+                style={{ fontSize: "11px" }}
               >
                 <strong className="label-title">
                   Tracking of Reports (Routed to Assigned Section/Unit)
@@ -380,7 +467,6 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
 
               <Row gutter={[16, 16]}>
                 <Col xs={24} sm={24} md={15} lg={15} className="modalcol">
-                  {" "}
                   <Paragraph>
                     <ConfigProvider
                       theme={{
@@ -399,53 +485,33 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                           width: "100%",
                           fontSize: "11px",
                         }}
-                        dropdownStyle={{
-                          boxShadow: "none",
-                          backgroundColor: "#f1f1f1",
-                        }}
                         options={pismuTrackingOptions}
-                        popupClassName="custom-autocomplete-dropdown"
                         value={pismuTracking}
-                        onChange={(value) => {
-                          setPismuTracking(value);
-                          handleChange("pismu_tracking_receiver", value);
-                        }}
+                        onChange={handlePismuChange}
                         filterOption={(inputValue, option) =>
                           option.value
                             .toLowerCase()
                             .includes(inputValue.toLowerCase())
                         }
                         allowClear={true}
-                        readOnly={!isEditing}
+                        readOnly={!isEditing || !isPismuTracked}
                       >
                         <Input
                           style={{
                             fontSize: "11px",
                             height: "29px",
                             padding: "4px 8px",
+                            cursor: isEditing ? "text" : "not-allowed",
+                            color: isEditing ? "" : "#aaa",
                           }}
                           placeholder="Select PISMU Staff"
-                          readOnly={!isEditing}
+                          readOnly={!isEditing || !isPismuTracked}
                         />
                       </AutoComplete>
                     </ConfigProvider>
                   </Paragraph>
                 </Col>
               </Row>
-            </Paragraph>
-
-            <Paragraph>
-              <Checkbox
-                disabled={!isEditing}
-                checked={localRecord.track_report_planning === "✔"}
-                onChange={(e) =>
-                  handleCheckboxChange("track_report_planning", e)
-                }
-              >
-                <strong className="label-title">
-                  Tracking of Reports (Received by Planning Unit)
-                </strong>
-              </Checkbox>
             </Paragraph>
 
             <Paragraph>
@@ -457,6 +523,10 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing }) => {
                 rows={4}
                 onChange={(e) => handleInputChange("remarks", e.target.value)}
                 className="textbox-label"
+                style={{
+                  cursor: isEditing ? "not-allowed" : "not-allowed",
+                  color: isEditing ? "#aaa" : "#aaa",
+                }}
               />
             </Paragraph>
           </Card>

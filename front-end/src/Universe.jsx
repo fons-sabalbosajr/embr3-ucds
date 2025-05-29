@@ -30,6 +30,11 @@ import Posting from "./menu-component/Posting";
 import ESWM from "./menu-eswm/ESWM";
 import ActivityLog from "./components/ActivityLog/ActivityLog";
 import Duplicates from "./menu-archive/ArchiveData";
+import Monitoring from "./menu-planning/monitoring/Monitoring";
+import MonitoringSurvey from "./menu-planning/survey/monitoring_survey";
+import Validations from "./menu-planning/validations/Validations";
+import RecordsConfig from "./menu-records/recordsconfig/RecordsConfig";
+import RecordsActivity from "./menu-records/recordsactivity/RecordsActivity";
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
@@ -420,7 +425,31 @@ const Universe = () => {
                   path="activity-log"
                   element={<ActivityLog theme={theme} />}
                 />
-                <Route path="admin" element={<Admin theme={theme} />} />
+                <Route
+                  path="planning-unit/monitoring"
+                  element={<Monitoring theme={theme} />}
+                />
+                <Route
+                  path="planning-unit/survey-activities" // Path updated to match SideMenu
+                  element={<MonitoringSurvey theme={theme} />}
+                /> 
+                <Route
+                  path="planning-unit/validations"
+                  element={<Validations theme={theme} />}
+                />
+                <Route
+                  path="records/config"
+                  element={<RecordsConfig theme={theme} />}
+                />
+                <Route
+                  path="records/activity"
+                  element={<RecordsActivity theme={theme} />}
+                />
+                <Route
+                  path="admin"
+                  element={<Admin theme={theme} />}
+                />
+
                 <Route path="report" element={<Report theme={theme} />} />
                 <Route path="posting" element={<Posting theme={theme} />} />
                 <Route

@@ -4,7 +4,7 @@
   padding: 0;
   margin: 0;
   box-sizing: border-box;
-  font-family: "Poppins", sans-serif; /* Apply Poppins more globally */
+  font-family: "Poppins", sans-serif; 
 }
 
 :root {
@@ -14,8 +14,7 @@
 
   /* New green/teal gradient colors */
   --green-grad-edge: #004d40;  /* Dark Teal/Green - for edge */
-  --green-grad-center: #00796b; /* Teal/Green - for center */
-
+  --green-grad-center: #00796b; 
   --linear-grad:
     radial-gradient(ellipse at top left, var(--grad-clr2) 0%, var(--grad-clr1) 100%),
     radial-gradient(ellipse at bottom right, var(--green-grad-center) 0%, var(--green-grad-edge) 100%);

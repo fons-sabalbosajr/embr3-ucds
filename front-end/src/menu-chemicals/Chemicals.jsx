@@ -14,6 +14,7 @@ import {
   DatePicker,
   ConfigProvider,
   Progress,
+  Avatar, // Added Avatar
   message,
 } from "antd";
 import {
@@ -34,6 +35,7 @@ import axios from "axios";
 import "./chemicals.css";
 import Swal from "sweetalert2";
 import ChemicalModal from "./ChemicalModal";
+import { io } from "socket.io-client"; // Added io
 
 const sortByIdNo = (arr) => {
   return [...arr].sort((a, b) => {
@@ -66,9 +68,13 @@ const Chemicals = ({ theme, currentUser, data }) => {
   const [dataSource, setDataSource] = useState(data);
   const [currentValue, setCurrentValue] = useState("");
   const [progress, setProgress] = useState(0);
+  const [chemicalsViewers, setChemicalsViewers] = useState([]); // Added state for viewers
+  const socketRef = useRef(null); // Added socket ref
+
+  const canViewDataHistory = currentUser?.permissions?.[3]; // For Avatar.Group visibility
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchChemicalsData = async () => {
       setLoading(true);
       try {
         const response = await fetch("http://localhost:8081/api/chemicals", {
@@ -97,8 +103,49 @@ const Chemicals = ({ theme, currentUser, data }) => {
       }
     };
 
-    fetchData();
+    fetchChemicalsData(); // Renamed to avoid conflict
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.username) return;
+
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:8081", { withCredentials: true });
+    }
+    const socket = socketRef.current;
+
+    const joinUserToChemicals = () => {
+      socket.emit("joinChemicals", {
+        user: {
+          username: currentUser.username,
+          avatar: currentUser.avatar || currentUser.avatarUrl,
+          name: currentUser.name,
+        },
+      });
+    };
+
+    joinUserToChemicals();
+
+    const chemicalsViewersHandler = (updatedViewers) => {
+      // console.log("[Chemicals.jsx] Received chemicalsViewers update:", updatedViewers.map(u => u.username).join(', '));
+      setChemicalsViewers(updatedViewers);
+    };
+
+    const handleConnect = () => {
+      joinUserToChemicals();
+    };
+
+    socket.on("chemicalsViewers", chemicalsViewersHandler);
+    socket.on("connect", handleConnect);
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.emit("leaveChemicals");
+        socketRef.current.off("chemicalsViewers", chemicalsViewersHandler);
+        socketRef.current.off("connect", handleConnect);
+      }
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (filteredData.length > 0) {
@@ -128,7 +175,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
       setFilteredData(sortedResult);
       setFilteredCount(sortedResult.length);
     } catch (error) {
-      console.error("Error fetching chemical data:", error.message);
+      // console.error("Error fetching chemical data:", error.message);
     } finally {
       setLoading(false);
     }
@@ -822,9 +869,36 @@ const Chemicals = ({ theme, currentUser, data }) => {
   return (
     <div className={`healthcare-container-card ${theme}-theme`}>
       <div className="header-content-survey">
-        <h3 className="header-title-survey">
-          Universe of Industries (Chemicals)
-        </h3>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+          <h3
+            className="header-title-survey"
+            style={{ margin: 0, marginRight: 16 }}
+          >
+            Universe of Industries (Chemicals)
+          </h3>
+          {canViewDataHistory && chemicalsViewers.length > 0 && (
+            <Avatar.Group
+              max={{ count: 3 }}
+              maxStyle={{
+                color: "#f56a00",
+                backgroundColor: "#fde3cf",
+                fontSize: 11,
+              }}
+              size={24}
+            >
+              {chemicalsViewers.map((user) => (
+                <Tooltip
+                  key={user.username}
+                  title={<span style={{ fontSize: "10px" }}>{`${user.username} is here`}</span>}
+                >
+                  <Avatar src={user.avatar} style={{ marginLeft: 2, verticalAlign: "middle" }}>
+                    {!user.avatar && user.username ? user.username[0].toUpperCase() : ""}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </Avatar.Group>
+          )}
+        </div>
         <div className="header-action-buttons">
           <Button
             type="primary"

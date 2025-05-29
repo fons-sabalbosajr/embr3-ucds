@@ -5,19 +5,28 @@ import "./sectionincharge.css";
 // Define the list of predefined industry types for autocomplete
 const UnitOptions = [
   { value: "AWECMES" },
-  { value: "CPD" },
+  { value: "CPD_AWPS" },
+  { value: "CPD_CHWPS" },
+  { value: "CPD_EIAS" },
   { value: "MBU" },
-  { value: "PEMU-AURORA" },
-  { value: "PEMU-BATAAN" },
-  { value: "PEMU-BULACAN" },
-  { value: "PEMU-NUEVA ECIJA" },
-  { value: "PEMU-PAMPANGA" },
-  { value: "PEMU-TARLAC" },
-  { value: "PEMU-ZAMBALES" },
+  { value: "PEMU-Aurora" },
+  { value: "PEMU-Bataan" },
+  { value: "PEMU-Bulacan" },
+  { value: "PEMU-Nueva_Ecija" },
+  { value: "PEMU-Pampanga" },
+  { value: "PEMU-Tarlac" },
+  { value: "PEMU-Zambales" },
   { value: "TCHWMS" },
 ];
 
-const SectionInCharged = ({ value, readOnly, onChange, style, theme }) => {
+const SectionInCharged = ({
+  value,
+  readOnly,
+  onChange,
+  style,
+  theme,
+  isEditing,
+}) => {
   return (
     <ConfigProvider
       theme={{
@@ -36,9 +45,7 @@ const SectionInCharged = ({ value, readOnly, onChange, style, theme }) => {
           width: "100%",
           ...style,
         }}
-
         options={readOnly ? [] : UnitOptions}
-       
         value={value}
         onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>
@@ -51,8 +58,8 @@ const SectionInCharged = ({ value, readOnly, onChange, style, theme }) => {
             fontSize: "11px",
             height: "29px",
             padding: "4px 8px",
-            cursor: readOnly ? "not-allowed" : "text",
-            color: readOnly ? "#aaa" : "inherit",
+            cursor: isEditing ? "text" : "not-allowed",
+            color: isEditing ? "" : "#aaa",
           }}
           readOnly={readOnly}
           placeholder="select section/unit"

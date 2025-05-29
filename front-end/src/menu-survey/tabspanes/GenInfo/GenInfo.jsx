@@ -15,7 +15,7 @@ const { Paragraph } = Typography;
 const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
   const [localRecord, setLocalRecord] = useState(editedRecord || {});
   const [projectData, setProjectData] = useState({});
-   const [longitude, setLongitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [latitude, setLatitude] = useState("");
 
   useEffect(() => {
@@ -183,6 +183,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               onChange={(e) =>
                 handleInputChange("project_title", e.target.value)
               }
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
             />
           </Paragraph>
 
@@ -193,21 +197,28 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               readOnly={!isEditing}
               placeholder="No data"
               onChange={(value) => handleInputChange("industry_class", value)}
+              isEditing={isEditing}
             />
           </Paragraph>
 
           <Paragraph className="paragraph-margin-top">
-            <strong>Project Type</strong>
+            <strong>Industry Type</strong>
             <Input
               value={
                 projectData
                   ? projectData.project_type
                   : localRecord.project_type || ""
               }
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
               readOnly={!isEditing}
               placeholder="No data"
               className="textbox-label disable-input"
-              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
+              onChange={(e) =>
+                handleInputChange("project_type", e.target.value)
+              }
             />
           </Paragraph>
 
@@ -219,10 +230,16 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                   ? projectData.project_subtype
                   : localRecord.project_subtype || ""
               }
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
               readOnly={!isEditing}
               placeholder="No data"
               className="textbox-label disable-input"
-              onChange={(e) => handleInputChange("pisc_code", e.target.value)}
+              onChange={(e) =>
+                handleInputChange("project_subtype", e.target.value)
+              }
             />
           </Paragraph>
 
@@ -234,6 +251,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                   ? projectData.psic_code
                   : localRecord.psic_code || ""
               }
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
               readOnly={!isEditing}
               placeholder="No data"
               className="textbox-label"
@@ -244,7 +265,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
           <Paragraph className="paragraph-margin-top">
             <strong>Other Project Type</strong>
             <Input
-               value={localRecord.other_project_type || ""}
+              value={localRecord.other_project_type || ""}
               readOnly={!isEditing}
               placeholder="No data"
               className="textbox-label disable-input"
@@ -264,6 +285,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               placeholder="No data"
               rows={2}
               className="textbox-label disable-input"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
               onChange={(e) => handleInputChange("address", e.target.value)}
             />
           </Paragraph>
@@ -275,6 +300,10 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
               readOnly={!isEditing}
               placeholder="No data"
               className="textbox-label disable-input"
+              style={{
+                cursor: isEditing ? "text" : "not-allowed",
+                color: isEditing ? "" : "#aaa",
+              }}
               onChange={(e) => handleInputChange("street", e.target.value)}
             />
           </Paragraph>
@@ -311,7 +340,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
             />
           </Paragraph>
 
-               <Row gutter={[16, 16]}>
+          <Row gutter={[16, 16]}>
             <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
               <Paragraph style={{ marginTop: "-10px" }}>
                 <strong>Longitude</strong>
@@ -328,13 +357,13 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                 >
                   <Input
                     value={longitude}
-                    onChange={(e) =>
-                      isEditing && setLongitude(e.target.value)
-                    }
+                    onChange={(e) => isEditing && setLongitude(e.target.value)}
                     style={{
                       fontSize: "11px",
                       height: "29px",
                       padding: "4px 8px",
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
                     }}
                     readOnly={!isEditing}
                   />
@@ -357,13 +386,13 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
                 >
                   <Input
                     value={latitude}
-                    onChange={(e) =>
-                      isEditing && setLatitude(e.target.value)
-                    }
+                    onChange={(e) => isEditing && setLatitude(e.target.value)}
                     style={{
                       fontSize: "11px",
                       height: "29px",
                       padding: "4px 8px",
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
                     }}
                     readOnly={!isEditing}
                   />

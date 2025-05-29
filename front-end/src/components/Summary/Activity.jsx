@@ -91,12 +91,12 @@ const Activity = ({ theme, provinceAccess }) => {
   };
 
   const collapseItems = permits.map((item) => ({
-    key: item.id_no,
+    key: item.sort_key,
     label: (
       <div className="panel-header-content">
         <div className="title-column">
           <div className="panel-title">
-            {item.id_no}: {item.title} <br />
+            {item.sort_key}: {item.title} <br />
             {item.ecc_cnc && (
               <span
                 className="ecc-cnc-tag"
@@ -177,7 +177,7 @@ const Activity = ({ theme, provinceAccess }) => {
                   }}
                   onClick={() => {
                     setSelectedRecord({
-                      id_no: item.id_no,
+                      sort_key: item.sort_key,
                       ecc_cnc: item.ecc_cnc,
                     });
                     setIsModalVisible(true);

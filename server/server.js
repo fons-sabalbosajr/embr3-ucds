@@ -421,7 +421,7 @@ router.get("/ucds/duplicates", async (req, res) => {
           {
             $group: {
               _id: "$ecc_cnc", // Group by ecc_cnc
-              idNos: { $push: "$id_no" }, // Collect all id_no values for each ecc_cnc
+              idNos: { $push: "$sort_key" }, // Collect all id_no values for each ecc_cnc
               count: { $sum: 1 }, // Count occurrences of each ecc_cnc
             },
           },
@@ -569,25 +569,25 @@ router.post("/archive-data", async (req, res) => {
   }
 });
 
-router.get("/ucds-data/:id_no", async (req, res) => {
-  const { id_no } = req.params;
+router.get("/ucds-data/:identifier", async (req, res) => { // Changed param name for clarity
+  const { identifier } = req.params; // identifier will be the sort_key, e.g., "AU-00005"
 
   try {
-    // First, try to find the record in ucds-data
+    // First, try to find the record in ucds-data using the sort_key field
     let record = await ucdsCollection.findOne({
-      id_no: { $regex: `^${id_no.trim()}$`, $options: "i" },
+      sort_key: { $regex: `^${identifier.trim()}$`, $options: "i" }, // Query by sort_key
     });
 
     if (!record) {
-      // If not found in ucds-data, try archive-data
+      // If not found in ucds-data, try archive-data using sort_key
       record = await archiveCollection.findOne({
-        id_no: { $regex: `^${id_no.trim()}$`, $options: "i" },
+        sort_key: { $regex: `^${identifier.trim()}$`, $options: "i" }, // Query by sort_key
       });
 
       if (!record) {
         return res
           .status(404)
-          .json({ message: `Record with id_no: ${id_no} not found.` });
+          .json({ message: `Record with identifier (sort_key): ${identifier} not found.` });
       }
 
       // Optionally, you could indicate this is from the archive
@@ -596,7 +596,7 @@ router.get("/ucds-data/:id_no", async (req, res) => {
 
     res.status(200).json(record);
   } catch (error) {
-    console.error("Error fetching record:", error);
+    console.error("Error fetching record by identifier (sort_key):", error);
     res.status(500).json({ message: "Error fetching record." });
   }
 });
@@ -1811,7 +1811,7 @@ app.get("/api/permits-summary", async (req, res) => {
         {},
         {
           projection: {
-            id_no: 1,
+            sort_key: 1,
             title: 1,
             name: 1,
             ecc_cnc: 1,
@@ -1827,7 +1827,7 @@ app.get("/api/permits-summary", async (req, res) => {
     const filteredByPrefix =
       prefixList.length > 0
         ? allData.filter((record) => {
-            const idNo = (record.id_no || "").toUpperCase();
+            const idNo = String(record.sort_key || "").toUpperCase();
             return prefixList.some((prefix) => idNo.startsWith(prefix));
           })
         : allData; // If no prefix specified, return all
@@ -1837,37 +1837,121 @@ app.get("/api/permits-summary", async (req, res) => {
       .map((record) => {
         const permits = [];
 
+        // Helper function to check for valid date (already present)
+         const isValidDate = (d) => d instanceof Date && !isNaN(d);
+
+        // Enhanced robust date parsing function
+        function parseDateString(dateStrInput) {
+          if (!dateStrInput || typeof dateStrInput !== 'string') {
+            return null;
+          }
+
+          let dateStr = dateStrInput.trim();
+
+          // 1. Handle obvious non-date strings
+          const nonDateKeywords = [
+            "n/a", "pending", "approval", "ongoing", "application", "for approval",
+            "verification", "unknown", "none", "---", "not applicable",
+            "coa no", "ref no", "dp-r03", "fla-", "lexie's farm", "in-process",
+            "app. no", "for verification", "new designated pco", "contact person" 
+            // Add more keywords as needed based on your data
+          ];
+          if (nonDateKeywords.some(keyword => dateStr.toLowerCase().includes(keyword))) {
+            return null;
+          }
+          if (/^#+$/.test(dateStr)) return null; // Handles "##########"
+          if (/^\d{4}-\d{4}$/.test(dateStr)) return null; // Handles "2024-2027" (year ranges)
+          if (/^\d{1,2}\/\d{1,2}\/\-\d{4}$/.test(dateStr)) return null; // Handles "01/12/-2022"
+
+          // 2. If multiple lines, take the first line
+          const lines = dateStr.split(/[\n\r]/);
+          dateStr = lines[0].trim();
+
+          // 3. Attempt direct parsing (handles YYYY-MM-DD, MM/DD/YYYY, "Month D, YYYY", "D-Month-YYYY")
+          let d = new Date(dateStr);
+          if (isValidDate(d)) {
+            return d;
+          }
+
+          // 4. Attempt to parse DD/MM/YYYY by rearranging to MM/DD/YYYY
+          const dmYMatch = dateStr.match(/^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$/);
+          if (dmYMatch) {
+            const day = parseInt(dmYMatch[1], 10);
+            const month = parseInt(dmYMatch[2], 10);
+            const year = parseInt(dmYMatch[3], 10);
+            if (day > 12 && month <= 12 && year > 1900 && year < 2100) { // Likely DD/MM/YYYY
+              d = new Date(`${month}/${day}/${year}`);
+              if (isValidDate(d)) return d;
+            }
+          }
+          
+          // 5. Handle cases like "Month. Day, YYYY" e.g. "Oct. 26, 2022" if direct parse failed
+          const monthDotDayYearMatch = dateStr.match(/^([A-Za-z]{3,})\.?\s*(\d{1,2}),?\s*(\d{4})$/i);
+          if (monthDotDayYearMatch) {
+            const cleanedForParse = `${monthDotDayYearMatch[1]} ${monthDotDayYearMatch[2]} ${monthDotDayYearMatch[3]}`;
+            d = new Date(cleanedForParse);
+            if (isValidDate(d)) return d;
+          }
+
+          // 6. Handle dates followed by extraneous text (e.g., "YYYY-MM-DD some_text" or "MM/DD/YYYY some_text")
+          const dateFollowedByTextMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/);
+          if (dateFollowedByTextMatch) {
+            d = new Date(dateFollowedByTextMatch[1]);
+            if (isValidDate(d)) return d;
+          }
+
+          return null; // Could not parse
+        }
+
         if (record.pto_issued) {
-          const expiry = new Date(record.pto_issued);
-          expiry.setFullYear(expiry.getFullYear() + 2);
-          permits.push({
-            type: "PTO",
-            expiry,
-            isNearExpiry: isNearExpiration(expiry),
-            isExpired: isExpired(expiry),
-          });
+          const issuedDate = parseDateString(record.pto_issued);
+          if (isValidDate(issuedDate)) {
+            const expiry = new Date(issuedDate);
+            expiry.setFullYear(expiry.getFullYear() + 2); // PTO valid for 2 years from issuance
+            permits.push({
+              type: "PTO",
+              expiry,
+              isNearExpiry: isNearExpiration(expiry),
+              isExpired: isExpired(expiry),
+            });
+          } else {
+            //console.warn(`Invalid pto_issued date: ${record.pto_issued} for sort_key: ${record.sort_key}`);
+          }
         }
 
         if (record.wwdp_issued) {
-          const expiry = new Date(record.wwdp_issued);
-          expiry.setFullYear(expiry.getFullYear() + 1);
-          permits.push({
-            type: "WWDP",
-            expiry,
-            isNearExpiry: isNearExpiration(expiry),
-            isExpired: isExpired(expiry),
-          });
+          const issuedDate = parseDateString(record.wwdp_issued);
+          if (isValidDate(issuedDate)) {
+            const expiry = new Date(issuedDate);
+            expiry.setFullYear(expiry.getFullYear() + 1); // WWDP valid for 1 year from issuance
+            permits.push({
+              type: "WWDP",
+              expiry,
+              isNearExpiry: isNearExpiration(expiry),
+              isExpired: isExpired(expiry),
+            });
+          } else {
+            //console.warn(`Invalid wwdp_issued date: ${record.wwdp_issued} for sort_key: ${record.sort_key}`);
+          }
         }
 
         if (record.pco_validity) {
-          const expiry = new Date(record.pco_validity);
-          expiry.setFullYear(expiry.getFullYear() + 3);
-          permits.push({
-            type: "PCO",
-            expiry,
-            isNearExpiry: isNearExpiration(expiry),
-            isExpired: isExpired(expiry),
-          });
+          const validityDate = parseDateString(record.pco_validity);
+          if (isValidDate(validityDate)) {
+            // Assuming pco_validity is the actual expiry date of the PCO
+            const expiry = validityDate;
+            permits.push({
+              type: "PCO",
+              expiry,
+              isNearExpiry: isNearExpiration(expiry),
+              isExpired: isExpired(expiry),
+            });
+          } else {
+            // If pco_validity was meant to be an issue date and PCOs are valid for 3 years,
+            // the logic would be: expiry.setFullYear(expiry.getFullYear() + 3);
+            // However, "validity" usually implies the expiry date itself.
+            //console.warn(`Invalid pco_validity date: ${record.pco_validity} for sort_key: ${record.sort_key}`);
+          }
         }
 
         const validPermits = permits.filter(
@@ -1876,7 +1960,7 @@ app.get("/api/permits-summary", async (req, res) => {
 
         if (validPermits.length > 0) {
           return {
-            id_no: record.id_no,
+            sort_key: record.sort_key,
             title: record.title || record.name || "Untitled",
             ecc_cnc: record.ecc_cnc || "",
             permits: validPermits,
@@ -1996,21 +2080,57 @@ app.get("/api/ucds", async (req, res) => {
   }
 });
 
-app.get("/api/ucds-data/:id_no", async (req, res) => {
-  const { id_no } = req.params;
+app.get("/api/ucds-data", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 20;
+    const skip = (page - 1) * pageSize;
+
+    const filters = {};
+    // Optionally add column filter logic here
+    if (req.query.name) {
+      filters.name = { $regex: req.query.name, $options: "i" };
+    }
+
+    const total = await ucdsCollection.countDocuments(filters);
+    const surveys = await ucdsCollection.find(filters).skip(skip).limit(pageSize).toArray();
+
+    res.status(200).json({ data: surveys, total });
+  } catch (error) {
+    console.error("Error fetching survey data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+
+app.get("/api/ucds-data/by-sort-key/:sort_key", async (req, res) => {
+  const { sort_key } = req.params;
 
   try {
-    // Fetch the data from the ucdsCollection based on id_no
-    const data = await ucdsCollection.findOne({ id_no });
+    // Fetch the data from the ucdsCollection based on sort_key (case-insensitive)
+    let data = await ucdsCollection.findOne({
+      sort_key: { $regex: `^${sort_key.trim()}$`, $options: "i" } 
+    });
 
     if (!data) {
-      return res.status(404).json({ message: "Data not found" });
+      // If not found in ucds-data, try archive-data using sort_key
+      data = await archiveCollection.findOne({
+        sort_key: { $regex: `^${sort_key.trim()}$`, $options: "i" },
+      });
+
+      if (!data) {
+        return res
+          .status(404)
+          .json({ message: `Data not found for sort_key: ${sort_key}` });
+      }
+      // Indicate that this record was found in the archive
+      data.archived = true;
     }
 
     res.status(200).json(data);
   } catch (error) {
-    console.error("Error fetching data:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error(`Error fetching data by sort_key (${sort_key}):`, error);
+    res.status(500).json({ message: "Error fetching record by sort_key." });
   }
 });
 
@@ -2891,10 +3011,13 @@ app.get("/api/get-province-data", async (req, res) => {
     // Format the fetched data for the response
     const formattedData = provinceData.map((doc) => ({
       id_no: doc.id_no,
-      title: doc.title,
-      name: doc.name,
-      address: doc.address,
-      ecc_cnc: doc.ecc_cnc,
+      sort_key: doc.sort_key || "",
+      helper_column: doc.helper_column || "",
+      helper_count: doc.helper_count || "",
+      title: doc.title || "",
+      name: doc.name || "",
+      address: doc.address || "",
+      ecc_cnc: doc.ecc_cnc || "",
       industry_class: doc.industry_class,
       remarks: doc.remarks || "",
       industry_type: doc.industry_type || "",
@@ -2915,7 +3038,7 @@ app.get("/api/get-province-data", async (req, res) => {
       section_incharged: doc.section_incharged || "",
       handler: doc.handler || "",
       monitoring_sched: doc.monitoring_sched || "",
-      iis_no: doc.iis_no || "",
+      iis_no_2024: doc.iis_no_2024 || "",
       iis_no_2025: doc.iis_no_2025 || "",
       insp_type: doc.insp_type || "",
       date_monitored: doc.date_monitored || "",
@@ -2926,6 +3049,7 @@ app.get("/api/get-province-data", async (req, res) => {
       pismu_tracking: doc.pismu_tracking || "",
       title_status: doc.title_status || "",
       with_nov: doc.with_nov || "",
+      pismu_count_month: doc.pismu_count_month || "",
       permit_process: doc.permit_process || "",
       date_amended: doc.date_amended || "",
       date_approved: doc.date_approved || "",
@@ -3019,12 +3143,15 @@ app.get("/api/extract-province-data", async (req, res) => {
     // Format the fetched data for the response
     const formattedData = provinceData.map((doc) => ({
       id_no: doc.id_no,
-      title: doc.title,
-      name: doc.name,
-      address: doc.address,
-      ecc_cnc: doc.ecc_cnc,
+      sort_key: doc.sort_key || "",
+      helper_column: doc.helper_column || "",
+      helper_count: doc.helper_count || "",
+      title: doc.title || "",
+      name: doc.name || "",
+      address: doc.address || "",
+      ecc_cnc: doc.ecc_cnc || "",
       industry_class: doc.industry_class,
-      remarks: doc.remarks_recommendations || "",
+      remarks: doc.remarks || "",
       industry_type: doc.industry_type || "",
       industry_subtype: doc.industry_subtype || "",
       psic_code: doc.psic_code || "",
@@ -3043,7 +3170,7 @@ app.get("/api/extract-province-data", async (req, res) => {
       section_incharged: doc.section_incharged || "",
       handler: doc.handler || "",
       monitoring_sched: doc.monitoring_sched || "",
-      iis_no: doc.iis_no || "",
+      iis_no_2024: doc.iis_no_2024 || "",
       iis_no_2025: doc.iis_no_2025 || "",
       insp_type: doc.insp_type || "",
       date_monitored: doc.date_monitored || "",
@@ -3054,6 +3181,7 @@ app.get("/api/extract-province-data", async (req, res) => {
       pismu_tracking: doc.pismu_tracking || "",
       title_status: doc.title_status || "",
       with_nov: doc.with_nov || "",
+      pismu_count_month: doc.pismu_count_month || "",
       permit_process: doc.permit_process || "",
       date_amended: doc.date_amended || "",
       date_approved: doc.date_approved || "",
@@ -3578,7 +3706,7 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     if (/^[a-fA-F0-9]{24}$/.test(id)) {
       query = { _id: new ObjectId(id) };
     } else {
-      query = { id_no: id };
+      query = { sort_key: id };
     }
 
     // Fetch old document
@@ -3600,12 +3728,17 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
 
       let newTransactionNumber = 1;
       if (latestLog.length && latestLog[0].transactionID) {
-        const lastTxnNum = parseInt(latestLog[0].transactionID.replace("TRXM-", ""), 10);
+        const lastTxnNum = parseInt(
+          latestLog[0].transactionID.replace("TRXM-", ""),
+          10
+        );
         if (!isNaN(lastTxnNum)) {
           newTransactionNumber = lastTxnNum + 1;
         }
       }
-      const transactionID = `TRXM-${newTransactionNumber.toString().padStart(4, "0")}`;
+      const transactionID = `TRXM-${newTransactionNumber
+        .toString()
+        .padStart(4, "0")}`;
 
       // Prepare audit log entry with only changed fields
       const changes = [];
@@ -3634,7 +3767,6 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
 
       // Respond success with audit log info
       res.status(200).json(logEntry);
-
     } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
       res.status(200).json({ message: "No changes were made to the data" });
     } else {
@@ -3642,12 +3774,11 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     }
   } catch (error) {
     console.error("Error updating data:", error);
-    res.status(500).json({ error: "Failed to update data. Please try again later." });
+    res
+      .status(500)
+      .json({ error: "Failed to update data. Please try again later." });
   }
 });
-
-
-
 
 app.put("/api/revert-by-ecc", logActivity, async (req, res) => {
   try {
@@ -4399,7 +4530,6 @@ app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
 });
 
 //#endregion
-
 
 // Handle graceful shutdown
 process.on("SIGINT", () => {

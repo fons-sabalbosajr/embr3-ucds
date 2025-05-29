@@ -46,19 +46,25 @@ const ProvinceModal = ({
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
   useEffect(() => {
-    if (record && record.id_no) {
+    if (record && record.sort_key) {
+      // Check for sort_key instead of id_no
       const fetchData = async () => {
         try {
           const response = await axios.get(
-            `http://localhost:8081/api/ucds-data/${record.id_no}`
+            `http://localhost:8081/api/ucds-data/${record.sort_key}` // Use sort_key in the URL
           );
           setEditedRecord(response.data);
         } catch (error) {
           console.error("Error fetching data:", error);
+          // Optionally, set an error state or clear the record
+          // setEditedRecord(null);
         }
       };
-
       fetchData();
+    } else if (record) {
+      // Handle cases where record might exist but sort_key is missing
+      console.warn("Record is missing sort_key:", record);
+      setEditedRecord(null); // Or set to the passed record if partial display is okay
     }
   }, [record]);
 
@@ -225,15 +231,15 @@ const ProvinceModal = ({
             updated_by: currentUsername, // Add username
           };
 
-          const fullIdNo = editedRecord.id_no;
+          const fullSortKey = editedRecord.sort_key;
 
-          if (!fullIdNo) {
-            console.error("Missing id_no in editedRecord");
+          if (!fullSortKey) {
+            console.error("Missing sort_key in editedRecord");
             return;
           }
 
           const response = await axios.put(
-            `http://localhost:8081/api/update-data/${fullIdNo}`,
+            `http://localhost:8081/api/update-data/${fullSortKey}`,
             updatedRecord
           );
 
@@ -328,7 +334,7 @@ const ProvinceModal = ({
 
   return (
     <div className={`modal-container ${theme}-theme`}>
-      {!record || !record.id_no || !editedRecord ? (
+      {!record || !record.sort_key || !editedRecord ? (
         <div style={{ textAlign: "center", padding: 40 }}>
           <Spin size="large" tip="Loading record details..." />
         </div>

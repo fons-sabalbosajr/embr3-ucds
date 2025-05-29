@@ -164,37 +164,32 @@
   padding: 2px 0 0 5px;
   margin-bottom: 3px; /* Increased spacing */
   width: 100px;
+  color: #ffffff; /* Default text color */
 }
-
 .checkbox-wrapper.survey_eia {
-  background-color: #aab4f2; /* Light Purple-Blue */
-  font-size: 11px;
-  font-weight: 600;
+  background-color: #4a5568; /* Slate Gray - neutral dark */
 }
 
 .checkbox-wrapper.survey_air {
-  background-color: #c7cace;
-  font-size: 11px;
-  font-weight: 600;
+  background-color: #3182ce; /* Blue 600 - theme-friendly */
 }
 
 .checkbox-wrapper.survey_water {
-  background-color: #72dfe9; /* Light Cyan */
-  font-size: 11px;
-  font-weight: 600;
+  background-color: #2b6cb0; /* Blue 700 - deeper tone */
 }
 
 .checkbox-wrapper.survey_haz {
-  background-color: #ffc568; /* Light Orange */
-  font-size: 11px;
-  font-weight: 600;
+  background-color: #dd6b20; /* Orange 500 */
 }
 
 .checkbox-wrapper.survey_chem {
-  background-color: #95e05f; /* Light Green */
-  font-size: 11px;
-  font-weight: 600;
+  background-color: #38a169; /* Green 500 */
 }
+
+.checkbox-wrapper.survey_eswm {
+  background-color: #805ad5; /* Purple 500 */
+}
+
 
 .checkbox-label {
   margin-left: 8px;

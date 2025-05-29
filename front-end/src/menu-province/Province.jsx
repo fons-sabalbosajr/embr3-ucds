@@ -21,7 +21,7 @@ import {
   Select as AntSelect,
   ConfigProvider,
   Progress,
-  Avatar, 
+  Avatar,
 } from "antd";
 import {
   ReloadOutlined,
@@ -128,6 +128,7 @@ const Province = ({ theme, currentUser }) => {
     return originalData.filter((record) => {
       const searchableFields = [
         record.id_no,
+        record.sort_key,
         record.title,
         record.name,
         record.address,
@@ -150,11 +151,11 @@ const Province = ({ theme, currentUser }) => {
         record.emp_no_total,
         record.wwtftype,
         record.bod,
-        record.fmr_section_incharged,
-        record.section_incharge,
+        record.section_incharged,
         record.handler,
         record.monitoring_sched,
-        record.iis_no,
+        record.iis_no_2024,
+        record.iis_no_2025,
         record.insp_type,
         record.report_type,
         record.date_monitored,
@@ -163,6 +164,8 @@ const Province = ({ theme, currentUser }) => {
         record.days_dmds,
         record.days_dsdrs,
         record.pismu_tracking,
+        record.with_nov,
+        record.pismu_count_month,
         record.pd1586,
         record.permit_process,
         record.date_amend,
@@ -481,12 +484,12 @@ const Province = ({ theme, currentUser }) => {
   };
 
   const onRowClick = (record) => {
-    const selectedIndex = selectedRowKeys.indexOf(record.id_no);
+    const selectedIndex = selectedRowKeys.indexOf(record.sort_key);
     const newSelectedRowKeys = [...selectedRowKeys];
     if (selectedIndex >= 0) {
       newSelectedRowKeys.splice(selectedIndex, 1);
     } else {
-      newSelectedRowKeys.push(record.id_no);
+      newSelectedRowKeys.push(record.sort_key);
     }
 
     setSelectedRowKeys(newSelectedRowKeys);
@@ -551,13 +554,15 @@ const Province = ({ theme, currentUser }) => {
       // Check if the record is in the filtered data
       const isInFilteredData = filteredData.includes(record);
 
-      if (dataIndex === "id_no") {
-        // Directly compare the filter value with the id_no field
-        return record.id_no && record.id_no.toLowerCase().includes(lowerValue);
+      if (dataIndex === "sort_key") {
+        // Directly compare the filter value with the sort_key field
+        return String(record.sort_key || "")
+          .toLowerCase()
+          .includes(lowerValue);
       }
 
       if (dataIndex === "remarks") {
-        // Directly compare the filter value with the id_no field
+        // Directly compare the filter value with the sort_key field
         return (
           record.remarks && record.remarks.toLowerCase().includes(lowerValue)
         );
@@ -628,12 +633,13 @@ const Province = ({ theme, currentUser }) => {
     const filtered = data.filter((record) => {
       const searchableFields = [
         record.id_no,
+        record.sort_key,
         record.title,
         record.name,
         record.address,
         record.ecc_cnc,
         record.industry_class,
-        record.remarks,
+        record.remarks_recommendations,
         record.industry_type,
         record.industry_subtype,
         record.psic_code,
@@ -653,7 +659,8 @@ const Province = ({ theme, currentUser }) => {
         record.section_incharged,
         record.handler,
         record.monitoring_sched,
-        record.iis_no,
+        record.iis_no_2024,
+        record.iis_no_2025,
         record.insp_type,
         record.report_type,
         record.date_monitored,
@@ -662,6 +669,8 @@ const Province = ({ theme, currentUser }) => {
         record.days_dmds,
         record.days_dsdrs,
         record.pismu_tracking,
+        record.with_nov,
+        record.pismu_count_month,
         record.pd1586,
         record.permit_process,
         record.date_amend,
@@ -677,6 +686,20 @@ const Province = ({ theme, currentUser }) => {
         record.ra6969,
         record.haz_id,
         record.haz_issued,
+        record.tsd_required,
+        record.tsd,
+        record.tp_trc_required,
+        record.tsd_ref_no,
+        record.tsd_expiration,
+        record.tp_trc,
+        record.tp_trc_ref_no,
+        record.tp_trc_expiration,
+        record.chemical_permit_required,
+        record.chemical_permit,
+        record.chemical_permit_type,
+        record.chemical_permit_sub_type,
+        record.chem_permit_issued,
+        record.chem_permit_exp,
         record.pco,
         record.pco_no,
         record.pco_name,
@@ -771,16 +794,17 @@ const Province = ({ theme, currentUser }) => {
 
       case "PEMU_Bataan":
       case "PEMU_BATAAN":
-        return "#FCE5BB"; // Biege. pero pag namonitor na, transparent
+        return "#D2D0A0"; // Biege. pero pag namonitor na, transparent
 
       case "PEMU_Bulacan":
       case "PEMU_BULACAN":
         return "#7A73D1"; // Light purple
 
       case "PEMU_Nueva Ecija":
+      case "PEMU_Nueva_Ecija":
       case "PEMU_NUEVA ECIJA":
       case "PEMU_NUEVA_ECIJA":
-        return "#FFE225"; // Yellow
+        return "#DDA853"; // Yellow
 
       case "PEMU_Pampanga":
       case "PEMU_PAMPANGA":
@@ -929,7 +953,7 @@ const Province = ({ theme, currentUser }) => {
 
         // Define columns and data for the PDF
         const columns = [
-          { title: "ID No.", dataKey: "id_no" },
+          { title: "ID No.", dataKey: "sort_key" },
           { title: "Industry Details", dataKey: "industryDetails" },
           { title: "Industry Classification", dataKey: "industry_class" },
           { title: "Permits/Clearances", dataKey: "permits_clearances" },
@@ -943,9 +967,9 @@ const Province = ({ theme, currentUser }) => {
 
         // Filter data based on selected checkboxes
         const data = paginatedData
-          .filter((record) => selectedRowKeys.includes(record.id_no))
+          .filter((record) => selectedRowKeys.includes(record.sort_key))
           .map((record) => ({
-            id_no: record.id_no || "",
+            sort_key: record.sort_key || "",
             industryDetails: formatIndustryDetails(record),
             industry_class: record.industry_class || "",
             permits_clearances: formatPermitsClearances(record),
@@ -962,7 +986,7 @@ const Province = ({ theme, currentUser }) => {
           theme: "striped",
           styles: { fontSize: 8, cellPadding: 2 },
           columnStyles: {
-            id_no: { cellWidth: 15 },
+            sort_key: { cellWidth: 15 },
             industryDetails: { cellWidth: 80 },
             industry_class: { cellWidth: 30 },
             permits_clearances: { cellWidth: 60 },
@@ -988,7 +1012,7 @@ const Province = ({ theme, currentUser }) => {
 
     // Define columns and data for the PDF
     const columns = [
-      { title: "ID No.", dataKey: "id_no" },
+      { title: "ID No.", dataKey: "sort_key" },
       { title: "Industry Details", dataKey: "industryDetails" },
       { title: "Industry Classification", dataKey: "industry_class" },
       { title: "Permits/Clearances", dataKey: "permits_clearances" },
@@ -999,7 +1023,7 @@ const Province = ({ theme, currentUser }) => {
 
     // Use the original data source, not just the paginated data
     const data = originalData.map((record) => ({
-      id_no: record.id_no || "",
+      sort_key: record.isort_key || "",
       industryDetails: formatIndustryDetails(record),
       industry_class: record.industry_class || "",
       permits_clearances: formatPermitsClearances(record),
@@ -1016,7 +1040,7 @@ const Province = ({ theme, currentUser }) => {
       theme: "striped",
       styles: { fontSize: 8, cellPadding: 2 },
       columnStyles: {
-        id_no: { cellWidth: 15 },
+        sort_key: { cellWidth: 15 },
         industryDetails: { cellWidth: 80 },
         industry_class: { cellWidth: 30 },
         permits_clearances: { cellWidth: 60 },
@@ -1159,7 +1183,8 @@ const Province = ({ theme, currentUser }) => {
 
   // Helper function to get permit status
   const getPermitStatus = (expirationDateStr) => {
-    if (!expirationDateStr || expirationDateStr === "N/A") {
+    const dateStr = String(expirationDateStr || "");
+    if (!dateStr || dateStr === "N/A") {
       return {
         status: "unknown",
         daysRemaining: null,
@@ -1167,11 +1192,7 @@ const Province = ({ theme, currentUser }) => {
         icon: null,
       };
     }
-    const expirationDate = moment(
-      expirationDateStr,
-      ["MM/DD/YYYY", "YYYY-MM-DD"],
-      true
-    ); // Strict parsing
+    const expirationDate = moment(dateStr, ["MM/DD/YYYY", "YYYY-MM-DD"], true); // Strict parsing
     if (!expirationDate.isValid()) {
       return {
         status: "invalid_date",
@@ -1205,12 +1226,19 @@ const Province = ({ theme, currentUser }) => {
     return { status: "active", daysRemaining, color: null, icon: null }; // Null color means use default
   };
 
-  const checkPendingStatus = (value) =>
-    typeof value === "string" &&
-    (value.toLowerCase().includes("app. no") ||
-      value.toLowerCase().includes("in process") ||
-      value.toLowerCase().includes("on process") ||
-      value.toLowerCase().includes("application no"));
+  const checkPendingStatus = (value) => {
+    const strValue = String(value || "").toLowerCase();
+    return (
+      strValue.includes("app. no") ||
+      strValue.includes("in process") ||
+      strValue.includes("In process") ||
+      strValue.includes("In Process") ||
+      strValue.includes("in-process") ||
+      strValue.includes("In-process") ||
+      strValue.includes("on process") ||
+      strValue.includes("application no")
+    );
+  };
 
   // Assuming sectionCounts is the original data you provided
   const mergedSectionCounts = mergeSections(sectionCounts);
@@ -1223,7 +1251,7 @@ const Province = ({ theme, currentUser }) => {
       align: "left",
       render: (_, record) => (
         <>
-          <strong>ID No.: {record.id_no}</strong> <br />
+          <strong>ID No.: {record.sort_key}</strong> <br />
           Project Title: {record.title} <br />
           <br />
           Proponent Name: {record.name} <br />
@@ -1276,12 +1304,19 @@ const Province = ({ theme, currentUser }) => {
   const columns = [
     {
       title: "ID No.",
-      dataIndex: "id_no",
-      key: "id_no",
+      dataIndex: "sort_key",
+      key: "sort_key",
       align: "left",
       width: 70,
-      ...getColumnSearchProps("id_no"),
-      render: (text) => <div>{text}</div>,
+      ...getColumnSearchProps("sort_key"),
+      render: (text) => {
+        if (typeof text !== "string") return text;
+
+        const [prefix, numberPart] = text.split("-");
+        const formatted = `${prefix}-${parseInt(numberPart, 10)}`;
+
+        return <div>{formatted}</div>;
+      },
     },
     {
       title: (
@@ -1353,7 +1388,7 @@ const Province = ({ theme, currentUser }) => {
                   top: "-3px",
                   right: "-3px",
                   fontSize: "11px",
-                  color: "#FF0303",
+                  color: "#a8e8f9",
                 }}
               />
             )}
@@ -1390,10 +1425,14 @@ const Province = ({ theme, currentUser }) => {
               >
                 <span>
                   <LabelWithIcon
-                    text={record.ecc_cnc.includes("CNC") ? "CNC" : "ECC"}
-                    isPending={checkPendingStatus(record.ecc_cnc)}
+                    text={
+                      String(record.ecc_cnc || "").includes("CNC")
+                        ? "CNC"
+                        : "ECC"
+                    }
+                    isPending={checkPendingStatus(String(record.ecc_cnc || ""))}
                     className={
-                      record.ecc_cnc.includes("CNC")
+                      String(record.ecc_cnc || "").includes("CNC")
                         ? "custom-span-yellow"
                         : "custom-span-green"
                     }
@@ -1423,7 +1462,9 @@ const Province = ({ theme, currentUser }) => {
                 <span>
                   <LabelWithIcon
                     text="PTO"
-                    isPending={checkPendingStatus(record.pto_code)}
+                    isPending={checkPendingStatus(
+                      String(record.pto_code || "")
+                    )}
                     className={
                       ptoStatus.status === "expired"
                         ? "custom-span-red"
@@ -1456,7 +1497,9 @@ const Province = ({ theme, currentUser }) => {
                 <span>
                   <LabelWithIcon
                     text="WWDP"
-                    isPending={checkPendingStatus(record.wwdp_code)}
+                    isPending={checkPendingStatus(
+                      String(record.wwdp_code || "")
+                    )}
                     className={
                       wwdpStatus.status === "expired"
                         ? "custom-span-red"
@@ -1483,7 +1526,7 @@ const Province = ({ theme, currentUser }) => {
                 <span>
                   <LabelWithIcon
                     text="HAZ"
-                    isPending={checkPendingStatus(record.haz_id)}
+                    isPending={checkPendingStatus(String(record.haz_id || ""))}
                     className="custom-span-skyblue"
                   />
                 </span>
@@ -1511,7 +1554,7 @@ const Province = ({ theme, currentUser }) => {
                 <span>
                   <LabelWithIcon
                     text="PCO"
-                    isPending={checkPendingStatus(record.pco_no)}
+                    isPending={checkPendingStatus(String(record.pco_no || ""))}
                     className={
                       pcoStatus.status === "expired"
                         ? "custom-span-red"
@@ -1532,7 +1575,7 @@ const Province = ({ theme, currentUser }) => {
       ...getColumnSearchProps("section_incharged"),
       render: (text, record) => {
         // Split sections by comma
-        const sections = record.section_incharged
+        const sections = String(record.section_incharged || "")
           .split(",")
           .map((section) => section.trim());
 
@@ -1611,12 +1654,16 @@ const Province = ({ theme, currentUser }) => {
     {
       title: "Monitoring Status",
       key: "monitoringStatus",
+      width: 200,
       ...getColumnSearchProps("iis_no"),
       render: (text, record) => (
         <div className="monitoring-status-container-province">
           {record.date_monitored && (
             <p className="monitoring-label">
-              <Tooltip title="Date Monitored">
+              <Tooltip
+                title={<div style={{ fontSize: "10px" }}>Date Monitored</div>}
+                color="#1890ff"
+              >
                 <MonitorOutlined style={{ marginRight: 8, color: "#1890ff" }} />
                 {record.date_monitored}
               </Tooltip>
@@ -1625,7 +1672,12 @@ const Province = ({ theme, currentUser }) => {
 
           {record.date_routed && (
             <p className="monitoring-label">
-              <Tooltip title="Date Routed to IIS">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>Date Routed to IIS</div>
+                }
+                color="#52c41a"
+              >
                 <GlobalOutlined style={{ marginRight: 8, color: "#52c41a" }} />
                 {record.date_routed}
               </Tooltip>
@@ -1634,7 +1686,12 @@ const Province = ({ theme, currentUser }) => {
 
           {record.date_signed && (
             <p className="monitoring-label">
-              <Tooltip title="Date Report Signed">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>Date Report Signed</div>
+                }
+                color="#faad14"
+              >
                 <CheckCircleFilled
                   style={{ marginRight: 8, color: "#faad14" }}
                 />
@@ -1643,9 +1700,10 @@ const Province = ({ theme, currentUser }) => {
             </p>
           )}
 
-          {record.iis_no && record.iis_no !== "N/A" && (
+          {/* Render iis_no_2024 if exists */}
+          {record.iis_no_2024 && record.iis_no_2024 !== "N/A" && (
             <p className="monitoring-label">
-              {record.iis_no
+              {String(record.iis_no_2024)
                 .split(/\s+/)
                 .filter(
                   (iis) => iis && iis.trim() !== "" && iis.trim() !== "N/A"
@@ -1672,9 +1730,11 @@ const Province = ({ theme, currentUser }) => {
                 ))}
             </p>
           )}
+
+          {/* Render iis_no_2025 if exists */}
           {record.iis_no_2025 && record.iis_no_2025 !== "N/A" && (
             <p className="monitoring-label">
-              {record.iis_no_2025
+              {String(record.iis_no_2025)
                 .split(/\s+/)
                 .filter(
                   (iis) => iis && iis.trim() !== "" && iis.trim() !== "N/A"
@@ -1702,9 +1762,17 @@ const Province = ({ theme, currentUser }) => {
             </p>
           )}
 
-          {record.pismu_tracking === "✔" && (
+          {/* PISMU Tracking */}
+          {record.pismu_tracking && record.pismu_tracking.trim() !== "" && (
             <p className="monitoring-label">
-              <Tooltip title="PISMU Tracking of Report">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>
+                    Received by PISMU: {record.pismu_tracking}
+                  </div>
+                }
+                color="#0D92F4"
+              >
                 <span>
                   <CheckCircleFilled
                     style={{ color: "#0D92F4", marginRight: 8 }}
@@ -1716,10 +1784,6 @@ const Province = ({ theme, currentUser }) => {
           )}
         </div>
       ),
-      width: 180,
-      onFilter: (value, record) => {
-        // ...existing filter logic...
-      },
     },
     {
       title: "Actions",
@@ -1765,32 +1829,30 @@ const Province = ({ theme, currentUser }) => {
         />
 
         {canViewDataHistory &&
-        provinceViewers[displayProvinceName] &&
-        provinceViewers[displayProvinceName].length > 0 && (
-          <div
-            style={{ display: "flex", alignItems: "center", marginLeft: 12 }}
-          >
-            <Avatar.Group
-              max={50}
-              maxStyle={{
-                color: "#f56a00",
-                backgroundColor: "#fde3cf",
-                fontSize: 10,
+          provinceViewers[displayProvinceName] &&
+          provinceViewers[displayProvinceName].length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                margin: "12px 0",
               }}
-              size={24}
             >
-              {provinceViewers[displayProvinceName]
-                // Filter out the dev user by userId or username
-                .filter(
-                  (user) =>
-                    user.username !== "asabalbosa"
-                )
-                .map((user) => (
+              <Avatar.Group
+                max={{ count: 3 }}
+                maxStyle={{
+                  color: "#f56a00",
+                  backgroundColor: "#fde3cf",
+                  fontSize: 11,
+                }}
+                size={24}
+              >
+                {provinceViewers[displayProvinceName].map((user) => (
                   <Tooltip
-                    key={user.userId}
+                    key={user.username}
                     title={
-                      <span style={{ fontSize: "8px" }}>
-                        {`${user.username} is viewing ${displayProvinceName}`}
+                      <span style={{ fontSize: "9px" }}>
+                        {`${user.username} is here`}
                       </span>
                     }
                   >
@@ -1807,9 +1869,9 @@ const Province = ({ theme, currentUser }) => {
                     </Avatar>
                   </Tooltip>
                 ))}
-            </Avatar.Group>
-          </div>
-        )}
+              </Avatar.Group>
+            </div>
+          )}
 
         <Button
           type="primary"
@@ -1833,7 +1895,7 @@ const Province = ({ theme, currentUser }) => {
         title={
           <div className="modal-title-container">
             <span className="modal-title" style={{ whiteSpace: "normal" }}>
-              Record ID: {selectedRecord?.id_no || "Unknown"}
+              Record ID: {selectedRecord?.sort_key || "Unknown"}
             </span>
             <span
               className="modal-title"
@@ -1885,7 +1947,7 @@ const Province = ({ theme, currentUser }) => {
             }}
           >
             <span style={{ flex: 1, textAlign: "left", fontSize: "11px" }}>
-              ID No: {selectedDuplicate?.id_no}
+              ID No: {selectedDuplicate?.sort_key}
             </span>
             <span
               style={{
@@ -1948,7 +2010,7 @@ const Province = ({ theme, currentUser }) => {
               dataSource={duplicateRecords} // Exclude selected record
               columns={duplicateColumns}
               pagination={false}
-              rowKey="id_no"
+              rowKey="sort_key"
               bordered
               locale={{ emptyText: "No duplicate records found" }}
               rowSelection={{
@@ -2177,7 +2239,7 @@ const Province = ({ theme, currentUser }) => {
             scroll={{ y: 950 }}
             dataSource={filteredDuplicateData} // Ensure this is set correctly
             columns={columns}
-            rowKey="id_no"
+            rowKey="sort_key"
             size="small"
             className="custom-table"
             pagination={false}

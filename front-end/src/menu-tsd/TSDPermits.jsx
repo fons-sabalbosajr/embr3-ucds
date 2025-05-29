@@ -9,6 +9,7 @@ import {
   Tag,
   ConfigProvider,
   message,
+  Avatar, // Added Avatar
 } from "antd";
 import {
   ReloadOutlined,
@@ -23,8 +24,8 @@ import {
 import Highlighter from "react-highlight-words";
 import "./tsdpermit.css";
 import Swal from "sweetalert2";
-import TSDModal from "./TSDModal";
-
+import TSDModal from "./TSDModal"; 
+import { io } from "socket.io-client"; // Added io
 
 const TSDPermits = ({ theme, currentUser, data }) => {
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,10 @@ const TSDPermits = ({ theme, currentUser, data }) => {
   const [editingKey, setEditingKey] = useState("");
   const [dataSource, setDataSource] = useState(data);
   const [currentValue, setCurrentValue] = useState("");
+  const [tsdViewers, setTsdViewers] = useState([]); // Added state for viewers
+  const socketRef = useRef(null); // Added socket ref
+
+  const canViewDataHistory = currentUser?.permissions?.[3]; // For Avatar.Group visibility
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,6 +90,47 @@ const TSDPermits = ({ theme, currentUser, data }) => {
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.username) return;
+
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:8081", { withCredentials: true });
+    }
+    const socket = socketRef.current;
+
+    const joinUserToTsd = () => {
+      socket.emit("joinTsd", {
+        user: {
+          username: currentUser.username,
+          avatar: currentUser.avatar || currentUser.avatarUrl,
+          name: currentUser.name,
+        },
+      });
+    };
+
+    joinUserToTsd();
+
+    const tsdViewersHandler = (updatedViewers) => {
+      // console.log("[TSDPermits.jsx] Received tsdViewers update:", updatedViewers.map(u => u.username).join(', '));
+      setTsdViewers(updatedViewers);
+    };
+
+    const handleConnect = () => {
+      joinUserToTsd();
+    };
+
+    socket.on("tsdViewers", tsdViewersHandler);
+    socket.on("connect", handleConnect);
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.emit("leaveTsd");
+        socketRef.current.off("tsdViewers", tsdViewersHandler);
+        socketRef.current.off("connect", handleConnect);
+      }
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (filteredData.length > 0) {
@@ -760,9 +806,37 @@ const TSDPermits = ({ theme, currentUser, data }) => {
 
   return (
     <div className={`header-panel ${theme}`}>
-      <div className="header-content">
-        <h3 className="header-title">Universe of Industries (Treatment, Storage, and Disposal Facilities)</h3>
-
+      <div className="header-content-survey"> {/* Use consistent class for styling */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+          <h3
+            className="header-title-survey" /* Use consistent class */
+            style={{ margin: 0, marginRight: 16 }}
+          >
+            Universe of Industries (TSD Facilities)
+          </h3>
+          {canViewDataHistory && tsdViewers.length > 0 && (
+            <Avatar.Group
+              max={{ count: 3 }}
+              maxStyle={{
+                color: "#f56a00",
+                backgroundColor: "#fde3cf",
+                fontSize: 11,
+              }}
+              size={24}
+            >
+              {tsdViewers.map((user) => (
+                <Tooltip
+                  key={user.username}
+                  title={<span style={{ fontSize: "10px" }}>{`${user.username} is here`}</span>}
+                >
+                  <Avatar src={user.avatar} style={{ marginLeft: 2, verticalAlign: "middle" }}>
+                    {!user.avatar && user.username ? user.username[0].toUpperCase() : ""}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </Avatar.Group>
+          )}
+        </div>
         <Button
           type="primary"
           className="refresh-button"
