@@ -15,6 +15,21 @@ import "./activity.css";
 
 const { Panel } = Collapse;
 
+const formatSortKeyDisplay = (sortKey) => {
+  if (typeof sortKey !== 'string') return sortKey;
+  const parts = sortKey.split('-');
+  if (parts.length === 2) {
+    const prefix = parts[0];
+    const numberStr = parts[1];
+    // Check if numberStr consists only of digits before parsing
+    if (/^\d+$/.test(numberStr)) {
+      const number = parseInt(numberStr, 10); // This removes leading zeros
+      return `${prefix}-${number}`;
+    }
+  }
+  return sortKey; // Return original if format is unexpected or no numeric part
+};
+
 const Activity = ({ theme, provinceAccess }) => {
   const [permits, setPermits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +41,7 @@ const Activity = ({ theme, provinceAccess }) => {
     id_no: "",
     ecc_cnc: "",
   });
-  const pageSize = 5; // Number of id_no entries per page
+  const pageSize = 10; // Number of id_no entries per page
 
   const provincePrefixes = {
     aurora: "AU",
@@ -96,7 +111,7 @@ const Activity = ({ theme, provinceAccess }) => {
       <div className="panel-header-content">
         <div className="title-column">
           <div className="panel-title">
-            {item.sort_key}: {item.title} <br />
+            {formatSortKeyDisplay(item.sort_key)}: {item.title} <br />
             {item.ecc_cnc && (
               <span
                 className="ecc-cnc-tag"
@@ -113,22 +128,28 @@ const Activity = ({ theme, provinceAccess }) => {
         <div className="permit-tags-column">
           <div className="permit-tags-container">
             {item.permits
-              .filter((permit) => permit.isNearExpiry || permit.isExpired)
-              .map((permit, index) => (
-                <Tag
-                  key={index}
-                  color={
-                    permit.isExpired
-                      ? "red"
-                      : permit.isNearExpiry
-                      ? "orange"
-                      : ""
-                  }
-                  className="permit-tag"
-                >
-                  {permit.type}
-                </Tag>
-              ))}
+              .filter(
+                (permit) => permit.isNearExpiry || permit.isExpired
+              )
+              .map((permit, index) => {
+                // Add this console.log to inspect the permit object
+                console.log("Activity.jsx - Rendering Tag for Permit:", permit);
+                return (
+                  <Tag
+                    key={index}
+                    color={
+                      permit.isExpired
+                        ? "red"
+                        : permit.isNearExpiry
+                        ? "yellow"
+                        : ""
+                    }
+                    className="permit-tag"
+                  >
+                    {permit.type}
+                  </Tag>
+                );
+              })}
           </div>
         </div>
       </div>
@@ -137,53 +158,52 @@ const Activity = ({ theme, provinceAccess }) => {
       <ul className="permit-list">
         {item.permits.map((permit, index) => {
           const expiryDate = new Date(permit.expiry);
+          let iconElement = null;
+          let textElement = null;
+
+          if (permit.isExpired) {
+            iconElement = (
+              <WarningFilled
+                className="expired-icon"
+                style={{ color: theme === "dark" ? "#ff4d4f" : "#ff7875" }}
+              />
+            );
+            textElement = (
+              <span>
+                {permit.type} already expired last{" "}
+                {expiryDate.toLocaleDateString()}
+              </span>
+            );
+          } else if (permit.isNearExpiry) {
+            iconElement = (
+              <ClockCircleFilled
+                className="will-expire-icon"
+                style={{ color: theme === "dark" ? "#faad14" : "#ffc069" }}
+              />
+            );
+            textElement = (
+              <span>
+                {permit.type} will expire by {expiryDate.toLocaleDateString()}
+              </span>
+            );
+          } else {
+            // Valid and not near expiry
+            iconElement = (
+              <ClockCircleFilled // Or consider CheckCircleFilled if available/preferred
+                className="valid-icon"
+                style={{ color: theme === "dark" ? "#52c41a" : "#73d13d" }} // Green tones
+              />
+            );
+            textElement = (
+              <span>
+                {permit.type} is valid until {expiryDate.toLocaleDateString()}
+              </span>
+            );
+          }
 
           return (
             <li key={index} className="permit-item">
-              <div className="permit-text">
-                {permit.isExpired ? (
-                  <>
-                    <WarningFilled
-                      className="expired-icon"
-                      style={{
-                        color: theme === "dark" ? "#ff4d4f" : "#ff7875",
-                      }}
-                    />{" "}
-                    {permit.type} already expired last{" "}
-                    {expiryDate.toLocaleDateString()}
-                  </>
-                ) : (
-                  <>
-                    <ClockCircleFilled
-                      className="will-expire-icon"
-                      style={{
-                        color: theme === "dark" ? "#faad14" : "#ffc069",
-                      }}
-                    />{" "}
-                    {permit.type} will expire by{" "}
-                    {expiryDate.toLocaleDateString()}
-                  </>
-                )}
-              </div>
-              <Tooltip title="Update">
-                <Button
-                  type="primary"
-                  icon={<EditOutlined />}
-                  size="small"
-                  className="update-btn"
-                  style={{
-                    backgroundColor: theme === "dark" ? "#1890ff" : "#40a9ff",
-                    color: "#ffffff",
-                  }}
-                  onClick={() => {
-                    setSelectedRecord({
-                      sort_key: item.sort_key,
-                      ecc_cnc: item.ecc_cnc,
-                    });
-                    setIsModalVisible(true);
-                  }}
-                />
-              </Tooltip>
+              <div className="permit-text">{iconElement} {textElement}</div>
             </li>
           );
         })}
@@ -286,7 +306,7 @@ const Activity = ({ theme, provinceAccess }) => {
         }}
       >
         <p>
-          <strong>ID No:</strong> {selectedRecord.id_no}
+          <strong>ID No:</strong> {formatSortKeyDisplay(selectedRecord.sort_key)}
         </p>
         <p>
           <strong>ECC/CNC:</strong> {selectedRecord.ecc_cnc || "N/A"}

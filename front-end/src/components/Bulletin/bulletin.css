@@ -156,6 +156,7 @@
 .bulletin-modal {
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); /* Enhanced shadow for depth */
 }
 
 /* Dark Theme Modal */
@@ -165,15 +166,20 @@
 }
 
 .modal-dark .ant-modal-header {
-  background-color: #1e1e1e; /* Dark header */
+  background: linear-gradient(135deg, #00203f, #003a75); /* Gradient header */
+  border-bottom: none; /* Remove default border */
+  padding: 20px 24px;
 }
 
 .modal-dark .ant-modal-title {
   color: #ffffff; /* White title */
+  font-weight: bold;
+  font-size: 20px;
 }
 
 .modal-dark .ant-modal-footer {
   background-color: #1e1e1e; /* Dark footer */
+  border-top: 1px solid #333; /* Subtle separator */
 }
 
 .modal-dark .modal-btn {
@@ -193,15 +199,20 @@
 }
 
 .modal-light .ant-modal-header {
-  background-color: #ffffff; /* Light header */
+  background: linear-gradient(135deg, #e6f7ff, #bae7ff); /* Light gradient header */
+  border-bottom: none; /* Remove default border */
+  padding: 20px 24px;
 }
 
 .modal-light .ant-modal-title {
   color: #000000; /* Black title */
+  font-weight: bold;
+  font-size: 20px;
 }
 
 .modal-light .ant-modal-footer {
   background-color: #ffffff; /* Light footer */
+  border-top: 1px solid #f0f0f0; /* Subtle separator */
 }
 
 .modal-light .modal-btn {
@@ -219,92 +230,34 @@
   font-size: 16px;
   line-height: 1.6;
   color: inherit; /* Inherit text color from theme */
+  /* Padding and positioning will be handled by modal-details-card or are no longer needed here */
 }
 
-/* Animated Background */
-.animated-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  z-index: 0; /* Ensure it stays behind the content */
+/* New styles for the inner card in the modal */
+.modal-details-card {
+  padding: 20px;
+  border-radius: 8px;
+  /* margin-top: 16px; /* Optional: if more space is needed below the header */
+  /* margin-bottom: 16px; /* Optional: if more space is needed above the footer */
 }
 
-.bubble {
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0.2; /* Semi-transparent */
-  animation: moveBubble 15s infinite ease-in-out;
+.modal-dark .modal-details-card {
+  background-color: #2c2c2c; /* Slightly lighter than modal dark background */
+  border: 1px solid #444; /* Subtle border for definition */
 }
 
-.bubble-1 {
-  width: 100px;
-  height: 100px;
-  background: rgba(255, 255, 255, 0.3);
-  top: 10%;
-  left: 15%;
-  animation-duration: 12s;
-}
-
-.bubble-2 {
-  width: 150px;
-  height: 150px;
-  background: rgba(255, 255, 255, 0.2);
-  top: 30%;
-  left: 50%;
-  animation-duration: 18s;
-}
-
-.bubble-3 {
-  width: 80px;
-  height: 80px;
-  background: rgba(255, 255, 255, 0.25);
-  top: 50%;
-  left: 70%;
-  animation-duration: 10s;
-}
-
-.bubble-4 {
-  width: 120px;
-  height: 120px;
-  background: rgba(255, 255, 255, 0.15);
-  top: 70%;
-  left: 30%;
-  animation-duration: 20s;
-}
-
-.bubble-5 {
-  width: 200px;
-  height: 200px;
-  background: rgba(255, 255, 255, 0.1);
-  top: 90%;
-  left: 10%;
-  animation-duration: 25s;
-}
-
-/* Animation for moving bubbles */
-@keyframes moveBubble {
-  0% {
-    transform: translateY(0) translateX(0);
-  }
-  50% {
-    transform: translateY(-30px) translateX(30px);
-  }
-  100% {
-    transform: translateY(0) translateX(0);
-  }
+.modal-light .modal-details-card {
+  background-color: #f7f7f7; /* Slightly darker than modal light background */
+  border: 1px solid #e8e8e8; /* Subtle border for definition */
 }
 
 /* Ensure carousel content stays above the background */
 .bulletin-slide {
   position: relative;
-  z-index: 1;
+  /* z-index: 1; no longer needed as animated-background is removed */
 }
 
 .bulletin-left,
 .bulletin-image {
-  position: relative;
-  z-index: 2; /* Ensure text and image are above the bubbles */
+  /* position: relative; and z-index: 2; no longer needed */
 }

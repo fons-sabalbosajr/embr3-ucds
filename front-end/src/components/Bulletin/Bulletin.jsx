@@ -108,15 +108,6 @@ const Bulletin = ({ theme = "dark" }) => {
               key={bulletin._id}
               className={`bulletin-slide ${gradientClass}`} // Apply gradient class
             >
-              {/* Moving Bubbles Background */}
-              <div className="animated-background">
-                <div className="bubble bubble-1"></div>
-                <div className="bubble bubble-2"></div>
-                <div className="bubble bubble-3"></div>
-                <div className="bubble bubble-4"></div>
-                <div className="bubble bubble-5"></div>
-              </div>
-
               {/* Bulletin Content */}
               <div className="bulletin-left">
                 <Typography.Title level={3} className="bulletin-title">
@@ -179,16 +170,15 @@ const Bulletin = ({ theme = "dark" }) => {
           theme === "dark" ? "modal-dark" : "modal-light"
         }`}
       >
-        <Typography.Title level={4} className="modal-title">
-          {selectedBulletin.title}
-        </Typography.Title>
-        <Typography.Paragraph className="modal-message">
-          <span
-            dangerouslySetInnerHTML={{
-              __html: (selectedBulletin.message || "").replace(/\n/g, "<br />"),
-            }}
-          />
-        </Typography.Paragraph>
+        <div className="modal-details-card">
+          <Typography.Paragraph className="modal-message">
+            <span
+              dangerouslySetInnerHTML={{
+                __html: (selectedBulletin.message || "").replace(/\n/g, "<br />"),
+              }}
+            />
+          </Typography.Paragraph>
+        </div>
       </Modal>
     </div>
   );

@@ -377,9 +377,9 @@ const SystemCalendar = ({ theme }) => {
               <li
                 key={index}
                 style={{
-                  fontSize: "10px", // Reduced font size for event titles
-                  lineHeight: "1.2", // Adjust line height for better spacing
-                  marginBottom: "2px", // Reduce spacing between events
+                  fontSize: "9px", // Further reduced font size for event titles
+                  lineHeight: "1.1", // Adjust line height for better spacing
+                  marginBottom: "1px", // Reduce spacing between events
                   overflow: "hidden", // Hide overflow text
                   textOverflow: "ellipsis", // Add ellipsis for long text
                   whiteSpace: "nowrap", // Prevent text wrapping
@@ -390,7 +390,7 @@ const SystemCalendar = ({ theme }) => {
                   text={
                     <span
                       style={{
-                        fontSize: "10px",
+                        fontSize: "9px", // Match event title font size
                         fontWeight: "400",
                         verticalAlign: "middle",
                         color: theme === "dark" ? "#ffffff" : "#000000", // Adjust text color based on theme
@@ -401,13 +401,13 @@ const SystemCalendar = ({ theme }) => {
                   }
                   className="event-title"
                   style={{
-                    fontSize: "10px", // Reduced font size for badge text
+                    fontSize: "9px", // Match event title font size
                   }}
                 />
               </li>
             ))}
           {dailyNotices.length > 1 && (
-            <li className="see-more">See {dailyNotices.length - 1} more...</li>
+            <li className="see-more" style={{ fontSize: "9px" }}>See {dailyNotices.length - 1} more...</li>
           )}
         </ul>
       </div>

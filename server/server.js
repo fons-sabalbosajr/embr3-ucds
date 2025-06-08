@@ -1403,9 +1403,8 @@ app.post("/api/update-color-universe", async (req, res) => {
         .send({ message: "No documents updated, upserted, or matched." });
     } else {
       res.status(200).send({
-        message: `Colors updated or upserted for ${
-          updatedCount + upsertedCount
-        } document(s).`,
+        message: `Colors updated or upserted for ${updatedCount + upsertedCount
+          } document(s).`,
       });
     }
   } catch (error) {
@@ -1781,24 +1780,117 @@ app.post("/api/ucds/add-establishment", async (req, res) => {
 
 app.use("/uploads", express.static(uploadsDir));
 
+
+
 //////////////////////////////////////////////////////////////////////////////////////////
+
+//#region Permit Summary Helpers
+const PERMITS_SUMMARY_DEFAULT_PAGE_SIZE = 10;
+
+const isValidDate = (d) => d instanceof Date && !isNaN(d);
+
+// Enhanced robust date parsing function
+function parseDateString(dateStrInput) {
+  if (!dateStrInput || typeof dateStrInput !== 'string') {
+    return null;
+  }
+
+  let dateStr = dateStrInput.trim();
+
+  // 1. Handle obvious non-date strings
+  const nonDateKeywords = [
+    "n/a", "pending", "approval", "ongoing", "application", "for approval",
+    "verification", "unknown", "none", "---", "not applicable",
+    "coa no", "ref no", "dp-r03", "fla-", "lexie's farm", "in-process",
+    "app. no", "for verification", "new designated pco", "contact person"
+    // Add more keywords as needed based on your data
+  ];
+  if (nonDateKeywords.some(keyword => dateStr.toLowerCase().includes(keyword))) {
+    return null;
+  }
+  if (/^#+$/.test(dateStr)) return null; // Handles "##########"
+  if (/^\d{4}-\d{4}$/.test(dateStr)) return null; // Handles "2024-2027" (year ranges)
+  if (/^\d{1,2}\/\d{1,2}\/\-\d{4}$/.test(dateStr)) return null; // Handles "01/12/-2022"
+
+  // 2. If multiple lines, take the first line
+  const lines = dateStr.split(/[\n\r]/);
+  dateStr = lines[0].trim();
+
+  // 3. Attempt direct parsing (handles YYYY-MM-DD, MM/DD/YYYY, "Month D, YYYY", "D-Month-YYYY")
+  let d = new Date(dateStr);
+  if (isValidDate(d)) {
+    return d;
+  }
+
+  // 4. Attempt to parse DD/MM/YYYY by rearranging to MM/DD/YYYY
+  const dmYMatch = dateStr.match(/^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$/);
+  if (dmYMatch) {
+    const day = parseInt(dmYMatch[1], 10);
+    const month = parseInt(dmYMatch[2], 10);
+    const year = parseInt(dmYMatch[3], 10);
+    if (day > 12 && month <= 12 && year > 1900 && year < 2100) { // Likely DD/MM/YYYY
+      d = new Date(`${month}/${day}/${year}`);
+      if (isValidDate(d)) return d;
+    }
+  }
+
+  // 5. Handle cases like "Month. Day, YYYY" e.g. "Oct. 26, 2022" if direct parse failed
+  const monthDotDayYearMatch = dateStr.match(/^([A-Za-z]{3,})\.?\s*(\d{1,2}),?\s*(\d{4})$/i);
+  if (monthDotDayYearMatch) {
+    const cleanedForParse = `${monthDotDayYearMatch[1]} ${monthDotDayYearMatch[2]} ${monthDotDayYearMatch[3]}`;
+    d = new Date(cleanedForParse);
+    if (isValidDate(d)) return d;
+  }
+
+  // 6. Handle dates followed by extraneous text (e.g., "YYYY-MM-DD some_text" or "MM/DD/YYYY some_text")
+  const dateFollowedByTextMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/);
+  if (dateFollowedByTextMatch) {
+    d = new Date(dateFollowedByTextMatch[1]);
+    if (isValidDate(d)) return d;
+  }
+
+  return null; // Could not parse
+}
+
+const isNearExpiration = (expiryDate, nowDate) => {
+  if (!isValidDate(expiryDate)) return false;
+  const oneMonthBefore = new Date(expiryDate);
+  oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
+  return nowDate >= oneMonthBefore && nowDate <= expiryDate;
+};
+
+const IsExpired = (expiryDate, nowDate) => {
+  if (!isValidDate(expiryDate)) return false;
+  return nowDate > expiryDate;
+};
+//#endregion Permit Summary Helpers
+
+
 app.get("/api/permits-summary", async (req, res) => {
-  const { page = 1, pageSize = 5, prefixes = "" } = req.query;
-  const currentPage = parseInt(page, 10);
-  const pageSizeInt = parseInt(pageSize, 10);
+  let {
+    page = 1,
+    pageSize = PERMITS_SUMMARY_DEFAULT_PAGE_SIZE,
+    prefixes = "",
+    searchText = "",
+    filterEstablishmentsByExpiryStatus = "false", // Existing parameter
+    permitTypesFilter = "" // New parameter for permit type filtering
+  } = req.query
+
+  let currentPage = parseInt(page, 10);
+  let pageSizeInt = parseInt(pageSize, 10);
+
+  if (isNaN(currentPage) || currentPage < 1) {
+    currentPage = 1;
+  }
+  if (isNaN(pageSizeInt) || pageSizeInt <= 0) {
+    pageSizeInt = PERMITS_SUMMARY_DEFAULT_PAGE_SIZE;
+  }
+
   const skip = (currentPage - 1) * pageSizeInt;
-  const limit = pageSizeInt;
+  const shouldFilterByExpiry = filterEstablishmentsByExpiryStatus === "true";
 
   try {
     const now = new Date();
-
-    const isNearExpiration = (expiryDate) => {
-      const oneMonthBefore = new Date(expiryDate);
-      oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
-      return now >= oneMonthBefore && now <= expiryDate;
-    };
-
-    const isExpired = (expiryDate) => now > expiryDate;
 
     // Parse comma-separated prefixes from query
     const prefixList = prefixes
@@ -1806,176 +1898,129 @@ app.get("/api/permits-summary", async (req, res) => {
       .map((p) => p.trim().toUpperCase())
       .filter((p) => p !== "");
 
-    const allData = await ucdsCollection
-      .find(
-        {},
-        {
-          projection: {
-            sort_key: 1,
-            title: 1,
-            name: 1,
-            ecc_cnc: 1,
-            pto_issued: 1,
-            wwdp_issued: 1,
-            pco_validity: 1,
-          },
-        }
-      )
+
+    const mongoQuery = {};
+    if (prefixList.length > 0) {
+      mongoQuery.sort_key = { $regex: `^(${prefixList.join('|')})`, $options: 'i' };
+    }
+
+    if (searchText) {
+      const searchRegex = { $regex: searchText, $options: 'i' };
+      mongoQuery.$or = [
+        { sort_key: searchRegex },
+        { title: searchRegex },
+        { name: searchRegex },
+        { ecc_cnc: searchRegex }
+      ];
+    }
+
+    // Fetch all records matching the basic query (search text, prefixes)
+    const allMatchingRecords = await ucdsCollection
+      .find(mongoQuery, {
+        projection: {
+          sort_key: 1,
+          title: 1,
+          name: 1,
+          ecc_cnc: 1,
+          pto_issued: 1,
+          pto_code: 1,
+          wwdp_issued: 1,
+          wwdp_code: 1,
+          pco_validity: 1,
+          pco_no: 1,
+        },
+      })
       .toArray();
 
-    // Apply multi-prefix filtering
-    const filteredByPrefix =
-      prefixList.length > 0
-        ? allData.filter((record) => {
-            const idNo = String(record.sort_key || "").toUpperCase();
-            return prefixList.some((prefix) => idNo.startsWith(prefix));
-          })
-        : allData; // If no prefix specified, return all
 
-    // Process permits
-    const processedData = filteredByPrefix
-      .map((record) => {
-        const permits = [];
+    let processedRecords = allMatchingRecords.map((record) => {
 
-        // Helper function to check for valid date (already present)
-         const isValidDate = (d) => d instanceof Date && !isNaN(d);
+      const permits = [];
 
-        // Enhanced robust date parsing function
-        function parseDateString(dateStrInput) {
-          if (!dateStrInput || typeof dateStrInput !== 'string') {
-            return null;
-          }
-
-          let dateStr = dateStrInput.trim();
-
-          // 1. Handle obvious non-date strings
-          const nonDateKeywords = [
-            "n/a", "pending", "approval", "ongoing", "application", "for approval",
-            "verification", "unknown", "none", "---", "not applicable",
-            "coa no", "ref no", "dp-r03", "fla-", "lexie's farm", "in-process",
-            "app. no", "for verification", "new designated pco", "contact person" 
-            // Add more keywords as needed based on your data
-          ];
-          if (nonDateKeywords.some(keyword => dateStr.toLowerCase().includes(keyword))) {
-            return null;
-          }
-          if (/^#+$/.test(dateStr)) return null; // Handles "##########"
-          if (/^\d{4}-\d{4}$/.test(dateStr)) return null; // Handles "2024-2027" (year ranges)
-          if (/^\d{1,2}\/\d{1,2}\/\-\d{4}$/.test(dateStr)) return null; // Handles "01/12/-2022"
-
-          // 2. If multiple lines, take the first line
-          const lines = dateStr.split(/[\n\r]/);
-          dateStr = lines[0].trim();
-
-          // 3. Attempt direct parsing (handles YYYY-MM-DD, MM/DD/YYYY, "Month D, YYYY", "D-Month-YYYY")
-          let d = new Date(dateStr);
-          if (isValidDate(d)) {
-            return d;
-          }
-
-          // 4. Attempt to parse DD/MM/YYYY by rearranging to MM/DD/YYYY
-          const dmYMatch = dateStr.match(/^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$/);
-          if (dmYMatch) {
-            const day = parseInt(dmYMatch[1], 10);
-            const month = parseInt(dmYMatch[2], 10);
-            const year = parseInt(dmYMatch[3], 10);
-            if (day > 12 && month <= 12 && year > 1900 && year < 2100) { // Likely DD/MM/YYYY
-              d = new Date(`${month}/${day}/${year}`);
-              if (isValidDate(d)) return d;
-            }
-          }
-          
-          // 5. Handle cases like "Month. Day, YYYY" e.g. "Oct. 26, 2022" if direct parse failed
-          const monthDotDayYearMatch = dateStr.match(/^([A-Za-z]{3,})\.?\s*(\d{1,2}),?\s*(\d{4})$/i);
-          if (monthDotDayYearMatch) {
-            const cleanedForParse = `${monthDotDayYearMatch[1]} ${monthDotDayYearMatch[2]} ${monthDotDayYearMatch[3]}`;
-            d = new Date(cleanedForParse);
-            if (isValidDate(d)) return d;
-          }
-
-          // 6. Handle dates followed by extraneous text (e.g., "YYYY-MM-DD some_text" or "MM/DD/YYYY some_text")
-          const dateFollowedByTextMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/);
-          if (dateFollowedByTextMatch) {
-            d = new Date(dateFollowedByTextMatch[1]);
-            if (isValidDate(d)) return d;
-          }
-
-          return null; // Could not parse
+      if (record.pto_issued) {
+        const issuedDate = parseDateString(record.pto_issued);
+        if (isValidDate(issuedDate)) {
+          const expiry = new Date(issuedDate);
+          expiry.setFullYear(expiry.getFullYear() + 2); // PTO valid for 2 years from issuance
+          permits.push({
+            type: "PTO",
+            code: record.pto_code || "",
+            expiry,
+            isNearExpiry: isNearExpiration(expiry, now),
+            isExpired: IsExpired(expiry, now),
+          });
+        } else {
+          //console.warn(`Invalid pto_issued date: ${record.pto_issued} for sort_key: ${record.sort_key}`);
         }
+      }
 
-        if (record.pto_issued) {
-          const issuedDate = parseDateString(record.pto_issued);
-          if (isValidDate(issuedDate)) {
-            const expiry = new Date(issuedDate);
-            expiry.setFullYear(expiry.getFullYear() + 2); // PTO valid for 2 years from issuance
-            permits.push({
-              type: "PTO",
-              expiry,
-              isNearExpiry: isNearExpiration(expiry),
-              isExpired: isExpired(expiry),
-            });
-          } else {
-            //console.warn(`Invalid pto_issued date: ${record.pto_issued} for sort_key: ${record.sort_key}`);
-          }
+      if (record.wwdp_issued) {
+        const issuedDate = parseDateString(record.wwdp_issued);
+        if (isValidDate(issuedDate)) {
+          const expiry = new Date(issuedDate);
+          expiry.setFullYear(expiry.getFullYear() + 1); // WWDP valid for 1 year from issuance
+          permits.push({
+            type: "WWDP",
+            code: record.wwdp_code || "",
+            expiry,
+            isNearExpiry: isNearExpiration(expiry, now),
+            isExpired: IsExpired(expiry, now),
+          });
+        } else {
+          //console.warn(`Invalid wwdp_issued date: ${record.wwdp_issued} for sort_key: ${record.sort_key}`);
         }
+      }
 
-        if (record.wwdp_issued) {
-          const issuedDate = parseDateString(record.wwdp_issued);
-          if (isValidDate(issuedDate)) {
-            const expiry = new Date(issuedDate);
-            expiry.setFullYear(expiry.getFullYear() + 1); // WWDP valid for 1 year from issuance
-            permits.push({
-              type: "WWDP",
-              expiry,
-              isNearExpiry: isNearExpiration(expiry),
-              isExpired: isExpired(expiry),
-            });
-          } else {
-            //console.warn(`Invalid wwdp_issued date: ${record.wwdp_issued} for sort_key: ${record.sort_key}`);
-          }
+      if (record.pco_validity) {
+        const validityDate = parseDateString(record.pco_validity);
+        if (isValidDate(validityDate)) {
+          // Assuming pco_validity is the actual expiry date of the PCO
+          const expiry = validityDate;
+          permits.push({
+            type: "PCO",
+            code: record.pco_no || "",
+            expiry,
+            isNearExpiry: isNearExpiration(expiry, now), // Pass 'now'
+            isExpired: IsExpired(expiry, now),
+          });
+        } else {
         }
+      }
+      return {
+        sort_key: record.sort_key,
+        title: record.title || record.name || "Untitled",
+        ecc_cnc: record.ecc_cnc || "",
+        permits: permits, // Return all permits for this record
+      };
+    });
 
-        if (record.pco_validity) {
-          const validityDate = parseDateString(record.pco_validity);
-          if (isValidDate(validityDate)) {
-            // Assuming pco_validity is the actual expiry date of the PCO
-            const expiry = validityDate;
-            permits.push({
-              type: "PCO",
-              expiry,
-              isNearExpiry: isNearExpiration(expiry),
-              isExpired: isExpired(expiry),
-            });
-          } else {
-            // If pco_validity was meant to be an issue date and PCOs are valid for 3 years,
-            // the logic would be: expiry.setFullYear(expiry.getFullYear() + 3);
-            // However, "validity" usually implies the expiry date itself.
-            //console.warn(`Invalid pco_validity date: ${record.pco_validity} for sort_key: ${record.sort_key}`);
-          }
-        }
+    // Filter out records with no valid permits (e.g. all expiry parsing failed)
+    let finalRecordsToPaginate = processedRecords.filter(rec => rec.permits.length > 0);
 
-        const validPermits = permits.filter(
-          (p) => p.isNearExpiry || p.isExpired
-        );
+    if (shouldFilterByExpiry) {
+      finalRecordsToPaginate = finalRecordsToPaginate.filter(rec =>
+        rec.permits.some(p => p.isExpired || p.isNearExpiry)
+      );
+    }
+    const selectedPermitTypesArray = (permitTypesFilter || "")
+      .split(",")
+      .map(pt => pt.trim().toUpperCase())
+      .filter(pt => pt !== "");
 
-        if (validPermits.length > 0) {
-          return {
-            sort_key: record.sort_key,
-            title: record.title || record.name || "Untitled",
-            ecc_cnc: record.ecc_cnc || "",
-            permits: validPermits,
-          };
-        }
+    if (selectedPermitTypesArray.length > 0) {
+      finalRecordsToPaginate = finalRecordsToPaginate.filter(establishment =>
+        establishment.permits.some(permit =>
+          (permit.isExpired || permit.isNearExpiry) && selectedPermitTypesArray.includes(permit.type.toUpperCase())
+        )
+      );
+    }
 
-        return null;
-      })
-      .filter((record) => record !== null);
-
-    const paginatedData = processedData.slice(skip, skip + limit);
+    const totalRecords = finalRecordsToPaginate.length;
+    const dataToSend = finalRecordsToPaginate.slice(skip, skip + pageSizeInt);
 
     res.json({
-      data: paginatedData,
-      total: processedData.length,
+      data: dataToSend,
+      total: totalRecords,
     });
   } catch (err) {
     console.error("Error in /api/permits-summary:", err);
@@ -2109,7 +2154,7 @@ app.get("/api/ucds-data/by-sort-key/:sort_key", async (req, res) => {
   try {
     // Fetch the data from the ucdsCollection based on sort_key (case-insensitive)
     let data = await ucdsCollection.findOne({
-      sort_key: { $regex: `^${sort_key.trim()}$`, $options: "i" } 
+      sort_key: { $regex: `^${sort_key.trim()}$`, $options: "i" }
     });
 
     if (!data) {
@@ -2925,8 +2970,7 @@ app.get("/generate-custom-survey-report/:id", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="SURVEY REPORT-${
-        selectedData.project_title || "Unknown"
+      `attachment; filename="SURVEY REPORT-${selectedData.project_title || "Unknown"
       }.pdf"`
     );
     res.setHeader("Content-Encoding", "gzip");
@@ -4326,6 +4370,77 @@ app.put(
     }
   }
 );
+
+app.put("/api/permits-summary/update-expiry", async (req, res) => {
+  const {
+    sort_key,
+    permitType,
+    newExpiryDate,
+    newPermitCode // Added to receive the new permit code
+  } = req.body;
+
+  // newPermitCode can be undefined if only date is being updated, so not strictly required here.
+  if (!sort_key || !permitType || !newExpiryDate) {
+    return res.status(400).json({ message: "Missing required fields: sort_key, permitType, or newExpiryDate." });
+  }
+
+  try {
+    const parsedNewExpiry = new Date(newExpiryDate); // Directly parse YYYY-MM-DD
+    if (!isValidDate(parsedNewExpiry)) {
+      return res.status(400).json({ message: "Invalid newExpiryDate format. Please use YYYY-MM-DD." });
+    }
+
+    let fieldsToUpdate = {};
+
+    if (permitType === "PTO") {
+
+      const newIssueDate = new Date(parsedNewExpiry);
+      newIssueDate.setFullYear(newIssueDate.getFullYear() - 2); // PTO expires 2 years from issue
+      fieldsToUpdate["pto_issued"] = newIssueDate.toISOString().split('T')[0];
+      if (newPermitCode !== undefined) { // Check if newPermitCode was provided
+        fieldsToUpdate["pto_code"] = newPermitCode;
+      }
+    } else if (permitType === "WWDP") {
+
+      const newIssueDate = new Date(parsedNewExpiry);
+      newIssueDate.setFullYear(newIssueDate.getFullYear() - 1); // WWDP expires 1 year from issue
+      fieldsToUpdate["wwdp_issued"] = newIssueDate.toISOString().split('T')[0];
+      if (newPermitCode !== undefined) {
+        fieldsToUpdate["wwdp_code"] = newPermitCode;
+      }
+    } else if (permitType === "PCO") {
+      fieldsToUpdate["pco_validity"] = parsedNewExpiry.toISOString().split('T')[0];
+      if (newPermitCode !== undefined) {
+        fieldsToUpdate["pco_no"] = newPermitCode;
+      }
+    } else {
+      return res.status(400).json({ message: "Invalid permitType." });
+    }
+
+    const result = await ucdsCollection.updateOne(
+      { sort_key: sort_key },
+      { $set: fieldsToUpdate }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: `Record with sort_key ${sort_key} not found.` });
+    }
+    if (result.modifiedCount === 0) {
+      return res.status(200).json({ message: "No changes made to the permit expiry." });
+    }
+
+    // Optional: Log this update to ucds-log
+    // const logEntry = { ... };
+    // await ucdsLogCollection.insertOne(logEntry);
+
+    res.status(200).json({ message: "Permit expiry updated successfully." });
+
+  } catch (err) {
+    console.error("Error updating permit expiry:", err);
+    res.status(500).json({ message: "Internal Server Error while updating permit expiry." });
+  }
+});
+
 
 //#endregion
 
