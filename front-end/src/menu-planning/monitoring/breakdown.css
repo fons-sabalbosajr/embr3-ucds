@@ -1,0 +1,18 @@
+.breakdown-modal .ant-table-cell {
+    white-space: normal !important; /* Ensure word wrapping for all cells */
+    word-wrap: break-word !important;
+}
+
+.breakdown-modal .ant-modal-header {
+    background-color: transparent !important; /* Remove background from header */
+    border-bottom: none !important; /* Remove the bottom border */
+}
+
+.breakdown-modal.theme-dark .ant-modal-content {
+    background-color: #262626; /* Example dark theme background */
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.breakdown-modal.theme-dark .ant-modal-title {
+    color: rgba(255, 255, 255, 0.85);
+}

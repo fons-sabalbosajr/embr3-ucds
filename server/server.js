@@ -7,6 +7,9 @@ const { MongoClient, ObjectId, GridFSBucket } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, rgb } = require("pdf-lib");
+const dayjs = require('dayjs'); // For server-side date parsing
+const customParseFormat = require('dayjs/plugin/customParseFormat'); // For "MMMM YYYY"
+dayjs.extend(customParseFormat);
 const fontkit = require("@pdf-lib/fontkit");
 const zlib = require("zlib");
 const dotenv = require("dotenv").config();
@@ -45,6 +48,244 @@ function generateRandomPassword(length) {
   return password;
 }
 
+// Date parsing and expiry check utility functions (moved for wider use)
+const parseDateStringForStats = (dateStrInput) => {
+  if (!dateStrInput || typeof dateStrInput !== "string") {
+    return null;
+  }
+  let originalTrimmedStr = dateStrInput.trim();
+
+  // Check 1: YYYY-YYYY range (on original trimmed string, prioritized).
+  // This regex `(\d{4})-(\d{4})` will find the first occurrence.
+  const generalYearRangeMatch = originalTrimmedStr.match(/(\d{4})-(\d{4})/);
+  if (generalYearRangeMatch) {
+    const endYear = parseInt(generalYearRangeMatch[2], 10);
+    if (endYear >= 1900 && endYear < 2100) {
+      return new Date(endYear, 11, 31); // December 31st of the end year
+    }
+  }
+
+  // Check 2: Non-date keywords (on the original trimmed string)
+  const nonDateKeywords = [
+    "n/a",
+    "pending",
+    "approval",
+    "ongoing",
+    "application",
+    "for approval",
+    "verification",
+    "unknown",
+    "none",
+    "---",
+    "not applicable",
+    "coa no",
+    "ref no",
+    "dp-r03",
+    "fla-",
+    "lexie's farm",
+    "in-process",
+    "app. no",
+    "for verification",
+    "new designated pco",
+    "contact person",
+  ];
+  if (
+    nonDateKeywords.some((keyword) =>
+      originalTrimmedStr.toLowerCase().includes(keyword)
+    )
+  ) {
+    return null;
+  }
+
+  // Check 3: Other specific non-date patterns (on original trimmed string)
+  if (/^#+$/.test(originalTrimmedStr)) return null;
+  if (/^\d{1,2}\/\d{1,2}\/\-\d{4}$/.test(originalTrimmedStr)) return null; // e.g., "01/12/-2022"
+
+  const lines = originalTrimmedStr.split(/[\n\r]/);
+  let dateStr = lines[0].trim(); // `dateStr` is now first line only.
+  let d = new Date(dateStr);
+  if (d instanceof Date && !isNaN(d)) {
+    const year = d.getFullYear();
+    if (year > 1900 && year < 2100) {
+      // Basic sanity check for year
+      return d;
+    }
+  }
+
+  const dmyMatch = dateStr.match(/^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$/);
+  if (dmyMatch) {
+    const p1 = parseInt(dmyMatch[1], 10); // part1
+    const p2 = parseInt(dmyMatch[2], 10); // part2
+    const year = parseInt(dmyMatch[3], 10);
+
+    if (year > 1900 && year < 2100) {
+      // Try MM/DD/YYYY
+      if (p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31) {
+        const testDate = new Date(year, p1 - 1, p2); // month is 0-indexed
+        if (
+          testDate.getFullYear() === year &&
+          testDate.getMonth() === p1 - 1 &&
+          testDate.getDate() === p2
+        ) {
+          return testDate;
+        }
+      }
+      // Try DD/MM/YYYY
+      if (p2 >= 1 && p2 <= 12 && p1 >= 1 && p1 <= 31) {
+        const testDate = new Date(year, p2 - 1, p1); // month is 0-indexed
+        if (
+          testDate.getFullYear() === year &&
+          testDate.getMonth() === p2 - 1 &&
+          testDate.getDate() === p1
+        ) {
+          return testDate;
+        }
+      }
+    }
+  }
+
+  // Attempt 3: "Month. Day, YYYY" e.g. "Oct. 26, 2022" or "October 26 2022"
+  const monthDayYearMatch = dateStr.match(
+    /^([A-Za-z]{3,})\.?\s*(\d{1,2}),?\s*(\d{4})$/i
+  );
+  if (monthDayYearMatch) {
+    const cleanedForParse = `${monthDayYearMatch[1]} ${monthDayYearMatch[2]} ${monthDayYearMatch[3]}`;
+    d = new Date(cleanedForParse);
+    if (d instanceof Date && !isNaN(d)) {
+      const year = d.getFullYear();
+      if (year > 1900 && year < 2100) return d;
+    }
+  }
+
+  // Attempt 4: Date followed by extraneous text (e.g., "YYYY-MM-DD some_text" or "MM/DD/YYYY some_text")
+  const dateFollowedByTextMatch = dateStr.match(
+    /^(\d{4}-\d{2}-\d{2}|\d{1,2}[/\-]\d{1,2}[/\-]\d{4})/
+  );
+  if (dateFollowedByTextMatch) {
+    const extractedDateStr = dateFollowedByTextMatch[1];
+    d = new Date(extractedDateStr);
+    if (d instanceof Date && !isNaN(d)) {
+      const year = d.getFullYear();
+      if (year > 1900 && year < 2100) return d;
+    }
+
+    // Corrected regex for D/M/Y parsing from an extracted string part
+    const dmyPatternForExtracted = /^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$/;
+    const dmyMatchForExtracted = extractedDateStr.match(dmyPatternForExtracted);
+    if (dmyMatchForExtracted) {
+      const p1 = parseInt(dmyMatchForExtracted[1], 10);
+      const p2 = parseInt(dmyMatchForExtracted[2], 10);
+      const year = parseInt(dmyMatchForExtracted[3], 10);
+      if (year > 1900 && year < 2100) {
+        // Try MM/DD/YYYY
+        if (p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31) {
+          const testDate = new Date(year, p1 - 1, p2);
+          if (
+            testDate.getFullYear() === year &&
+            testDate.getMonth() === p1 - 1 &&
+            testDate.getDate() === p2
+          )
+            return testDate;
+        }
+        // Try DD/MM/YYYY
+        if (p2 >= 1 && p2 <= 12 && p1 >= 1 && p1 <= 31) {
+          const testDate = new Date(year, p2 - 1, p1);
+          if (
+            testDate.getFullYear() === year &&
+            testDate.getMonth() === p2 - 1 &&
+            testDate.getDate() === p1
+          )
+            return testDate;
+        }
+      }
+    }
+  }
+
+  // Fallback: Try to extract any plausible 4-digit year from the original trimmed string
+  // if other more specific parsers failed. This makes the year a stronger basis if full date is unclear.
+  // This regex looks for a 4-digit number that looks like a year (19xx or 20xx).
+  const yearMatch = originalTrimmedStr.match(/\b(19\d{2}|20\d{2})\b/);
+  if (yearMatch && yearMatch[0]) {
+    const extractedYear = parseInt(yearMatch[0], 10);
+    // Ensure the year is within a reasonable range (e.g., 1900-2099)
+    if (extractedYear >= 1900 && extractedYear < 2100) {
+      return new Date(extractedYear, 11, 31); // Assume end of the extracted year (December 31st)
+    }
+  }
+
+  return null; // If nothing could be reliably parsed
+};
+
+const isPermitExpired = (dateStrInput) => {
+  const expiryDate = parseDateStringForStats(dateStrInput);
+  if (!(expiryDate instanceof Date && !isNaN(expiryDate))) {
+    return false;
+  }
+  const today = new Date();
+  // Compare date parts only: an item expiring "on" date X is not expired until date X+1.
+  const todayDateOnly = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const expiryDateOnly = new Date(
+    expiryDate.getFullYear(),
+    expiryDate.getMonth(),
+    expiryDate.getDate()
+  );
+  return todayDateOnly > expiryDateOnly;
+};
+
+const isPermitNearExpiry = (dateStrInput, nowDate) => {
+  // Accept string, parse internally
+  const expiryDate = parseDateStringForStats(dateStrInput); // Use existing robust parser
+  if (!(expiryDate instanceof Date && !isNaN(expiryDate))) {
+    return false;
+  }
+  const oneMonthBefore = new Date(expiryDate);
+  oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
+
+  const todayDateOnly = new Date(
+    nowDate.getFullYear(),
+    nowDate.getMonth(),
+    nowDate.getDate()
+  );
+  const expiryDateOnly = new Date(
+    expiryDate.getFullYear(),
+    expiryDate.getMonth(),
+    expiryDate.getDate()
+  );
+
+  // Near expiry if today is within the month leading up to expiry, inclusive, but not yet past.
+  return (
+    todayDateOnly >= oneMonthBefore &&
+    todayDateOnly <= expiryDateOnly &&
+    !(todayDateOnly > expiryDateOnly)
+  );
+};
+
+// Helper function to build a flexible query for sort_key
+function buildSortKeyQuery(idString) {
+  if (typeof idString === "string" && idString.includes("-")) {
+    const parts = idString.split("-");
+    const prefix = parts[0];
+    const numberPart = parts[1];
+    // Regex to match prefix, hyphen, optional zeros, then the number part. Case-insensitive.
+    // Example: idString "TA-226" should match "TA-00226" in DB.
+    // Regex: /^TA-0*226$/i
+    if (prefix && numberPart && /^\d+$/.test(numberPart)) {
+      // Ensure numberPart is numeric
+      // Construct regex to match prefix, hyphen, any number of zeros (0*), then the numeric part.
+      return {
+        sort_key: { $regex: `^${prefix}-0*${numberPart}$`, $options: "i" },
+      };
+    }
+  }
+  // Fallback to direct match if not in expected "PREFIX-NUMBER" format,
+  // if numberPart is not purely numeric, or if idString is not a string.
+  return { sort_key: idString };
+}
+
 //#endregion functions setup
 
 //#region DB CONNECTION
@@ -75,6 +316,11 @@ let chemicalCollection;
 let tsdCollection;
 let trcCollection;
 let archiveCollection;
+let swmplanCollection;
+let mrfCollection;
+let slfCollection
+let equipmentCollection;
+let odsCollection;
 
 app.use(
   session({
@@ -118,6 +364,11 @@ async function connectToMongo() {
     chemicalCollection = db.collection("ucds-data-chemicals");
     tsdCollection = db.collection("ucds-data-tsd");
     trcCollection = db.collection("ucds-data-trc");
+    swmplanCollection = db.collection("ucds-ewsm-ten_swm_plan");
+    mrfCollection = db.collection("ucds-eswm-mrf");
+    slfCollection = db.collection("ucds-eswm-slf");
+    equipmentCollection = db.collection("ucds-eswm-equipment");
+    odsCollection = db.collection("ucds-eswm-ods");
 
     app.locals.ucdsCollection = ucdsCollection;
   } catch (error) {
@@ -569,25 +820,23 @@ router.post("/archive-data", async (req, res) => {
   }
 });
 
-router.get("/ucds-data/:identifier", async (req, res) => { // Changed param name for clarity
+router.get("/ucds-data/:identifier", async (req, res) => {
+  // Changed param name for clarity
   const { identifier } = req.params; // identifier will be the sort_key, e.g., "AU-00005"
 
   try {
     // First, try to find the record in ucds-data using the sort_key field
-    let record = await ucdsCollection.findOne({
-      sort_key: { $regex: `^${identifier.trim()}$`, $options: "i" }, // Query by sort_key
-    });
+    const query = buildSortKeyQuery(identifier.trim()); // Use the utility function
+    let record = await ucdsCollection.findOne(query);
 
     if (!record) {
       // If not found in ucds-data, try archive-data using sort_key
-      record = await archiveCollection.findOne({
-        sort_key: { $regex: `^${identifier.trim()}$`, $options: "i" }, // Query by sort_key
-      });
+      record = await archiveCollection.findOne(query); // Use the same query for archive
 
       if (!record) {
-        return res
-          .status(404)
-          .json({ message: `Record with identifier (sort_key): ${identifier} not found.` });
+        return res.status(404).json({
+          message: `Record with identifier (sort_key): ${identifier} not found.`,
+        });
       }
 
       // Optionally, you could indicate this is from the archive
@@ -600,6 +849,97 @@ router.get("/ucds-data/:identifier", async (req, res) => { // Changed param name
     res.status(500).json({ message: "Error fetching record." });
   }
 });
+
+// Define these lists on the server, ideally matching or derived from client-side needs
+const monthTypeFilterFieldsForServer = [
+  'date_monitored', 'date_routed', 'date_signed', 'date_amended',
+  'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued',
+  'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date',
+  'resolution_issued'
+];
+const yearTypeFilterFieldsForServer = ['pco_validity'];
+
+// New route to get distinct values for dropdown fields
+router.get("/ucds-data/distinct-values", async (req, res) => {
+  const { field } = req.query;
+
+  if (!field) {
+    return res.status(400).json({ error: "Field query parameter is required." });
+  }
+  
+  // Expanded whitelist to include all fields that might need distinct values for filters
+  const allowedFields = [
+    'industry_type', 'industry_subtype', 'industry_class', 'psic_code',
+    'mbu_area', 'waterbody', 'emp_total', 'wwtf_type', 'cong_district',
+    'street', 'brgy', 'city', 'section_incharged', 'handler',
+    'monitoring_sched', 'insp_type', 'pismu_tracking', 'title_status',
+    'with_nov', 'pismu_count_month', 'permit_process', 'denr_pab_case_no', 'legal_officer', 
+    'tc_commitment', 'province',
+    ...monthTypeFilterFieldsForServer, // Add month fields
+    ...yearTypeFilterFieldsForServer   // Add year fields
+  ];
+
+  if (!allowedFields.includes(field)) {
+    return res.status(400).json({ error: `Field '${field}' not allowed for distinct value query.` });
+  }
+
+  try {
+    if (!ucdsCollection) { // Ensure ucdsCollection is available
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+    // Fetch all distinct non-null, non-empty raw values for the field
+    const distinctRawValues = await ucdsCollection.distinct(field, {
+      [field]: { $exists: true, $ne: null, $ne: "" } 
+    });
+
+    let processedValues = [];
+
+    if (monthTypeFilterFieldsForServer.includes(field)) {
+      const uniqueMonths = new Set();
+      distinctRawValues.forEach(val => {
+        let date;
+        if (val instanceof Date) {
+          date = dayjs(val);
+        } else if (typeof val === 'string') {
+          // Try parsing with multiple formats, non-strict
+          date = dayjs(val, ["YYYY-MM-DD", "M/D/YYYY", "MM/DD/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", dayjs.ISO_8601], false);
+        } else {
+          // If it's a number (timestamp) or other type, try to convert
+          date = dayjs(val);
+        }
+
+        if (date.isValid()) {
+          uniqueMonths.add(date.format('MMMM YYYY'));
+        }
+      });
+      processedValues = Array.from(uniqueMonths).sort((a, b) => dayjs(a, 'MMMM YYYY').valueOf() - dayjs(b, 'MMMM YYYY').valueOf());
+    } else if (yearTypeFilterFieldsForServer.includes(field)) {
+      const uniqueYears = new Set();
+      distinctRawValues.forEach(val => {
+        let date;
+        if (val instanceof Date) {
+          date = dayjs(val);
+        } else if (typeof val === 'string') {
+          date = dayjs(val, ["YYYY-MM-DD", "M/D/YYYY", "MM/DD/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", dayjs.ISO_8601], false);
+        } else {
+          date = dayjs(val);
+        }
+        if (date.isValid()) {
+          uniqueYears.add(date.format('YYYY'));
+        }
+      });
+      processedValues = Array.from(uniqueYears).sort((a,b) => parseInt(a) - parseInt(b));
+    } else {
+      // General fields: convert to string and sort alphabetically
+      processedValues = distinctRawValues.map(val => String(val)).sort((a, b) => String(a).localeCompare(String(b)));
+    }
+    res.status(200).json(processedValues); // Send array of processed strings
+  } catch (error) {
+    console.error(`Error fetching distinct values for field ${field}:`, error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 
 module.exports = router;
 
@@ -652,7 +992,7 @@ const logActivity = async (req, res, next) => {
       if (/^[a-fA-F\d]{24}$/.test(id)) {
         filter = { _id: new ObjectId(id) };
       } else {
-        filter = { id_no: id }; // supports "BU-201" and other alphanumeric IDs
+        filter = buildSortKeyQuery(id); // Use flexible sort_key query
       }
     }
 
@@ -1009,7 +1349,7 @@ app.post("/request-password-reset", async (req, res) => {
       ],
     };
     // Send the email
-    await transporter.sendMail(mailOptions);
+    transporter.sendMail(mailOptions);
 
     // Send success response
     return res.status(200).json({
@@ -1403,8 +1743,9 @@ app.post("/api/update-color-universe", async (req, res) => {
         .send({ message: "No documents updated, upserted, or matched." });
     } else {
       res.status(200).send({
-        message: `Colors updated or upserted for ${updatedCount + upsertedCount
-          } document(s).`,
+        message: `Colors updated or upserted for ${
+          updatedCount + upsertedCount
+        } document(s).`,
       });
     }
   } catch (error) {
@@ -1780,8 +2121,6 @@ app.post("/api/ucds/add-establishment", async (req, res) => {
 
 app.use("/uploads", express.static(uploadsDir));
 
-
-
 //////////////////////////////////////////////////////////////////////////////////////////
 
 //#region Permit Summary Helpers
@@ -1791,25 +2130,57 @@ const isValidDate = (d) => d instanceof Date && !isNaN(d);
 
 // Enhanced robust date parsing function
 function parseDateString(dateStrInput) {
-  if (!dateStrInput || typeof dateStrInput !== 'string') {
+  if (!dateStrInput || typeof dateStrInput !== "string") {
     return null;
   }
 
-  let dateStr = dateStrInput.trim();
+  let dateStr = dateStrInput.trim(); // Use this for the YYYY-YYYY check as well
+
+  // Prioritized Check for YYYY-YYYY range, similar to parseDateStringForStats
+  // This regex `^(\d{4})-(\d{4})$` will match if the whole string is YYYY-YYYY.
+  const yearRangeMatch = dateStr.match(/^(\d{4})-(\d{4})$/);
+  if (yearRangeMatch) {
+    const endYear = parseInt(yearRangeMatch[2], 10);
+    if (endYear >= 1900 && endYear < 2100) {
+      // Basic sanity check for year
+      return new Date(endYear, 11, 31); // December 31st of the end year
+    }
+    // If year is out of sane range but pattern matched, consider it unparseable here.
+    return null;
+  }
 
   // 1. Handle obvious non-date strings
   const nonDateKeywords = [
-    "n/a", "pending", "approval", "ongoing", "application", "for approval",
-    "verification", "unknown", "none", "---", "not applicable",
-    "coa no", "ref no", "dp-r03", "fla-", "lexie's farm", "in-process",
-    "app. no", "for verification", "new designated pco", "contact person"
+    "n/a",
+    "pending",
+    "approval",
+    "ongoing",
+    "application",
+    "for approval",
+    "verification",
+    "unknown",
+    "none",
+    "---",
+    "not applicable",
+    "coa no",
+    "ref no",
+    "dp-r03",
+    "fla-",
+    "lexie's farm",
+    "in-process",
+    "app. no",
+    "for verification",
+    "new designated pco",
+    "contact person",
     // Add more keywords as needed based on your data
   ];
-  if (nonDateKeywords.some(keyword => dateStr.toLowerCase().includes(keyword))) {
+  if (
+    nonDateKeywords.some((keyword) => dateStr.toLowerCase().includes(keyword))
+  ) {
     return null;
   }
   if (/^#+$/.test(dateStr)) return null; // Handles "##########"
-  if (/^\d{4}-\d{4}$/.test(dateStr)) return null; // Handles "2024-2027" (year ranges)
+  // The YYYY-YYYY check above replaces the previous specific line: if (/^\d{4}-\d{4}$/.test(dateStr)) return null;
   if (/^\d{1,2}\/\d{1,2}\/\-\d{4}$/.test(dateStr)) return null; // Handles "01/12/-2022"
 
   // 2. If multiple lines, take the first line
@@ -1828,14 +2199,17 @@ function parseDateString(dateStrInput) {
     const day = parseInt(dmYMatch[1], 10);
     const month = parseInt(dmYMatch[2], 10);
     const year = parseInt(dmYMatch[3], 10);
-    if (day > 12 && month <= 12 && year > 1900 && year < 2100) { // Likely DD/MM/YYYY
+    if (day > 12 && month <= 12 && year > 1900 && year < 2100) {
+      // Likely DD/MM/YYYY
       d = new Date(`${month}/${day}/${year}`);
       if (isValidDate(d)) return d;
     }
   }
 
   // 5. Handle cases like "Month. Day, YYYY" e.g. "Oct. 26, 2022" if direct parse failed
-  const monthDotDayYearMatch = dateStr.match(/^([A-Za-z]{3,})\.?\s*(\d{1,2}),?\s*(\d{4})$/i);
+  const monthDotDayYearMatch = dateStr.match(
+    /^([A-Za-z]{3,})\.?\s*(\d{1,2}),?\s*(\d{4})$/i
+  );
   if (monthDotDayYearMatch) {
     const cleanedForParse = `${monthDotDayYearMatch[1]} ${monthDotDayYearMatch[2]} ${monthDotDayYearMatch[3]}`;
     d = new Date(cleanedForParse);
@@ -1843,7 +2217,9 @@ function parseDateString(dateStrInput) {
   }
 
   // 6. Handle dates followed by extraneous text (e.g., "YYYY-MM-DD some_text" or "MM/DD/YYYY some_text")
-  const dateFollowedByTextMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/);
+  const dateFollowedByTextMatch = dateStr.match(
+    /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/
+  );
   if (dateFollowedByTextMatch) {
     d = new Date(dateFollowedByTextMatch[1]);
     if (isValidDate(d)) return d;
@@ -1865,7 +2241,6 @@ const IsExpired = (expiryDate, nowDate) => {
 };
 //#endregion Permit Summary Helpers
 
-
 app.get("/api/permits-summary", async (req, res) => {
   let {
     page = 1,
@@ -1873,8 +2248,8 @@ app.get("/api/permits-summary", async (req, res) => {
     prefixes = "",
     searchText = "",
     filterEstablishmentsByExpiryStatus = "false", // Existing parameter
-    permitTypesFilter = "" // New parameter for permit type filtering
-  } = req.query
+    permitTypesFilter = "", // New parameter for permit type filtering
+  } = req.query;
 
   let currentPage = parseInt(page, 10);
   let pageSizeInt = parseInt(pageSize, 10);
@@ -1898,19 +2273,21 @@ app.get("/api/permits-summary", async (req, res) => {
       .map((p) => p.trim().toUpperCase())
       .filter((p) => p !== "");
 
-
     const mongoQuery = {};
     if (prefixList.length > 0) {
-      mongoQuery.sort_key = { $regex: `^(${prefixList.join('|')})`, $options: 'i' };
+      mongoQuery.sort_key = {
+        $regex: `^(${prefixList.join("|")})`,
+        $options: "i",
+      };
     }
 
     if (searchText) {
-      const searchRegex = { $regex: searchText, $options: 'i' };
+      const searchRegex = { $regex: searchText, $options: "i" };
       mongoQuery.$or = [
         { sort_key: searchRegex },
         { title: searchRegex },
         { name: searchRegex },
-        { ecc_cnc: searchRegex }
+        { ecc_cnc: searchRegex },
       ];
     }
 
@@ -1932,9 +2309,7 @@ app.get("/api/permits-summary", async (req, res) => {
       })
       .toArray();
 
-
     let processedRecords = allMatchingRecords.map((record) => {
-
       const permits = [];
 
       if (record.pto_issued) {
@@ -1995,22 +2370,26 @@ app.get("/api/permits-summary", async (req, res) => {
     });
 
     // Filter out records with no valid permits (e.g. all expiry parsing failed)
-    let finalRecordsToPaginate = processedRecords.filter(rec => rec.permits.length > 0);
+    let finalRecordsToPaginate = processedRecords.filter(
+      (rec) => rec.permits.length > 0
+    );
 
     if (shouldFilterByExpiry) {
-      finalRecordsToPaginate = finalRecordsToPaginate.filter(rec =>
-        rec.permits.some(p => p.isExpired || p.isNearExpiry)
+      finalRecordsToPaginate = finalRecordsToPaginate.filter((rec) =>
+        rec.permits.some((p) => p.isExpired || p.isNearExpiry)
       );
     }
     const selectedPermitTypesArray = (permitTypesFilter || "")
       .split(",")
-      .map(pt => pt.trim().toUpperCase())
-      .filter(pt => pt !== "");
+      .map((pt) => pt.trim().toUpperCase())
+      .filter((pt) => pt !== "");
 
     if (selectedPermitTypesArray.length > 0) {
-      finalRecordsToPaginate = finalRecordsToPaginate.filter(establishment =>
-        establishment.permits.some(permit =>
-          (permit.isExpired || permit.isNearExpiry) && selectedPermitTypesArray.includes(permit.type.toUpperCase())
+      finalRecordsToPaginate = finalRecordsToPaginate.filter((establishment) =>
+        establishment.permits.some(
+          (permit) =>
+            (permit.isExpired || permit.isNearExpiry) &&
+            selectedPermitTypesArray.includes(permit.type.toUpperCase())
         )
       );
     }
@@ -2025,6 +2404,739 @@ app.get("/api/permits-summary", async (req, res) => {
   } catch (err) {
     console.error("Error in /api/permits-summary:", err);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+const permitKeyToFieldMap = {
+  ecc_cnc: {
+    queryField: "ecc_cnc",
+    dateField: "date_approved",
+    validityYears: 5,
+    isDateAnExpiry: false,
+    displayName: "ECC/CNC",
+  },
+  pto_code: {
+    queryField: "pto_code",
+    dateField: "pto_expiration",
+    isDateAnExpiry: true,
+    displayName: "PTO",
+  },
+  wwdp_code: {
+    queryField: "wwdp_code",
+    dateField: "wwdp_expiration",
+    isDateAnExpiry: true,
+    displayName: "WWDP",
+  },
+  haz_id: {
+    queryField: "haz_id",
+    dateField: "haz_issued",
+    validityYears: 1,
+    isDateAnExpiry: false,
+    displayName: "HWG ID",
+  }, // Assuming 1 year validity
+  pco_no: {
+    queryField: "pco_no",
+    dateField: "pco_validity",
+    isDateAnExpiry: true,
+    displayName: "PCO",
+  },
+};
+
+router.get("/ucds/permit-expiry-breakdown/:permitKey", async (req, res) => {
+  const { permitKey } = req.params;
+  const permitConfig = permitKeyToFieldMap[permitKey];
+
+  if (!permitConfig) {
+    return res.status(400).json({ error: "Invalid permit key." });
+  }
+
+  try {
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+
+    // Keywords for PTO application stages (defined here for use in counts and exclusion)
+    const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
+    const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
+
+    // --- Count for different statuses ---
+    // Count for blank permits (where the permit field is null or empty)
+    const blankCount = await ucdsCollection.countDocuments({
+      $or: [
+        { [permitConfig.queryField]: null },
+        { [permitConfig.queryField]: "" },
+      ],
+    });
+
+    // Count for Ongoing Process (only for PTO)
+    let ongoingProcessCount = 0; // Initialize for all types
+    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
+        ongoingProcessCount = await ucdsCollection.countDocuments({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } });
+    }
+
+    // Count for Applications (only for PTO)
+    let applicationCount = 0; // Initialize for all types
+    let applicationStagesCount = 0; // For combined count
+    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
+        applicationCount = await ucdsCollection.countDocuments({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } });
+        // Combine counts for the new card
+        applicationStagesCount = ongoingProcessCount + applicationCount;
+    };
+    // Fetch records that *have* the permit code for expiry status calculation
+    const recordsWithPermitCode = await ucdsCollection
+      .find(
+        { [permitConfig.queryField]: { $exists: true, $ne: null, $ne: "" } },
+        { projection: { _id: 1, [permitConfig.dateField]: 1 } } // Only need the date field
+      )
+      .toArray();
+
+    // Filter out records that are counted as Ongoing Process or Application
+    const recordsForExpiryCalculation = recordsWithPermitCode.filter(record => {
+        if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
+            const ptoCodeValue = String(record[permitConfig.queryField] || "").trim();
+            return !ptoCodeValue.match(ptoOngoingKeywordsRegex) && !ptoCodeValue.match(ptoApplicationKeywordsRegex);
+        }
+        return true; // Include all records for other permit types
+    });
+
+    let expiredCount = 0;
+    let nearExpiryCount = 0;
+    let notExpiredCount = 0;
+    const now = new Date();
+    
+    recordsForExpiryCalculation.forEach((record) => {
+      const dateValue = record[permitConfig.dateField];
+      let actualExpiryDate = null;
+      const parsedDate = parseDateStringForStats(dateValue); // Use the robust parser
+
+      if (parsedDate instanceof Date && !isNaN(parsedDate)) {
+        if (permitConfig.isDateAnExpiry) {
+          actualExpiryDate = parsedDate;
+        } else if (permitConfig.validityYears) {
+          actualExpiryDate = new Date(parsedDate);
+          actualExpiryDate.setFullYear(
+            actualExpiryDate.getFullYear() + permitConfig.validityYears
+          );
+        }
+      }
+
+      if (actualExpiryDate) {
+        // Pass actualExpiryDate (as Date object) to isPermitExpired and isPermitNearExpiry
+        // These functions expect a string, so we format it. Or modify them to accept Date.
+        // For now, let's format to string that parseDateStringForStats can handle.
+        const expiryDateString = actualExpiryDate.toISOString().split("T")[0];
+
+        if (isPermitExpired(expiryDateString)) {
+          // isPermitExpired already uses parseDateStringForStats
+          expiredCount++;
+        } else if (isPermitNearExpiry(expiryDateString, now)) {
+          // isPermitNearExpiry also uses parseDateStringForStats
+          nearExpiryCount++;
+        } else {
+          notExpiredCount++;
+        }
+      }
+    });
+
+    let responsePayload = {
+      permitKey: permitKey,
+      displayName: permitConfig.displayName,
+      expired: expiredCount,
+      nearExpiry: nearExpiryCount,
+      notExpired: notExpiredCount,
+      blank: blankCount, // Add the blank count
+      totalWithPermit: recordsForExpiryCalculation.length, // Count of records used for expiry check
+    };
+
+    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
+      // Send the combined count
+      responsePayload.applicationStages = applicationStagesCount;
+    }
+
+    res.json(responsePayload);
+  } catch (error) {
+    console.error(`Error fetching expiry breakdown for ${permitKey}:`, error);
+    res
+      .status(500)
+      .json({ error: `Failed to fetch expiry breakdown for ${permitKey}.` });
+  }
+});
+
+router.get("/ucds/list-all-industries", async (req, res) => {
+  try {
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+    // Define the fields you want to project for the "All Industries" view.
+    // These should correspond to the commonInitialColumns in Breakdown.jsx.
+    const projectionFields = {
+      sort_key: 1,
+      name: 1,
+      title: 1,
+      _id: 1, // Important for rowKey in Ant Design Table
+      // Optionally add a few more general fields if desired:
+      province: 1,
+      city: 1,
+      brgy: 1,
+      ecc_cnc: 1, // As an example of a permit field
+    };
+    const allIndustries = await ucdsCollection
+      .find({})
+      .project(projectionFields)
+      .sort({ sort_key: 1 }) // Default sort, adjust as needed
+      .toArray();
+    res.json(allIndustries);
+  } catch (error) {
+    console.error("Error fetching all industries:", error);
+    res.status(500).json({ message: "Server error while fetching all industries." });
+  }
+});
+
+router.get("/ucds/list-all-industries", async (req, res) => {
+  try {
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+    // Define the fields you want to project for the "All Industries" view.
+    // These should correspond to the commonInitialColumns in Breakdown.jsx.
+    const projectionFields = {
+      sort_key: 1,
+      name: 1,
+      title: 1,
+      _id: 1, // Important for rowKey in Ant Design Table
+      // Optionally add a few more general fields if desired:
+      province: 1,
+      city: 1,
+      brgy: 1,
+      ecc_cnc: 1, // As an example of a permit field
+    };
+    const allIndustries = await ucdsCollection
+      .find({})
+      .project(projectionFields)
+      .sort({ sort_key: 1 }) // Default sort, adjust as needed
+      .toArray();
+    res.json(allIndustries);
+  } catch (error) {
+    console.error("Error fetching all industries:", error);
+    res.status(500).json({ message: "Server error while fetching all industries." });
+  }
+});
+
+router.get("/ucds/ecc-cnc-subtypes-breakdown", async (req, res) => {
+  try {
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+
+    const eccManualPromise = ucdsCollection.countDocuments({
+      permit_process: { $regex: /^ECC Manual$/i },
+    });
+    const eccOnlinePromise = ucdsCollection.countDocuments({
+      permit_process: { $regex: /^ECC Online$/i },
+    });
+    const eccCoCombinedPromise = ucdsCollection.countDocuments({
+      permit_process: { $in: [/^ECC CO$/i, /^ECC \(EMB CO\)$/i] },
+    });
+    const cncManualPromise = ucdsCollection.countDocuments({
+      permit_process: { $regex: /^CNC Manual$/i },
+    });
+    const cncOnlinePromise = ucdsCollection.countDocuments({
+      permit_process: { $regex: /^CNC Online$/i },
+    });
+    const cncCoPromise = ucdsCollection.countDocuments({
+      permit_process: { $regex: /^CNC CO$/i },
+    });
+
+    const [eccManual, eccOnline, eccCO, cncManual, cncOnline, cncCO] =
+      await Promise.all([
+        eccManualPromise,
+        eccOnlinePromise,
+        eccCoCombinedPromise,
+        cncManualPromise,
+        cncOnlinePromise,
+        cncCoPromise,
+      ]);
+
+    // Count records with blank or null ecc_cnc
+    const blankEccCnc = await ucdsCollection.countDocuments({
+      $or: [{ ecc_cnc: null }, { ecc_cnc: "" }],
+    });
+
+    res.json({
+      eccManual,
+      eccOnline,
+      eccCO,
+      cncManual,
+      cncOnline,
+      cncCO,
+      blankEccCnc,
+    });
+  } catch (error) {
+    console.error("Error fetching ECC/CNC subtypes breakdown:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch ECC/CNC subtypes breakdown." });
+  }
+});
+
+router.get("/ucds/dashboard-stats", async (req, res) => {
+  try {
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+    const { permitTypeFilterKey } = req.query; // Expecting keys like 'ecc_cnc', 'pto_code', etc.
+
+    const totalIndustries = await ucdsCollection.countDocuments({});
+    const mainQueryConditions = {};
+
+    // Fetch counts for general permit categories
+    const eccPromise = ucdsCollection.countDocuments({
+      ecc_cnc: { $exists: true, $ne: null, $ne: "" },
+    });
+    const ptoPromise = ucdsCollection.countDocuments({
+      pto_code: { $exists: true, $ne: null, $ne: "" },
+    });
+    const wwdpPromise = ucdsCollection.countDocuments({
+      wwdp_code: { $exists: true, $ne: null, $ne: "" },
+    });
+    const hwgPromise = ucdsCollection.countDocuments({
+      haz_id: { $exists: true, $ne: null, $ne: "" },
+    });
+    const pcoPromise = ucdsCollection.countDocuments({
+      pco_no: { $exists: true, $ne: null, $ne: "" },
+    });
+
+    const [
+      resolvedEccCount,
+      resolvedPtoCount,
+      resolvedWwdpCount,
+      resolvedHwgCount,
+      resolvedPcoCount,
+    ] = await Promise.all([
+      eccPromise,
+      ptoPromise,
+      wwdpPromise,
+      hwgPromise,
+      pcoPromise,
+    ]);
+
+    const permitBreakdown = {
+      ecc: resolvedEccCount,
+      pto: resolvedPtoCount,
+      wwdp: resolvedWwdpCount,
+      hwg: resolvedHwgCount,
+      pco: resolvedPcoCount,
+    };
+
+    const sectionBreakdownResults = await ucdsCollection
+      .aggregate([
+        // Optional initial match stage if permitTypeFilterKey is provided
+        ...(permitTypeFilterKey && permitKeyToFieldMap[permitTypeFilterKey]
+          ? [
+              {
+                $match: {
+                  [permitKeyToFieldMap[permitTypeFilterKey].queryField]: {
+                    $exists: true,
+                    $ne: null,
+                    $ne: "",
+                  },
+                },
+              },
+            ]
+          : []),
+        {
+          $match: {
+            section_incharged: { $exists: true, $ne: null, $ne: "" },
+          },
+        },
+        {
+          $project: {
+            sections: {
+              $split: [{ $ifNull: ["$section_incharged", ""] }, ","],
+            },
+          },
+        },
+        { $unwind: "$sections" },
+        {
+          $project: {
+            section: {
+              $trim: {
+                input: {
+                  $toUpper: {
+                    $replaceAll: {
+                      input: "$sections",
+                      find: " ",
+                      replacement: "_",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        { $match: { section: { $nin: ["N/A", "NONE", "", null] } } }, // Added null to $nin
+        { $group: { _id: "$section", count: { $sum: 1 } } },
+        { $project: { _id: 0, section: "$_id", count: 1 } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
+
+    const projectStatusResults = await ucdsCollection
+      .aggregate([
+        // Optional initial match stage if permitTypeFilterKey is provided for project status
+        ...(permitTypeFilterKey && permitKeyToFieldMap[permitTypeFilterKey]
+          ? [
+              {
+                $match: {
+                  [permitKeyToFieldMap[permitTypeFilterKey].queryField]: {
+                    $exists: true,
+                    $ne: null,
+                    $ne: "",
+                  },
+                },
+              },
+            ]
+          : []),
+        { $match: { title_status: { $exists: true, $ne: null, $ne: "" } } }, // Existing match for title_status
+        {
+          $project: {
+            status: {
+              $toUpper: {
+                $trim: { input: { $ifNull: ["$title_status", ""] } },
+              },
+            },
+          },
+        }, // Corrected: $ifNull is input to $trim
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ])
+      .toArray();
+
+    const projectStatusBreakdown = {
+      operational: 0,
+      nonOperational: 0,
+      notOperational: 0,
+      notYetMonitored: 0,
+      other: 0,
+    };
+    projectStatusResults.forEach((item) => {
+      if (item._id === "OPERATIONAL")
+        projectStatusBreakdown.operational = item.count;
+      else if (item._id === "NON-OPERATIONAL")
+        projectStatusBreakdown.nonOperational = item.count;
+      else if (item._id === "NOT OPERATIONAL")
+        projectStatusBreakdown.notOperational = item.count;
+      else if (item._id === "")
+        projectStatusBreakdown.notYetMonitored = item.count;
+      else if (item._id && item._id !== "N/A" && item._id !== "NONE")
+        projectStatusBreakdown.other += item.count;
+    });
+
+    // For industriesWithAnyPermit and industriesWithAtLeastOneExpiredPermit
+    const industriesCursor = ucdsCollection.find(
+      {},
+      {
+        projection: {
+          _id: 1,
+          ecc_cnc: 1,
+          pto_code: 1,
+          wwdp_code: 1,
+          haz_id: 1,
+          pco_no: 1,
+          pto_expiration: 1,
+          wwdp_expiration: 1,
+          pco_validity: 1,
+        },
+      }
+    );
+
+    const industriesWithAnyPermitSet = new Set();
+    const industriesWithExpiredPermitSet = new Set();
+
+    await industriesCursor.forEach((item) => {
+      if (
+        item.ecc_cnc ||
+        item.pto_code ||
+        item.wwdp_code ||
+        item.haz_id ||
+        item.pco_no
+      ) {
+        industriesWithAnyPermitSet.add(item._id.toString());
+      }
+      if (
+        isPermitExpired(item.pto_expiration) ||
+        isPermitExpired(item.wwdp_expiration) ||
+        isPermitExpired(item.pco_validity)
+      ) {
+        industriesWithExpiredPermitSet.add(item._id.toString());
+      }
+    });
+
+    res.json({
+      totalIndustries,
+      industriesWithAnyPermit: industriesWithAnyPermitSet.size,
+      industriesWithAtLeastOneExpiredPermit:
+        industriesWithExpiredPermitSet.size,
+      permitBreakdown,
+      sectionBreakdown: sectionBreakdownResults,
+      projectStatusBreakdown,
+    });
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    res.status(500).json({ error: "Failed to fetch dashboard statistics." });
+  }
+});
+
+app.get("/api/ucds/list-by-ecc-cnc-subtype", async (req, res) => {
+  try {
+    const { subtypeLabel } = req.query; // Expecting "ECC Manual", "ECC Online", etc.
+
+    if (!subtypeLabel) {
+      return res
+        .status(400)
+        .json({ message: "subtypeLabel query parameter is required." });
+    }
+
+    const query = {};
+
+    if (subtypeLabel === "Blank ECC/CNC") {
+      query.$or = [{ ecc_cnc: null }, { ecc_cnc: "" }];
+    } else {
+      // Existing logic for permit_process
+      query.permit_process = { $regex: `^${subtypeLabel}$`, $options: "i" };
+    }
+
+    // Fields to select, similar to what Breakdown.jsx expects
+    const selectedFields = {
+      sort_key: 1,
+      name: 1,
+      title: 1,
+      ecc_cnc: 1,
+      permit_process: 1,
+      date_approved: 1,
+      date_amended: 1,
+      iis_no_2024: 1, // Add iis_no_2024
+      iis_no_2025: 1, // Add iis_no_2025
+      brgy: 1,
+      city: 1,
+      province: 1,
+      _id: 1, // Or whatever your unique identifier is, if not _id for rowKey
+    };
+
+    const industries = await ucdsCollection
+      .find(query)
+      .project(selectedFields)
+      .sort({ sort_key: 1 })
+      .toArray(); // Corrected to use ucdsCollection and MongoDB driver syntax
+
+    res.json(industries);
+  } catch (error) {
+    console.error("Error fetching ECC/CNC subtype breakdown:", error);
+    res
+      .status(500)
+      .json({ message: "Server error while fetching breakdown data." });
+  }
+});
+
+app.get("/api/ucds/list-by-permit-status", async (req, res) => {
+  try {
+    const { permitKey, status } = req.query;
+
+    const permitConfig = permitKeyToFieldMap[permitKey];
+
+    if (!permitConfig) {
+      return res.status(400).json({ message: "Invalid permitKey." });
+    }
+    if (
+      ![
+        "Expired",
+        "Near Expiry",
+        "Not Expired",
+        "Blank",
+        "Ongoing Process",
+        "Application", // Keep individual statuses for direct fetching if ever needed
+        "Application Stages", // New combined status
+        "All" // New status to fetch all records for a permit type
+      ].includes(status)
+    ) {
+      return res.status(400).json({ message: "Invalid status." });
+    }
+
+    // Base fields needed for the table regardless of permit type
+    const baseProjection = {
+      sort_key: 1,
+      name: 1,
+      title: 1,
+      _id: 1,
+    };
+
+    // Permit-specific fields to project
+    const permitSpecificProjection = {};
+    if (permitConfig.queryField)
+      permitSpecificProjection[permitConfig.queryField] = 1; // e.g., pto_code
+    if (permitConfig.dateField)
+      permitSpecificProjection[permitConfig.dateField] = 1; // e.g., pto_expiration
+
+    // Add other relevant fields based on permitKey that are not covered by queryField or dateField
+    if (permitKey === "pto_code") {
+      permitSpecificProjection["pto_issued"] = 1;
+      permitSpecificProjection["iis_no_2024"] = 1; // Add IIS 2024 for PTO
+      permitSpecificProjection["iis_no_2025"] = 1; // Add IIS 2025 for PTO
+      permitSpecificProjection["brgy"] = 1; // Add Barangay for PTO
+      permitSpecificProjection["city"] = 1; // Add City for PTO
+      permitSpecificProjection["province"] = 1; // Add Province for PTO
+    } else if (permitKey === "wwdp_code") {
+      permitSpecificProjection["wwdp_issued"] = 1;
+      permitSpecificProjection["iis_no_2024"] = 1;
+      permitSpecificProjection["iis_no_2025"] = 1;
+      permitSpecificProjection["brgy"] = 1;
+      permitSpecificProjection["city"] = 1;
+      permitSpecificProjection["province"] = 1;
+    } else if (permitKey === "pco_no") {
+      permitSpecificProjection["pco_name"] = 1; // pco_validity is already permitConfig.dateField
+      permitSpecificProjection["iis_no_2024"] = 1;
+      permitSpecificProjection["iis_no_2025"] = 1;
+      permitSpecificProjection["brgy"] = 1;
+      permitSpecificProjection["city"] = 1;
+      permitSpecificProjection["province"] = 1;
+    }
+    // For haz_id, haz_issued is already permitConfig.dateField
+
+    const projectionFields = { ...baseProjection, ...permitSpecificProjection };
+    let industriesToReturn = [];
+
+    if (status === "Blank") {
+      industriesToReturn = await ucdsCollection
+        .find(
+          {
+            $or: [
+              { [permitConfig.queryField]: null },
+              { [permitConfig.queryField]: "" },
+            ],
+          },
+          { projection: projectionFields }
+        )
+        .sort({ sort_key: 1 })
+        .toArray();
+    } else if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && status === "Ongoing Process") {
+      const ptoOngoingKeywordsRegex =
+        /\b(In-process|In process|On Process|ON GOING)\b/i; // Added "ON GOING"
+      industriesToReturn = await ucdsCollection
+        .find(
+          { [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } },
+          { projection: projectionFields }
+        )
+        .sort({ sort_key: 1 })
+        .toArray();
+    } else if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && status === "Application") {
+      const ptoApplicationKeywordsRegex =
+        /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i; // Made more flexible
+      // Ensure these are not also "Ongoing Process" if there's overlap in keywords, though unlikely with current regex.
+      // For simplicity, assuming keywords are distinct enough or "Ongoing Process" takes precedence if both match.
+      industriesToReturn = await ucdsCollection
+        .find(
+          {
+            [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex },
+          },
+          { projection: projectionFields }
+        )
+        .sort({ sort_key: 1 })
+        .toArray();
+    } else if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && status === "Application Stages") {
+      // Fetch records matching EITHER ongoing OR application keywords
+      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
+      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
+      industriesToReturn = await ucdsCollection
+        .find(
+          { $or: [
+              { [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } },
+              { [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } }
+          ]},
+          { projection: projectionFields }
+        )
+        .sort({ sort_key: 1 })
+        .toArray();
+    } else if (status === "All" && permitConfig.queryField) {
+      // Fetch all records that have the specified permitKey (e.g., all PTOs)
+      industriesToReturn = await ucdsCollection
+        .find(
+          { [permitConfig.queryField]: { $exists: true, $ne: null, $ne: "" } },
+          { projection: projectionFields }
+        )
+        .sort({ sort_key: 1 })
+        .toArray();
+    } else {
+      const allRecordsWithPermit = await ucdsCollection
+        .find(
+          { [permitConfig.queryField]: { $exists: true, $ne: null, $ne: "" } },
+          { projection: projectionFields }
+        )
+        .toArray();
+
+      const now = new Date();
+      // Define these regex patterns here as well, as they are used in this scope
+      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
+      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
+
+
+      allRecordsWithPermit.forEach((record) => {
+        const ptoCodeValue = String(record[permitConfig.queryField] || "").trim(); // Used for PTO, WWDP, HAZ_ID application check
+
+        // Skip records that are in application/ongoing stages for expiry calculations
+        if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && (ptoCodeValue.match(ptoOngoingKeywordsRegex) || ptoCodeValue.match(ptoApplicationKeywordsRegex))) {
+          return;
+        }
+
+        const dateValue = record[permitConfig.dateField];
+        let actualExpiryDate = null;
+        const parsedDate = parseDateStringForStats(dateValue);
+
+        if (parsedDate instanceof Date && !isNaN(parsedDate)) {
+          if (permitConfig.isDateAnExpiry) {
+            actualExpiryDate = parsedDate;
+          } else if (permitConfig.validityYears) {
+            actualExpiryDate = new Date(parsedDate);
+            actualExpiryDate.setFullYear(
+              actualExpiryDate.getFullYear() + permitConfig.validityYears
+            );
+          }
+        }
+
+        if (actualExpiryDate) {
+          const expiryDateString = actualExpiryDate.toISOString().split("T")[0];
+          const isCurrentlyExpired = isPermitExpired(expiryDateString);
+          const isCurrentlyNearExpiry = isPermitNearExpiry(
+            expiryDateString,
+            now
+          );
+
+          if (status === "Expired" && isCurrentlyExpired) {
+            industriesToReturn.push(record);
+          } else if (
+            status === "Near Expiry" &&
+            isCurrentlyNearExpiry &&
+            !isCurrentlyExpired
+          ) {
+            industriesToReturn.push(record);
+          } else if (
+            status === "Not Expired" &&
+            !isCurrentlyExpired &&
+            !isCurrentlyNearExpiry
+          ) {
+            industriesToReturn.push(record);
+          }
+        }
+      });
+      industriesToReturn.sort((a, b) =>
+        (String(a.sort_key) || "").localeCompare(String(b.sort_key) || "")
+      );
+    }
+
+    res.json(industriesToReturn);
+  } catch (error) {
+    console.error("Error fetching permit status breakdown:", error);
+    res.status(500).json({
+      message: "Server error while fetching permit status breakdown data.",
+    });
   }
 });
 
@@ -2131,22 +3243,373 @@ app.get("/api/ucds-data", async (req, res) => {
     const pageSize = parseInt(req.query.pageSize) || 20;
     const skip = (page - 1) * pageSize;
 
-    const filters = {};
-    // Optionally add column filter logic here
-    if (req.query.name) {
-      filters.name = { $regex: req.query.name, $options: "i" };
+    const mongoQuery = {};
+    let queryConditions = [];
+
+    // Define fields for global search. Expand this list as needed.
+    const globalSearchFields = [
+      "name",
+      "title",
+      "ecc_cnc",
+      "sort_key",
+      "address",
+      "industry_class",
+      "section_incharged",
+      "handler",
+      "remarks",
+      "province",
+      "city",
+      "brgy",
+      "psic_code",
+      "pco_name",
+      "legal_officer",
+      "title_status",
+      // Add any other fields you want to be included in the global text search
+    ];
+
+
+    // 1. Handle Global Search (if present)
+    if (req.query.search) {
+      const searchTermTrimmed = String(req.query.search).trim();
+      if (searchTermTrimmed) {
+        const orConditions = globalSearchFields.map((sField) => {
+          if (sField === "sort_key") {
+            const parts = searchTermTrimmed.split("-");
+            if (parts.length === 2 && parts[0] && /^\d+$/.test(parts[1])) {
+              const prefix = parts[0];
+              const numberPart = parts[1];
+              return { [sField]: { $regex: `^${prefix}-0*${numberPart}$`, $options: "i" } };
+            } else {
+              return { [sField]: { $regex: searchTermTrimmed, $options: "i" } };
+            }
+          } else {
+            return { [sField]: { $regex: searchTermTrimmed, $options: "i" } };
+          }
+        });
+        if (orConditions.length > 0) {
+          queryConditions.push({ $or: orConditions });
+        }
+      }
     }
 
-    const total = await ucdsCollection.countDocuments(filters);
-    const surveys = await ucdsCollection.find(filters).skip(skip).limit(pageSize).toArray();
+    // Define fields that are handled as specific top-level filters
+    // and should not be re-processed by the column filter loop.
+    const topLevelFilterKeys = [
+      'search', 'page', 'pageSize', 
+      'projectStatus', 'sectionFilter', 'permitTypeKey', 'filterExpired',
+      'province' // Province is handled as a top-level filter from global dropdown
+    ];
+
+
+    const { projectStatus, sectionFilter, permitTypeKey, filterExpired } =
+      req.query;
+
+    // The generic loop "for (const key in req.query)" that previously attempted to handle
+    // some column filters has been removed. Its responsibilities are now correctly
+    // handled by the dedicated global search logic, the columnFilterableFields.forEach loop,
+    // and the specific top-level filter handlers (projectStatus, sectionFilter, etc.).
+
+    // 2. Handle Column-Specific Filters
+    const columnFilterableFields = [
+      // This list should contain ALL fields that can be filtered from the client table.
+      // It's used to iterate and check req.query for corresponding filter values.
+      'sort_key', 'name', 'title', 'long', 'lat', 'bod', 'address',
+      'iis_no_2024', 'iis_no_2025', 'days_dmds', 'days_drds', 'remarks',
+      'ecc_cnc', 'pco_no', 'pto_code', 'wwdp_code', 'haz_id', 'pco_name',
+      'docket_no', 'v_pd1586', 'v_ra9275', 'v_ra8749', 'v_ra6969_haz',
+      'v_ra6969_tchem', 'tc_date_actual', 'tc_compliance_link', 'pos_paper',
+      'amount', 'or_number', 'other_tc_remarks', 'order_issued', 'order_status',
+      'date_monitored', 'date_routed', 'date_signed', 'date_amended', // Was month
+      'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued', // Was month
+      'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date', // Was month
+      'resolution_issued', 'pco_validity', 'province', 'industry_type', 'industry_subtype', // Was year/general
+      'industry_class', 'psic_code', 'mbu_area', 'waterbody', 'emp_total',
+      'wwtf_type', 'cong_district', 'street', 'brgy', 'city', 'section_incharged',
+      'handler', 'monitoring_sched', 'insp_type', 'pismu_tracking', 'title_status',
+      'with_nov', 'pismu_count_month', 'permit_process', 'denr_pab_case_no',
+      'legal_officer', 'tc_commitment' // All these were general dropdowns
+    ];
+
+    const inputTypeFilterFields = [
+      // All fields that should be treated with a regex text search.
+      'sort_key', 'name', 'title', 'long', 'lat', 'bod', 'address',
+      'iis_no_2024', 'iis_no_2025', 'days_dmds', 'days_drds', 'remarks',
+      'ecc_cnc', 'pco_no', 'pto_code', 'wwdp_code', 'haz_id', 'pco_name',
+      'docket_no', 'v_pd1586', 'v_ra9275', 'v_ra8749', 'v_ra6969_haz',
+      'v_ra6969_tchem', 'tc_date_actual', 'tc_compliance_link', 'pos_paper',
+      'amount', 'or_number', 'other_tc_remarks', 'order_issued', 'order_status',
+      // Add previously month-type fields
+      'date_monitored', 'date_routed', 'date_signed', 'date_amended',
+      'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued',
+      'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date',
+      'resolution_issued',
+      // Add previously year-type fields
+      'pco_validity',
+      // Add previously general-dropdown-type fields
+      'industry_type', 'industry_subtype', 'industry_class', 'psic_code',
+      'mbu_area', 'waterbody', 'emp_total', 'wwtf_type', 'cong_district',
+      'street', 'brgy', 'city', 'section_incharged', 'handler',
+      'monitoring_sched', 'insp_type', 'pismu_tracking', 'title_status',
+      'with_nov', 'pismu_count_month', 'permit_process', 'denr_pab_case_no',
+      'legal_officer', 'tc_commitment', 'province'
+    ];
+
+    const monthTypeFilterFields = [
+      'date_monitored', 'date_routed', 'date_signed', 'date_amended',
+      'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued',
+      'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date',
+      'resolution_issued' 
+      // These fields are now in inputTypeFilterFields. This array can be emptied
+      // or the logic below adjusted if no fields will match this anymore.
+    ];
+
+    const yearTypeFilterFields = ['pco_validity'];
+    // Similar to monthTypeFilterFields, 'pco_validity' is now in inputTypeFilterFields.
+    columnFilterableFields.forEach(field => {
+       if (req.query[field] && req.query[field].length > 0 && !topLevelFilterKeys.includes(field)) {
+        const filterValues = Array.isArray(req.query[field]) ? req.query[field] : [req.query[field]];
+
+        const firstFilterValue = String(filterValues[0]).trim();
+        let handledBySpecificLogic = false;
+
+        if (field === 'sort_key') {
+          const parts = firstFilterValue.split("-");
+          if (parts.length === 2 && parts[0] && /^\d+$/.test(parts[1])) {
+            const prefix = parts[0];
+            const numberPart = parts[1];
+            queryConditions.push({
+              [field]: { $regex: `^${prefix}-0*${numberPart}$`, $options: "i" }
+            });
+            handledBySpecificLogic = true;
+          }
+        }
+
+        if (!handledBySpecificLogic) {
+          if (inputTypeFilterFields.includes(field)) {
+            queryConditions.push({ [field]: { $regex: firstFilterValue, $options: "i" } });
+          // The following 'else if' blocks for monthTypeFilterFields and yearTypeFilterFields
+          // will likely not be hit if these arrays are empty or their fields moved to inputTypeFilterFields.
+          } else if (monthTypeFilterFields.includes(field)) {
+            const targetMonth = dayjs(firstFilterValue, "MMMM YYYY");
+            if (targetMonth.isValid()) {
+              const startDate = targetMonth.startOf('month').toDate();
+              const endDate = targetMonth.endOf('month').toDate();
+              queryConditions.push({ [field]: { $gte: startDate, $lte: endDate } });
+            }
+          } else if (yearTypeFilterFields.includes(field)) {
+            const targetYear = dayjs(firstFilterValue, "YYYY");
+            if (targetYear.isValid()) {
+              const startDate = targetYear.startOf('year').toDate();
+              const endDate = targetYear.endOf('year').toDate();
+              queryConditions.push({ [field]: { $gte: startDate, $lte: endDate } });
+            }
+          } else { 
+            // This 'else' block would previously handle general dropdowns.
+            // Since they are now intended to be text inputs and moved to inputTypeFilterFields,
+            // this block might only catch fields in columnFilterableFields but not in any specific type list.
+            // For consistency with "input filter type", consider if these should also be regex.
+            // However, if they are not in inputTypeFilterFields, this $in will perform an exact match.
+            queryConditions.push({ [field]: { $in: filterValues.map(val => String(val).trim()) } });
+          }
+        }
+      }
+    });
+
+    if (projectStatus) {
+      const statusKey = projectStatus.toLowerCase(); // Ensure consistency
+      if (statusKey === "operational") {
+        queryConditions.push({ title_status: { $regex: /^OPERATIONAL$/i } });
+      } else if (statusKey === "nonoperational") {
+        // Matched to client's 'nonOperational'
+        queryConditions.push({
+          title_status: { $regex: /^NON-OPERATIONAL$/i },
+        });
+      } else if (statusKey === "notoperational") {
+        // Matched to client's 'notOperational'
+        queryConditions.push({
+          title_status: { $regex: /^NOT OPERATIONAL$/i },
+        });
+      } else if (statusKey === "notyetmonitored") {
+        // Matched to client's 'notYetMonitored'
+        queryConditions.push({ title_status: { $in: ["", null] } });
+      } else if (statusKey === "other") {
+        queryConditions.push({
+          title_status: {
+            $nin: [
+              "OPERATIONAL",
+              "NON-OPERATIONAL",
+              "NOT OPERATIONAL",
+              "",
+              null,
+              "N/A",
+              "NONE", // Case-sensitive values as stored or normalized in DB
+            ],
+            $exists: true, // Ensure the field exists
+            $ne: "N/A", // Explicitly exclude "N/A" if it's stored as uppercase
+            $ne: "NONE", // Explicitly exclude "NONE"
+          },
+        });
+      }
+    }
+
+    // Handle sectionIncharged filter
+    if (
+      sectionFilter &&
+      typeof sectionFilter === "string" &&
+      sectionFilter.trim() !== ""
+    ) {
+      // This regex will find the sectionFilter as a whole word or part of a comma-separated list
+      queryConditions.push({
+        section_incharged: { $regex: sectionFilter.trim(), $options: "i" },
+      });
+    }
+
+    // Handle permitTypeKey filter
+    if (
+      permitTypeKey &&
+      typeof permitTypeKey === "string" &&
+      permitTypeKey.trim() !== ""
+    ) {
+      const fieldToFilter = permitTypeKey.trim(); // The value of permitTypeKey is the field name
+      queryConditions.push({
+        [fieldToFilter]: { $exists: true, $ne: null, $ne: "" },
+      });
+    }
+
+    // Handle top-level province filter (from global dropdown)
+    const { province: queryProvince } = req.query;
+    if (queryProvince && typeof queryProvince === 'string' && queryProvince.trim() !== "" && queryProvince.trim().toLowerCase() !== "all provinces") {
+      queryConditions.push({ province: { $regex: `^${queryProvince.trim()}$`, $options: "i" } });
+    }
+
+    if (queryConditions.length > 0) {
+      mongoQuery.$and = queryConditions;
+    }
+
+    // console.log("Executing MongoDB Query:", JSON.stringify(mongoQuery, null, 2)); // For debugging
+    let surveys;
+    let total;
+
+    if (filterExpired === "true") {
+      const allMatchingRecords = await ucdsCollection
+        .find(mongoQuery)
+        .toArray();
+
+      const recordsWithExpiredPermits = allMatchingRecords.filter(
+        (record) =>
+          isPermitExpired(record.pto_expiration) ||
+          isPermitExpired(record.wwdp_expiration) ||
+          isPermitExpired(record.pco_validity)
+      );
+
+      total = recordsWithExpiredPermits.length;
+
+      // Sort the filtered records
+      recordsWithExpiredPermits.sort((a, b) => {
+        const getSortParts = (sortKeyStr) => {
+          const sKey = String(sortKeyStr || "");
+          if (!sKey.includes("-")) return { prefix: sKey, num: 0 };
+          const parts = sKey.split("-");
+          return { prefix: parts[0], num: parseInt(parts[1], 10) || 0 };
+        };
+        const partsA = getSortParts(a.sort_key);
+        const partsB = getSortParts(b.sort_key);
+        if (partsA.prefix < partsB.prefix) return -1;
+        if (partsA.prefix > partsB.prefix) return 1;
+        return partsA.num - partsB.num;
+      });
+
+      surveys = recordsWithExpiredPermits.slice(skip, skip + pageSize);
+    } else {
+      total = await ucdsCollection.countDocuments(mongoQuery);
+      const pipeline = [];
+
+      // 1. Initial Match based on filters from request query
+      if (Object.keys(mongoQuery).length > 0) {
+        pipeline.push({ $match: mongoQuery });
+      }
+
+      // 2. Add fields for sorting by sort_key (prefix and numeric part)
+      pipeline.push(
+        {
+          $addFields: {
+            // Ensure sort_key is not null before splitting, default to empty string
+            _temp_sort_key: { $ifNull: ["$sort_key", ""] },
+          },
+        },
+        {
+          $addFields: {
+            _sort_key_parts: { $split: ["$_temp_sort_key", "-"] },
+          },
+        },
+        {
+          $addFields: {
+            _sort_key_prefix: {
+              // Use the first part as prefix, or the whole key if no hyphen
+              $cond: {
+                if: {
+                  $gt: [{ $size: { $ifNull: ["$_sort_key_parts", []] } }, 0],
+                }, // Check if _sort_key_parts is not null and has elements
+                then: { $arrayElemAt: ["$_sort_key_parts", 0] },
+                else: "$_temp_sort_key",
+              },
+            },
+            _sort_key_number_str: {
+              // Use the second part as number string if it exists
+              $cond: {
+                if: {
+                  $gt: [{ $size: { $ifNull: ["$_sort_key_parts", []] } }, 1],
+                },
+                then: { $arrayElemAt: ["$_sort_key_parts", 1] },
+                else: null,
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            _sort_key_number: {
+              // Convert numeric string part to integer
+              $convert: {
+                input: "$_sort_key_number_str", // Input can be null
+                to: "int",
+                onError: null, // If conversion fails (e.g., "ABC"), treat as null
+                onNull: null, // If input is null (no numeric part), treat as null
+              },
+            },
+          },
+        }
+      );
+
+      // 3. Sort stage
+      pipeline.push({ $sort: { _sort_key_prefix: 1, _sort_key_number: 1 } });
+
+      // 4. Pagination stages (must be after sorting)
+      pipeline.push({ $skip: skip });
+      pipeline.push({ $limit: pageSize });
+
+      // 5. Project stage to remove temporary sort fields (optional, but good practice)
+      pipeline.push({
+        $project: {
+          _temp_sort_key: 0,
+          _sort_key_parts: 0,
+          _sort_key_prefix: 0,
+          _sort_key_number_str: 0,
+          _sort_key_number: 0,
+        },
+      });
+
+      surveys = await ucdsCollection
+        .aggregate(pipeline, { allowDiskUse: true })
+        .toArray();
+    }
 
     res.status(200).json({ data: surveys, total });
   } catch (error) {
-    console.error("Error fetching survey data:", error);
+    console.error("Error fetching UCDS data:", error);
     res.status(500).send("Internal Server Error");
   }
 });
-
 
 app.get("/api/ucds-data/by-sort-key/:sort_key", async (req, res) => {
   const { sort_key } = req.params;
@@ -2154,7 +3617,7 @@ app.get("/api/ucds-data/by-sort-key/:sort_key", async (req, res) => {
   try {
     // Fetch the data from the ucdsCollection based on sort_key (case-insensitive)
     let data = await ucdsCollection.findOne({
-      sort_key: { $regex: `^${sort_key.trim()}$`, $options: "i" }
+      sort_key: { $regex: `^${sort_key.trim()}$`, $options: "i" },
     });
 
     if (!data) {
@@ -2970,7 +4433,8 @@ app.get("/generate-custom-survey-report/:id", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="SURVEY REPORT-${selectedData.project_title || "Unknown"
+      `attachment; filename="SURVEY REPORT-${
+        selectedData.project_title || "Unknown"
       }.pdf"`
     );
     res.setHeader("Content-Encoding", "gzip");
@@ -3673,6 +5137,52 @@ app.get("/api/project_type", async (req, res) => {
   }
 });
 
+// Endpoint to get industry details by class name, matching frontend request
+app.get("/api/industry-details-by-class", async (req, res) => {
+  const { className } = req.query; // Frontend sends 'className'
+
+  if (!className) {
+    return res
+      .status(400)
+      .json({ error: "className query parameter is required." });
+  }
+
+  try {
+    if (!projectTypeCollection) {
+      console.error(
+        "projectTypeCollection is not initialized in /api/industry-details-by-class"
+      );
+      return res.status(500).json({
+        error:
+          "Server configuration error: projectTypeCollection not available.",
+      });
+    }
+
+    // Query using 'industry_class' field in the collection, with the value from 'className'
+    const industryDetails = await projectTypeCollection.findOne({
+      industry_class: className,
+    });
+
+    if (industryDetails) {
+      // Return the whole document. Frontend expects fields like industry_type, industry_subtype, psic_code
+      // Ensure these fields exist in your projectTypeCollection documents.
+      res.status(200).json(industryDetails);
+    } else {
+      res
+        .status(404)
+        .json({ message: `No industry details found for class: ${className}` });
+    }
+  } catch (error) {
+    console.error(
+      `Error fetching industry details for class ${className}:`,
+      error
+    );
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching industry details." });
+  }
+});
+
 // Endpoint to get longitude and latitude data from ucdsCollection
 app.get("/api/ucds", async (req, res) => {
   try {
@@ -3735,7 +5245,11 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params; // id like "BU-201" or ObjectId string
     const newData = req.body;
-    const updatedBy = req.body.updated_by;
+    // Use authenticated user from session as the person who updated
+    const updatedBy =
+      req.session && req.session.user
+        ? req.session.user.username
+        : "Unknown User";
 
     if (!client.topology.isConnected()) {
       await client.connect();
@@ -3750,7 +5264,7 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     if (/^[a-fA-F0-9]{24}$/.test(id)) {
       query = { _id: new ObjectId(id) };
     } else {
-      query = { sort_key: id };
+      query = buildSortKeyQuery(id); // Use flexible sort_key query
     }
 
     // Fetch old document
@@ -3821,6 +5335,62 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     res
       .status(500)
       .json({ error: "Failed to update data. Please try again later." });
+  }
+});
+
+// Bulk update UCDS records
+router.put("/ucds-data/bulk-update", logActivity, async (req, res) => {
+  try {
+    const updatesArray = req.body.updates; // Expecting an array of { _id: "...", changes: { field1: value1, ... } }
+
+    if (!Array.isArray(updatesArray) || updatesArray.length === 0) {
+      return res.status(400).json({ error: "Invalid or empty updates array." });
+    }
+
+    if (!ucdsCollection) {
+      return res.status(500).json({ error: "Database collection not found." });
+    }
+
+    const bulkOps = updatesArray
+      .map((item) => {
+        if (
+          !item._id ||
+          !ObjectId.isValid(item._id) ||
+          !item.changes ||
+          Object.keys(item.changes).length === 0
+        ) {
+          // Log invalid item but don't stop the whole batch
+          console.warn("Invalid item in bulk update:", item);
+          return null; // Will be filtered out
+        }
+        return {
+          updateOne: {
+            filter: { _id: new ObjectId(item._id) },
+            update: { $set: item.changes },
+          },
+        };
+      })
+      .filter((op) => op !== null); // Remove any null operations from invalid items
+
+    if (bulkOps.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "No valid update operations to perform." });
+    }
+
+    const result = await ucdsCollection.bulkWrite(bulkOps);
+
+    // TODO: Enhance logging for bulk updates in ucds-log collection if needed.
+    // This would involve iterating through each successful update in `result`
+    // and creating individual log entries, similar to the single update logic.
+
+    res.status(200).json({
+      message: `${result.modifiedCount} records updated successfully.`,
+      result,
+    });
+  } catch (error) {
+    console.error("Error during bulk update:", error);
+    res.status(500).json({ error: "Failed to perform bulk update." });
   }
 });
 
@@ -4207,6 +5777,45 @@ app.put("/api/status/:id", logActivity, async (req, res) => {
   }
 });
 
+// New route to get distinct values for dropdown fields
+router.get("/ucds-data/distinct-dropdown-values", async (req, res) => {
+  try {
+    const distinctValues = {};
+    // Define the fields for which you want to get distinct values for dropdowns
+    // This list should ideally match or be derived from the client-side `dropdownFields`
+    const fieldsForDropdowns = [
+      "province",
+      "industry_type",
+      "industry_subtype",
+      "industry_class",
+      "waterbody",
+      "wwtf_type",
+      "monitoring_sched",
+      // "date_monitored", "date_routed", "date_signed", // Dates might produce too many unique values for a dropdown
+      "pismu_tracking",
+      "title_status",
+      "pismu_count_month",
+      "legal_officer",
+      // "nov_issued" // Consider if this is a date or a limited set of strings like Yes/No
+    ];
+
+    for (const field of fieldsForDropdowns) {
+      // Fetch distinct, non-null, non-empty values and sort them
+      const values = await ucdsCollection.distinct(field, {
+        [field]: { $ne: null, $ne: "" },
+      });
+      // Ensure all values are strings for consistency in dropdowns
+      distinctValues[field] = values
+        .map(String)
+        .sort((a, b) => a.localeCompare(b));
+    }
+    res.status(200).json(distinctValues);
+  } catch (error) {
+    console.error("Error fetching distinct dropdown values:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 app.put("/api/survey/:id", logActivity, async (req, res) => {
   const { id } = req.params;
   const update = req.body;
@@ -4376,40 +5985,58 @@ app.put("/api/permits-summary/update-expiry", async (req, res) => {
     sort_key,
     permitType,
     newExpiryDate,
-    newPermitCode // Added to receive the new permit code
+    newPermitCode, // Added to receive the new permit code
   } = req.body;
 
   // newPermitCode can be undefined if only date is being updated, so not strictly required here.
   if (!sort_key || !permitType || !newExpiryDate) {
-    return res.status(400).json({ message: "Missing required fields: sort_key, permitType, or newExpiryDate." });
+    return res.status(400).json({
+      message:
+        "Missing required fields: sort_key, permitType, or newExpiryDate.",
+    });
   }
 
   try {
-    const parsedNewExpiry = new Date(newExpiryDate); // Directly parse YYYY-MM-DD
+    let parsedNewExpiry;
+    // Ensure "YYYY-MM-DD" strings are parsed as UTC midnight.
+    // new Date("YYYY-MM-DD") already does this by specification.
+    // Other formats might be parsed as local time by new Date().
+    if (
+      typeof newExpiryDate === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(newExpiryDate)
+    ) {
+      parsedNewExpiry = new Date(newExpiryDate); // Interprets as UTC midnight
+    } else {
+      parsedNewExpiry = new Date(newExpiryDate); // Fallback for other formats
+    }
+
     if (!isValidDate(parsedNewExpiry)) {
-      return res.status(400).json({ message: "Invalid newExpiryDate format. Please use YYYY-MM-DD." });
+      return res.status(400).json({
+        message: "Invalid newExpiryDate format. Please use YYYY-MM-DD.",
+      });
     }
 
     let fieldsToUpdate = {};
 
     if (permitType === "PTO") {
-
       const newIssueDate = new Date(parsedNewExpiry);
       newIssueDate.setFullYear(newIssueDate.getFullYear() - 2); // PTO expires 2 years from issue
-      fieldsToUpdate["pto_issued"] = newIssueDate.toISOString().split('T')[0];
-      if (newPermitCode !== undefined) { // Check if newPermitCode was provided
+      fieldsToUpdate["pto_issued"] = newIssueDate.toISOString().split("T")[0];
+      if (newPermitCode !== undefined) {
+        // Check if newPermitCode was provided
         fieldsToUpdate["pto_code"] = newPermitCode;
       }
     } else if (permitType === "WWDP") {
-
       const newIssueDate = new Date(parsedNewExpiry);
       newIssueDate.setFullYear(newIssueDate.getFullYear() - 1); // WWDP expires 1 year from issue
-      fieldsToUpdate["wwdp_issued"] = newIssueDate.toISOString().split('T')[0];
+      fieldsToUpdate["wwdp_issued"] = newIssueDate.toISOString().split("T")[0];
       if (newPermitCode !== undefined) {
         fieldsToUpdate["wwdp_code"] = newPermitCode;
       }
     } else if (permitType === "PCO") {
-      fieldsToUpdate["pco_validity"] = parsedNewExpiry.toISOString().split('T')[0];
+      fieldsToUpdate["pco_validity"] = parsedNewExpiry
+        .toISOString()
+        .split("T")[0];
       if (newPermitCode !== undefined) {
         fieldsToUpdate["pco_no"] = newPermitCode;
       }
@@ -4423,10 +6050,14 @@ app.put("/api/permits-summary/update-expiry", async (req, res) => {
     );
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ message: `Record with sort_key ${sort_key} not found.` });
+      return res
+        .status(404)
+        .json({ message: `Record with sort_key ${sort_key} not found.` });
     }
     if (result.modifiedCount === 0) {
-      return res.status(200).json({ message: "No changes made to the permit expiry." });
+      return res
+        .status(200)
+        .json({ message: "No changes made to the permit expiry." });
     }
 
     // Optional: Log this update to ucds-log
@@ -4434,13 +6065,13 @@ app.put("/api/permits-summary/update-expiry", async (req, res) => {
     // await ucdsLogCollection.insertOne(logEntry);
 
     res.status(200).json({ message: "Permit expiry updated successfully." });
-
   } catch (err) {
     console.error("Error updating permit expiry:", err);
-    res.status(500).json({ message: "Internal Server Error while updating permit expiry." });
+    res
+      .status(500)
+      .json({ message: "Internal Server Error while updating permit expiry." });
   }
 });
-
 
 //#endregion
 

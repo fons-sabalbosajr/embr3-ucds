@@ -47,14 +47,8 @@ const IndustrySubTypeAutoComplete = ({ value, disabled, onChange }) => {
         style={{
           width: "100%",
           fontSize: "11px",
-
-        }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
         }}
         options={industrysubTypeOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
         value={value}
         disabled={disabled}
         onChange={onChange}
@@ -74,7 +68,6 @@ const IndustrySubTypeAutoComplete = ({ value, disabled, onChange }) => {
             fontSize: "9px",
           }}
         />
-
       </AutoComplete>
     </ConfigProvider>
   );

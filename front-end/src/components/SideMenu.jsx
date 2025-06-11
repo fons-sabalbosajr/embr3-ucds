@@ -27,6 +27,7 @@ const rootSubmenuKeys = [
   "planning-unit",
   "reports",
   "admin",
+  "eswm-database", // Added for the new submenu
 ];
 
 const visibleProvincesList = [
@@ -81,10 +82,10 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["healthcare"]);
     } else if (path.startsWith("/universe/survey")) {
       setOpenKeys([]);
-    } else if (path.startsWith("/universe/mbu")) {
+    } else if (path.startsWith("/universe/mbu")) { // Corrected from path.startsWith("/universe/eswm-database") for mbu
       setOpenKeys([]);
     } else if (path.startsWith("/universe/eswm-database")) {
-      setOpenKeys([]);
+      setOpenKeys(["eswm-database"]); // Keep the 'eswm-database' submenu open
     } else if (path.startsWith("/universe/planning-unit/")) {
       setOpenKeys(["planning-unit"]);
     } else if (
@@ -213,7 +214,7 @@ const SideMenu = ({ theme, currentUser }) => {
       }
       if (
         currentUser?.username &&
-        location.pathname === "/universe/eswm-database"
+        location.pathname.startsWith("/universe/eswm-database") // Updated to cover sub-routes
       ) {
         socket.emit("joinEswm", {
           user: {
@@ -371,9 +372,9 @@ const SideMenu = ({ theme, currentUser }) => {
     const socket = socketRef.current;
     let didJoinEswmThisEffect = false;
 
-    if (location.pathname === "/universe/eswm-database") {
+    if (location.pathname.startsWith("/universe/eswm-database")) { // Updated to cover sub-routes
       console.log(
-        "[SideMenu] Path is /universe/eswm-database, attempting to joinEswm."
+        "[SideMenu] Path starts with /universe/eswm-database, attempting to joinEswm."
       );
       socket.emit("joinEswm", {
         user: {
@@ -723,24 +724,35 @@ const SideMenu = ({ theme, currentUser }) => {
       ),
     },
     {
-      key: "/universe/eswm-database",
+      key: "eswm-database", // Changed to be a submenu key
       icon: <DatabaseFilled />,
       label: (
         <span style={{ display: "flex", alignItems: "center", width: "100%" }}>
-          <span>
-            <Link to="/universe/eswm-database">ESWM Database</Link>
-          </span>
-          <span
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            {renderAvatars(eswmViewers)}
-          </span>
+          ESWM Database
         </span>
       ),
+      children: [
+        {
+          key: "/universe/eswm-database/swm-plan",
+          label: <Link to="/universe/eswm-database/swm-plan">10 Year SWM Plan</Link>,
+        },
+        {
+          key: "/universe/eswm-database/mrf",
+          label: <Link to="/universe/eswm-database/mrf">Material Recovery Facility (MRF)</Link>,
+        },
+        {
+          key: "/universe/eswm-database/slf",
+          label: <Link to="/universe/eswm-database/slf">Sanitary Landfill (SLF)</Link>,
+        },
+        {
+          key: "/universe/eswm-database/ods",
+          label: <Link to="/universe/eswm-database/ods">Open Dump Sites (ODS)</Link>,
+        },
+        {
+          key: "/universe/eswm-database/equipments",
+          label: <Link to="/universe/eswm-database/equipments">Equipments</Link>,
+        },
+      ]
     },
     {
       key: "planning-unit", // New menu key
@@ -808,7 +820,7 @@ const SideMenu = ({ theme, currentUser }) => {
 
         {
           key: "/universe/records/config",
-          label: <Link to="/universe/records/config">Records Config</Link>,
+          label: <Link to="/universe/records/config">Monitoring Config</Link>,
         },
         {
           key: "/universe/records/activity",

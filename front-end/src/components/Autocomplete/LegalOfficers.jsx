@@ -22,6 +22,7 @@ const LegalOfficers = ({
   onChange,
   theme,
   style,
+  placeholder, // Ensure placeholder prop is received
   readOnly,
 }) => {
   return (
@@ -62,10 +63,9 @@ const LegalOfficers = ({
             height: "29px",
             padding: "4px 8px",
           }}
-          placeholder="Select Legal Officer"
-          placeholderStyle={{
-            fontSize: "9px",
-          }}
+          placeholder={placeholder || "Select Legal Officer"} // Use passed placeholder or a default
+          // placeholderStyle is not a standard Ant Design Input prop.
+          // Placeholder styling is typically handled by ConfigProvider's colorTextPlaceholder token or CSS.
         />
       </AutoComplete>
     </ConfigProvider>

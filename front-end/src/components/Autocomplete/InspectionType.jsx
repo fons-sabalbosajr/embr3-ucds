@@ -33,12 +33,9 @@ const InspectionType = ({
           width: "100%",
           ...style,
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
-        }}
+       
         options={readOnly ? [] : InspectionTypeOptions} // Use predefined suggestions
-        popupClassName={`custom-autocomplete-dropdown ${theme}-theme`}
+        
         value={value}
         disabled={disabled}
         onChange={!readOnly ? onChange : undefined}

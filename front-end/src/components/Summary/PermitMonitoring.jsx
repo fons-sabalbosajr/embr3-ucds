@@ -41,7 +41,7 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText, setDebouncedSearchText] = useState("");
-  const [selectedPermitTypes, setSelectedPermitTypes] = useState([]); // For client-side "Permits Status" filter
+  const [activePermitFilters, setActivePermitFilters] = useState([]); // Holds selected status and type filters for "Permits Expired" column
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
@@ -70,10 +70,14 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     try {
       const alwaysFilterByExpiryOnServer = true;
       const prefixQuery = selectedPrefixes.join(",");
-      const permitTypesQuery = selectedPermitTypes.join(","); // Get selected permit types
+      // Extract only actual permit types for the API query from the combined filters
+      const typesForApiQuery = activePermitFilters
+        .filter((f) => f.startsWith("type_"))
+        .map((f) => f.replace("type_", ""))
+        .join(",");
 
       const res = await fetch(
-        `http://localhost:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}&prefixes=${prefixQuery}&searchText=${debouncedSearchText}&filterEstablishmentsByExpiryStatus=${alwaysFilterByExpiryOnServer}&permitTypesFilter=${permitTypesQuery}`
+        `http://localhost:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}&prefixes=${prefixQuery}&searchText=${debouncedSearchText}&filterEstablishmentsByExpiryStatus=${alwaysFilterByExpiryOnServer}&permitTypesFilter=${typesForApiQuery}`
       );
       if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
 
@@ -85,13 +89,19 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
       console.error("Error fetching permits:", err);
       message.error("Failed to fetch permits.");
       setData([]); // Clear data on error
-      setTotal(0);   // Reset total on error
+      setTotal(0); // Reset total on error
     } finally {
       setLoading(false);
       setIsReloading(false);
     }
-  }, [visible, currentPage, pageSize, selectedPrefixes, debouncedSearchText, selectedPermitTypes]); // Added selectedPermitTypes
-
+  }, [
+    visible,
+    currentPage,
+    pageSize,
+    selectedPrefixes,
+    debouncedSearchText,
+    activePermitFilters, // Changed from selectedPermitTypes
+  ]);
 
   useEffect(() => {
     if (visible) {
@@ -145,11 +155,13 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     onFilter: (value, record) =>
       record[dataIndex]
         ? record[dataIndex]
-          .toString()
-          .toLowerCase()
-          .includes(value.toLowerCase())
+            .toString()
+            .toLowerCase()
+            .includes(value.toLowerCase())
         : "",
-    filteredValue: clientSideColumnFilters[dataIndex] ? [clientSideColumnFilters[dataIndex]] : null,
+    filteredValue: clientSideColumnFilters[dataIndex]
+      ? [clientSideColumnFilters[dataIndex]]
+      : null,
   });
 
   const handlePageChange = (page, size) => {
@@ -160,12 +172,18 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
   };
 
   const handleTableChange = (pagination, filters, sorter) => {
-    const newSelectedPermitTypes = filters.permits || [];
-    if (JSON.stringify(newSelectedPermitTypes) !== JSON.stringify(selectedPermitTypes)) {
-      setSelectedPermitTypes(newSelectedPermitTypes);
-      setCurrentPage(1); // Reset page when permit type filter changes
+    const newActivePermitFilters = filters.permits || [];
+    if (
+      JSON.stringify(newActivePermitFilters) !==
+      JSON.stringify(activePermitFilters)
+    ) {
+      setActivePermitFilters(newActivePermitFilters);
+      setCurrentPage(1); // Reset page when permit filter changes
     }
-    const newClientFilters = { title: filters.title?.[0], ecc_cnc: filters.ecc_cnc?.[0] };
+    const newClientFilters = {
+      title: filters.title?.[0],
+      ecc_cnc: filters.ecc_cnc?.[0],
+    };
     setClientSideColumnFilters(newClientFilters);
   };
 
@@ -178,7 +196,7 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     setEditingPermitKey(`${record.sort_key}_${permit.type}`);
     const expiry = new Date(permit.expiry);
     // Format for <input type="date" /> which expects YYYY-MM-DD
-    setEditingPermitDate(expiry.toISOString().split('T')[0]);
+    setEditingPermitDate(expiry.toISOString().split("T")[0]);
     setEditingPermitCodeValue(permit.code || "");
   };
 
@@ -195,21 +213,26 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8081/api/permits-summary/update-expiry`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sort_key: record.sort_key,
-          permitType: permitType,
-          newExpiryDate: editingPermitDate, // Send as YYYY-MM-DD
-          newPermitCode: editingPermitCodeValue,
-        }),
-      });
+      const response = await fetch(
+        `http://localhost:8081/api/permits-summary/update-expiry`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sort_key: record.sort_key,
+            permitType: permitType,
+            newExpiryDate: editingPermitDate, // Send as YYYY-MM-DD
+            newPermitCode: editingPermitCodeValue,
+          }),
+        }
+      );
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+        throw new Error(
+          errorData.message || `HTTP error! Status: ${response.status}`
+        );
       }
       message.success("Permit expiry updated successfully.");
       setEditingPermitKey(null);
@@ -241,6 +264,15 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
         }
         return prefixA.localeCompare(prefixB);
       },
+      render: (text) => {
+        if (!text || !text.includes("-")) return text;
+        const parts = text.split("-");
+        const prefix = parts[0];
+        const numStr = parts[1];
+        const num = parseInt(numStr, 10);
+        if (isNaN(num)) return text; // Should not happen with valid sort_key
+        return `${prefix}-${num}`;
+      },
       filterDropdown: () => (
         <Select
           mode="multiple"
@@ -252,7 +284,6 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
             setSelectedPrefixes(values);
             setCurrentPage(1); // Reset to page 1 on filter change
           }}
-
         >
           {idPrefixes.map(({ label, value }) => (
             <Option key={value} value={value}>
@@ -261,7 +292,11 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
           ))}
         </Select>
       ),
-      filterIcon: () => <SearchOutlined style={{ color: selectedPrefixes.length > 0 ? "#1890ff" : undefined }} />,
+      filterIcon: () => (
+        <SearchOutlined
+          style={{ color: selectedPrefixes.length > 0 ? "#1890ff" : undefined }}
+        />
+      ),
     },
     {
       title: "Project Title",
@@ -285,41 +320,115 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
       key: "permits",
       align: "center",
       width: 160,
-      filters: permitTypes.map((p) => ({ text: p, value: p })),
-      filteredValue: selectedPermitTypes,
-      render: (permitsArray = []) => {
-        // Filter out permits not in selected types (for rendering only)
-        let permitsToDisplay = selectedPermitTypes.length
-          ? permitsArray.filter((p) => selectedPermitTypes.includes(p.type))
-          : permitsArray;
+      filters: [
+        { text: "Status: Expired", value: "status_expired" },
+        { text: "Status: Nearly Expired", value: "status_near_expiry" },
+        { text: "Status: Active Permits", value: "status_active" },
+        ...permitTypes.map((pt) => ({
+          text: `Type: ${pt}`,
+          value: `type_${pt}`,
+        })),
+      ],
+      onFilter: (value, record) => {
+        return true; // Row filtering is not done here; render function handles display based on activePermitFilters
+      },
+      filteredValue: activePermitFilters,
+      render: (permitsArray = [], record) => {
+        if (!permitsArray || permitsArray.length === 0) {
+          return <Tag color="default">—</Tag>;
+        }
 
-        return permitsToDisplay.length > 0 ? (
-          permitsToDisplay.map((p, i) => {
-            const expiryDate = new Date(p.expiry);
-            const tagColor = p.isExpired
-              ? "red"
-              : p.isNearExpiry
-                ? "yellow"
-                : "green";
+        let finalPermitsToDisplay = [...permitsArray];
 
-            const tooltipText = p.isExpired
-              ? `Permit has expired on ${expiryDate.toLocaleDateString()}`
-              : p.isNearExpiry
-                ? `Permit will be expired on ${expiryDate.toLocaleDateString()}`
-                : `Permit is valid until ${expiryDate.toLocaleDateString()}`;
+        // activePermitFilters is from component state
+        const statusFilterValues = activePermitFilters
+          .filter((f) => f.startsWith("status_"))
+          .map((f) => f.replace("status_", ""));
 
-            return (
-              <Tooltip key={`${p.type}-${i}`} title={tooltipText}>
-                <Tag color={tagColor}>{p.type}</Tag>
-              </Tooltip>
+        const typeFilterValues = activePermitFilters
+          .filter((f) => f.startsWith("type_"))
+          .map((f) => f.replace("type_", ""));
+
+        // Only apply filters if there are any selected in the dropdown for this column
+        if (activePermitFilters.length > 0) {
+          if (typeFilterValues.length > 0) {
+            finalPermitsToDisplay = finalPermitsToDisplay.filter((p) =>
+              typeFilterValues.includes(p.type)
             );
-          })
-        ) : (
-          <Tag color="default">—</Tag>
+          }
+
+          if (statusFilterValues.length > 0) {
+            finalPermitsToDisplay = finalPermitsToDisplay.filter((p) => {
+              const isExpired = p.isExpired;
+              const isNearExpiry = p.isNearExpiry;
+              const isActive = !isExpired && !isNearExpiry;
+              // Permit must match AT LEAST ONE of the selected status filters
+              return statusFilterValues.some((sf) => {
+                if (sf === "expired") return isExpired;
+                if (sf === "near_expiry") return isNearExpiry;
+                if (sf === "active") return isActive;
+                return false;
+              });
+            });
+          }
+
+          // If, after applying filters, no permits match for this cell, render nothing.
+          if (finalPermitsToDisplay.length === 0) {
+            return null;
+          }
+        }
+
+        const renderablePermits = finalPermitsToDisplay.filter(
+          (p) => p && typeof p === "object" && typeof p.type === "string"
         );
+
+        return renderablePermits.map((p, i) => (
+          <PermitTag key={`${p.type}-${i}`} permit={p} />
+        ));
       },
     },
   ];
+
+  // Helper component for rendering individual permit tags
+  const PermitTag = ({ permit }) => {
+    if (!permit || typeof permit.expiry === "undefined") {
+      return permit && typeof permit.type === "string" ? (
+        <Tag color="grey">{permit.type} (Data Missing)</Tag>
+      ) : null;
+    }
+
+    const expiryDate = new Date(permit.expiry);
+    if (isNaN(expiryDate.getTime())) {
+       return <Tag color="purple">{permit.type} (Date Error)</Tag>;
+    }
+
+    const tagColor = permit.isExpired
+      ? "red"
+      : permit.isNearExpiry
+      ? "yellow"
+      : "green";
+
+    let tooltipText = `Type: ${permit.type}\n`; // Added newline
+    tooltipText += permit.isExpired
+      ? `Expired: ${expiryDate.toLocaleDateString()}`
+      : permit.isNearExpiry
+      ? `Expires: ${expiryDate.toLocaleDateString()}`
+      : `Valid: ${expiryDate.toLocaleDateString()}`;
+
+    if (permit.code) {
+      tooltipText += `\nCode: ${permit.code}`; // Added newline
+    }
+
+    return (
+      <Tooltip
+        title={<span style={{ fontSize: "11px" }}>{tooltipText}</span>}
+        placement="topLeft"
+        overlayStyle={{ maxWidth: "400px" }} // Optional: constrain width if text is long
+      >
+        <Tag color={tagColor}>{permit.type}</Tag>
+      </Tooltip>
+    );
+  };
 
   return (
     <Modal
@@ -339,7 +448,7 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
           marginBottom: 16,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
           <Input
             placeholder="Search ID, Title, ECC/CNC..."
             prefix={<SearchOutlined />}
@@ -348,8 +457,10 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
             onChange={(e) => setSearchText(e.target.value)}
             style={{ maxWidth: 300, marginRight: 8 }} // Added marginRight
           />
-          <span style={{ fontSize: '11px', color: '#888' }}> {/* Reduced font size and removed marginLeft */}
-            {loading ? 'Searching...' : `Total permits found: ${total}`}
+          <span style={{ fontSize: "11px", color: "#888" }}>
+            {" "}
+            {/* Reduced font size and removed marginLeft */}
+            {loading ? "Searching..." : `Total permits found: ${total}`}
           </span>
         </div>
         {/* Pagination Controls */}
@@ -363,7 +474,6 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
           onChange={handlePageChange}
           onShowSizeChange={handlePageSizeChange}
           size="small"
-
         />
       </div>
 
@@ -379,50 +489,79 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
           scroll={{ x: "max-content", y: "500px" }}
           onChange={handleTableChange}
           locale={{
-            emptyText: loading ? 'Loading data...' : 'No permits found.',
+            emptyText: loading ? "Loading data..." : "No permits found.",
           }}
           expandable={{
-            expandedRowRender: record => (
+            expandedRowRender: (record) => (
               <ul style={{ margin: 0, paddingLeft: 20 }}>
-                {record.permits?.map(p => {
+                {record.permits?.map((p) => {
                   const expiryDate = new Date(p.expiry);
                   // Format date as MM/DD/YYYY
-                  const formattedDate = `${String(expiryDate.getMonth() + 1).padStart(2, '0')}/${String(expiryDate.getDate()).padStart(2, '0')}/${expiryDate.getFullYear()}`;
+                  const formattedDate = `${String(
+                    expiryDate.getMonth() + 1
+                  ).padStart(2, "0")}/${String(expiryDate.getDate()).padStart(
+                    2,
+                    "0"
+                  )}/${expiryDate.getFullYear()}`;
                   return (
                     <li
                       key={`${p.type}-${p.expiry}`}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '4px 0',
-                        justifyContent: 'center',
-                        fontSize: '11px' // Reduced font size
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "4px 0",
+                        justifyContent: "center",
+                        fontSize: "11px", // Reduced font size
                       }}
                     >
                       {editingPermitKey === `${record.sort_key}_${p.type}` ? (
                         <>
-                          <span style={{ minWidth: '70px', textAlign: 'right', marginRight: '5px' }}>{p.type} Code:</span>
+                          <span
+                            style={{
+                              minWidth: "70px",
+                              textAlign: "right",
+                              marginRight: "5px",
+                            }}
+                          >
+                            {p.type} Code:
+                          </span>
                           <Input
                             value={editingPermitCodeValue}
-                            onChange={(e) => setEditingPermitCodeValue(e.target.value)}
+                            onChange={(e) =>
+                              setEditingPermitCodeValue(e.target.value)
+                            }
                             size="small"
-                            style={{ width: '150px', marginRight: '10px' }}
+                            style={{ width: "150px", marginRight: "10px" }}
                             placeholder="Permit Code"
                           />
-                          <span style={{ minWidth: '50px', textAlign: 'right', marginRight: '5px' }}>Expiry:</span>
+                          <span
+                            style={{
+                              minWidth: "50px",
+                              textAlign: "right",
+                              marginRight: "5px",
+                            }}
+                          >
+                            Expiry:
+                          </span>
                           <Input
                             type="date"
                             value={editingPermitDate}
-                            onChange={(e) => setEditingPermitDate(e.target.value)}
+                            onChange={(e) =>
+                              setEditingPermitDate(e.target.value)
+                            }
                             size="small"
-                            style={{ width: '130px', marginRight: '8px' }}
+                            style={{ width: "130px", marginRight: "8px" }}
                           />
                           <Space>
                             <Button
                               type="primary"
                               size="small"
                               onClick={() => handleSavePermit(record, p.type)}
-                              loading={loading && editingPermitKey === `${record.sort_key}_${p.type}`}
+                              loading={
+                                loading &&
+                                editingPermitKey ===
+                                  `${record.sort_key}_${p.type}`
+                              }
                             >
                               Save
                             </Button>
@@ -433,10 +572,16 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
                         </>
                       ) : (
                         <>
-                          <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                              width: "100%",
+                            }}
+                          >
                             <span style={{ flexGrow: 1 }}>
-                              {p.type} {p.code ? `(${p.code})` : ''} - {formattedDate}
+                              {p.type} {p.code ? `(${p.code})` : ""} -{" "}
+                              {formattedDate}
                             </span>
                             <Space>
                               <Button

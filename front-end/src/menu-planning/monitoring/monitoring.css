@@ -1,0 +1,483 @@
+/* General Page Styles */
+.monitoring-page-container {
+  padding: 24px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.monitoring-page-container.theme-light {
+  background-color: #ffffff;
+  border: 1px solid #f0f0f0;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.monitoring-page-container.theme-dark {
+  background-color: #1e1e1e;
+  border: 1px solid #303030;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Dashboard Tiles Container */
+.dashboard-tiles-container {
+  margin-bottom: 24px;
+}
+
+/* Dashboard Tiles Styles */
+.dashboard-tile-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+  height: 100%; /* Make card fill the height of its parent Col */
+  display: flex; /* Use flexbox to manage header and body */
+  flex-direction: column; /* Stack header and body vertically */
+}
+
+.dashboard-tile-card > .ant-card-body {
+  flex-grow: 1; /* Allow the card body to take up remaining vertical space */
+  display: flex; /* Ensure card body itself is a flex container for its content */
+  flex-direction: column; /* Default direction, specific classes can override justify/align */
+}
+
+.dashboard-tile-card .ant-card-head {
+  font-size: 13px;
+  text-align: center;
+}
+
+.dashboard-tile-card-body {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Center content for single stat cards like "Total Industries" */
+  /* height: 100%; is implicitly handled by flex-grow on .ant-card-body and this being its child */
+}
+
+.permit-breakdown-card-body {
+  /* Specific for the Permit Breakdown card if its padding differs */
+  padding: 0;
+  /* height: 100%; is implicitly handled */
+  /* Content will flow naturally; add justify-content if vertical centering of the grid is needed */
+}
+
+.permit-status-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around; /* Distribute space for two stats */
+}
+
+.dashboard-small-stat-card {
+  text-align: center;
+  flex: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  min-height: 70px;
+}
+
+.dashboard-small-stat-card .ant-card-body {
+  padding: 5px !important; /* Increased padding for better spacing in small stat cards */
+}
+
+.dashboard-small-stat-card .ant-statistic-title {
+  font-size: 11px;
+  white-space: normal;
+  margin-top: 10px;
+  line-height: 1.2;
+}
+
+.dashboard-small-stat-card .ant-statistic-content-value {
+  font-size: 16px;
+}
+
+.dashboard-small-stat-card.clickable-card {
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out,
+    border-color 0.2s ease-in-out;
+}
+.dashboard-small-stat-card.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.dashboard-small-stat-card.clickable-card.active-filter {
+  border: 1.5px solid #1890ff; /* Ant Design primary color */
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2); /* Subtle glow */
+}
+.theme-dark .dashboard-small-stat-card.clickable-card.active-filter {
+  border: 1.5px solid #177ddc;
+  box-shadow: 0 0 0 2px rgba(23, 125, 220, 0.25);
+}
+
+/* Specific styles for permit breakdown cards */
+.permit-card-ecc {
+  background-color: #0b5f74;
+  color: white;
+}
+.permit-card-pto {
+  background-color: #643c6a;
+  color: white;
+}
+.permit-card-wwdp {
+  background-color: #b45248;
+  color: white;
+}
+.permit-card-hwg {
+  background-color: #415e20;
+  color: white;
+}
+.permit-card-pco {
+  background-color: #242726;
+  color: white;
+}
+
+.permit-card-ecc .ant-statistic-title,
+.permit-card-ecc .ant-statistic-content-value,
+.permit-card-pto .ant-statistic-title,
+.permit-card-pto .ant-statistic-content-value,
+.permit-card-wwdp .ant-statistic-title,
+.permit-card-wwdp .ant-statistic-content-value,
+.permit-card-hwg .ant-statistic-title,
+.permit-card-hwg .ant-statistic-content-value,
+.permit-card-pco .ant-statistic-title,
+.permit-card-pco .ant-statistic-content-value {
+  color: white;
+}
+
+.dashboard-section-card-body {
+  padding: 3px; /* Reduced padding for Industries by Section card body */
+  /* Removed max-height and overflow-y to allow content to fully expand
+     and remove the scrollbar. The card will grow as needed. */
+}
+
+.dashboard-project-status-card-body {
+  padding: 10px;
+}
+
+.dashboard-statistic-total-industries .ant-statistic-content-value {
+  font-size: 28px;
+  font-weight: 500;
+}
+.dashboard-statistic-permit-status .ant-statistic-content-value {
+  font-size: 20px;
+}
+.dashboard-statistic-permit-status-expired .ant-statistic-content-value {
+  font-size: 20px;
+  color: red;
+}
+.dashboard-statistic-permit-status-ok .ant-statistic-content-value {
+  font-size: 20px;
+  /* Default color will be used */
+}
+
+.loading-stats-container {
+  text-align: center;
+  padding: 50px;
+  min-height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.loading-stats-progress-wrapper {
+  width: 70%;
+}
+
+.failed-stats-message {
+  text-align: center;
+  padding: 50px;
+  color: red;
+}
+.no-data-message {
+  text-align: center;
+  padding: 10px 0;
+}
+.theme-light .no-data-message {
+  color: #888;
+}
+.theme-dark .no-data-message {
+  color: #aaa;
+}
+
+/* Table Controls */
+.table-controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.table-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.table-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.search-results-message {
+  font-size: 0.85em;
+  margin-left: 8px;
+}
+.theme-light .search-results-message {
+  color: rgba(0, 0, 0, 0.65);
+}
+.theme-dark .search-results-message {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Custom Dropdown Wrapper for Column/Freeze Menus */
+.custom-dropdown-wrapper {
+  box-shadow: 0 3px 6px -4px rgba(0, 0, 0, 0.12),
+    0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.theme-light .custom-dropdown-wrapper {
+  background-color: #ffffff;
+}
+.theme-dark .custom-dropdown-wrapper {
+  background-color: #1f1f1f;
+}
+
+.custom-dropdown-footer {
+  padding: 8px;
+  text-align: right;
+}
+
+.custom-dropdown-divider {
+  margin: 0;
+}
+
+/* Table Styles */
+.table-header-center .ant-table-column-title {
+  /* Target title for reliable centering */
+  display: block; /* Ensure it takes full width for text-align to work */
+  text-align: center;
+}
+
+/* Specific Grouped Column Headers */
+.table-header-group-ecc .ant-table-column-title,
+.table-header-group-pto .ant-table-column-title,
+.table-header-group-wwdp .ant-table-column-title,
+.table-header-group-hwg_id .ant-table-column-title,
+.table-header-group-pco .ant-table-column-title {
+  display: block;
+  text-align: center;
+  color: white;
+}
+
+.table-header-group-ecc {
+  background-color: #0b5f74;
+}
+.table-header-group-pto {
+  background-color: #643c6a;
+}
+.table-header-group-wwdp {
+  background-color: #b45248;
+}
+.table-header-group-hwg_id {
+  background-color: #415e20;
+} /* HWG ID */
+.table-header-group-pco {
+  background-color: #242726;
+}
+
+/* Frozen Columns */
+.table-header-frozen .ant-table-column-title {
+  display: block;
+  text-align: center;
+}
+.theme-light .table-header-frozen {
+  background-color: #e6f4ff;
+  color: rgba(0, 0, 0, 0.88);
+}
+.theme-dark .table-header-frozen {
+  background-color: #003a8c;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.theme-light .table-cell-frozen {
+  background-color: #d9eaff;
+}
+.theme-dark .table-cell-frozen {
+  background-color: #00275c;
+}
+
+/* Section & Handler Info Badges */
+.section-handler-badge-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+.section-handler-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-align: center;
+  display: inline-block; /* Default, can be overridden by container */
+}
+.section-handler-badge-combined {
+  /* For the one with handler name and first section */
+  min-width: 140px;
+}
+
+.theme-light .section-handler-empty-text {
+  color: #777;
+}
+.theme-dark .section-handler-empty-text {
+  color: #888;
+}
+
+/* IIS Numbers Column */
+.iis-link-container span {
+  text-align: left;
+  display: block;
+}
+
+/* Technical Conference Link */
+.tc-compliance-link.text-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: default;
+}
+/* .tc-compliance-link.external-link will use default link styles */
+
+/* Menu Styles */
+.column-visibility-menu {
+  max-height: 400px;
+  overflow-y: auto;
+  max-width: 300px;
+  font-size: 11px; /* Applied to Menu component */
+}
+.column-visibility-menu .ant-menu-item,
+.column-visibility-menu .ant-menu-item-group-title {
+  font-size: 11px; /* Ensure child items also get this size if not inheriting */
+}
+.column-visibility-menu-item-indented {
+  padding-left: 35px !important; /* AntD uses !important, so we might need to match */
+}
+.column-visibility-menu-item-default-indent {
+  padding-left: 20px !important;
+}
+.column-visibility-menu .ant-checkbox-wrapper span:last-child {
+  /* Target text next to checkbox */
+  font-size: 11px;
+}
+
+.freeze-column-menu {
+  max-height: 300px;
+  overflow-y: auto;
+  max-width: 275px;
+}
+.freeze-column-menu .ant-checkbox-wrapper {
+  width: 100%; /* Ensure checkbox takes full width for better clickability */
+}
+.freeze-column-menu .ant-menu-item,
+.freeze-column-menu .ant-checkbox-wrapper span:last-child {
+  font-size: 11px;
+}
+
+.table-format-popover-content {
+  width: 200px;
+  padding: 8px;
+}
+.table-format-popover-content p {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.table-format-popover-content .ant-radio-group {
+  margin-bottom: 12px;
+}
+.table-format-popover-content .ant-divider {
+  margin: 12px 0;
+}
+
+/* Utility for text alignment in table cells if AntD's align prop is not enough */
+.text-align-left {
+  text-align: left;
+}
+.text-align-center {
+  text-align: center;
+}
+.text-align-right {
+  text-align: right;
+}
+
+.editable-cell-input .ant-picker,
+.editable-cell-input .ant-select,
+.editable-cell-input .ant-input-number,
+.editable-cell-input.ant-input {
+  /* Target Ant Input directly if not wrapped */
+  width: 100%;
+  margin-top: -1px; /* Adjust these as needed to align perfectly */
+  margin-bottom: -1px;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-radius: 4px; /* Consistent border radius for all editable inputs */
+}
+
+/* Ensure inputs within editable cells don't add extra vertical space via Form.Item if used */
+.editable-cell .ant-form-item {
+  margin-top: -1px; /* Counteract potential Form.Item margins to align with cell */
+  margin-bottom: 0;
+}
+
+/* Ensure disabled TextArea in dark theme has appropriate background */
+.theme-dark .ant-input-disabled,
+.theme-dark .ant-input[disabled],
+.theme-dark textarea.ant-input:disabled {
+  background-color: #262626 !important; /* Ant Design's default dark disabled background */
+  color: rgba(255, 255, 255, 0.3) !important;
+  border-color: #303030;
+}
+
+/* Darker Permit Column Backgrounds */
+.table-header-group-ecc-dark {
+  background-color: #0b5f74 !important; /* Darker Green */
+  color: white !important;
+}
+.table-cell-group-ecc-dark {
+  background-color: rgba(11, 95, 116, 0.1) !important; /* #0b5f74 with 30% opacity */
+  /* color: white !important; */ /* Allow text color to inherit for better contrast */
+}
+
+.table-header-group-pto-dark {
+  background-color: #643c6a !important; /* Darker Orange */
+  color: white !important;
+}
+.table-cell-group-pto-dark {
+  background-color: rgba(100, 60, 106, 0.1) !important; /* #643c6a with 30% opacity */
+  /* color: white !important; */
+}
+
+.table-header-group-wwdp-dark {
+ background-color: #b45248 !important; /* Darker Blue */
+  color: white !important;
+}
+.table-cell-group-wwdp-dark {
+  background-color: rgba(180, 82, 72, 0.1) !important; /* #b45248 with 30% opacity */
+  /* color: white !important; */
+}
+
+.table-header-group-hwg_id-dark {
+  background-color: #415e20 !important; /* Darker Purple */
+  color: white !important;
+}
+.table-cell-group-hwg_id-dark {
+  background-color: rgba(65, 94, 32, 0.1) !important; /* #415e20 with 30% opacity */
+  /* color: white !important; */
+}
+
+.table-header-group-pco-dark {
+  background-color: #242726 !important; /* Darker Teal */
+  color: white !important;
+}
+.table-cell-group-pco-dark {
+  background-color: rgba(36, 39, 38, 0.1) !important; /* #242726 with 30% opacity */
+  /* color: white !important; */
+}
+
+/* Ensure header title text is white for these specific headers */
+.table-header-group-ecc-dark .ant-table-column-title,
+.table-header-group-pto-dark .ant-table-column-title,
+.table-header-group-wwdp-dark .ant-table-column-title,
+.table-header-group-hwg_id-dark .ant-table-column-title,
+.table-header-group-pco-dark .ant-table-column-title {
+  color: white !important;
+}

@@ -29,12 +29,7 @@ const IndustryTypeAutoComplete = ({ value, disabled, onChange }) => {
           width: "100%",
           fontSize: "11px",
         }}
-        dropdownStyle={{
-          boxShadow: "none",
-          backgroundColor: "#f1f1f1",
-        }}
         options={industryTypeOptions}
-        dropdownClassName="custom-autocomplete-dropdown"
         value={value}
         disabled={disabled}
         onChange={onChange}

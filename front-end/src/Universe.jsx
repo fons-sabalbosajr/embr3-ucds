@@ -28,6 +28,11 @@ import Extract from "./menu-extract/ExtractData";
 import Report from "./menu-component/Admin";
 import Posting from "./menu-component/Posting";
 import ESWM from "./menu-eswm/ESWM";
+import SWMPlan from "./menu-eswm/SWMPlan/SWMPlan"; // Added
+import MRF from "./menu-eswm/MRF/MRF"; // Added
+import SLF from "./menu-eswm/SLF/SLF"; // Added
+import ODS from "./menu-eswm/ODS/ODS"; // Added
+import Equipments from "./menu-eswm/Equipments/Equipments"; // Added
 import ActivityLog from "./components/ActivityLog/ActivityLog";
 import Duplicates from "./menu-archive/ArchiveData";
 import Monitoring from "./menu-planning/monitoring/Monitoring";
@@ -418,7 +423,13 @@ const Universe = () => {
                 <Route path="tsd" element={<TSD theme={theme} />} />
                 <Route path="trc" element={<TRC theme={theme} />} />
                 <Route path="mbu" element={<MBU theme={theme} />} />
-                <Route path="eswm-database" element={<ESWM theme={theme} />} />
+                {/* ESWM Database Parent Route - can render a default page or redirect */}
+                <Route path="eswm-database" element={<Navigate to="swm-plan" replace />} />
+                <Route path="eswm-database/swm-plan" element={<SWMPlan theme={theme} />} />
+                <Route path="eswm-database/mrf" element={<MRF theme={theme} />} />
+                <Route path="eswm-database/slf" element={<SLF theme={theme} />} />
+                <Route path="eswm-database/ods" element={<ODS theme={theme} />} />
+                <Route path="eswm-database/equipments" element={<Equipments theme={theme} />} />
                 <Route path="accounts" element={<Accounts theme={theme} />} />
                 <Route path="extract" element={<Extract theme={theme} />} />
                 <Route
