@@ -2,7 +2,7 @@ import React from 'react'
 
 const Validations = () => {
   return (
-    <div>Validations</div>
+    <div>Validations HI</div>
   )
 }
 

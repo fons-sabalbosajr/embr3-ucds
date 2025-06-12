@@ -270,9 +270,6 @@ function buildSortKeyQuery(idString) {
     const parts = idString.split("-");
     const prefix = parts[0];
     const numberPart = parts[1];
-    // Regex to match prefix, hyphen, optional zeros, then the number part. Case-insensitive.
-    // Example: idString "TA-226" should match "TA-00226" in DB.
-    // Regex: /^TA-0*226$/i
     if (prefix && numberPart && /^\d+$/.test(numberPart)) {
       // Ensure numberPart is numeric
       // Construct regex to match prefix, hyphen, any number of zeros (0*), then the numeric part.
@@ -3686,6 +3683,161 @@ app.get("/api/ucds/next-id", async (req, res) => {
   }
 });
 
+// GET endpoint for survey dashboard statistics
+app.get("/api/survey-dashboard-stats/:year", async (req, res) => {
+  try {
+    const { year } = req.params;
+    let surveyMonitoringCollection;
+
+    if (year === "2024") {
+      surveyMonitoringCollection = db.collection("survey-data-2024");
+    } else if (year === "2025") {
+      surveyMonitoringCollection = db.collection("survey-data-2025");
+    } else {
+      return res.status(400).json({ error: "Invalid survey year provided." });
+    }
+
+    if (!surveyMonitoringCollection) {
+      return res.status(500).json({ error: `Survey collection for year ${year} not found or initialized.` });
+    }
+
+    const totalSurveys = await surveyMonitoringCollection.countDocuments({});
+
+    const projectTypeBreakdown = await surveyMonitoringCollection.aggregate([
+      { $match: { project_type: { $exists: true, $ne: null, $ne: "" } } },
+      { $group: { _id: "$project_type", count: { $sum: 1 } } },
+      { $project: { _id: 0, type: "$_id", count: 1 } },
+      { $sort: { count: -1 } }
+    ]).toArray();
+
+    const provinceBreakdown = await surveyMonitoringCollection.aggregate([
+      { $match: { province: { $exists: true, $ne: null, $ne: "" } } },
+      { $group: { _id: "$province", count: { $sum: 1 } } },
+      { $project: { _id: 0, province: "$_id", count: 1 } },
+      { $sort: { count: -1 } }
+    ]).toArray();
+
+    const eiaSurveyCount = await surveyMonitoringCollection.countDocuments({ survey_eia: true });
+    const mbuAreaSurveyCount = await surveyMonitoringCollection.countDocuments({ mbu_area: true });
+    // Example: Count for "Completed" status_survey
+    // const completedSurveyCount = await surveyMonitoringCollection.countDocuments({ status_survey: "Completed" });
+
+
+    res.status(200).json({
+      totalSurveys,
+      projectTypeBreakdown,
+      provinceBreakdown,
+      eiaSurveyCount,
+      mbuAreaSurveyCount,
+      // completedSurveyCount, // Add other stats as needed
+    });
+
+  } catch (error) {
+    console.error("Error fetching survey dashboard stats:", error);
+    res.status(500).json({
+      error: "Failed to fetch survey dashboard statistics.",
+      details: error.message
+    });
+  }
+});
+
+// GET endpoint for survey monitoring data (e.g., from survey-data-2025)
+app.get("/api/surveys-monitoring-data/:year", async (req, res) => {
+  try {
+    const { year } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 20;
+    const skip = (page - 1) * pageSize;
+
+    let surveyMonitoringCollection;
+    if (year === "2024") {
+      surveyMonitoringCollection = db.collection("survey-data-2024");
+    } else if (year === "2025") {
+      surveyMonitoringCollection = db.collection("survey-data-2025");
+    } else {
+      return res.status(400).json({ error: "Invalid survey year provided." });
+    }
+
+    if (!surveyMonitoringCollection) {
+      return res.status(500).json({ error: `Survey collection for year ${year} not found or initialized.` });
+    }
+
+    const mongoQuery = {};
+    let queryConditions = [];
+
+    // Define fields for global search in survey data
+    const surveyGlobalSearchFields = [
+      "id_no",
+      "project_title", // Assuming this field exists
+      "name", // If company name is stored in 'name'
+      "industry_class",
+      "address",
+      "province",
+      "city",
+      "brgy",
+      // Add other relevant survey fields for global search
+    ];
+
+    if (req.query.search) {
+      const searchTermTrimmed = String(req.query.search).trim();
+      if (searchTermTrimmed) {
+        const orConditions = surveyGlobalSearchFields.map((sField) => ({
+          [sField]: { $regex: searchTermTrimmed, $options: "i" },
+        }));
+        if (orConditions.length > 0) {
+          queryConditions.push({ $or: orConditions });
+        }
+      }
+    }
+
+    // Handle top-level province filter
+    if (req.query.province && typeof req.query.province === 'string' && req.query.province.trim() !== "" && req.query.province.trim().toLowerCase() !== "all provinces") {
+      queryConditions.push({ province: { $regex: `^${req.query.province.trim()}$`, $options: "i" } });
+    }
+    
+    // Handle survey status filter (example)
+    if (req.query.status && typeof req.query.status === 'string' && req.query.status.trim() !== "") {
+        queryConditions.push({ status_survey: { $regex: `^${req.query.status.trim()}$`, $options: "i" } }); // Assuming 'status_survey' field
+    }
+
+    // Handle Column-Specific Filters (all as text search for simplicity)
+    // Client should send filter key matching dataIndex of the column
+    const surveyColumnFilterableFields = [ // Match these with baseColumns dataIndex in monitoring_survey.jsx
+        'id_no', 'project_title', 'industry_class', 'address', 'province', 
+        'city', 'brgy', 'lat', 'long', 'date_surveyed', 'status_survey', 'remarks_survey'
+    ];
+
+    surveyColumnFilterableFields.forEach(field => {
+      if (req.query[field] && req.query[field].length > 0 && !['search', 'page', 'pageSize', 'province', 'status'].includes(field)) {
+        const filterValue = Array.isArray(req.query[field]) ? String(req.query[field][0]).trim() : String(req.query[field]).trim();
+        if (filterValue) {
+          queryConditions.push({ [field]: { $regex: filterValue, $options: "i" } });
+        }
+      }
+    });
+
+
+    if (queryConditions.length > 0) {
+      mongoQuery.$and = queryConditions;
+    }
+
+    const total = await surveyMonitoringCollection.countDocuments(mongoQuery);
+    // Basic sort by id_no, assuming it's a numeric or sortable string. Adjust if needed.
+    const surveys = await surveyMonitoringCollection
+      .find(mongoQuery)
+      .sort({ id_no: 1 }) // Or any other relevant sort key for surveys
+      .skip(skip)
+      .limit(pageSize)
+      .toArray();
+
+    res.status(200).json({ data: surveys, total });
+  } catch (error) {
+    console.error("Error fetching survey monitoring data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+
 // Search by name
 app.get("/api/ucds/search-name", async (req, res) => {
   const query = req.query.query;
@@ -5335,6 +5487,47 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
     res
       .status(500)
       .json({ error: "Failed to update data. Please try again later." });
+  }
+});
+
+// PUT endpoint to update survey monitoring data
+app.put("/api/surveys-monitoring-data/:year/:id", async (req, res) => {
+  try {
+    const { year, id } = req.params; // id is expected to be MongoDB _id string
+    const newData = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid survey record ID format." });
+    }
+
+    let surveyMonitoringCollection;
+    if (year === "2024") {
+      surveyMonitoringCollection = db.collection("survey-data-2024");
+    } else if (year === "2025") {
+      surveyMonitoringCollection = db.collection("survey-data-2025");
+    } else {
+      return res.status(400).json({ error: "Invalid survey year provided." });
+    }
+
+     if (!surveyMonitoringCollection) {
+      return res.status(500).json({ error: `Survey collection for year ${year} not found or initialized.` });
+    }
+
+    // Exclude _id from $set payload if it's present in newData
+    const { _id, ...updatePayload } = newData;
+
+    const result = await surveyMonitoringCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updatePayload }
+    );
+
+    if (result.matchedCount === 0) return res.status(404).json({ error: "Survey record not found." });
+    if (result.modifiedCount === 0) return res.status(200).json({ message: "No changes made to the survey record." });
+
+    res.status(200).json({ message: "Survey record updated successfully." });
+  } catch (error) {
+    console.error("Error updating survey monitoring data:", error);
+    res.status(500).json({ error: "Failed to update survey record." });
   }
 });
 
