@@ -550,51 +550,61 @@ const NotificationsPopover = ({
   return (
     <>
       <Popover
-        content={popoverContent}
-        trigger="click"
-        placement="bottomRight"
-        // styles={{ body: { width: "350px" } }} // width is now controlled by Tabs
+        content={popoverContent} // The content of the popover
+        trigger="click" // Trigger action
+        placement="bottomRight" // Placement of the popover
       >
-        <Badge
-          count={
-            isLoading || isProcessingNotifications || isProcessingWarnings ? ( // Reflect all loading states
-              <LoadingOutlined
+        <span> {/* Wrap Badge with a span to resolve findDOMNode warning */}
+          <Badge
+            count={
+              isLoading || isProcessingNotifications || isProcessingWarnings ? ( // Reflect all loading states
+                <LoadingOutlined
+                  style={{
+                    fontSize: "8px",
+                    color: "white",
+                    backgroundColor: "green",
+                    borderRadius: "50%",
+                    padding: "5px",
+                  }}
+                />
+              ) : (
+                groupedKeys.length + processedComputedWarnings.length // Use processed data for count
+              )
+            }
+            offset={[1, 0]}
+            size="small"
+            style={{
+              marginRight: "15px",
+              fontSize: "8px",
+              padding: "1px",
+              backgroundColor: isLoading || isProcessingNotifications || isProcessingWarnings // Reflect all for background
+                ? theme === "dark"
+                  ? "#444444"
+                  : "#d9d9d9"
+                : groupedKeys.length + // Use processed data for color logic
+                    processedComputedWarnings.length >
+                  0
+                ? "green"
+                : "#d9d9d9",
+            }}
+          >
+            {/* Explicitly wrap BellOutlined in a span.
+                While AntD icons usually forward refs, this ensures Badge's direct child
+                is a DOM element, which can help prevent findDOMNode warnings if Badge
+                is the source. */}
+            <span>
+              <BellOutlined
+                className={`notification-icon ${
+                  theme === "dark" ? "dark-theme" : "light-theme"
+                }`}
                 style={{
-                  fontSize: "8px",
-                  color: "white",
-                  backgroundColor: "green",
-                  borderRadius: "50%",
-                  padding: "5px",
+                  color: theme === "dark" ? "#e0e0e0" : "#333333",
+                  backgroundColor: "transparent",
                 }}
               />
-            ) : (
-              groupedKeys.length + processedComputedWarnings.length // Use processed data for count
-            )
-          }
-          offset={[1, 0]}
-          size="small"
-          style={{
-            marginRight: "15px",
-            fontSize: "8px",
-            padding: "1px",
-            backgroundColor: isLoading || isProcessingNotifications || isProcessingWarnings // Reflect all for background
-              ? theme === "dark"
-                ? "#444444"
-                : "#d9d9d9"
-              : groupedKeys.length + // Use processed data for color logic
-                  processedComputedWarnings.length >
-                0
-              ? "green"
-              : "#d9d9d9",
-          }}
-        >
-          <BellOutlined
-            className={`notification-icon ${
-              theme === "dark" ? "dark-theme" : "light-theme"
-            }`}
-            style={{ color: theme === "dark" ? "#e0e0e0" : "#333333" }}
-          />
-        </Badge>
+            </span>
+          </Badge>
+        </span>
       </Popover>
 
       <Modal

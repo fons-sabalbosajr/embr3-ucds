@@ -18,7 +18,7 @@ const ActivityLog = ({ theme }) => {
     // Fetch logs from the API
     const fetchLogs = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/api/logs");
+        const response = await axios.get("http://10.14.77.100:8081/api/logs");
         //console.log("Fetched logs:", response.data); // Log the fetched data
         setLogs(response.data);
         setFilteredLogs(response.data);

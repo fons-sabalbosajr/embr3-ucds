@@ -77,7 +77,7 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
         .join(",");
 
       const res = await fetch(
-        `http://localhost:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}&prefixes=${prefixQuery}&searchText=${debouncedSearchText}&filterEstablishmentsByExpiryStatus=${alwaysFilterByExpiryOnServer}&permitTypesFilter=${typesForApiQuery}`
+        `http://10.14.77.100:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}&prefixes=${prefixQuery}&searchText=${debouncedSearchText}&filterEstablishmentsByExpiryStatus=${alwaysFilterByExpiryOnServer}&permitTypesFilter=${typesForApiQuery}`
       );
       if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
 
@@ -214,7 +214,7 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8081/api/permits-summary/update-expiry`,
+        `http://10.14.77.100:8081/api/permits-summary/update-expiry`,
         {
           method: "PUT",
           headers: {

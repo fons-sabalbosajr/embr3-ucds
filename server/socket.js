@@ -1,4 +1,4 @@
-const { Server } = require("socket.io");
+const { Server } = require('socket.io');
 
 // In-memory store for online users per province
 let provinceViewers = {}; // Changed to let if you plan to reassign; if not, const is fine.
@@ -47,10 +47,10 @@ function createViewerManager(viewersArray, viewersEventName, socketUserKey, logP
   return { join, leave };
 }
 
-function setupSocket(server) {
+function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a parameter
   const io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173", // Adjust as needed
+      origin: allowedOrigins, // Use the passed allowedOrigins array
       credentials: true,
     },
   });
@@ -143,4 +143,4 @@ function setupSocket(server) {
   });
 }
 
-module.exports = setupSocket;
+module.exports = { setupSocket }; // Export setupSocket

@@ -51,7 +51,7 @@ const ProvinceModal = ({
       const fetchData = async () => {
         try {
           const response = await axios.get(
-            `http://localhost:8081/api/ucds-data/${record.sort_key}` // Use sort_key in the URL
+            `http://10.14.77.100:8081/api/ucds-data/${record.sort_key}` // Use sort_key in the URL
           );
           setEditedRecord(response.data);
         } catch (error) {
@@ -105,7 +105,7 @@ const ProvinceModal = ({
     try {
       const ecc_cnc = record.ecc_cnc;
       const response = await axios.get(
-        `http://localhost:8081/api/ucds-log?ecc_cnc=${ecc_cnc}`
+        `http://10.14.77.100:8081/api/ucds-log?ecc_cnc=${ecc_cnc}`
       );
       const existingLogs = response.data;
 
@@ -141,7 +141,7 @@ const ProvinceModal = ({
 
     try {
       // Fetch all logs to determine the next transaction number
-      const response = await axios.get("http://localhost:8081/api/ucds-log");
+      const response = await axios.get("http://10.14.77.100:8081/api/ucds-log");
       const transactions = response.data;
 
       const existingLog = transactions.find(
@@ -183,7 +183,7 @@ const ProvinceModal = ({
       };
 
       // Save the log to ucds-log (POST)
-      await axios.post("http://localhost:8081/api/ucds-log", logData);
+      await axios.post("http://10.14.77.100:8081/api/ucds-log", logData);
     } catch (error) {
       console.error("Error logging initial data:", error);
     } finally {
@@ -239,7 +239,7 @@ const ProvinceModal = ({
           }
 
           const response = await axios.put(
-            `http://localhost:8081/api/update-data/${fullSortKey}`,
+            `http://10.14.77.100:8081/api/update-data/${fullSortKey}`,
             updatedRecord
           );
 

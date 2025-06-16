@@ -32,7 +32,7 @@ const HomeResetPassword = () => {
 
     try {
       setLoading(true);
-      const response = await axios.post('http://localhost:8081/reset-password', {
+      const response = await axios.post('http://10.14.77.100:8081/reset-password', {
         token,
         newPassword
       });

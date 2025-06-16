@@ -68,7 +68,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://localhost:8081/api/healthcare", {
+        const response = await fetch("http://10.14.77.100:8081/api/healthcare", {
           method: "GET",
           credentials: "include",
         });
@@ -129,7 +129,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://localhost:8081/api/healthcare", {
+        const response = await fetch("http://10.14.77.100:8081/api/healthcare", {
           method: "GET",
           credentials: "include",
         });
@@ -162,7 +162,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://localhost:8081", { withCredentials: true });
+      socketRef.current = io("http://10.14.77.100:8081", { withCredentials: true });
     }
     const socket = socketRef.current;
 
@@ -210,7 +210,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const handleReload = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8081/api/healthcare", {
+      const response = await fetch("http://10.14.77.100:8081/api/healthcare", {
         method: "GET",
         credentials: "include",
       });

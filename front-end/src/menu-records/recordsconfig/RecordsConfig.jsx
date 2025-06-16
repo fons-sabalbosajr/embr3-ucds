@@ -109,7 +109,7 @@ const RecordsConfig = ({ theme = "light" }) => {
     setLoading(true);
     // console.log("Fetching data for page:", page, "pageSize:", pageSize, "search:", search);
     try {
-      const res = await axios.get("http://localhost:8081/api/ucds-data", {
+      const res = await axios.get("http://10.14.77.100:8081/api/ucds-data", {
         params: {
           page,
           pageSize,
@@ -152,7 +152,7 @@ const RecordsConfig = ({ theme = "light" }) => {
 
   useEffect(() => {
     // In a real app, fetch this from an API endpoint:
-    // e.g., axios.get("http://localhost:8081/api/distinct-provinces")
+    // e.g., axios.get("http://10.14.77.100:8081/api/distinct-provinces")
     // For demonstration, using a static list. This list should match the
     // possible values in your data's 'province' field.
     const staticProvincesList = [

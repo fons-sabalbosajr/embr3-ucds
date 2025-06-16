@@ -12,7 +12,7 @@ const ProjectTitle = ({ isEditing }) => {
       try {
         const year = "2025"; // Always use year 2025 for search titles
         const response = await fetch(
-          `http://localhost:8081/api/surveys/search-title?query=${value}&year=${year}`
+          `http://10.14.77.100:8081/api/surveys/search-title?query=${value}&year=${year}`
         );
 
         const data = await response.json();

@@ -27,7 +27,7 @@ const DuplicateNotif = ({
     const fetchRecord = async (id_no) => {
       try {
         const response = await fetch(
-          `http://localhost:8081/api/ucds-data/${id_no}`
+          `http://10.14.77.100:8081/api/ucds-data/${id_no}`
         );
 
         if (response.ok) {
@@ -277,7 +277,7 @@ const DuplicateNotif = ({
       }
 
       const response = await fetch(
-        "http://localhost:8081/api/ucds/update-duplicates",
+        "http://10.14.77.100:8081/api/ucds/update-duplicates",
         {
           method: "POST",
           headers: {
@@ -315,7 +315,7 @@ const DuplicateNotif = ({
     try {
       //console.log(`Archiving record with id_no: ${id_no}`);
 
-      const response = await fetch("http://localhost:8081/api/archive-data", {
+      const response = await fetch("http://10.14.77.100:8081/api/archive-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_no }),

@@ -50,7 +50,7 @@ const Posting = () => {
   useEffect(() => {
     // Fetch senders from user collection API
     const fetchSenders = async () => {
-      const response = await axios.get("http://localhost:8081/api/users"); // Replace with your API endpoint
+      const response = await axios.get("http://10.14.77.100:8081/api/users"); // Replace with your API endpoint
       const sendersData = response.data;
       setSenders(sendersData);
     };
@@ -61,7 +61,7 @@ const Posting = () => {
 
   const fetchAnnouncements = async () => {
     try {
-      const response = await axios.get("http://localhost:8081/api/postings");
+      const response = await axios.get("http://10.14.77.100:8081/api/postings");
       const announcementsData = response.data;
       setAnnouncements(announcementsData);
     } catch (error) {
@@ -72,7 +72,7 @@ const Posting = () => {
   const handleStatusChange = async (id, status) => {
     console.log("Updating status for ID:", id); // Debugging log
     try {
-      const response = await fetch(`http://localhost:8081/api/postings/${id}`, {
+      const response = await fetch(`http://10.14.77.100:8081/api/postings/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -137,7 +137,7 @@ const Posting = () => {
 
   const handleFormSubmit = async (values) => {
     try {
-      const response = await fetch("http://localhost:8081/api/posting", {
+      const response = await fetch("http://10.14.77.100:8081/api/posting", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -194,7 +194,7 @@ const Posting = () => {
   const handleEditSubmit = async (values) => {
     try {
       const response = await fetch(
-        `http://localhost:8081/api/postings/${selectedPosting._id}`,
+        `http://10.14.77.100:8081/api/postings/${selectedPosting._id}`,
         {
           method: "PUT",
           headers: {
@@ -239,7 +239,7 @@ const Posting = () => {
 
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`http://localhost:8081/api/postings/${id}`, {
+      const response = await fetch(`http://10.14.77.100:8081/api/postings/${id}`, {
         method: "DELETE",
         credentials: "include", // Include credentials
       });

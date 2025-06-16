@@ -50,7 +50,7 @@ const Register = () => {
 
     try {
       const response = await axios.post(
-        "http://localhost:8081/register",
+        "http://10.14.77.100:8081/register",
         {
           name: values.name,
           division: values.division,

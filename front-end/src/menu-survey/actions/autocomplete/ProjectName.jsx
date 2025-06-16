@@ -11,7 +11,7 @@ const ProjectName = ({ isEditing }) => {
       setLoading(true);
       try {
         const response = await fetch(
-          `http://localhost:8081/api/surveys/search-name?query=${value}`
+          `http://10.14.77.100:8081/api/surveys/search-name?query=${value}`
         );
         const data = await response.json();
         const uniqueNames = data

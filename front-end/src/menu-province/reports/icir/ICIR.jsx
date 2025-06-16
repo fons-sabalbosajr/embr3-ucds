@@ -148,7 +148,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   useEffect(() => {
     const encodedIdNo = encodeURIComponent(editedRecord.id_no);
     axios
-      .get(`http://localhost:8081/api/ucds-data/${encodedIdNo}`)
+      .get(`http://10.14.77.100:8081/api/ucds-data/${encodedIdNo}`)
       .then((response) => {
         setUcdsData(response.data);
       })
@@ -267,12 +267,12 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       // Log Request URL to see if it aligns
       console.log(
         "Request URL:",
-        `http://localhost:8081/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`
+        `http://10.14.77.100:8081/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`
       );
   
       // Call the API to generate PDF
       const response = await axios.get(
-        `http://localhost:8081/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`,
+        `http://10.14.77.100:8081/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`,
         {
           params: selectedFields, // Sending selected fields as query parameters
           responseType: "arraybuffer", // Expecting PDF as an array buffer
@@ -330,7 +330,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       document.body.style.cursor = "wait";
 
       // Fetch current user with credentials using /check-auth
-      const userResponse = await axios.get("http://localhost:8081/check-auth", {
+      const userResponse = await axios.get("http://10.14.77.100:8081/check-auth", {
         withCredentials: true,
         headers: {
           Accept: "application/json",
@@ -376,7 +376,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
 
       // Call the API to generate PDF
       response = await axios.get(
-        `http://localhost:8081/generate-custom-icir/${editedRecord.id_no}`,
+        `http://10.14.77.100:8081/generate-custom-icir/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -406,7 +406,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       formData.append("pdfFile", blob, fileName); // Attach file with filename
 
       // Save draft report to MongoDB
-      await axios.post("http://localhost:8081/save-draft-report", formData);
+      await axios.post("http://10.14.77.100:8081/save-draft-report", formData);
 
       Modal.success({
         title: "Success",

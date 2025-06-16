@@ -12,7 +12,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         const fetchUserData = async () => {
             try {
                 const response = await fetch(
-                    `http://localhost:8081/api/users?username=${userHandle}`
+                    `http://10.14.77.100:8081/api/users?username=${userHandle}`
                 );
                 if (!response.ok) {
                     throw new Error("User not found");
@@ -61,7 +61,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         <div style={{ display: "flex", alignItems: "center" }}>
             {typeof avatar === 'string' ? (
                 <Avatar
-                    src={`http://localhost:8081${avatar}`}
+                    src={`http://10.14.77.100:8081${avatar}`}
                     alt="Profile Picture"
                     style={{ width: size, height: size }}
                 />

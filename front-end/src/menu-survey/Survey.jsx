@@ -102,7 +102,7 @@ const Survey = ({ theme, currentUser }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://localhost:8081", {
+      socketRef.current = io("http://10.14.77.100:8081", {
         withCredentials: true,
       });
     }
@@ -168,7 +168,7 @@ const Survey = ({ theme, currentUser }) => {
       }, 200);
 
       const response = await fetch(
-        `http://localhost:8081/api/surveys/${year}`,
+        `http://10.14.77.100:8081/api/surveys/${year}`,
         {
           method: "GET",
           credentials: "include",
@@ -594,7 +594,7 @@ const Survey = ({ theme, currentUser }) => {
     setLoading(true);
     try {
       const promises = ids.map((id) => {
-        return fetch(`http://localhost:8081/api/surveys/${id}`, {
+        return fetch(`http://10.14.77.100:8081/api/surveys/${id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -764,7 +764,7 @@ const Survey = ({ theme, currentUser }) => {
       }
 
       const response = await axios.put(
-        `http://localhost:8081/api/survey/${record.id_no}`,
+        `http://10.14.77.100:8081/api/survey/${record.id_no}`,
         payload
       );
 

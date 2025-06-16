@@ -1,0 +1,353 @@
+/* General Page Styles */
+.swmplan-page-container { /* Renamed from .monitoring-page-container */
+  padding: 24px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.swmplan-page-container.theme-light {
+  background-color: #ffffff;
+  border: 1px solid #f0f0f0;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.swmplan-page-container.theme-dark {
+  background-color: #1e1e1e;
+  border: 1px solid #303030;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Dashboard Tiles Container */
+.dashboard-tiles-container {
+  margin-bottom: 24px;
+}
+
+/* Dashboard Tiles Styles */
+.dashboard-tile-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+  height: 100%; 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.dashboard-tile-card > .ant-card-body {
+  flex-grow: 1; 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.dashboard-tile-card .ant-card-head {
+  font-size: 13px;
+  text-align: center;
+}
+
+.dashboard-tile-card-body { /* This class might not be used if content is directly in ant-card-body */
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; 
+}
+
+/* Styles for the small stat cards used within larger dashboard cards */
+.dashboard-small-stat-card {
+  text-align: center;
+  flex: 1; /* Allow it to grow if needed within a flex row/col */
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  min-height: 70px; /* Ensure a minimum height */
+}
+
+.dashboard-small-stat-card .ant-card-body {
+  padding: 5px !important; 
+}
+
+.dashboard-small-stat-card .ant-statistic-title {
+  font-size: 11px;
+  white-space: normal; /* Allow title to wrap */
+  margin-top: 10px; /* Adjust as needed */
+  line-height: 1.2;
+}
+
+.dashboard-small-stat-card .ant-statistic-content-value {
+  font-size: 16px; /* Adjust as needed */
+}
+
+.dashboard-small-stat-card.clickable-card {
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+.dashboard-small-stat-card.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.dashboard-small-stat-card.clickable-card.active-filter {
+  border: 1.5px solid #1890ff; 
+  box-shadow: 0 0 0 2px rgba(24,144,255,0.2); 
+}
+.theme-dark .dashboard-small-stat-card.clickable-card.active-filter {
+  border: 1.5px solid #177ddc;
+  box-shadow: 0 0 0 2px rgba(23,125,220,0.25);
+}
+
+/* SWM Plan specific card styles (if any, e.g., for status colors) */
+/* Example:
+.swm-plan-status-approved { background-color: #4CAF50; color: white; }
+.swm-plan-status-approved .ant-statistic-title,
+.swm-plan-status-approved .ant-statistic-content-value { color: white; }
+*/
+
+.dashboard-section-card-body { /* If you have a section for LGUs or similar */
+  padding: 3px;
+}
+
+.dashboard-project-status-card-body { /* If you use a similar layout for plan statuses */
+  padding: 10px;
+}
+
+
+.loading-stats-container {
+  text-align: center;
+  padding: 50px;
+  min-height: 200px; /* Ensure it takes some space while loading */
+  display: flex;
+  flex-direction: column; /* Stack progress bar and text */
+  justify-content: center;
+  align-items: center;
+}
+.loading-stats-container .ant-progress {
+  width: 70%; /* Control width of progress bar */
+  margin-bottom: 10px;
+}
+
+.failed-stats-message {
+  text-align: center;
+  padding: 50px;
+  color: red;
+}
+.no-data-message {
+  text-align: center;
+  padding: 10px 0;
+}
+.theme-light .no-data-message {
+  color: #888;
+}
+.theme-dark .no-data-message {
+  color: #aaa;
+}
+
+/* Table Controls */
+.table-controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; /* Align items vertically */
+  margin-bottom: 16px;
+}
+.table-controls-left {
+  display: flex;
+  align-items: flex-start; /* Align search and dropdown to top */
+  gap: 10px;
+}
+.table-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 5px; /* Space between buttons */
+}
+
+.search-results-message {
+  font-size: 0.85em;
+  margin-left: 8px; /* Space from the filter tags */
+}
+.theme-light .search-results-message {
+  color: rgba(0, 0, 0, 0.65);
+}
+.theme-dark .search-results-message {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Custom Dropdown Wrapper for Column/Freeze Menus */
+.custom-dropdown-wrapper {
+  box-shadow: 0 3px 6px -4px rgba(0,0,0,0.12), 0 6px 16px 0 rgba(0,0,0,0.08), 0 9px 28px 8px rgba(0,0,0,0.05);
+  border-radius: 4px;
+}
+.theme-light .custom-dropdown-wrapper {
+  background-color: #ffffff;
+}
+.theme-dark .custom-dropdown-wrapper {
+  background-color: #1f1f1f; /* Dark background for dropdown content */
+}
+
+.custom-dropdown-footer {
+  padding: 8px;
+  text-align: right;
+}
+
+.custom-dropdown-divider {
+  margin: 0; /* Remove default margins */
+}
+
+/* Table Styles */
+.table-header-center .ant-table-column-title {
+  display: block; 
+  text-align: center;
+}
+
+/* Specific Grouped Column Headers (if you adapt this concept for SWM Plans) */
+/* Example:
+.table-header-group-swm-status .ant-table-column-title { color: white; }
+.table-header-group-swm-status { background-color: #2196F3; }
+*/
+
+/* Frozen Columns */
+.table-header-frozen .ant-table-column-title {
+  display: block;
+  text-align: center;
+}
+.theme-light .table-header-frozen {
+  background-color: #e6f4ff; /* Light blue for frozen header */
+  color: rgba(0,0,0,0.88);
+}
+.theme-dark .table-header-frozen {
+  background-color: #003a8c; /* Darker blue for frozen header in dark theme */
+  color: rgba(255,255,255,0.85);
+}
+
+.theme-light .table-cell-frozen {
+  background-color: #f0f8ff; /* Slightly lighter blue for frozen cells */
+}
+.theme-dark .table-cell-frozen {
+  background-color: #00275c; /* Darker blue for frozen cells in dark theme */
+}
+
+
+/* Menu Styles for Column Visibility and Freeze */
+.column-visibility-menu {
+  max-height: 400px;
+  overflow-y: auto;
+  max-width: 300px; /* Adjust as needed */
+  font-size: 11px; 
+}
+.column-visibility-menu .ant-menu-item,
+.column-visibility-menu .ant-menu-item-group-title {
+  font-size: 11px; 
+}
+.column-visibility-menu-item-indented {
+  padding-left: 35px !important; 
+}
+.column-visibility-menu-item-default-indent {
+  padding-left: 20px !important; /* Default AntD indent for non-grouped items */
+}
+.column-visibility-menu .ant-checkbox-wrapper span:last-child { /* Text next to checkbox */
+  font-size: 11px;
+}
+
+.freeze-column-menu {
+  max-height: 300px;
+  overflow-y: auto;
+  max-width: 275px; /* Adjust as needed */
+}
+.freeze-column-menu .ant-checkbox-wrapper {
+  width: 100%; /* Make checkbox label clickable across width */
+}
+.freeze-column-menu .ant-menu-item,
+.freeze-column-menu .ant-checkbox-wrapper span:last-child { /* Text next to checkbox */
+  font-size: 11px;
+}
+
+.table-format-popover-content {
+  width: 200px;
+  padding: 8px;
+}
+.table-format-popover-content p {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.table-format-popover-content .ant-radio-group {
+  margin-bottom: 12px;
+}
+.table-format-popover-content .ant-divider {
+  margin: 12px 0;
+}
+
+/* Utility for text alignment in table cells if AntD's align prop is not enough */
+.text-align-left { text-align: left; }
+.text-align-center { text-align: center; }
+.text-align-right { text-align: right; }
+
+/* Editable Cell Inputs */
+.editable-cell-input .ant-picker,
+.editable-cell-input .ant-select,
+.editable-cell-input .ant-input-number,
+.editable-cell-input.ant-input { /* Target Ant Input directly if not wrapped */
+  width: 100%;
+  margin-top: -1px; /* Fine-tune alignment */
+  margin-bottom: -1px;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-radius: 4px; 
+}
+
+/* Ensure inputs within editable cells don't add extra vertical space via Form.Item if used */
+.editable-cell .ant-form-item {
+  margin-top: -1px; 
+  margin-bottom: 0;
+}
+
+/* Ensure disabled TextArea in dark theme has appropriate background */
+.theme-dark .ant-input-disabled,
+.theme-dark .ant-input[disabled],
+.theme-dark textarea.ant-input:disabled {
+  background-color: #262626 !important; 
+  color: rgba(255,255,255,0.3) !important;
+  border-color: #303030;
+}
+
+/* Darker Column Backgrounds for specific groups (if you use them) */
+/* Example:
+.table-header-group-swm-status-dark { background-color: #1565C0 !important; color: white !important; }
+.table-cell-group-swm-status-dark { background-color: rgba(21, 101, 192, 0.1) !important; }
+.table-header-group-swm-status-dark .ant-table-column-title { color: white !important; }
+*/
+
+/* Pagination styling */
+.ant-pagination {
+    margin-left: 8px; /* Add some space from the last button */
+}
+
+.ant-pagination.ant-pagination-simple .ant-pagination-simple-pager input {
+    margin: 0 4px; /* Adjust spacing around the pager input */
+    padding: 0 4px; /* Adjust padding inside the pager input */
+    height: 22px; /* Match button height */
+    font-size: 12px;
+}
+
+.ant-pagination.ant-pagination-simple .ant-pagination-prev .ant-pagination-item-link,
+.ant-pagination.ant-pagination-simple .ant-pagination-next .ant-pagination-item-link {
+    height: 22px; /* Match button height */
+    line-height: 22px;
+    font-size: 12px;
+}
+
+.ant-pagination-options {
+    margin-left: 8px; /* Space before page size changer */
+}
+
+.ant-pagination-options .ant-select-selector {
+    height: 22px !important; /* Match button height */
+    padding: 0 8px !important;
+    font-size: 12px;
+}
+.ant-pagination-options .ant-select-arrow {
+    font-size: 10px; /* Smaller arrow */
+}
+
+.ant-pagination-options .ant-select-selection-item {
+    line-height: 20px !important; /* Align text vertically */
+    font-size: 12px;
+}
+
+/* Ensure table controls right buttons are vertically aligned */
+.table-controls-right .ant-btn,
+.table-controls-right .ant-dropdown-trigger,
+.table-controls-right .ant-pagination {
+    vertical-align: middle;
+}

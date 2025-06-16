@@ -35,7 +35,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
   const fetchPassword = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:8081/api/generate-password"
+        "http://10.14.77.100:8081/api/generate-password"
       );
       const { password } = response.data;
       setGeneratePassword(password);
@@ -106,7 +106,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
   
         // Step 1: Add user to 'users' collection
         const userResponse = await axios.post(
-          "http://localhost:8081/api/newusers",
+          "http://10.14.77.100:8081/api/newusers",
           formData,
           {
             headers: {

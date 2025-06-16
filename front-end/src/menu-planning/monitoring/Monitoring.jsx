@@ -126,7 +126,7 @@ const DashboardTiles = ({
       setLoadingStats(true);
       try {
         const response = await axios.get(
-          "http://localhost:8081/api/ucds/dashboard-stats" // No params for initial full load
+          "http://10.14.77.100:8081/api/ucds/dashboard-stats" // No params for initial full load
         );
         setStats(response.data);
         setInitialStats(response.data); // Save the full initial stats
@@ -161,7 +161,7 @@ const DashboardTiles = ({
         } else {
           // Fetch stats again, filtered by permitTypeKey
           const response = await axios.get(
-            "http://localhost:8081/api/ucds/dashboard-stats",
+            "http://10.14.77.100:8081/api/ucds/dashboard-stats",
             {
               params: { permitTypeFilterKey: selectedPermitTypeKey },
             }
@@ -210,7 +210,7 @@ const DashboardTiles = ({
         setSelectedPermitExpiryDetails(null);
         try {
           const response = await axios.get(
-            "http://localhost:8081/api/ucds/ecc-cnc-subtypes-breakdown"
+            "http://10.14.77.100:8081/api/ucds/ecc-cnc-subtypes-breakdown"
           );
           setDetailedEccCncSubtypeCounts(response.data);
         } catch (error) {
@@ -229,7 +229,7 @@ const DashboardTiles = ({
         setDetailedEccCncSubtypeCounts(null);
         try {
           const response = await axios.get(
-            `http://localhost:8081/api/ucds/permit-expiry-breakdown/${selectedPermitTypeKey}`
+            `http://10.14.77.100:8081/api/ucds/permit-expiry-breakdown/${selectedPermitTypeKey}`
           );
           setSelectedPermitExpiryDetails(response.data);
         } catch (error) {
@@ -1149,7 +1149,7 @@ const Monitoring = ({ theme = "light" }) => {
     setLoading(true);
     // console.log("Fetching data for page:", page, "pageSize:", pageSize, "search:", search);
     try {
-      const res = await axios.get("http://localhost:8081/api/ucds-data", {
+      const res = await axios.get("http://10.14.77.100:8081/api/ucds-data", {
         params: {
           page,
           pageSize,
@@ -2525,7 +2525,7 @@ const Monitoring = ({ theme = "light" }) => {
       for (const update of updatesToApi) {
         // Ensure this matches your server route. server.js has /api/update-data/:id
         await axios.put(
-          `http://localhost:8081/api/update-data/${update.identifier}`, // Use sort_key as identifier
+          `http://10.14.77.100:8081/api/update-data/${update.identifier}`, // Use sort_key as identifier
           update.payload // Send only the changes
         );
       }
@@ -2691,7 +2691,7 @@ const Monitoring = ({ theme = "light" }) => {
         if (value) {
           try {
             const response = await axios.get(
-              `http://localhost:8081/api/industry-details-by-class`,
+              `http://10.14.77.100:8081/api/industry-details-by-class`,
               { params: { className: value } }
             );
             const details = response.data;

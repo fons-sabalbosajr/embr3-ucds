@@ -14,7 +14,7 @@ const Bulletin = ({ theme = "dark" }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("http://localhost:8081/api/postings");
+        const response = await axios.get("http://10.14.77.100:8081/api/postings");
         const data = response.data;
 
         const activeBulletins = data
@@ -33,7 +33,7 @@ const Bulletin = ({ theme = "dark" }) => {
     setSelectedBulletin(record);
     setIsModalVisible(true);
     try {
-      await axios.patch(`http://localhost:8081/api/postings/${record._id}`, {
+      await axios.patch(`http://10.14.77.100:8081/api/postings/${record._id}`, {
         isRead: true,
       });
       setBulletins((prev) =>
@@ -51,7 +51,7 @@ const Bulletin = ({ theme = "dark" }) => {
   const handleDontShowAgain = async () => {
     try {
       await axios.patch(
-        `http://localhost:8081/api/postings/${selectedBulletin._id}`,
+        `http://10.14.77.100:8081/api/postings/${selectedBulletin._id}`,
         { showAgain: false }
       );
       setDontShowAgainIds((prev) => new Set(prev).add(selectedBulletin._id));

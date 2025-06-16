@@ -11,7 +11,7 @@ const ESWM = ({ currentUser }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://localhost:8081", { withCredentials: true });
+      socketRef.current = io("http://10.14.77.100:8081", { withCredentials: true });
     }
     const socket = socketRef.current;
 

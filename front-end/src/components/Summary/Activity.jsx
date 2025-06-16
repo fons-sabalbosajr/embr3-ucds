@@ -63,7 +63,7 @@ const Activity = ({ theme, provinceAccess }) => {
         setLoading(true);
 
         const response = await axios.get(
-          "http://localhost:8081/api/permits-summary",
+          "http://10.14.77.100:8081/api/permits-summary",
           {
             params: {
               page: currentPage,
@@ -133,7 +133,7 @@ const Activity = ({ theme, provinceAccess }) => {
               )
               .map((permit, index) => {
                 // Add this console.log to inspect the permit object
-                console.log("Activity.jsx - Rendering Tag for Permit:", permit);
+                //console.log("Activity.jsx - Rendering Tag for Permit:", permit);
                 return (
                   <Tag
                     key={index}

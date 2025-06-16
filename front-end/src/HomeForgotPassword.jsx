@@ -11,7 +11,7 @@ const HomeForgotPassword = () => {
   const handleResetRequest = async (values) => {
     setIsLoading(true);
     try {
-      const response = await axios.post("http://localhost:8081/request-password-reset", {
+      const response = await axios.post("http://10.14.77.100:8081/request-password-reset", {
         email: values.email,  // Ensure you're sending the correct field
       });
   

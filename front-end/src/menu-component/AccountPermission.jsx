@@ -130,7 +130,7 @@ const AccountPermission = ({
     const fetchUserAvatarAndAccess = async () => {
       try {
         const response = await axios.get(
-          `http://localhost:8081/api/users?username=${userData.username}`
+          `http://10.14.77.100:8081/api/users?username=${userData.username}`
         );
   
         const users = response.data;
@@ -288,13 +288,13 @@ const AccountPermission = ({
       try {
         // Send permissions to the main permissions endpoint
         await axios.patch(
-          `http://localhost:8081/api/users/${userData.email}/permissions`,
+          `http://10.14.77.100:8081/api/users/${userData.email}/permissions`,
           updatedPermissions
         );
 
         // Send province permissions to the province permissions endpoint
         await axios.patch(
-          `http://localhost:8081/api/users/${userData.email}/province-permissions`,
+          `http://10.14.77.100:8081/api/users/${userData.email}/province-permissions`,
           provincePermissionsPayload
         );
 

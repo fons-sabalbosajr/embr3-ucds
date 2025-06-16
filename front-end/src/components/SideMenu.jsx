@@ -59,6 +59,22 @@ const SideMenu = ({ theme, currentUser }) => {
   const prevLocationPathnameRef = useRef(location.pathname); // To track previous path
   const socketRef = useRef(null);
 
+  // Style for the text part of menu items, allowing wrapping
+  const textWithAvatarsStyle = {
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    textAlign: 'left',
+    lineHeight: '1.4',
+    marginRight: '8px', // Creates a gap before the avatars
+  };
+
+  const textOnlyMenuItemStyle = {
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    textAlign: 'left',
+    lineHeight: '1.4',
+    width: '100%', // Ensure it uses available space for wrapping
+  };
   const permissions = currentUser?.permissions || [];
   const canViewDataHistory = permissions[3];
   const visibleProvinces = visibleProvincesList.filter(
@@ -114,7 +130,7 @@ const SideMenu = ({ theme, currentUser }) => {
 
   useEffect(() => {
     if (!socketRef.current) {
-      socketRef.current = io("http://localhost:8081", {
+      socketRef.current = io("http://10.14.77.100:8081", {
         withCredentials: true,
       });
     }
@@ -139,10 +155,10 @@ const SideMenu = ({ theme, currentUser }) => {
 
     const provinceViewersHandler = (viewers) => setProvinceViewers(viewers);
     const surveyViewersHandler = (updatedViewers) => {
-      console.log(
-        "[SideMenu] Received surveyViewers update:",
-        updatedViewers.map((u) => u.username).join(", ")
-      );
+      // console.log(
+      //   "[SideMenu] Received surveyViewers update:",
+      //   updatedViewers.map((u) => u.username).join(", ")
+      // );
       // console.log("[SideMenu] Received surveyViewers update:", updatedViewers.map(u => u.username).join(', '));
       setSurveyViewers(updatedViewers);
     };
@@ -341,7 +357,7 @@ const SideMenu = ({ theme, currentUser }) => {
     let didJoinMbuThisEffect = false;
 
     if (location.pathname === "/universe/mbu") {
-      console.log("[SideMenu] Path is /universe/mbu, attempting to joinMbu.");
+      //console.log("[SideMenu] Path is /universe/mbu, attempting to joinMbu.");
       socket.emit("joinMbu", {
         user: {
           username: currentUser.username,
@@ -354,9 +370,9 @@ const SideMenu = ({ theme, currentUser }) => {
 
     return () => {
       if (socketRef.current && didJoinMbuThisEffect && currentUser?.username) {
-        console.log(
-          "[SideMenu] Cleanup for MBU effect: Emitting leaveMbu because this effect instance had joined."
-        );
+        // console.log(
+        //   "[SideMenu] Cleanup for MBU effect: Emitting leaveMbu because this effect instance had joined."
+        // );
         socketRef.current.emit("leaveMbu");
       }
     };
@@ -373,9 +389,9 @@ const SideMenu = ({ theme, currentUser }) => {
     let didJoinEswmThisEffect = false;
 
     if (location.pathname.startsWith("/universe/eswm-database")) { // Updated to cover sub-routes
-      console.log(
-        "[SideMenu] Path starts with /universe/eswm-database, attempting to joinEswm."
-      );
+      // console.log(
+      //   "[SideMenu] Path starts with /universe/eswm-database, attempting to joinEswm."
+      // );
       socket.emit("joinEswm", {
         user: {
           username: currentUser.username,
@@ -386,12 +402,12 @@ const SideMenu = ({ theme, currentUser }) => {
       didJoinEswmThisEffect = true;
     }
     return () => {
-      if (socketRef.current && didJoinEswmThisEffect && currentUser?.username) {
-        console.log(
-          "[SideMenu] Cleanup for ESWM effect: Emitting leaveEswm because this effect instance had joined."
-        );
-        socketRef.current.emit("leaveEswm");
-      }
+      // if (socketRef.current && didJoinEswmThisEffect && currentUser?.username) {
+      //   console.log(
+      //     "[SideMenu] Cleanup for ESWM effect: Emitting leaveEswm because this effect instance had joined."
+      //   );
+      //   socketRef.current.emit("leaveEswm");
+      // }
     };
   }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
 
@@ -577,12 +593,13 @@ const SideMenu = ({ theme, currentUser }) => {
             <span
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
-              <span>{province}</span>
+              <span style={textWithAvatarsStyle}>{province}</span>
               <span
                 style={{
                   marginLeft: "auto",
                   display: "flex",
                   alignItems: "center",
+                  flexShrink: 0, // Prevent avatars from shrinking
                 }}
               >
                 {renderAvatars(viewers)}
@@ -603,7 +620,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <span
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
-              <span>
+              <span style={textWithAvatarsStyle}>
                 <Link to="/universe/healthcare">Healthcare Industries</Link>
               </span>
               <span
@@ -611,6 +628,7 @@ const SideMenu = ({ theme, currentUser }) => {
                   marginLeft: "auto",
                   display: "flex",
                   alignItems: "center",
+                  flexShrink: 0,
                 }}
               >
                 {renderAvatars(healthcareViewers)} {/* Added avatars */}
@@ -624,7 +642,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <span
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
-              <span>
+              <span style={textWithAvatarsStyle}>
                 <Link to="/universe/chemicals">Chemical Industries</Link>
               </span>
               <span
@@ -632,6 +650,7 @@ const SideMenu = ({ theme, currentUser }) => {
                   marginLeft: "auto",
                   display: "flex",
                   alignItems: "center",
+                  flexShrink: 0,
                 }}
               >
                 {renderAvatars(chemicalsViewers)} {/* Added avatars */}
@@ -645,7 +664,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <span
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
-              <span>
+              <span style={textWithAvatarsStyle}>
                 <Link to="/universe/tsd">TSD Facilities</Link>
               </span>
               <span
@@ -653,6 +672,7 @@ const SideMenu = ({ theme, currentUser }) => {
                   marginLeft: "auto",
                   display: "flex",
                   alignItems: "center",
+                  flexShrink: 0,
                 }}
               >
                 {renderAvatars(tsdViewers)} {/* Added avatars */}
@@ -666,7 +686,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <span
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
-              <span>
+              <span style={textWithAvatarsStyle}>
                 <Link to="/universe/trc">TRC Permits</Link>
               </span>
               <span
@@ -674,6 +694,7 @@ const SideMenu = ({ theme, currentUser }) => {
                   marginLeft: "auto",
                   display: "flex",
                   alignItems: "center",
+                  flexShrink: 0,
                 }}
               >
                 {renderAvatars(trcViewers)} {/* Added avatars */}
@@ -688,7 +709,7 @@ const SideMenu = ({ theme, currentUser }) => {
       icon: <ReconciliationFilled />,
       label: (
         <span style={{ display: "flex", alignItems: "center", width: "100%" }}>
-          <span>
+          <span style={textWithAvatarsStyle}>
             <Link to="/universe/survey">Survey</Link>
           </span>
           <span
@@ -696,6 +717,7 @@ const SideMenu = ({ theme, currentUser }) => {
               marginLeft: "auto",
               display: "flex",
               alignItems: "center",
+              flexShrink: 0,
             }}
           >
             {renderAvatars(surveyViewers)}
@@ -708,7 +730,7 @@ const SideMenu = ({ theme, currentUser }) => {
       icon: <EnvironmentFilled />,
       label: (
         <span style={{ display: "flex", alignItems: "center", width: "100%" }}>
-          <span>
+          <span style={textWithAvatarsStyle}>
             <Link to="/universe/mbu">Manila Bay Pipeline</Link>
           </span>
           <span
@@ -716,6 +738,7 @@ const SideMenu = ({ theme, currentUser }) => {
               marginLeft: "auto",
               display: "flex",
               alignItems: "center",
+              flexShrink: 0,
             }}
           >
             {renderAvatars(mbuViewers)}
@@ -734,23 +757,113 @@ const SideMenu = ({ theme, currentUser }) => {
       children: [
         {
           key: "/universe/eswm-database/swm-plan",
-          label: <Link to="/universe/eswm-database/swm-plan">10 Year SWM Plan</Link>,
+          label: (
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/eswm-database/swm-plan">10 Year SWM Plan</Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {renderAvatars(eswmViewers)}
+              </span>
+            </span>
+          ),
         },
         {
           key: "/universe/eswm-database/mrf",
-          label: <Link to="/universe/eswm-database/mrf">Material Recovery Facility (MRF)</Link>,
+          label: (
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/eswm-database/mrf">Material Recovery Facility (MRF)</Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {renderAvatars(eswmViewers)}
+              </span>
+            </span>
+          ),
         },
         {
           key: "/universe/eswm-database/slf",
-          label: <Link to="/universe/eswm-database/slf">Sanitary Landfill (SLF)</Link>,
+          label: (
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/eswm-database/slf">Sanitary Landfill (SLF)</Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {renderAvatars(eswmViewers)}
+              </span>
+            </span>
+          ),
         },
         {
           key: "/universe/eswm-database/ods",
-          label: <Link to="/universe/eswm-database/ods">Open Dump Sites (ODS)</Link>,
+          label: (
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/eswm-database/ods">Open Dump Sites (ODS)</Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {renderAvatars(eswmViewers)}
+              </span>
+            </span>
+          ),
         },
         {
           key: "/universe/eswm-database/equipments",
-          label: <Link to="/universe/eswm-database/equipments">Equipments</Link>,
+          label: (
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/eswm-database/equipments">Equipments</Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {renderAvatars(eswmViewers)}
+              </span>
+            </span>
+          ),
         },
       ]
     },
@@ -762,29 +875,37 @@ const SideMenu = ({ theme, currentUser }) => {
         {
           key: "/universe/planning-unit/monitoring",
           label: (
-            <Link to="/universe/planning-unit/monitoring">Monitoring</Link>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/planning-unit/monitoring">Monitoring</Link>
+            </span>
           ),
         },
         {
           key: "/universe/planning-unit/survey-activities", // Made path more specific
           label: (
-            <Link to="/universe/planning-unit/survey-activities">
-              Survey Activities
-            </Link>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/planning-unit/survey-activities">
+                Survey Activities
+              </Link>
+            </span>
           ),
         },
         {
           key: "/universe/planning-unit/validations",
           label: (
-            <Link to="/universe/planning-unit/validations">Validations</Link>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/planning-unit/validations">Validations</Link>
+            </span>
           ),
         },
         {
           key: "/universe/planning-unit/generated-reports", // Made path more specific
           label: (
-            <Link to="/universe/planning-unit/generated-reports">
-              Generated Reports
-            </Link>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/planning-unit/generated-reports">
+                Generated Reports
+              </Link>
+            </span>
           ),
         },
       ],
@@ -796,11 +917,15 @@ const SideMenu = ({ theme, currentUser }) => {
       children: [
         {
           key: "/universe/extract",
-          label: <Link to="/universe/extract">Extract Data</Link>,
+          label: (
+            <span style={textOnlyMenuItemStyle}><Link to="/universe/extract">Extract Data</Link></span>
+          ),
         },
         {
           key: "/universe/deleted_firms",
-          label: <Link to="/universe/deleted_firms">Deleted Industries</Link>,
+          label: (
+            <span style={textOnlyMenuItemStyle}><Link to="/universe/deleted_firms">Deleted Industries</Link></span>
+          ),
         },
       ],
     },
@@ -811,20 +936,32 @@ const SideMenu = ({ theme, currentUser }) => {
       children: [
         {
           key: "/universe/accounts",
-          label: <Link to="/universe/accounts">User Accounts</Link>,
+          label: (
+            <span style={textOnlyMenuItemStyle}><Link to="/universe/accounts">User Accounts</Link></span>
+          ),
         },
         {
           key: "/universe/posting",
-          label: <Link to="/universe/posting">Post to Bulletin</Link>,
+          label: (
+            <span style={textOnlyMenuItemStyle}><Link to="/universe/posting">Post to Bulletin</Link></span>
+          ),
         },
 
         {
           key: "/universe/records/config",
-          label: <Link to="/universe/records/config">Monitoring Config</Link>,
+          label: (
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/records/config">Monitoring Config</Link>
+            </span>
+          ),
         },
         {
           key: "/universe/records/activity",
-          label: <Link to="/universe/records/activity">Records Activity</Link>,
+          label: (
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/records/activity">Records Activity</Link>
+            </span>
+          ),
         },
       ],
     },

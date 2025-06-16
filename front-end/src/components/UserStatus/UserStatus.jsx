@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { List } from "antd";
+import React, { useState, useEffect, useRef } from "react";
+import { List, Modal, Button, Row, Col } from "antd";
 import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
 import "./userstatus.css";
@@ -7,12 +7,15 @@ import "./userstatus.css";
 const UserStatus = ({ theme }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const listContainerRef = useRef(null);
+  const [showScrollIndicator, setShowScrollIndicator] = useState(false);
+  const [isAllUsersModalVisible, setIsAllUsersModalVisible] = useState(false);
 
   useEffect(() => {
     const fetchOnlineUsers = async () => {
       try {
         const response = await axios.get(
-          "http://localhost:8081/api/online_users"
+          "http://10.14.77.100:8081/api/online_users"
         );
         const allUsers = response.data.onlineUsers;
 
@@ -52,6 +55,16 @@ const UserStatus = ({ theme }) => {
     return () => clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    // Check for scrollbar after onlineUsers are updated and rendered
+    if (listContainerRef.current) {
+      const { scrollHeight, clientHeight } = listContainerRef.current;
+      setShowScrollIndicator(scrollHeight > clientHeight);
+    } else {
+      setShowScrollIndicator(false);
+    }
+  }, [onlineUsers, loading]); // Rerun when onlineUsers or loading state changes
+
   const calculateTime = (time) => {
     const now = new Date();
     const diffMs = now - new Date(time);
@@ -60,17 +73,32 @@ const UserStatus = ({ theme }) => {
     if (diffMinutes < 1) {
       return "0 min ago";
     } else if (diffMinutes < 60) {
-      return `${diffMinutes} min ago`;
+      return `${diffMinutes} min`;
     } else if (diffMinutes < 1440) {
       const diffHours = Math.floor(diffMinutes / 60);
-      return `${diffHours} hr ago`;
+      return `${diffHours} hr`;
     } else if (diffMinutes < 2880) {
       const diffDays = Math.floor(diffMinutes / 1440);
-      return `${diffDays} day ago`;
+      return `${diffDays} day`;
     } else {
       return ""; // hide time for offline users older than 2 days
     }
   };
+
+  const handleOpenAllUsersModal = () => {
+    setIsAllUsersModalVisible(true);
+  };
+
+  const handleCloseAllUsersModal = () => {
+    setIsAllUsersModalVisible(false);
+  };
+
+  const modalOnlineUsers = onlineUsers
+    .filter((user) => user.isLoggedIn)
+    .sort((a, b) => new Date(b.loginTime) - new Date(a.loginTime));
+  const modalOfflineUsers = onlineUsers
+    .filter((user) => !user.isLoggedIn)
+    .sort((a, b) => new Date(b.logoutTime) - new Date(a.logoutTime));
 
   return (
     <div
@@ -85,7 +113,7 @@ const UserStatus = ({ theme }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "10px",
+
         }}
       >
         <h3
@@ -110,7 +138,9 @@ const UserStatus = ({ theme }) => {
                 backgroundColor: "#52c41a",
               }}
             ></div>
-            <span style={{ fontSize: "10px" }}>Online</span>
+            <span style={{ fontSize: "10px" }}>
+              Online ({onlineUsers.filter((user) => user.isLoggedIn).length})
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <div
@@ -126,89 +156,259 @@ const UserStatus = ({ theme }) => {
         </div>
       </div>
       {onlineUsers.length > 0 ? (
-        <div
-          className="user-status-list-container"
-          style={{
-            flex: 1, // Allow the list to grow and fill the remaining space
-            overflowY: "auto",
-          }}
-        >
-          <List
-            itemLayout="horizontal"
-            size="large" // Increase the size of the list items
-            dataSource={onlineUsers}
-            renderItem={(user) => (
-              <List.Item
-                className="user-status-item"
-                style={{
-                  opacity: user.isLoggedIn ? 1 : 0.75,
-                  padding: "0px", // Add padding to make items larger
-                  alignItems: "center", // Center the content vertically
-                }}
-              >
-                <div style={{ position: "relative" }}>
-                  {user.avatar ? (
-                    typeof user.avatar === "string" ? (
-                      <img
-                        src={`http://localhost:8081${user.avatar}`}
-                        alt="Avatar"
-                        style={{
-                          width: "20px", // Increase avatar size
-                          height: "20px",
-                          borderRadius: "50%",
-                        }}
-                      />
+        <>
+          <div
+            ref={listContainerRef}
+            className="user-status-list-container"
+            style={{
+              flex: 1, // Allow the list to grow and fill the remaining space
+              overflowY: "auto",
+              maxHeight: "150px", // Add a maxHeight to ensure scrolling
+            }}
+          >
+            <List
+              itemLayout="horizontal"
+              size="large" // Increase the size of the list items
+              dataSource={onlineUsers}
+              renderItem={(user, index) => (
+                <List.Item
+                  key={user.userName || user.userId || index}
+                  className="user-status-item"
+                  style={{
+                    opacity: user.isLoggedIn ? 1 : 0.75,
+                    padding: "0px", // Add padding to make items larger
+                    alignItems: "center", // Center the content vertically
+                  }}
+                >
+                  <div style={{ position: "relative" }}>
+                    {user.avatar ? (
+                      typeof user.avatar === "string" ? (
+                        <img
+                          src={`http://10.14.77.100:8081${user.avatar}`}
+                          alt="Avatar"
+                          style={{
+                            width: "20px", // Increase avatar size
+                            height: "20px",
+                            borderRadius: "50%",
+                          }}
+                        />
+                      ) : (
+                        <NiceAvatar
+                          style={{
+                            width: "20px", // Increase avatar size
+                            height: "20px",
+                            borderRadius: "50%",
+                          }}
+                          {...user.avatar}
+                        />
+                      )
                     ) : (
-                      <NiceAvatar
-                        style={{
-                          width: "20px", // Increase avatar size
-                          height: "20px",
-                          borderRadius: "50%",
-                        }}
-                        {...user.avatar}
-                      />
-                    )
-                  ) : (
-                    <NiceAvatar style={{ width: "20px", height: "20px" }} />
-                  )}
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: 4,
-                      right: 0,
-                      width: "8px", // Increase status indicator size
-                      height: "8px",
-                      borderRadius: "50%",
-                      backgroundColor: user.isLoggedIn ? "#52c41a" : "#d9d9d9",
-                      border: "1px solid white",
-                    }}
-                  />
-                </div>
-                <List.Item.Meta
-                  title={
+                      <NiceAvatar style={{ width: "20px", height: "20px" }} />
+                    )}
                     <div
-                      className="user-status-item-title"
-                      style={{ fontSize: "10px", marginBottom: "10px" }} // Larger font size
+                      style={{
+                        position: "absolute",
+                        bottom: 4,
+                        right: 0,
+                        width: "8px", // Increase status indicator size
+                        height: "8px",
+                        borderRadius: "50%",
+                        backgroundColor: user.isLoggedIn
+                          ? "#52c41a"
+                          : "#d9d9d9",
+                        border: "1px solid white",
+                      }}
+                    />
+                  </div>
+                  <List.Item.Meta
+                    title={
+                      <div
+                        className="user-status-item-title"
+                        style={{ fontSize: "10px", marginBottom: "10px" }} // Larger font size
+                      >
+                        {user.name}
+                      </div>
+                    }
+                  />
+                  {!user.isLoggedIn && (
+                    <span
+                      className="user-status-item-time"
+                      style={{ fontSize: "9px" }} // Larger font size for time
                     >
-                      {user.name}
-                    </div>
-                  }
-                />
-                {!user.isLoggedIn && (
-                  <span
-                    className="user-status-item-time"
-                    style={{ fontSize: "9px" }} // Larger font size for time
-                  >
-                    {calculateTime(user.logoutTime)}
-                  </span>
-                )}
-              </List.Item>
-            )}
-          />
-        </div>
+                      {calculateTime(user.logoutTime)}
+                    </span>
+                  )}
+                </List.Item>
+              )}
+            />
+          </div>
+          {showScrollIndicator && (
+            <Button
+              type="link"
+              onClick={handleOpenAllUsersModal}
+              style={{
+                marginTop: "5px",
+                padding: 0,
+                height: "auto",
+                lineHeight: "normal",
+                textAlign: "center",
+                width: "100%",
+                color: theme === "dark" ? "#ffffff" : "#000000",
+              }}
+            >
+              View all users
+            </Button>
+          )}
+        </>
       ) : (
         <p>No online users</p>
       )}
+
+      <Modal
+        title="All Users Status"
+        open={isAllUsersModalVisible}
+        onCancel={handleCloseAllUsersModal}
+        footer={null}
+        width={600}
+        style={{ maxHeight: "70vh", overflowY: "auto" }}
+      >
+        <Row gutter={16}>
+          <Col span={12}>
+            <h4 style={{ color: theme === "dark" ? "#fff" : "#000" }}>
+              Online ({modalOnlineUsers.length})
+            </h4>
+            <List
+              itemLayout="horizontal"
+              dataSource={modalOnlineUsers}
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+              renderItem={(user, index) => (
+                <List.Item
+                  key={user.userName || user.userId || index}
+                  className="user-status-item"
+                  style={{ padding: "5px 0" }}
+                >
+                  <div style={{ position: "relative", marginRight: "10px" }}>
+                    {user.avatar ? (
+                      typeof user.avatar === "string" ? (
+                        <img
+                          src={`http://10.14.77.100:8081${user.avatar}`}
+                          alt="Avatar"
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            borderRadius: "50%",
+                          }}
+                        />
+                      ) : (
+                        <NiceAvatar
+                          style={{ width: "30px", height: "30px" }}
+                          {...user.avatar}
+                        />
+                      )
+                    ) : (
+                      <NiceAvatar style={{ width: "30px", height: "30px" }} />
+                    )}
+                    <div
+                      className="user-status-dot" // Re-use class if styles match
+                      style={{
+                        backgroundColor: "#52c41a",
+                        width: "10px",
+                        height: "10px",
+                        bottom: 5,
+                        right: 1,
+                      }}
+                    />
+                  </div>
+                  <List.Item.Meta
+                    title={
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          color: theme === "dark" ? "#fff" : "#000",
+                          fontWeight: "normal",
+                        }}
+                      >
+                        {user.name}
+                      </span>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          </Col>
+          <Col span={12}>
+            <h4 style={{ color: theme === "dark" ? "#fff" : "#000" }}>
+              Offline ({modalOfflineUsers.length})
+            </h4>
+            <List
+              itemLayout="horizontal"
+              dataSource={modalOfflineUsers}
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+              renderItem={(user, index) => (
+                <List.Item
+                  key={user.userName || user.userId || index}
+                  className="user-status-item"
+                  style={{ opacity: 0.75, padding: "5px 0" }}
+                >
+                  <div style={{ position: "relative", marginRight: "10px" }}>
+                    {user.avatar ? (
+                      typeof user.avatar === "string" ? (
+                        <img
+                          src={`http://10.14.77.100:8081${user.avatar}`}
+                          alt="Avatar"
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            borderRadius: "50%",
+                          }}
+                        />
+                      ) : (
+                        <NiceAvatar
+                          style={{ width: "30px", height: "30px" }}
+                          {...user.avatar}
+                        />
+                      )
+                    ) : (
+                      <NiceAvatar style={{ width: "30px", height: "30px" }} />
+                    )}
+                    <div
+                      className="user-status-dot" // Re-use class if styles match
+                      style={{
+                        backgroundColor: "#d9d9d9",
+                        width: "10px",
+                        height: "10px",
+                        bottom: 5,
+                        right: 1,
+                      }}
+                    />
+                  </div>
+                  <List.Item.Meta
+                    title={
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          color: theme === "dark" ? "#fff" : "#000",
+                          fontWeight: "normal",
+                        }}
+                      >
+                        {user.name}
+                      </span>
+                    }
+                  />
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: theme === "dark" ? "#aaa" : "#888",
+                    }}
+                  >
+                    {calculateTime(user.logoutTime)}
+                  </span>
+                </List.Item>
+              )}
+            />
+          </Col>
+        </Row>
+      </Modal>
     </div>
   );
 };

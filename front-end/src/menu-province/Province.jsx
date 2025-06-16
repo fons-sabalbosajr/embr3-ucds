@@ -101,7 +101,7 @@ const Province = ({ theme, currentUser }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState("");
   const [sectionDetails, setSectionDetails] = useState([]);
-  const [selectedSectionData, setSelectedSectionData] = useState([]);
+  const [selectedSectionData, setSelectedSectionData] = useState([]); // Combined with sectionDetails logic
   const [buttonColor, setButtonColor] = useState("primary");
   const [progress, setProgress] = useState(0); // Progress state
   const [provinceViewers, setProvinceViewers] = useState({});
@@ -373,37 +373,46 @@ const Province = ({ theme, currentUser }) => {
   }, [data]);
 
   useEffect(() => {
-    // Connect once
     if (!socketRef.current) {
-      socketRef.current = io("http://localhost:8081", {
+      socketRef.current = io("http://10.14.77.100:8081", {
         withCredentials: true,
       });
     }
     const socket = socketRef.current;
+    
+    const handleConnect = () => {
+      if (currentUser?.username && displayProvinceName) {
+        socket.emit("joinProvince", {
+          province: displayProvinceName,
+          user: {
+            username: currentUser.username,
+            avatar: currentUser.avatar || currentUser.avatarUrl,
+            name: currentUser.name,
+          },
+        });
+      }
+    };
 
-    // Join province room on mount or province change
-    if (currentUser && displayProvinceName) {
-      socket.emit("joinProvince", {
-        province: displayProvinceName,
-        user: {
-          userId:
-            currentUser._id?.$oid || currentUser._id || currentUser.userId,
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
-      });
-    }
-
-    // Listen for updates
-    socket.on("provinceViewers", (viewers) => {
+    const provinceViewersHandler = (viewers) => {
       setProvinceViewers(viewers);
-    });
+    };
 
-    // Leave province on unmount
+    if (socket.connected) { // If already connected, join immediately
+      handleConnect();
+    }
+    socket.on("connect", handleConnect);
+    socket.on("provinceViewers", provinceViewersHandler);
+
     return () => {
-      socket.emit("leaveProvince");
-      socket.off("provinceViewers");
+      // The leaveProvince logic is primarily handled by SideMenu's navigation effect.
+      // If Province.jsx were to emit leaveProvince directly on unmount,
+      // it might prematurely remove the user if SideMenu's effect runs slightly later
+      // during a navigation event.
+      // However, cleaning up the specific listener for this component is good practice.
+      socket.off("connect", handleConnect);
+      socket.off("provinceViewers", provinceViewersHandler);
+      // Consider if a specific "leaveThisSpecificProvinceView" event is needed if SideMenu doesn't cover all cases.
+      // For now, relying on SideMenu's comprehensive join/leave logic.
     };
   }, [currentUser, displayProvinceName]);
 
@@ -436,7 +445,7 @@ const Province = ({ theme, currentUser }) => {
 
     setSelectedSection(section); // Set the selected section
     setSelectedSectionData(filteredSectionData); // Set the filtered data for the section
-    setIsModalOpen(true); // Open the modal
+    setIsModalOpen(true); // Open the modal // This state was `selectedSectionData` before, ensure it's correct
   };
 
   const handleCloseSectionModal = () => {
@@ -1828,11 +1837,12 @@ const Province = ({ theme, currentUser }) => {
           title="Export Data"
         />
 
-        {canViewDataHistory &&
-          provinceViewers[displayProvinceName] &&
-          provinceViewers[displayProvinceName].length > 0 && (
+        {/* Display avatars of other users viewing this province */}
+        {canViewDataHistory && provinceViewers[displayProvinceName] && (
             <div
+              className="province-viewers-avatars"
               style={{
+                marginLeft: "15px",
                 display: "flex",
                 alignItems: "center",
                 margin: "12px 0",
@@ -1840,38 +1850,38 @@ const Province = ({ theme, currentUser }) => {
             >
               <Avatar.Group
                 max={{ count: 3 }}
-                maxStyle={{
-                  color: "#f56a00",
-                  backgroundColor: "#fde3cf",
-                  fontSize: 11,
-                }}
                 size={24}
               >
-                {provinceViewers[displayProvinceName].map((user) => (
-                  <Tooltip
-                    key={user.username}
-                    title={
-                      <span style={{ fontSize: "9px" }}>
-                        {`${user.username} is here`}
-                      </span>
-                    }
-                  >
-                    <Avatar
-                      src={user.avatar}
-                      style={{
-                        marginLeft: 2,
-                        verticalAlign: "middle",
-                      }}
+                {provinceViewers[displayProvinceName]
+                  .filter(viewer => viewer.username !== currentUser?.username) // Show OTHERS
+                  .map((viewer) => (
+                    <Tooltip
+                      key={viewer.username}
+                      title={
+                        <span style={{ fontSize: "9px" }}>
+                          {`${viewer.name || viewer.username} is viewing ${displayProvinceName}`}
+                        </span>
+                      }
                     >
-                      {!user.avatar && user.username
-                        ? user.username[0].toUpperCase()
-                        : ""}
-                    </Avatar>
-                  </Tooltip>
-                ))}
+                      <Avatar
+                        src={viewer.avatar ? `http://10.14.77.100:8081${viewer.avatar}` : undefined}
+                        style={{
+                          marginLeft: -8, // Overlap avatars slightly
+                          border: `2px solid ${theme === 'dark' ? '#262626' : '#fff'}`, // Border for better visibility
+                        }}
+                      >
+                        {(!viewer.avatar && viewer.name)
+                          ? viewer.name[0].toUpperCase()
+                          : (!viewer.avatar && viewer.username)
+                            ? viewer.username[0].toUpperCase()
+                            : null}
+                      </Avatar>
+                    </Tooltip>
+                  ))}
               </Avatar.Group>
             </div>
           )}
+
 
         <Button
           type="primary"

@@ -51,7 +51,7 @@ const Profile = ({ username }) => {
     setFetching(true);
     try {
       const res = await fetch(
-        `http://localhost:8081/api/user/details?username=${username}`
+        `http://10.14.77.100:8081/api/user/details?username=${username}`
       );
       const data = await res.json();
       if (res.ok && data) {
@@ -97,7 +97,7 @@ const Profile = ({ username }) => {
     formData.append("username", username);
 
     try {
-      const res = await fetch("http://localhost:8081/api/users/update", {
+      const res = await fetch("http://10.14.77.100:8081/api/users/update", {
         method: "POST",
         body: formData,
       });
@@ -167,7 +167,7 @@ const Profile = ({ username }) => {
         <Col>
           <div className="avatar-container">
             <img
-              src={photo ? photo.url : `http://localhost:8081${userData.avatar}`}
+              src={photo ? photo.url : `http://10.14.77.100:8081${userData.avatar}`}
               alt="Profile Avatar"
               className="profile-avatar"
             />

@@ -9,7 +9,7 @@ export const UserProvider = ({ children }) => {
 
   const fetchUserData = async (userHandle) => {
     try {
-      const response = await axios.get(`http://localhost:8081/api/users?username=${userHandle}`);
+      const response = await axios.get(`http://10.14.77.100:8081/api/users?username=${userHandle}`);
       if (response.data && response.data.length > 0) {
         setUserData(response.data[0]);
       }

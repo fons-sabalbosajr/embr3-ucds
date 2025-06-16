@@ -31,7 +31,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
       // Fetch project data based on the selected industry_class
       try {
         const response = await axios.get(
-          `http://localhost:8081/api/project_type?industry_class=${record.industry_class}`
+          `http://10.14.77.100:8081/api/project_type?industry_class=${record.industry_class}`
         );
         if (response.data) {
           const { psic_code, project_type, project_subtype } = response.data;

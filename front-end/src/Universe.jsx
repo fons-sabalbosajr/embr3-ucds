@@ -65,10 +65,11 @@ const Universe = () => {
   const [popoverContents, setPopoverContents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showThemeHint, setShowThemeHint] = useState(false);
-  const [userProvinceStringPermissions, setUserProvinceStringPermissions] = useState({});
+  const [userProvinceStringPermissions, setUserProvinceStringPermissions] =
+    useState({});
   const [userRole, setUserRole] = useState(""); // New state for the user's role string
 
-  const backendUrl = "http://localhost:8081";
+  const backendUrl = "http://10.14.77.100:8081";
   const navigate = useNavigate();
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
   const [provinceAccess, setProvinceAccess] = useState({
@@ -106,15 +107,23 @@ const Universe = () => {
       ];
 
       // Process province permissions (convert "view"/"readWrite" to true, "none" or others to false)
-      const provinceKeys = ['aurora', 'bataan', 'bulacan', 'nuevaEcija', 'pampanga', 'tarlac', 'zambales'];
-      const provincePermissionsAsBooleans = provinceKeys.map(key => {
+      const provinceKeys = [
+        "aurora",
+        "bataan",
+        "bulacan",
+        "nuevaEcija",
+        "pampanga",
+        "tarlac",
+        "zambales",
+      ];
+      const provincePermissionsAsBooleans = provinceKeys.map((key) => {
         const permissionString = data[key];
-        return permissionString === 'view' || permissionString === 'readWrite';
+        return permissionString === "view" || permissionString === "readWrite";
       });
 
       const newProvinceStringPermissions = {};
-      provinceKeys.forEach(key => {
-        newProvinceStringPermissions[key] = data[key] || 'none'; // Store "view", "readWrite", or "none"
+      provinceKeys.forEach((key) => {
+        newProvinceStringPermissions[key] = data[key] || "none"; // Store "view", "readWrite", or "none"
       });
       setUserProvinceStringPermissions(newProvinceStringPermissions);
 
@@ -126,9 +135,10 @@ const Universe = () => {
 
       // Set provinceAccess state for components like Dashboard
       const newProvinceAccessState = {};
-      provinceKeys.forEach(key => {
+      provinceKeys.forEach((key) => {
         const permissionString = data[key];
-        newProvinceAccessState[key] = permissionString === 'view' || permissionString === 'readWrite';
+        newProvinceAccessState[key] =
+          permissionString === "view" || permissionString === "readWrite";
       });
       setProvinceAccess(newProvinceAccessState);
 
@@ -151,34 +161,34 @@ const Universe = () => {
   // Define fetchDataIssues outside of useEffect, memoized with useCallback
   const fetchDataIssues = useCallback(async () => {
     if (!auth) return; // Ensure auth is true before fetching
-      setIsLoading(true); // Set loading for notifications
-      try {
-        const dataIssuesRes = await axios.post(`${backendUrl}/api/check-data`);
-        const duplicateIssuesRes = await axios.get(
-          `${backendUrl}/api/ucds/duplicates`
-        );
+    setIsLoading(true); // Set loading for notifications
+    try {
+      const dataIssuesRes = await axios.post(`${backendUrl}/api/check-data`);
+      const duplicateIssuesRes = await axios.get(
+        `${backendUrl}/api/ucds/duplicates`
+      );
 
-        const dataIssues = Array.isArray(dataIssuesRes.data.issues)
-          ? dataIssuesRes.data.issues
-          : [dataIssuesRes.data.issues || "No issues detected"];
+      const dataIssues = Array.isArray(dataIssuesRes.data.issues)
+        ? dataIssuesRes.data.issues
+        : [dataIssuesRes.data.issues || "No issues detected"];
 
-        const duplicateIssues = duplicateIssuesRes.data.duplicates.map((d) => ({
-          idNos: d.idNos,
-          ecc_cnc: d.ecc_cnc,
-          count: d.count,
-        }));
+      const duplicateIssues = duplicateIssuesRes.data.duplicates.map((d) => ({
+        idNos: d.idNos,
+        ecc_cnc: d.ecc_cnc,
+        count: d.count,
+      }));
 
-        const combined = [...dataIssues, ...duplicateIssues];
-        setNotifications(combined);
-        // setPopoverContents(combined); // REMOVE THIS LINE
-      } catch (err) {
-        console.error("Fetch error:", err);
-        const errorMsg = ["Error fetching data issues."];
-        setNotifications(errorMsg);
-        // setPopoverContents(errorMsg); // REMOVE THIS LINE
-      } finally {
-        setIsLoading(false); // Clear loading for notifications
-      }
+      const combined = [...dataIssues, ...duplicateIssues];
+      setNotifications(combined);
+      // setPopoverContents(combined); // REMOVE THIS LINE
+    } catch (err) {
+      console.error("Fetch error:", err);
+      const errorMsg = ["Error fetching data issues."];
+      setNotifications(errorMsg);
+      // setPopoverContents(errorMsg); // REMOVE THIS LINE
+    } finally {
+      setIsLoading(false); // Clear loading for notifications
+    }
   }, [auth, backendUrl, setIsLoading, setNotifications]); // Add dependencies
 
   useEffect(() => {
@@ -270,12 +280,19 @@ const Universe = () => {
     },
   };
 
-  const provinceKeysForCurrentUser = ['aurora', 'bataan', 'bulacan', 'nuevaEcija', 'pampanga', 'tarlac', 'zambales'];
+  const provinceKeysForCurrentUser = [
+    "aurora",
+    "bataan",
+    "bulacan",
+    "nuevaEcija",
+    "pampanga",
+    "tarlac",
+    "zambales",
+  ];
   const provinceStringPermissions = {};
-  provinceKeysForCurrentUser.forEach(key => {
-    provinceStringPermissions[key] = permissions 
+  provinceKeysForCurrentUser.forEach((key) => {
+    provinceStringPermissions[key] = permissions;
   });
-
 
   const currentUser = {
     name,
@@ -307,7 +324,7 @@ const Universe = () => {
                     {name} | {division}
                   </span>
 
-                    <NotificationsPopover
+                  <NotificationsPopover
                     // popoverContent={popoverContents} // REMOVE THIS PROP
                     theme={theme}
                     notifications={notifications}
@@ -404,7 +421,12 @@ const Universe = () => {
                 <Route
                   path="dashboard"
                   element={
-                    <Dashboard avatar={avatar} name={name} theme={theme} provinceAccess={provinceAccess}  />
+                    <Dashboard
+                      avatar={avatar}
+                      name={name}
+                      theme={theme}
+                      provinceAccess={provinceAccess}
+                    />
                   }
                 />
                 <Route
@@ -424,12 +446,30 @@ const Universe = () => {
                 <Route path="trc" element={<TRC theme={theme} />} />
                 <Route path="mbu" element={<MBU theme={theme} />} />
                 {/* ESWM Database Parent Route - can render a default page or redirect */}
-                <Route path="eswm-database" element={<Navigate to="swm-plan" replace />} />
-                <Route path="eswm-database/swm-plan" element={<SWMPlan theme={theme} />} />
-                <Route path="eswm-database/mrf" element={<MRF theme={theme} />} />
-                <Route path="eswm-database/slf" element={<SLF theme={theme} />} />
-                <Route path="eswm-database/ods" element={<ODS theme={theme} />} />
-                <Route path="eswm-database/equipments" element={<Equipments theme={theme} />} />
+                <Route
+                  path="eswm-database"
+                  element={<Navigate to="swm-plan" replace />}
+                />
+                <Route
+                  path="eswm-database/swm-plan"
+                  element={<SWMPlan theme={theme} />}
+                />
+                <Route
+                  path="eswm-database/mrf"
+                  element={<MRF theme={theme} />}
+                />
+                <Route
+                  path="eswm-database/slf"
+                  element={<SLF theme={theme} />}
+                />
+                <Route
+                  path="eswm-database/ods"
+                  element={<ODS theme={theme} />}
+                />
+                <Route
+                  path="eswm-database/equipments"
+                  element={<Equipments theme={theme} />}
+                />
                 <Route path="accounts" element={<Accounts theme={theme} />} />
                 <Route path="extract" element={<Extract theme={theme} />} />
                 <Route
@@ -443,7 +483,7 @@ const Universe = () => {
                 <Route
                   path="planning-unit/survey-activities" // Path updated to match SideMenu
                   element={<MonitoringSurvey theme={theme} />}
-                /> 
+                />
                 <Route
                   path="planning-unit/validations"
                   element={<Validations theme={theme} />}
@@ -456,10 +496,7 @@ const Universe = () => {
                   path="records/activity"
                   element={<RecordsActivity theme={theme} />}
                 />
-                <Route
-                  path="admin"
-                  element={<Admin theme={theme} />}
-                />
+                <Route path="admin" element={<Admin theme={theme} />} />
 
                 <Route path="report" element={<Report theme={theme} />} />
                 <Route path="posting" element={<Posting theme={theme} />} />

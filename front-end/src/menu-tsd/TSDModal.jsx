@@ -60,7 +60,7 @@ const TSDModal = ({
           };
 
           const response = await axios.put(
-            `http://localhost:8081/api/update-chemical/${record.id_no}`,
+            `http://10.14.77.100:8081/api/update-chemical/${record.id_no}`,
             updatedRecord
           );
 
