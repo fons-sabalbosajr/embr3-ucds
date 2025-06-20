@@ -156,4 +156,34 @@
   background-color: #121212 !important;
 }
 
+/* Responsive Table Wrapper */
+.table-responsive-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
 
+/*
+  Ensure AntD table itself uses its scroll prop effectively.
+  It's generally better to set `scroll={{ x: 'max-content' }}` or `scroll={{ x: PIXEL_VALUE }}`
+  directly on the <Table> component.
+  This class is a fallback or can be used if you want to enforce a min-width
+  even if the AntD scroll prop isn't perfectly configured for all tables.
+*/
+
+
+/* Optional: Custom Scrollbar Styling */
+.table-responsive-wrapper::-webkit-scrollbar {
+  height: 8px; /* Adjust height of the horizontal scrollbar */
+}
+.table-responsive-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1; /* Color of the scrollbar thumb */
+  border-radius: 10px;
+}
+.table-responsive-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8; /* Color on hover */
+}
+.table-responsive-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1; /* Color of the scrollbar track */
+  border-radius: 10px;
+}

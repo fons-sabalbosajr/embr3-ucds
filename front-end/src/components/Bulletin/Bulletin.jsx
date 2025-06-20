@@ -14,7 +14,9 @@ const Bulletin = ({ theme = "dark" }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("http://10.14.77.100:8081/api/postings");
+        const response = await axios.get(
+          "http://10.14.77.100:8081/api/postings"
+        );
         const data = response.data;
 
         const activeBulletins = data
@@ -97,6 +99,19 @@ const Bulletin = ({ theme = "dark" }) => {
         theme === "dark" ? "bulletin-dark" : "bulletin-light"
       }`}
     >
+      {/* Animated Circles Background */}
+      <ul className="animated-circles-container-bulletin">
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+        <li className="bulletin-circle"></li>
+      </ul>
       <Carousel autoplay effect="fade" className="bulletin-carousel">
         {bulletins.slice(0, 5).map((bulletin) => {
           const gradientClass = getGradientClass(
@@ -141,7 +156,7 @@ const Bulletin = ({ theme = "dark" }) => {
           );
         })}
       </Carousel>
-      {/* Modal for full bulletin view */}
+
       <Modal
         title="Bulletin Details"
         open={isModalVisible}
@@ -174,7 +189,10 @@ const Bulletin = ({ theme = "dark" }) => {
           <Typography.Paragraph className="modal-message">
             <span
               dangerouslySetInnerHTML={{
-                __html: (selectedBulletin.message || "").replace(/\n/g, "<br />"),
+                __html: (selectedBulletin.message || "").replace(
+                  /\n/g,
+                  "<br />"
+                ),
               }}
             />
           </Typography.Paragraph>

@@ -3,6 +3,11 @@ import { Table, Spin, Input, Tooltip, Button, Modal, message } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import Draggable from "react-draggable";
 import fieldLabels from "../../constants/fieldLabels";
+import {
+  getUcdsRecordById,
+  updateUcdsDuplicates,
+  archiveUcdsRecord,
+} from "../../api/notificationService"; // Import the consolidated service
 import "./duplicatenotif.css";
 
 const DuplicateNotif = ({
@@ -24,36 +29,17 @@ const DuplicateNotif = ({
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const fetchRecord = async (id_no) => {
-      try {
-        const response = await fetch(
-          `http://10.14.77.100:8081/api/ucds-data/${id_no}`
-        );
-
-        if (response.ok) {
-          return await response.json();
-        } else if (response.status === 404) {
-          console.warn(
-            `Record ${id_no} not found in ucds-data (possibly archived).`
-          );
-          return null; // Skip rendering this record
-        } else {
-          console.error(
-            `Failed to fetch ${id_no}: ${response.status} ${response.statusText}`
-          );
-          return null;
-        }
-      } catch (error) {
-        console.error(`Network error fetching ${id_no}:`, error);
-        return null;
-      }
-    };
-
     const fetchDuplicateData = async () => {
+      setLoading(true);
       try {
         const fetchedRecords = await Promise.all(
           duplicateData.idNos.map(async (id_no, index) => {
-            const record = await fetchRecord(id_no);
+            // Use the service function
+            const record = await getUcdsRecordById(id_no).catch(error => {
+              // Errors are logged in the service, but we can add component-specific handling
+              message.error(`Could not load details for record ${id_no}.`);
+              return null;
+            });
             if (!record) return null;
 
             return {
@@ -249,6 +235,7 @@ const DuplicateNotif = ({
 
 
   const handleSaveChanges = async () => {
+    setIsSaving(true);
     try {
       const updatedRecords = [];
 
@@ -276,24 +263,16 @@ const DuplicateNotif = ({
         return;
       }
 
-      const response = await fetch(
-        "http://10.14.77.100:8081/api/ucds/update-duplicates",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ updates: updatedRecords }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to save changes.");
+      // Use the service function
+      await updateUcdsDuplicates(updatedRecords);
 
       message.success("Changes saved to database.");
       setHasChanges(false); // Reset hasChanges after saving
     } catch (err) {
-      console.error(err);
-      message.error("Error saving changes.");
+      // Error is logged in the service
+      message.error(err.message || "Error saving changes.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -312,23 +291,12 @@ const DuplicateNotif = ({
 
     const id_no = selectedRecord.id_no; // Use selectedRecord.id_no
 
+    setIsSaving(true); // Indicate saving/processing state
     try {
-      //console.log(`Archiving record with id_no: ${id_no}`);
+      // Use the service function
+      await archiveUcdsRecord(id_no);
 
-      const response = await fetch("http://10.14.77.100:8081/api/archive-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_no }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to transfer the record to archive-data. Server response: ${errorText}`
-        );
-      }
-
-      //console.log(`Successfully archived record: ${id_no}`);
+      // console.log(`Successfully archived record: ${id_no}`);
 
       message.success({
         content: `Record with ID ${id_no} has been successfully archived.`,
@@ -344,13 +312,14 @@ const DuplicateNotif = ({
       }
       setIsModalVisible(false); // Close the archive selection modal
     } catch (error) {
-      console.error("Error during transfer operation:", error);
-
+      // Error is logged in the service
       message.error({
-        content: `Failed to archive the record. Details: ${error.message}`,
+        content: error.message || `Failed to archive the record.`,
         placement: "topRight", // Show the message on the right side
       });
       // Potentially do not close the modal on error, or handle as needed
+    } finally {
+      setIsSaving(false);
     }
   };
 

@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import { Input, Button, ConfigProvider } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 import CryptoJS from "crypto-js";
 import "./login.css";
+import { loginUser } from "./api/authService"; // Import the new service
 import homelogo from "./assets/UCDSInformation.png";
 
 const Login = () => {
@@ -23,28 +23,19 @@ const Login = () => {
     setError(null);
 
     try {
-      const response = await axios.post(
-        "http://10.14.77.100:8081/login",
-        {
-          username: values.username,
-          password: values.password,
-        },
-        {
-          withCredentials: true,
-        }
-      );
+      const responseData = await loginUser(values.username, values.password);
 
-      if (response.data.status === "success") {
-        const { password, ...safeProfile } = response.data;
+      if (responseData.status === "success") {
+        // const { password, ...safeProfile } = responseData; // password is not in responseData if service handles it
         // No longer storing the full profile in localStorage
         navigate("/universe");
       } else {
         setError("Login failed. Please check your credentials.");
       }
     } catch (error) {
-      console.error("Error during login:", error);
-      if (error.response && error.response.data && error.response.data.message) {
-        setError(error.response.data.message);
+      console.error("Error during login:", error); // error here is what's thrown by loginUser
+      if (error && error.message) {
+        setError(error.message);
       } else {
         setError("Invalid username or password. Please try again.");
       }

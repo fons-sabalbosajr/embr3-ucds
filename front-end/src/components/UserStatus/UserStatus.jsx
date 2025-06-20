@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { List, Modal, Button, Row, Col } from "antd";
 import NiceAvatar from "react-nice-avatar";
-import axios from "axios";
 import "./userstatus.css";
+import { getOnlineUsers } from "../../api/userService"; // Import the new service
 
 const UserStatus = ({ theme }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -14,10 +14,8 @@ const UserStatus = ({ theme }) => {
   useEffect(() => {
     const fetchOnlineUsers = async () => {
       try {
-        const response = await axios.get(
-          "http://10.14.77.100:8081/api/online_users"
-        );
-        const allUsers = response.data.onlineUsers;
+        const responseData = await getOnlineUsers();
+        const allUsers = responseData.onlineUsers;
 
         // Separate online and offline users
         const online = allUsers.filter((user) => user.isLoggedIn);
@@ -33,13 +31,16 @@ const UserStatus = ({ theme }) => {
           return timeB - timeA;
         });
 
-        // Combine online and offline users
         const sortedUsers = [...online, ...offline];
 
-        // Update onlineUsers state with the latest data
         setOnlineUsers(sortedUsers);
       } catch (error) {
-        console.error("Error fetching online users:", error);
+        console.error(
+          "Error in UserStatus component while fetching online users:",
+          error
+        );
+
+        setOnlineUsers([]);
       } finally {
         setLoading(false);
       }
@@ -102,139 +103,70 @@ const UserStatus = ({ theme }) => {
 
   return (
     <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%", // Make it fill the parent container
-      }}
+      className={`user-status-wrapper ${
+        theme === "dark" ? "theme-dark" : "theme-light"
+      }`}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-
-        }}
-      >
-        <h3
-          className="user-status-title"
-          style={{ color: theme === "dark" ? "#ffffff" : "#000000" }}
-        >
-          Online Users
-        </h3>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <div
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: "#52c41a",
-              }}
-            ></div>
-            <span style={{ fontSize: "10px" }}>
+      <div className="user-status-header">
+        <h3 className="user-status-title">Online Users</h3>
+        <div className="user-status-indicators">
+          <div className="user-status-indicator">
+            <div className="user-status-indicator-dot online"></div>
+            <span className="user-status-indicator-text">
               Online ({onlineUsers.filter((user) => user.isLoggedIn).length})
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <div
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: "#d9d9d9",
-              }}
-            ></div>
-            <span style={{ fontSize: "10px" }}>Offline</span>
+          <div className="user-status-indicator">
+            <div className="user-status-indicator-dot offline"></div>
+            <span className="user-status-indicator-text">Offline</span>
           </div>
         </div>
       </div>
       {onlineUsers.length > 0 ? (
         <>
-          <div
-            ref={listContainerRef}
-            className="user-status-list-container"
-            style={{
-              flex: 1, // Allow the list to grow and fill the remaining space
-              overflowY: "auto",
-              maxHeight: "150px", // Add a maxHeight to ensure scrolling
-            }}
-          >
+          <div ref={listContainerRef} className="user-status-list-container">
             <List
               itemLayout="horizontal"
-              size="large" // Increase the size of the list items
+              size="small"
+              className="user-status-list"
               dataSource={onlineUsers}
               renderItem={(user, index) => (
                 <List.Item
                   key={user.userName || user.userId || index}
-                  className="user-status-item"
-                  style={{
-                    opacity: user.isLoggedIn ? 1 : 0.75,
-                    padding: "0px", // Add padding to make items larger
-                    alignItems: "center", // Center the content vertically
-                  }}
+                  className={`user-status-item ${
+                    !user.isLoggedIn ? "offline-user" : ""
+                  }`}
                 >
-                  <div style={{ position: "relative" }}>
+                  <div className="user-status-item-avatar-wrapper">
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
                           src={`http://10.14.77.100:8081${user.avatar}`}
                           alt="Avatar"
-                          style={{
-                            width: "20px", // Increase avatar size
-                            height: "20px",
-                            borderRadius: "50%",
-                          }}
+                          className="user-status-item-avatar"
                         />
                       ) : (
                         <NiceAvatar
-                          style={{
-                            width: "20px", // Increase avatar size
-                            height: "20px",
-                            borderRadius: "50%",
-                          }}
+                          className="user-status-item-avatar"
                           {...user.avatar}
                         />
                       )
                     ) : (
-                      <NiceAvatar style={{ width: "20px", height: "20px" }} />
+                      <NiceAvatar className="user-status-item-avatar" />
                     )}
                     <div
-                      style={{
-                        position: "absolute",
-                        bottom: 4,
-                        right: 0,
-                        width: "8px", // Increase status indicator size
-                        height: "8px",
-                        borderRadius: "50%",
-                        backgroundColor: user.isLoggedIn
-                          ? "#52c41a"
-                          : "#d9d9d9",
-                        border: "1px solid white",
-                      }}
+                      className={`user-status-dot ${
+                        user.isLoggedIn ? "online" : "offline"
+                      }`}
                     />
                   </div>
                   <List.Item.Meta
                     title={
-                      <div
-                        className="user-status-item-title"
-                        style={{ fontSize: "10px", marginBottom: "10px" }} // Larger font size
-                      >
-                        {user.name}
-                      </div>
+                      <div className="user-status-item-title">{user.name}</div>
                     }
                   />
                   {!user.isLoggedIn && (
-                    <span
-                      className="user-status-item-time"
-                      style={{ fontSize: "9px" }} // Larger font size for time
-                    >
+                    <span className="user-status-item-time">
                       {calculateTime(user.logoutTime)}
                     </span>
                   )}
@@ -244,17 +176,9 @@ const UserStatus = ({ theme }) => {
           </div>
           {showScrollIndicator && (
             <Button
-              type="link"
+              type="primary"
               onClick={handleOpenAllUsersModal}
-              style={{
-                marginTop: "5px",
-                padding: 0,
-                height: "auto",
-                lineHeight: "normal",
-                textAlign: "center",
-                width: "100%",
-                color: theme === "dark" ? "#ffffff" : "#000000",
-              }}
+              className="user-status-view-all-button"
             >
               View all users
             </Button>
@@ -265,69 +189,52 @@ const UserStatus = ({ theme }) => {
       )}
 
       <Modal
+        className="user-status-modal"
         title="All Users Status"
         open={isAllUsersModalVisible}
         onCancel={handleCloseAllUsersModal}
         footer={null}
-        width={600}
-        style={{ maxHeight: "70vh", overflowY: "auto" }}
+        width={700} // Keep a max width for larger screens
       >
-        <Row gutter={16}>
-          <Col span={12}>
-            <h4 style={{ color: theme === "dark" ? "#fff" : "#000" }}>
+        {/* Use responsive Col props to stack columns on smaller screens */}
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={24} md={12} lg={12} xl={12}>
+            <h4 className="user-status-modal-section-title">
               Online ({modalOnlineUsers.length})
             </h4>
             <List
               itemLayout="horizontal"
               dataSource={modalOnlineUsers}
-              style={{ maxHeight: "60vh", overflowY: "auto" }}
+              className="user-status-modal-list"
               renderItem={(user, index) => (
                 <List.Item
                   key={user.userName || user.userId || index}
-                  className="user-status-item"
-                  style={{ padding: "5px 0" }}
+                  className="user-status-item" // Re-uses base item styles, modal-list will override padding
                 >
-                  <div style={{ position: "relative", marginRight: "10px" }}>
+                  <div className="user-status-item-avatar-wrapper">
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
                           src={`http://10.14.77.100:8081${user.avatar}`}
                           alt="Avatar"
-                          style={{
-                            width: "30px",
-                            height: "30px",
-                            borderRadius: "50%",
-                          }}
+                          className="user-status-item-avatar" // modal-list will target this for size
                         />
                       ) : (
                         <NiceAvatar
-                          style={{ width: "30px", height: "30px" }}
+                          className="user-status-item-avatar" // modal-list will target this for size
                           {...user.avatar}
                         />
                       )
                     ) : (
-                      <NiceAvatar style={{ width: "30px", height: "30px" }} />
+                      <NiceAvatar className="user-status-item-avatar" /> // modal-list will target this for size
                     )}
                     <div
-                      className="user-status-dot" // Re-use class if styles match
-                      style={{
-                        backgroundColor: "#52c41a",
-                        width: "10px",
-                        height: "10px",
-                        bottom: 5,
-                        right: 1,
-                      }}
+                      className="user-status-dot online" // modal-list will target this for size/pos
                     />
                   </div>
                   <List.Item.Meta
                     title={
-                      <span
-                        style={{
-                          fontSize: "10px",
-                          color: theme === "dark" ? "#fff" : "#000",
-                          fontWeight: "normal",
-                        }}
-                      >
+                      <span className="user-status-modal-item-name">
                         {user.name}
                       </span>
                     }
@@ -336,71 +243,48 @@ const UserStatus = ({ theme }) => {
               )}
             />
           </Col>
-          <Col span={12}>
-            <h4 style={{ color: theme === "dark" ? "#fff" : "#000" }}>
+          <Col xs={24} sm={24} md={12} lg={12} xl={12}>
+            <h4 className="user-status-modal-section-title">
               Offline ({modalOfflineUsers.length})
             </h4>
             <List
               itemLayout="horizontal"
               dataSource={modalOfflineUsers}
-              style={{ maxHeight: "60vh", overflowY: "auto" }}
+              className="user-status-modal-list"
               renderItem={(user, index) => (
                 <List.Item
                   key={user.userName || user.userId || index}
-                  className="user-status-item"
-                  style={{ opacity: 0.75, padding: "5px 0" }}
+                  className="user-status-item offline-user" // Re-uses base item styles
                 >
-                  <div style={{ position: "relative", marginRight: "10px" }}>
+                  <div className="user-status-item-avatar-wrapper">
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
                           src={`http://10.14.77.100:8081${user.avatar}`}
                           alt="Avatar"
-                          style={{
-                            width: "30px",
-                            height: "30px",
-                            borderRadius: "50%",
-                          }}
+                          className="user-status-item-avatar" // modal-list will target this for size
                         />
                       ) : (
                         <NiceAvatar
-                          style={{ width: "30px", height: "30px" }}
+                          className="user-status-item-avatar" // modal-list will target this for size
                           {...user.avatar}
                         />
                       )
                     ) : (
-                      <NiceAvatar style={{ width: "30px", height: "30px" }} />
+                      <NiceAvatar className="user-status-item-avatar" /> // modal-list will target this for size
                     )}
                     <div
-                      className="user-status-dot" // Re-use class if styles match
-                      style={{
-                        backgroundColor: "#d9d9d9",
-                        width: "10px",
-                        height: "10px",
-                        bottom: 5,
-                        right: 1,
-                      }}
+                      className="user-status-dot offline" // modal-list will target this for size/pos
                     />
                   </div>
                   <List.Item.Meta
                     title={
-                      <span
-                        style={{
-                          fontSize: "10px",
-                          color: theme === "dark" ? "#fff" : "#000",
-                          fontWeight: "normal",
-                        }}
-                      >
+                      <span className="user-status-modal-item-name">
                         {user.name}
                       </span>
                     }
                   />
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      color: theme === "dark" ? "#aaa" : "#888",
-                    }}
-                  >
+                  <span className="user-status-modal-item-time">
                     {calculateTime(user.logoutTime)}
                   </span>
                 </List.Item>

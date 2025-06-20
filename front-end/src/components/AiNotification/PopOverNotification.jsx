@@ -18,7 +18,6 @@ import {
   LoadingOutlined,
 } from "@ant-design/icons";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
-import axios from "axios"; // Import axios
 import ProvinceModal from "../../menu-province/ProvinceModal";
 import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import "./popovernotification.css";

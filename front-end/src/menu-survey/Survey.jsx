@@ -935,15 +935,6 @@ const Survey = ({ theme, currentUser }) => {
     setIsAddModalVisible(false);
   };
 
-  const convertHexToRgba = (hex, opacity) => {
-    const sanitizedHex = hex.replace("#", "");
-    const bigint = parseInt(sanitizedHex, 16);
-    const r = (bigint >> 16) & 255;
-    const g = (bigint >> 8) & 255;
-    const b = bigint & 255;
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  };
-
   const paginatedData = useMemo(() => {
     return filteredData.slice(
       (currentPage - 1) * pageSize,
@@ -1289,28 +1280,6 @@ const Survey = ({ theme, currentUser }) => {
               loading={loading && progress < 100} // Show loading on button if fetching
             />
           </Tooltip>
-          {/* <Tooltip title="Export Data">
-            <Button
-              type="primary"
-              className="action-button"
-              icon={<ExportOutlined />}
-              //onClick={() => handleExportPDF(capitalizedProvinceName)} // Add export functionality
-            />
-          </Tooltip> */}
-          {/* <Tooltip title="Mark Row As">
-            <Dropdown
-              overlay={colorMenu}
-              open={colorMenuVisible}
-              onOpenChange={(visible) => setColorMenuVisible(visible)}
-              placement="bottomLeft"
-            >
-              <Button
-                type="primary"
-                className="action-button"
-                icon={<BgColorsOutlined />}
-              />
-            </Dropdown>
-          </Tooltip> */}
           <Button
             type="primary"
             className="add-survey-button"
@@ -1369,6 +1338,7 @@ const Survey = ({ theme, currentUser }) => {
               pageSizeOptions={["10", "20", "50", "100"]}
               size="small"
               className="custom-pagination"
+              simple
             />
           </div>
         </div>

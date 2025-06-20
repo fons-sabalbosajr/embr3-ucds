@@ -811,11 +811,11 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
           )}
 
           {/* PISMU Tracking */}
-          {record.pismu_tracking && record.pismu_tracking !== "none" && (
+          {record.pismu_tracking && record.pismu_tracking.trim() !== "" && record.pismu_tracking.trim().toLowerCase() !== "none" && (
             <p className="monitoring-label">
               <Tooltip
                 title={
-                  <div style={{ fontSize: "10px" }}>Received by PISMU</div>
+                  <div style={{ fontSize: "10px" }}>Received by: {record.pismu_tracking}</div>
                 }
                 color="#0D92F4"
               >

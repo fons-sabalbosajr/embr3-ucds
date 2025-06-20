@@ -1,39 +1,114 @@
+.user-status-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.user-status-wrapper.theme-dark .user-status-title,
+.user-status-wrapper.theme-dark .user-status-view-all-button,
+.user-status-wrapper.theme-dark .user-status-modal-section-title,
+.user-status-wrapper.theme-dark .user-status-modal-item-name {
+  color: #ffffff;
+}
+
+.user-status-wrapper.theme-dark .user-status-modal-item-time {
+  color: #aaa;
+}
+
+.user-status-wrapper.theme-light .user-status-title,
+.user-status-wrapper.theme-light .user-status-view-all-button,
+.user-status-wrapper.theme-light .user-status-modal-section-title,
+.user-status-wrapper.theme-light .user-status-modal-item-name {
+  color: #000000;
+}
+
+.user-status-wrapper.theme-light .user-status-modal-item-time {
+  color: #888;
+}
+
 .user-status-container {
   border-radius: 5px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   background-color: #f9f9f9;
   border: 1px solid #dee2e6;
 }
+.user-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-.user-status-title{
+.user-status-title {
   font-weight: 500;
+  /* Theme-specific color will be applied via .user-status-wrapper.theme-dark/light */
+}
+
+.user-status-indicators {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.user-status-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.user-status-indicator-dot.online {
+  background-color: #52c41a;
+}
+
+.user-status-indicator-dot.offline {
+  background-color: #d9d9d9;
+}
+
+.user-status-indicator-text {
+  font-size: 10px;
 }
 
 .user-status-item {
   display: flex;
   align-items: center;
   justify-content: space-between; /* Changed justify-items to justify-content */
-  padding: 10px; /* Added padding */
-  border-bottom: 1px solid #e9e9e9; /* Added border bottom */
+  padding: 0px; /* Overriding the previous 10px, as per inline style */
+}
+
+.user-status-item.offline-user {
+  opacity: 0.75;
+}
+
+.user-status-item-avatar-wrapper {
+  position: relative;
 }
 
 .user-status-item-avatar {
-  margin-right: 10px; /* Increased margin right */
-  font-size: 11px; /* Increased font size */
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-right: 2px; /* Increased margin right */
 }
 
 .user-status-item-title {
-  margin-top: 10px; /* Removed margin top */
-  font-size: 11px; 
+  font-size: 10px; /* As per inline style */
   font-weight: 500;
-  margin-left: 10px;
+  margin-left: 10px; /* Reduced left margin for smaller screens */
+  position: relative; /* Added to be a positioning context for the time */
+  margin-bottom: -2px;
+  white-space: nowrap; /* Prevent text wrapping */
 }
 
 .user-status-item-time {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 9px;
   color: #9d9d9d;
-  margin-right: 20px;
+  padding-right: -10px;
 }
 
 .user-status-dot {
@@ -45,39 +120,297 @@
   border-radius: 50%;
   border: 1px solid white;
 }
-
-.user-status-list-container {
-  //height: 180px;
-  overflow-y: auto;
+.user-status-dot.online {
+  background-color: #52c41a;
+}
+.user-status-dot.offline {
+  background-color: #d9d9d9;
 }
 
-.user-status-item {
-  border-bottom: 1px solid #ddd;
+/* Specific dot styles for main list item avatars, if different from general .user-status-dot */
+.user-status-item .user-status-dot {
+  width: 8px;
+  height: 8px;
+  bottom: 4px;
+  right: 0px;
+}
+
+.user-status-list-container {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 150px;
 }
 
 /* Custom Scrollbar Styles */
+/* These were duplicated, merged into .user-status-list-container above */
+
+.user-status-view-all-button {
+  margin-top: 5px;
+  padding: 0;
+  height: auto;
+  text-align: center;
+  width: 100px;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Modal specific styles */
+.user-status-modal .ant-modal-body {
+  padding: 10px; /* Add some padding to the modal body */
+  height: auto;
+}
+
+.user-status-modal-section-title {
+  /* Theme-specific color will be applied via .user-status-wrapper.theme-dark/light */
+  margin-bottom: 8px; /* Add some spacing */
+}
+
+.user-status-modal-list {
+  max-height: 60vh; /* Keep the height for modal list */
+  overflow-y: auto; /* Allow scrolling */
+  padding: 0; /* Reset padding to avoid extra space */
+}
+
+.user-status-modal-list .user-status-item.offline-user {
+  opacity: 0.75;
+}
+
+.user-status-modal-list .user-status-item-avatar-wrapper {
+  position: relative;
+  margin-right: 10px;
+}
+
+.user-status-modal-list .user-status-item-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+}
+
+/* Specific dot styles for modal list item avatars */
+/* These will be overridden by responsive styles if screen size matches */
+.user-status-modal-list .user-status-dot {
+  width: 10px;
+  height: 10px;
+  bottom: 5px;
+  right: 1px;
+}
+
+.user-status-modal-item-name {
+  font-size: 10px;
+  font-weight: normal;
+  /* Theme-specific color will be applied via .user-status-wrapper.theme-dark/light */
+}
+
+.user-status-modal-item-time {
+  font-size: 10px;
+  margin-left: auto; /* To push it to the right */
+  /* Theme-specific color will be applied via .user-status-wrapper.theme-dark/light */
+}
+
+/* Scrollbar styles for modal list (can be same as user-status-list-container if desired) */
 .user-status-list-container {
   //height: 180px;
   overflow-y: auto;
-  scrollbar-width: thin; /* For Firefox */
-  scrollbar-color: #b9b9b9 #f9f9f9; /* For Firefox */
+  scrollbar-width: none; /* For Firefox */
+  -ms-overflow-style: none;  /* For Internet Explorer and Edge */
 }
 
-/* For Webkit browsers (Chrome, Safari) */
-.user-status-list-container::-webkit-scrollbar {
-  width: 5px; /* Width of the scrollbar */
+.user-status-list-container::-webkit-scrollbar,
+.user-status-modal-list::-webkit-scrollbar {
+ display: none; /* For Chrome, Safari, Opera */
 }
 
-.user-status-list-container::-webkit-scrollbar-track {
-  background: #f9f9f9; /* Background of the scrollbar track */
-  border-radius: 20px; /* Rounded corners for the track */
+/* Remove lines between items in the modal lists */
+.user-status-modal .user-status-modal-list .ant-list-item {
+  border-bottom: none !important;
 }
 
-.user-status-list-container::-webkit-scrollbar-thumb {
-  background-color: #b9b9b9; /* Color of the scrollbar thumb */
-  border-radius: 20px; /* Rounded corners for the thumb */
+/* Increase the height of the lists within the modal, which will make the modal taller */
+.user-status-modal .user-status-modal-list {
+  height: 500px; /* You can adjust this value as needed */
+  overflow-y: auto; /* Add a scrollbar if content exceeds the new height */
+  scrollbar-width: none; /* For Firefox */
+  -ms-overflow-style: none;  /* For Internet Explorer and Edge */
 }
 
-.user-status-list-container::-webkit-scrollbar-thumb:hover {
-  background-color: #b9b9b9; /* Darker shade on hover */
+@media (max-width: 1100px) {
+  /* Adjust the container width for smaller screens */
+  .user-status-container {
+    width: 100%; /* Full width on smaller screens */
+    max-width: none; /* Remove max-width restriction */
+  }
+
+  .user-status-container span[style*="font-size: 10px"] {
+    font-size: 11px !important; /* Use !important to override inline style */
+  }
+
+  /* Adjust the title font size for better readability */
+  .user-status-title {
+    font-size: 13px; /* Increase font size for better visibility */
+  }
+
+  .user-status-indicators {
+    flex-direction: column; /* Stack indicators vertically */
+    align-items: flex-start; /* Align indicators to the start */
+    gap: 1px; /* Reduce gap between indicators */
+  }
+
+  .user-status-indicator-text {
+    font-size: 9px;
+  }
+
+  .user-status-item-title {
+    font-size: 9px; /* As per inline style */
+    font-weight: 300;
+    margin-left: 5px; /* Reduced left margin for smaller screens */
+    position: relative; /* Added to be a positioning context for the time */
+    margin-bottom: -2px;
+    white-space: nowrap; /* Prevent text wrapping */
+  }
+
+  .user-status-item-avatar {
+    width: 20px; /* Reduce avatar size for smaller screens */
+    height: 20px;
+  }
+
+  .user-status-item-title {
+    font-size: 9px; /* Increase font size for better visibility */
+    margin-left: 5px; /* Reduce left margin for smaller screens */
+    position: relative; /* Added to be a positioning context for the time */
+    margin-bottom: -2px;
+  }
+
+  .user-status-item-time {
+    font-size: 10px; /* Increase font size for better visibility */
+    margin-left: 0; /* Override general 'auto' to align under title */
+    margin-right: 0;
+    padding-right: 0; /* Corrected invalid negative padding */
+
+    top: 100%; /* Place below the title's content box */
+    left: 0; /* Align with the start of the title's content box */
+    margin-top: 2px; /* Add a small gap between title and time */
+    width: auto; /* Adjust width to content */
+    white-space: nowrap; /* Prevent time from wrapping if short */
+  }
+
+  .user-status-dot {
+    width: 8px; /* Reduce dot size for smaller screens */
+    height: 8px;
+    bottom: 2px; /* Adjust position for smaller screens */
+    right: 1px;
+  }
+  /* Adjust the modal styles for smaller screens */
+  .user-status-modal .ant-modal-body {
+    padding: 5px; /* Add some padding to the modal body */
+  }
+
+  .user-status-modal-section-title {
+    font-size: 12px; /* Increase font size for better visibility */
+    margin-bottom: 10px; /* Add some spacing */
+  }
+
+  .user-status-modal-list {
+    max-height: 50vh; /* Keep the height for modal list */
+    overflow-y: auto; /* Allow scrolling */
+  }
+
+  .user-status-modal-list .user-status-item-avatar {
+    width: 30px; /* Adjust avatar size for modal list */
+    height: 30px;
+  }
+
+  /* Adjust modal list item padding */
+  .ant-modal-body .ant-list-item {
+    padding: 5px 0 !important; /* Adjust padding for modal list items */
+  }
+}
+
+/* Responsive adjustments for screens up to 1082px */
+@media (max-width: 1082px) {
+  /* Adjust font sizes for better readability on smaller screens */
+  .user-status-title {
+    font-size: 15px;
+  }
+
+  /* Small online/offline counts next to the title */
+  .user-status-container span[style*="font-size: 10px"] {
+    font-size: 11px !important; /* Use !important to override inline style */
+  }
+
+  .user-status-item-title {
+    font-size: 12px; /* Increase from 11px */
+  }
+
+  .user-status-item-time {
+    font-size: 11px; /* Increase from 10px */
+  }
+
+  /* Adjust padding or margins if needed */
+  .user-status-item {
+    padding: 8px; /* Slightly less padding than 10px if space is tight */
+  }
+
+  .user-status-item-avatar {
+    margin-right: 8px; /* Slightly less margin */
+  }
+
+  .user-status-item-title {
+    margin-left: 8px; /* Slightly less margin */
+  }
+
+  .user-status-item-time {
+    margin-right: 15px; /* Slightly less margin */
+  }
+
+  /* Adjust avatar and dot size if desired */
+  .user-status-item img,
+  .user-status-item .ant-avatar {
+    width: 18px !important; /* Adjust avatar size */
+    height: 18px !important;
+  }
+
+  .user-status-dot {
+    width: 7px !important; /* Adjust dot size */
+    height: 7px !important;
+    bottom: 3px !important; /* Adjust position */
+    right: 0px !important;
+  }
+
+  /* Modal adjustments - these target elements within the modal */
+  /* The modal layout itself is handled by Ant Design's responsive Col props */
+
+  /* Adjust modal content padding */
+  .ant-modal-body .ant-row {
+    padding: 0 10px; /* Add some horizontal padding to the modal content */
+  }
+
+  /* Adjust modal list item padding */
+  .ant-modal-body .ant-list-item {
+    padding: 5px 0 !important; /* Adjust padding for modal list items */
+  }
+
+  /* Adjust modal avatar and dot size */
+  .ant-modal-body .user-status-item img,
+  .ant-modal-body .user-status-item .ant-avatar {
+    width: 25px !important; /* Adjust modal avatar size */
+    height: 25px !important;
+  }
+
+  .ant-modal-body .user-status-dot {
+    width: 8px !important; /* Adjust modal dot size */
+    height: 8px !important;
+    bottom: 4px !important; /* Adjust position */
+    right: 0px !important;
+  }
+
+  /* Adjust modal user name font size */
+  .ant-modal-body .ant-list-item-meta-title span {
+    font-size: 11px !important; /* Adjust modal user name font size */
+  }
+
+  /* Adjust modal offline time font size */
+  .ant-modal-body .user-status-item span[style*="font-size: 10px"] {
+    font-size: 11px !important; /* Adjust modal offline time font size */
+  }
 }

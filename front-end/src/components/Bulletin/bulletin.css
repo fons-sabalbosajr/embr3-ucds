@@ -1,30 +1,35 @@
 .gradient-information {
-  background: linear-gradient(135deg, #5b8cb4, #00203f);
+  background: linear-gradient(135deg, rgba(91, 140, 180, 0.85), rgba(0, 32, 63, 0.85)); /* Semi-transparent */
 }
 
 .gradient-announcement {
-  background: linear-gradient(135deg, #3ea489, #005b55); /* Yellow gradient */
+  background: linear-gradient(135deg, rgba(62, 164, 137, 0.85), rgba(0, 91, 85, 0.85)); /* Semi-transparent */
 }
 
 .gradient-alerts {
-  background: linear-gradient(135deg, #ff7875, #a8071a); /* Red gradient */
+  background: linear-gradient(135deg, rgba(255, 120, 117, 0.85), rgba(168, 7, 26, 0.85)); /* Semi-transparent */
 }
 
 .gradient-warning {
-  background: linear-gradient(135deg, #fff566, #fa8c16); /* Orange gradient */
+  background: linear-gradient(135deg, rgba(255, 245, 102, 0.85), rgba(250, 140, 22, 0.85)); /* Semi-transparent */
 }
 
 .gradient-default {
-  background: linear-gradient(135deg, #a6a6a6, #595959); /* Gray gradient */
+  background: linear-gradient(135deg, rgba(166, 166, 166, 0.85), rgba(89, 89, 89, 0.85)); /* Semi-transparent */
 }
 
 .bulletin-container {
   width: 100%;
   margin: 0 auto;
+  position: relative; /* Added for animated circles */
+  overflow: hidden;
 }
 
 .bulletin-carousel {
-  overflow: hidden;
+  width: 100%;
+  margin: 0 auto;
+  position: relative; /* Ensure carousel is positioned correctly */
+  overflow: hidden; /* Hide overflow for circles */
 }
 
 .bulletin-carousel .slick-slide {
@@ -33,15 +38,15 @@
 
 .bulletin-slide {
   display: flex !important;
+  position: relative; /* Ensure content is above the circles */
+  z-index: 10; /* Ensure content is above the circles */
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
   padding: 30px;
   border-radius: 10px;
   height: 250px;
-  position: relative;
   width: 100%;
-  background-size: cover; /* Ensure background fills the space */
   transition: background 0.4s ease-in-out;
 }
 
@@ -199,7 +204,11 @@
 }
 
 .modal-light .ant-modal-header {
-  background: linear-gradient(135deg, #e6f7ff, #bae7ff); /* Light gradient header */
+  background: linear-gradient(
+    135deg,
+    #e6f7ff,
+    #bae7ff
+  ); /* Light gradient header */
   border-bottom: none; /* Remove default border */
   padding: 20px 24px;
 }
@@ -257,7 +266,308 @@
   /* z-index: 1; no longer needed as animated-background is removed */
 }
 
-.bulletin-left,
-.bulletin-image {
-  /* position: relative; and z-index: 2; no longer needed */
+.animated-circles-container-bulletin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* Below the bulletin content */
+  pointer-events: none; /* Allow clicks through the circles */
+}
+
+.bulletin-circle {
+  position: absolute;
+  display: block;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.2); /* Slightly more visible base */
+  animation: gentleFloat 30s ease-in-out infinite alternate; /* Floating animation with alternate direction */
+  border-radius: 50%;
+}
+
+@keyframes gentleFloat {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.1;
+  }
+  25% {
+    transform: translate(10px, -15px) scale(1.05);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-5px, 10px) scale(0.95);
+    opacity: 0.5; /* Peak opacity */
+  }
+  75% {
+    transform: translate(15px, 5px) scale(1.02);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.1;
+  }
+}
+
+/* Varying sizes, positions, and animation delays/durations for circles */
+.bulletin-circle:nth-child(1) {
+  left: 25%;
+  top: 10%; /* Added top position */
+  width: 80px;
+  height: 80px;
+  animation-delay: 0s;
+  animation-duration: 25s; /* Adjusted duration */
+}
+
+.bulletin-circle:nth-child(2) {
+  left: 10%;
+  top: 40%; /* Added top position */
+  width: 20px;
+  height: 20px;
+  animation-delay: 2s;
+  animation-duration: 12s;
+  background: rgba(255, 255, 255, 0.1); /* Slightly less opaque */
+}
+
+.bulletin-circle:nth-child(3) {
+  left: 70%;
+  top: 20%; /* Added top position */
+  width: 20px;
+  height: 20px;
+  animation-delay: 4s;
+  animation-duration: 18s; /* Adjusted duration */
+}
+
+.bulletin-circle:nth-child(4) {
+  left: 40%;
+  top: 70%; /* Added top position */
+  width: 60px;
+  height: 60px;
+  animation-delay: 0s;
+  animation-duration: 18s;
+  background: rgba(255, 255, 255, 0.2); /* Slightly more opaque */
+}
+
+.bulletin-circle:nth-child(5) {
+  left: 65%;
+  top: 85%; /* Added top position */
+  width: 20px;
+  height: 20px;
+  animation-delay: 0s;
+  animation-duration: 15s; /* Adjusted duration */
+}
+
+.bulletin-circle:nth-child(6) {
+  left: 75%;
+  top: 55%; /* Added top position */
+  width: 110px;
+  height: 110px;
+  animation-delay: 3s;
+  background: rgba(255, 255, 255, 0.08); /* Adjusted opacity */
+  animation-duration: 22s; /* Adjusted duration */
+}
+
+.bulletin-circle:nth-child(7) {
+  left: 35%;
+  top: 5%; /* Added top position */
+  width: 150px;
+  height: 150px;
+  animation-delay: 7s;
+  background: rgba(255, 255, 255, 0.1); /* Adjusted opacity */
+  animation-duration: 35s; /* Adjusted duration */
+}
+
+.bulletin-circle:nth-child(8) {
+  left: 50%;
+  top: 30%; /* Added top position */
+  width: 25px;
+  height: 25px;
+  animation-delay: 15s;
+  animation-duration: 45s;
+  background: rgba(255, 255, 255, 0.12); /* Slightly less opaque */
+}
+
+.bulletin-circle:nth-child(9) {
+  left: 20%;
+  top: 65%; /* Added top position */
+  width: 15px;
+  height: 15px;
+  animation-delay: 2s;
+  background: rgba(255, 255, 255, 0.18); /* Adjusted opacity */
+  animation-duration: 28s; /* Adjusted duration */
+}
+
+.bulletin-circle:nth-child(10) {
+  left: 85%;
+  top: 75%; /* Added top position */
+  width: 150px;
+  height: 150px;
+  animation-delay: 5s; /* Adjusted delay */
+  background: rgba(255, 255, 255, 0.07); /* Adjusted opacity */
+  animation-duration: 20s; /* Adjusted duration */
+}
+
+/* Ensure the bulletin-container is positioned for absolute children */
+.bulletin-container {
+  width: 100%;
+  margin: 0 auto;
+  position: relative; /* Already present, needed for circles */
+  overflow: hidden;
+  /* Optionally, you can add a background gradient here if desired */
+  /* background: linear-gradient(135deg, #e0f7fa, #b2ebf2); */
+}
+
+/* Ensure bulletin content stays above the circles */
+.bulletin-carousel,
+.bulletin-slide {
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 1082px) {
+  .bulletin-slide {
+    padding: 20px; /* Slightly less padding for smaller screens */
+  }
+
+  /* .bulletin-left is already full width and stacked from the 1024px breakpoint */
+
+  .bulletin-title {
+    font-size: 20px; /* Slightly smaller title */
+  }
+
+  .bulletin-date {
+    font-size: 12px; /* Slightly smaller date */
+  }
+
+  .bulletin-message {
+    font-size: 14px; /* Slightly smaller message text */
+    margin-bottom: 15px; /* Adjust margin */
+  }
+
+  .bulletin-button {
+    /* font-size: 14px; /* Inherits from 1024px or can be adjusted */
+    padding: 8px 16px; /* Adjust button padding */
+  }
+
+  .bulletin-image {
+    width: 200px; /* Smaller image size for phones */
+    height: 200px;
+    opacity: 0.3; /* Make image more subtle */
+    margin-top: 10px; /* Add space above image */
+  }
+
+  /* Adjust modal for smaller screens */
+  .bulletin-modal .ant-modal {
+    max-width: 90%; /* Make modal take more width */
+  }
+
+  .bulletin-modal .ant-modal-header {
+    padding: 15px 20px; /* Adjust modal header padding */
+  }
+
+  .bulletin-modal .ant-modal-title {
+    font-size: 15px; /* Adjust modal title size */
+  }
+}
+
+/* Responsive adjustments for tablets (e.g., iPads) and smaller screens */
+@media (max-width: 1024px) {
+  /* Adjusted for general tablet responsiveness */
+  .bulletin-slide {
+    flex-direction: column; /* Stack items vertically */
+    height: auto; /* Allow height to adjust based on content */
+    padding: 25px; /* General tablet padding */
+    text-align: center; /* Center text content */
+  }
+
+  .bulletin-left {
+    flex: none; /* Remove flex grow */
+    width: 100%; /* Take full width */
+    padding-right: 0;
+    margin-bottom: 20px; /* Add space below text before image */
+  }
+
+  .bulletin-title {
+    font-size: 20px; /* General tablet title size */
+  }
+
+  .bulletin-date {
+    font-size: 13px; /* General tablet date size */
+  }
+
+  .bulletin-message {
+    font-size: 15px; /* General tablet message text */
+    margin-bottom: 20px; /* Adjust margin */
+  }
+
+  .bulletin-button {
+    font-size: 14px; /* General tablet button text */
+    padding: 9px 20px; /* Adjust button padding */
+  }
+
+  .bulletin-image {
+    width: 180px; /* General tablet image size */
+    height: 180px;
+    opacity: 0.35; /* Slightly more visible */
+    margin-top: 15px; /* Add space above image */
+  }
+
+  /* Adjust modal for general tablets */
+  .bulletin-modal .ant-modal {
+    max-width: 85%;
+  }
+
+  .bulletin-modal .ant-modal-header {
+    padding: 18px 22px;
+  }
+
+  .bulletin-modal .ant-modal-title {
+    font-size: 19px;
+  }
+}
+
+/* Further refinements for smaller tablets and phones */
+@media (max-width: 768px) {
+  .bulletin-slide {
+    padding: 20px; /* Slightly less padding for smaller screens */
+  }
+
+  /* .bulletin-left is already full width and stacked from the 1024px breakpoint */
+
+  .bulletin-title {
+    font-size: 20px; /* Slightly smaller title */
+  }
+
+  .bulletin-date {
+    font-size: 12px; /* Slightly smaller date */
+  }
+
+  .bulletin-message {
+    font-size: 14px; /* Slightly smaller message text */
+    margin-bottom: 15px; /* Adjust margin */
+  }
+
+  .bulletin-button {
+    /* font-size: 14px; /* Inherits from 1024px or can be adjusted */
+    padding: 8px 16px; /* Adjust button padding */
+  }
+
+  .bulletin-image {
+    width: 150px; /* Smaller image size for phones */
+    height: 150px;
+    opacity: 0.3; /* Make image more subtle */
+    margin-top: 10px; /* Add space above image */
+  }
+
+  /* Adjust modal for smaller screens */
+  .bulletin-modal .ant-modal {
+    max-width: 90%; /* Make modal take more width */
+  }
+
+  .bulletin-modal .ant-modal-header {
+    padding: 15px 20px; /* Adjust modal header padding */
+  }
+
+  .bulletin-modal .ant-modal-title {
+    font-size: 18px; /* Adjust modal title size */
+  }
 }

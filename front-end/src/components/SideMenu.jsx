@@ -15,7 +15,49 @@ import {
 import { BsClipboardDataFill } from "react-icons/bs"; // Example icon, choose one you like
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { DataContext } from "./../menu-province/DataContext";
-import { io } from "socket.io-client";
+import {
+  initializeSocket,
+  disconnectSocket,
+  getSocket,
+  emitJoinProvince,
+  emitLeaveProvince,
+  emitJoinSurvey,
+  emitLeaveSurvey,
+  emitJoinMbu,
+  emitLeaveMbu,
+  emitJoinEswm,
+  emitJoinPlanningUnitMonitoring,
+  emitLeavePlanningUnitMonitoring,
+  emitJoinPlanningUnitSurveyActivities,
+  emitLeavePlanningUnitSurveyActivities,
+  emitJoinPlanningUnitValidations,
+  emitLeavePlanningUnitValidations,
+  emitJoinPlanningUnitGeneratedReports,
+  emitLeavePlanningUnitGeneratedReports,
+  emitLeaveEswm,
+  emitJoinHealthcare,
+  emitLeaveHealthcare,
+  emitJoinChemicals,
+  emitLeaveChemicals,
+  emitJoinTsd,
+  emitLeaveTsd,
+  emitJoinTrc,
+  emitLeaveTrc,
+  onProvinceViewersUpdate,
+  onSurveyViewersUpdate,
+  onMbuViewersUpdate,
+  onPlanningUnitMonitoringViewersUpdate,
+  onPlanningUnitSurveyActivitiesViewersUpdate,
+  onPlanningUnitValidationsViewersUpdate,
+  onPlanningUnitGeneratedReportsViewersUpdate,
+  onEswmViewersUpdate,
+  onHealthcareViewersUpdate,
+  onChemicalsViewersUpdate,
+  onTsdViewersUpdate,
+  onTrcViewersUpdate,
+  onSocketConnect,
+  // onSocketDisconnect, // If needed
+} from "../api/socketService"; // Import socket service
 import Logo from "./Logo";
 import "./sidemenu.css";
 
@@ -47,6 +89,10 @@ const SideMenu = ({ theme, currentUser }) => {
   const [surveyViewers, setSurveyViewers] = useState([]);
   const [mbuViewers, setMbuViewers] = useState([]);
   const [eswmViewers, setEswmViewers] = useState([]);
+  const [monitoringViewers, setMonitoringViewers] = useState([]); // New state for Planning Unit Monitoring
+  const [surveyActivitiesViewers, setSurveyActivitiesViewers] = useState([]); // New state for Planning Unit Survey Activities
+  const [validationsViewers, setValidationsViewers] = useState([]); // New state for Planning Unit Validations
+  const [generatedReportsViewers, setGeneratedReportsViewers] = useState([]); // New state for Planning Unit Generated Reports
   const [healthcareViewers, setHealthcareViewers] = useState([]);
   const [chemicalsViewers, setChemicalsViewers] = useState([]);
   const [tsdViewers, setTsdViewers] = useState([]);
@@ -57,23 +103,22 @@ const SideMenu = ({ theme, currentUser }) => {
   const navigate = useNavigate();
   const { setCurrentProvince } = useContext(DataContext);
   const prevLocationPathnameRef = useRef(location.pathname); // To track previous path
-  const socketRef = useRef(null);
 
   // Style for the text part of menu items, allowing wrapping
   const textWithAvatarsStyle = {
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-    textAlign: 'left',
-    lineHeight: '1.4',
-    marginRight: '8px', // Creates a gap before the avatars
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    textAlign: "left",
+    lineHeight: "1.4",
+    marginRight: "8px", // Creates a gap before the avatars
   };
 
   const textOnlyMenuItemStyle = {
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-    textAlign: 'left',
-    lineHeight: '1.4',
-    width: '100%', // Ensure it uses available space for wrapping
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    textAlign: "left",
+    lineHeight: "1.4",
+    width: "100%", // Ensure it uses available space for wrapping
   };
   const permissions = currentUser?.permissions || [];
   const canViewDataHistory = permissions[3];
@@ -98,7 +143,8 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["healthcare"]);
     } else if (path.startsWith("/universe/survey")) {
       setOpenKeys([]);
-    } else if (path.startsWith("/universe/mbu")) { // Corrected from path.startsWith("/universe/eswm-database") for mbu
+    } else if (path.startsWith("/universe/mbu")) {
+      // Corrected from path.startsWith("/universe/eswm-database") for mbu
       setOpenKeys([]);
     } else if (path.startsWith("/universe/eswm-database")) {
       setOpenKeys(["eswm-database"]); // Keep the 'eswm-database' submenu open
@@ -128,166 +174,86 @@ const SideMenu = ({ theme, currentUser }) => {
   //   }
   // }, [currentUser]);
 
+  // Effect for initializing socket and setting up listeners
   useEffect(() => {
-    if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.100:8081", {
-        withCredentials: true,
-      });
-    }
-    // This effect is primarily for establishing the socket connection
-    // and cleaning it up if the component were to unmount or socket needs to be reset.
-    // Actual event listeners will be managed by other effects.
-    const socket = socketRef.current; // Keep a reference for cleanup
+    initializeSocket();
+
+    const cleanups = [
+      onProvinceViewersUpdate(setProvinceViewers),
+      onSurveyViewersUpdate(setSurveyViewers),
+      onMbuViewersUpdate(setMbuViewers),
+      onEswmViewersUpdate(setEswmViewers),
+      onPlanningUnitMonitoringViewersUpdate(setMonitoringViewers), // New listener
+      onPlanningUnitSurveyActivitiesViewersUpdate(setSurveyActivitiesViewers), // New listener
+      onPlanningUnitValidationsViewersUpdate(setValidationsViewers), // New listener
+      onPlanningUnitGeneratedReportsViewersUpdate(setGeneratedReportsViewers), // New listener
+      onHealthcareViewersUpdate(setHealthcareViewers),
+      onChemicalsViewersUpdate(setChemicalsViewers),
+      onTsdViewersUpdate(setTsdViewers),
+      onTrcViewersUpdate(setTrcViewers),
+    ];
+
+    const handleSocketReconnect = () => {
+      //console.log("[SideMenu] Socket reconnected. Re-joining rooms...");
+      if (!currentUser?.username) return;
+
+      const userPayload = {
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
+      };
+
+      if (currentProvince) {
+        // currentProvince is from component's state
+        emitJoinProvince(currentProvince, userPayload);
+      }
+      if (location.pathname === "/universe/survey") {
+        emitJoinSurvey(userPayload);
+      }
+      if (location.pathname === "/universe/mbu") {
+        emitJoinMbu(userPayload);
+      }
+      if (location.pathname === "/universe/planning-unit/monitoring") {
+        emitJoinPlanningUnitMonitoring(userPayload);
+      }
+      if (location.pathname === "/universe/planning-unit/survey-activities") {
+        emitJoinPlanningUnitSurveyActivities(userPayload);
+      }
+      if (location.pathname === "/universe/planning-unit/validations") {
+        emitJoinPlanningUnitValidations(userPayload);
+      }
+      if (location.pathname === "/universe/planning-unit/generated-reports") {
+        emitJoinPlanningUnitGeneratedReports(userPayload);
+      }
+      if (location.pathname.startsWith("/universe/eswm-database")) {
+        emitJoinEswm(userPayload);
+      }
+
+      if (location.pathname === "/universe/chemicals") {
+        emitJoinChemicals(userPayload);
+      }
+      if (location.pathname === "/universe/tsd") {
+        emitJoinTsd(userPayload);
+      }
+      if (location.pathname === "/universe/trc") {
+        emitJoinTrc(userPayload);
+      } // Healthcare join/leave logic - moved to its own effect below
+      if (location.pathname === "/universe/healthcare") {
+        emitJoinHealthcare(userPayload);
+      }
+      if (location.pathname === "/universe/admin") {
+        // Add admin room join/leave if needed
+      }
+    };
+
+    const connectCleanup = onSocketConnect(handleSocketReconnect);
+    cleanups.push(connectCleanup);
     return () => {
-      if (socket && socket.connected) {
-        // socket.disconnect(); // Optional: disconnect if SideMenu itself unmounts
-        // socketRef.current = null;
-      }
+      // If SideMenu unmounts, you might want to disconnect the socket
+      // if no other component is using it. For now, we leave it connected.
+      // disconnectSocket();
     };
-  }, []); // Empty dependency array means this runs once on mount and cleanup on unmount
-
-  // Effect for general data listeners (provinceViewers, surveyViewers, etc.)
-  useEffect(() => {
-    if (!socketRef.current || !socketRef.current.connected) {
-      return;
-    }
-    const socket = socketRef.current;
-
-    const provinceViewersHandler = (viewers) => setProvinceViewers(viewers);
-    const surveyViewersHandler = (updatedViewers) => {
-      // console.log(
-      //   "[SideMenu] Received surveyViewers update:",
-      //   updatedViewers.map((u) => u.username).join(", ")
-      // );
-      // console.log("[SideMenu] Received surveyViewers update:", updatedViewers.map(u => u.username).join(', '));
-      setSurveyViewers(updatedViewers);
-    };
-    const mbuViewersHandler = (viewers) => setMbuViewers(viewers);
-    const eswmViewersHandler = (viewers) => setEswmViewers(viewers);
-    const healthcareViewersHandler = (viewers) => setHealthcareViewers(viewers); // Added handler
-    const chemicalsViewersHandler = (viewers) => setChemicalsViewers(viewers); // Added handler
-    const tsdViewersHandler = (viewers) => setTsdViewers(viewers); // Added handler
-    const trcViewersHandler = (viewers) => setTrcViewers(viewers); // Added handler
-
-    // Province viewers
-    socket.on("provinceViewers", provinceViewersHandler);
-
-    // Survey viewers
-    socket.on("surveyViewers", surveyViewersHandler);
-
-    // MBU viewers
-    socket.on("mbuViewers", mbuViewersHandler);
-
-    // ESWM viewers
-    socket.on("eswmViewers", eswmViewersHandler);
-    socket.on("healthcareViewers", healthcareViewersHandler);
-    socket.on("chemicalsViewers", chemicalsViewersHandler);
-    socket.on("tsdViewers", tsdViewersHandler);
-    socket.on("trcViewers", trcViewersHandler);
-
-    return () => {
-      // Cleanup these general listeners when canViewDataHistory changes or component unmounts
-      socket.off("provinceViewers", provinceViewersHandler);
-      socket.off("surveyViewers", surveyViewersHandler);
-      socket.off("mbuViewers", mbuViewersHandler);
-      socket.off("eswmViewers", eswmViewersHandler);
-      socket.off("healthcareViewers", healthcareViewersHandler); // Ensure cleanup
-      socket.off("chemicalsViewers", chemicalsViewersHandler); // Ensure cleanup
-      socket.off("tsdViewers", tsdViewersHandler); // Ensure cleanup
-      socket.off("trcViewers", trcViewersHandler); // Ensure cleanup
-    };
-  }, []); // Run once when component mounts and socketRef is available. Listeners persist across reconnections.
-
-  // Effect for 'connect' handler (re-joining rooms on socket reconnection)
-  useEffect(() => {
-    if (!socketRef.current || !currentUser?.username)
-      // Removed canViewDataHistory check
-      return;
-
-    const socket = socketRef.current;
-
-    // Re-emit join events on reconnect
-    socket.on("connect", () => {
-      if (currentProvince && currentUser?.username) {
-        socket.emit("joinProvince", {
-          province: currentProvince,
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-      // Survey re-join on connect is handled by Survey.jsx itself
-      if (currentUser?.username && location.pathname === "/universe/mbu") {
-        socket.emit("joinMbu", {
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-      if (
-        currentUser?.username &&
-        location.pathname.startsWith("/universe/eswm-database") // Updated to cover sub-routes
-      ) {
-        socket.emit("joinEswm", {
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-      if (
-        currentUser?.username &&
-        location.pathname === "/universe/healthcare"
-      ) {
-        socket.emit("joinHealthcare", {
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-      if (
-        currentUser?.username &&
-        location.pathname === "/universe/chemicals"
-      ) {
-        socket.emit("joinChemicals", {
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-      if (currentUser?.username && location.pathname === "/universe/tsd") {
-        socket.emit("joinTsd", {
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-      if (currentUser?.username && location.pathname === "/universe/trc") {
-        socket.emit("joinTrc", {
-          user: {
-            username: currentUser.username,
-            avatar: currentUser.avatar || currentUser.avatarUrl,
-            name: currentUser.name,
-          },
-        });
-      }
-    });
-
-    return () => {
-      socket.off("connect");
-    };
-  }, [currentProvince, currentUser, location.pathname]); // Removed canViewDataHistory from deps
+  }, [currentUser, currentProvince, location.pathname]); // Add dependencies that handleSocketReconnect uses
 
   // Centralized effect for province join/leave based on URL changes
   useEffect(() => {
@@ -295,9 +261,7 @@ const SideMenu = ({ theme, currentUser }) => {
       const match = path.match(/\/universe\/province\/([^/]+)/);
       return match ? match[1] : null;
     };
-    if (!socketRef.current || !currentUser?.username) {
-      // Removed canViewDataHistory check
-      // If socket isn't ready, or no permission, or no user, ensure province state is cleared if not on a province page.
+    if (!currentUser?.username) {
       const currentUrlProvince = extractProvinceFromPath(location.pathname);
       if (!currentUrlProvince) {
         setCurrentProvinceState(null);
@@ -307,7 +271,6 @@ const SideMenu = ({ theme, currentUser }) => {
       return;
     }
 
-    const socket = socketRef.current;
     const currentPath = location.pathname;
     const prevPath = prevLocationPathnameRef.current;
 
@@ -318,27 +281,16 @@ const SideMenu = ({ theme, currentUser }) => {
     setCurrentProvinceState(newUrlProvince);
     setCurrentProvince(newUrlProvince);
 
-    // Handle leaving the old province
-    // The server's leaveProvince uses `socket.province` which was set when the user joined `oldUrlProvince`.
     if (oldUrlProvince && oldUrlProvince !== newUrlProvince) {
-      // console.log(
-      //   `[SideMenu] Navigating away from province ${oldUrlProvince}. Emitting leaveProvince.`
-      // );
-      socket.emit("leaveProvince");
+      emitLeaveProvince();
     }
 
     // Handle joining the new province
     if (newUrlProvince && newUrlProvince !== oldUrlProvince) {
-      // console.log(
-      //   `[SideMenu] Navigating to province ${newUrlProvince}. Emitting joinProvince.`
-      // );
-      socket.emit("joinProvince", {
-        province: newUrlProvince,
-        user: {
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
+      emitJoinProvince(newUrlProvince, {
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
       });
     }
 
@@ -348,191 +300,207 @@ const SideMenu = ({ theme, currentUser }) => {
 
   // MBU join/leave logic
   useEffect(() => {
-    if (!socketRef.current || !currentUser?.username) {
+    if (!currentUser?.username) {
       // Removed canViewDataHistory check
       return;
     }
 
-    const socket = socketRef.current;
     let didJoinMbuThisEffect = false;
 
     if (location.pathname === "/universe/mbu") {
       //console.log("[SideMenu] Path is /universe/mbu, attempting to joinMbu.");
-      socket.emit("joinMbu", {
-        user: {
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
+      emitJoinMbu({
+        // Corrected payload, removed path
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
       });
       didJoinMbuThisEffect = true;
     }
 
     return () => {
-      if (socketRef.current && didJoinMbuThisEffect && currentUser?.username) {
-        // console.log(
-        //   "[SideMenu] Cleanup for MBU effect: Emitting leaveMbu because this effect instance had joined."
-        // );
-        socketRef.current.emit("leaveMbu");
+      if (didJoinMbuThisEffect && currentUser?.username) {
+        emitLeaveMbu();
       }
     };
-  }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
+  }, [currentUser, location.pathname]);
 
   // ESWM join/leave logic
   useEffect(() => {
-    if (!socketRef.current || !currentUser?.username) {
+    if (!currentUser?.username) {
       // Removed canViewDataHistory check
       return;
     }
 
-    const socket = socketRef.current;
     let didJoinEswmThisEffect = false;
+    const eswmPath = location.pathname;
 
-    if (location.pathname.startsWith("/universe/eswm-database")) { // Updated to cover sub-routes
-      // console.log(
-      //   "[SideMenu] Path starts with /universe/eswm-database, attempting to joinEswm."
-      // );
-      socket.emit("joinEswm", {
-        user: {
+    if (eswmPath.startsWith("/universe/eswm-database")) {
+      // Updated to cover sub-routes
+      // Updated to cover sub-routes
+      emitJoinEswm(
+        {
+          // Corrected payload
           username: currentUser.username,
           avatar: currentUser.avatar || currentUser.avatarUrl,
           name: currentUser.name,
         },
-      });
+        eswmPath
+      );
       didJoinEswmThisEffect = true;
     }
     return () => {
-      // if (socketRef.current && didJoinEswmThisEffect && currentUser?.username) {
-      //   console.log(
-      //     "[SideMenu] Cleanup for ESWM effect: Emitting leaveEswm because this effect instance had joined."
-      //   );
-      //   socketRef.current.emit("leaveEswm");
-      // }
+      if (didJoinEswmThisEffect && currentUser?.username) {
+        emitLeaveEswm(eswmPath);
+      }
     };
-  }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
+  }, [currentUser, location.pathname]);
 
+  // Planning Unit join/leave logic
   useEffect(() => {
-    if (!socketRef.current || !currentUser?.username) {
-      // Removed canViewDataHistory check
+    if (!currentUser?.username) {
       return;
     }
 
-    const socket = socketRef.current;
+    const path = location.pathname;
+    const userPayload = {
+      // Define userPayload once
+      username: currentUser.username,
+      avatar: currentUser.avatar || currentUser.avatarUrl,
+      name: currentUser.name,
+    };
+    let didJoinMonitoring = false;
+    let didJoinSurveyActivities = false;
+    let didJoinValidations = false;
+    let didJoinGeneratedReports = false;
+    // No specific route for Generated Reports yet, assuming it might be static or covered by another room
+
+    if (path === "/universe/planning-unit/monitoring") {
+      emitJoinPlanningUnitMonitoring(userPayload);
+      didJoinMonitoring = true;
+    } else if (path === "/universe/planning-unit/survey-activities") {
+      emitJoinPlanningUnitSurveyActivities(userPayload);
+      didJoinSurveyActivities = true;
+    } else if (path === "/universe/planning-unit/validations") {
+      emitJoinPlanningUnitValidations(userPayload);
+      didJoinValidations = true;
+    } else if (path === "/universe/planning-unit/generated-reports") {
+      emitJoinPlanningUnitGeneratedReports(userPayload);
+      didJoinGeneratedReports = true;
+    }
+
+    return () => {
+      if (didJoinMonitoring && currentUser?.username)
+        emitLeavePlanningUnitMonitoring();
+      if (didJoinSurveyActivities && currentUser?.username)
+        emitLeavePlanningUnitSurveyActivities();
+      if (didJoinValidations && currentUser?.username)
+        emitLeavePlanningUnitValidations();
+      if (didJoinGeneratedReports && currentUser?.username)
+        emitLeavePlanningUnitGeneratedReports();
+    };
+  }, [currentUser, location.pathname]);
+
+  // Healthcare join/leave logic
+  useEffect(() => {
+    if (!currentUser?.username) {
+      return;
+    }
+
     let didJoinHealthcareThisEffect = false;
 
     if (location.pathname === "/universe/healthcare") {
       // console.log("[SideMenu] Path is /universe/healthcare, attempting to joinHealthcare.");
-      socket.emit("joinHealthcare", {
-        user: {
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
+      emitJoinHealthcare({
+        // Corrected payload
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
       });
       didJoinHealthcareThisEffect = true;
     }
 
     return () => {
-      if (
-        socketRef.current &&
-        didJoinHealthcareThisEffect &&
-        currentUser?.username
-      ) {
-        // console.log("[SideMenu] Cleanup for Healthcare effect: Emitting leaveHealthcare because this effect instance had joined.");
-        socketRef.current.emit("leaveHealthcare");
+      if (didJoinHealthcareThisEffect && currentUser?.username) {
+        emitLeaveHealthcare();
       }
     };
   }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
 
   // Chemicals join/leave logic
   useEffect(() => {
-    if (!socketRef.current || !currentUser?.username) {
+    if (!currentUser?.username) {
       // Removed canViewDataHistory check
       return;
     }
 
-    const socket = socketRef.current;
     let didJoinChemicalsThisEffect = false;
 
     if (location.pathname === "/universe/chemicals") {
-      // console.log("[SideMenu] Path is /universe/chemicals, attempting to joinChemicals.");
-      socket.emit("joinChemicals", {
-        user: {
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
+      emitJoinChemicals({
+        // Corrected payload
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
       });
       didJoinChemicalsThisEffect = true;
     }
 
     return () => {
-      if (
-        socketRef.current &&
-        didJoinChemicalsThisEffect &&
-        currentUser?.username
-      ) {
-        // console.log("[SideMenu] Cleanup for Chemicals effect: Emitting leaveChemicals because this effect instance had joined.");
-        socketRef.current.emit("leaveChemicals");
+      if (didJoinChemicalsThisEffect && currentUser?.username) {
+        emitLeaveChemicals();
       }
     };
   }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
 
   // TSD join/leave logic
   useEffect(() => {
-    if (!socketRef.current || !currentUser?.username) {
+    if (!currentUser?.username) {
+      // Corrected: Removed socketRef
       // Removed canViewDataHistory check
       return;
     }
 
-    const socket = socketRef.current;
     let didJoinTsdThisEffect = false;
-
     if (location.pathname === "/universe/tsd") {
       // console.log("[SideMenu] Path is /universe/tsd, attempting to joinTsd.");
-      socket.emit("joinTsd", {
-        user: {
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
+      emitJoinTsd({
+        // Corrected: Use emitJoinTsd and direct payload
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
       });
       didJoinTsdThisEffect = true;
     }
 
     return () => {
-      if (socketRef.current && didJoinTsdThisEffect && currentUser?.username) {
-        // console.log("[SideMenu] Cleanup for TSD effect: Emitting leaveTsd because this effect instance had joined.");
-        socketRef.current.emit("leaveTsd");
+      if (didJoinTsdThisEffect && currentUser?.username) {
+        emitLeaveTsd();
       }
     };
   }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
 
   // TRC join/leave logic
   useEffect(() => {
-    if (!socketRef.current || !currentUser?.username) {
+    if (!currentUser?.username) {
       // Removed canViewDataHistory check
       return;
     }
 
-    const socket = socketRef.current;
     let didJoinTrcThisEffect = false;
 
     if (location.pathname === "/universe/trc") {
-      // console.log("[SideMenu] Path is /universe/trc, attempting to joinTrc.");
-      socket.emit("joinTrc", {
-        user: {
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
+      emitJoinTrc({
+        // Corrected payload
+        username: currentUser.username,
+        avatar: currentUser.avatar || currentUser.avatarUrl,
+        name: currentUser.name,
       });
       didJoinTrcThisEffect = true;
     }
     return () => {
-      if (socketRef.current && didJoinTrcThisEffect && currentUser?.username) {
-        // console.log("[SideMenu] Cleanup for TRC effect: Emitting leaveTrc because this effect instance had joined.");
-        socketRef.current.emit("leaveTrc");
+      if (didJoinTrcThisEffect && currentUser?.username) {
+        emitLeaveTrc();
       }
     };
   }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
@@ -725,7 +693,7 @@ const SideMenu = ({ theme, currentUser }) => {
         </span>
       ),
     },
-    {
+    permissions[2] &&{
       key: "/universe/mbu",
       icon: <EnvironmentFilled />,
       label: (
@@ -746,7 +714,7 @@ const SideMenu = ({ theme, currentUser }) => {
         </span>
       ),
     },
-    {
+    permissions[2] &&{
       key: "eswm-database", // Changed to be a submenu key
       icon: <DatabaseFilled />,
       label: (
@@ -762,7 +730,9 @@ const SideMenu = ({ theme, currentUser }) => {
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
               <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/swm-plan">10 Year SWM Plan</Link>
+                <Link to="/universe/eswm-database/swm-plan">
+                  10 Year SWM Plan
+                </Link>
               </span>
               <span
                 style={{
@@ -772,7 +742,10 @@ const SideMenu = ({ theme, currentUser }) => {
                   flexShrink: 0,
                 }}
               >
-                {renderAvatars(eswmViewers)}
+                {" "}
+                {/* Only render avatars if this is the currently active ESWM sub-route */}
+                {location.pathname === "/universe/eswm-database/swm-plan" &&
+                  renderAvatars(eswmViewers)}
               </span>
             </span>
           ),
@@ -784,7 +757,9 @@ const SideMenu = ({ theme, currentUser }) => {
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
               <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/mrf">Material Recovery Facility (MRF)</Link>
+                <Link to="/universe/eswm-database/mrf">
+                  Material Recovery Facility (MRF)
+                </Link>
               </span>
               <span
                 style={{
@@ -794,7 +769,10 @@ const SideMenu = ({ theme, currentUser }) => {
                   flexShrink: 0,
                 }}
               >
-                {renderAvatars(eswmViewers)}
+                {" "}
+                {/* Only render avatars if this is the currently active ESWM sub-route */}
+                {location.pathname === "/universe/eswm-database/mrf" &&
+                  renderAvatars(eswmViewers)}
               </span>
             </span>
           ),
@@ -806,7 +784,9 @@ const SideMenu = ({ theme, currentUser }) => {
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
               <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/slf">Sanitary Landfill (SLF)</Link>
+                <Link to="/universe/eswm-database/slf">
+                  Sanitary Landfill (SLF)
+                </Link>
               </span>
               <span
                 style={{
@@ -816,7 +796,10 @@ const SideMenu = ({ theme, currentUser }) => {
                   flexShrink: 0,
                 }}
               >
-                {renderAvatars(eswmViewers)}
+                {" "}
+                {/* Only render avatars if this is the currently active ESWM sub-route */}
+                {location.pathname === "/universe/eswm-database/slf" &&
+                  renderAvatars(eswmViewers)}
               </span>
             </span>
           ),
@@ -828,7 +811,9 @@ const SideMenu = ({ theme, currentUser }) => {
               style={{ display: "flex", alignItems: "center", width: "100%" }}
             >
               <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/ods">Open Dump Sites (ODS)</Link>
+                <Link to="/universe/eswm-database/ods">
+                  Open Dump Sites (ODS)
+                </Link>
               </span>
               <span
                 style={{
@@ -838,7 +823,10 @@ const SideMenu = ({ theme, currentUser }) => {
                   flexShrink: 0,
                 }}
               >
-                {renderAvatars(eswmViewers)}
+                {" "}
+                {/* Only render avatars if this is the currently active ESWM sub-route */}
+                {location.pathname === "/universe/eswm-database/ods" &&
+                  renderAvatars(eswmViewers)}
               </span>
             </span>
           ),
@@ -860,14 +848,15 @@ const SideMenu = ({ theme, currentUser }) => {
                   flexShrink: 0,
                 }}
               >
-                {renderAvatars(eswmViewers)}
+                {location.pathname === "/universe/eswm-database/equipments" &&
+                  renderAvatars(eswmViewers)}
               </span>
             </span>
           ),
         },
-      ]
+      ],
     },
-    {
+    permissions[2] && {
       key: "planning-unit", // New menu key
       icon: <BsClipboardDataFill />, // Example Icon
       label: "Planning Unit",
@@ -875,36 +864,100 @@ const SideMenu = ({ theme, currentUser }) => {
         {
           key: "/universe/planning-unit/monitoring",
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/planning-unit/monitoring">Monitoring</Link>
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/planning-unit/monitoring">Monitoring</Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {location.pathname === "/universe/planning-unit/monitoring" &&
+                  renderAvatars(monitoringViewers)}
+              </span>
             </span>
           ),
         },
         {
           key: "/universe/planning-unit/survey-activities", // Made path more specific
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/planning-unit/survey-activities">
-                Survey Activities
-              </Link>
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/planning-unit/survey-activities">
+                  Survey Activities
+                </Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {location.pathname ===
+                  "/universe/planning-unit/survey-activities" &&
+                  renderAvatars(surveyActivitiesViewers)}
+              </span>
             </span>
           ),
         },
         {
           key: "/universe/planning-unit/validations",
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/planning-unit/validations">Validations</Link>
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/planning-unit/validations">
+                  Validations
+                </Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {location.pathname === "/universe/planning-unit/validations" &&
+                  renderAvatars(validationsViewers)}
+              </span>
             </span>
           ),
         },
         {
           key: "/universe/planning-unit/generated-reports", // Made path more specific
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/planning-unit/generated-reports">
-                Generated Reports
-              </Link>
+            <span
+              style={{ display: "flex", alignItems: "center", width: "100%" }}
+            >
+              <span style={textWithAvatarsStyle}>
+                <Link to="/universe/planning-unit/generated-reports">
+                  Generated Reports
+                </Link>
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {location.pathname ===
+                  "/universe/planning-unit/generated-reports" &&
+                  renderAvatars(generatedReportsViewers)}
+              </span>
             </span>
           ),
         },
@@ -918,13 +971,17 @@ const SideMenu = ({ theme, currentUser }) => {
         {
           key: "/universe/extract",
           label: (
-            <span style={textOnlyMenuItemStyle}><Link to="/universe/extract">Extract Data</Link></span>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/extract">Extract Data</Link>
+            </span>
           ),
         },
         {
           key: "/universe/deleted_firms",
           label: (
-            <span style={textOnlyMenuItemStyle}><Link to="/universe/deleted_firms">Deleted Industries</Link></span>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/deleted_firms">Deleted Industries</Link>
+            </span>
           ),
         },
       ],
@@ -937,13 +994,17 @@ const SideMenu = ({ theme, currentUser }) => {
         {
           key: "/universe/accounts",
           label: (
-            <span style={textOnlyMenuItemStyle}><Link to="/universe/accounts">User Accounts</Link></span>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/accounts">User Accounts</Link>
+            </span>
           ),
         },
         {
           key: "/universe/posting",
           label: (
-            <span style={textOnlyMenuItemStyle}><Link to="/universe/posting">Post to Bulletin</Link></span>
+            <span style={textOnlyMenuItemStyle}>
+              <Link to="/universe/posting">Post to Bulletin</Link>
+            </span>
           ),
         },
 

@@ -3,7 +3,6 @@ import { Modal, Button, Tabs, Space, Typography, Spin } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import "./provincemodal.css";
 import styled from "styled-components";
-import axios from "axios";
 import Swal from "sweetalert2";
 import PropTypes from "prop-types";
 import GenInfo from "./tabpanes/GeneralInfo/GenInfo";
@@ -17,13 +16,16 @@ import ICIR from "./reports/icir/ICIR";
 import IC from "./reports/ic/formIC";
 import CIC from "./reports/cic/formCIC";
 import Drafts from "./reports/drafts/ReportDrafts";
+import {
+  fetchRecordDetailsBySortKey,
+  checkExistingLogsByEccCnc,
+  fetchAllUcdsLogs,
+  createUcdsLogEntry,
+  updateUcdsDataBySortKey,
+} from "../api/provinceService";
 
 const { TabPane } = Tabs;
 const { Paragraph } = Typography;
-const BoldTab = styled.span`
-  font-weight: 600;
-  font-size: 16px;
-`;
 
 const ProvinceModal = ({
   visible,
@@ -47,20 +49,16 @@ const ProvinceModal = ({
 
   useEffect(() => {
     if (record && record.sort_key) {
-      // Check for sort_key instead of id_no
-      const fetchData = async () => {
+      const loadRecordData = async () => {
         try {
-          const response = await axios.get(
-            `http://10.14.77.100:8081/api/ucds-data/${record.sort_key}` // Use sort_key in the URL
-          );
-          setEditedRecord(response.data);
+          const data = await fetchRecordDetailsBySortKey(record.sort_key);
+          setEditedRecord(data);
         } catch (error) {
           console.error("Error fetching data:", error);
           // Optionally, set an error state or clear the record
           // setEditedRecord(null);
         }
       };
-      fetchData();
     } else if (record) {
       // Handle cases where record might exist but sort_key is missing
       console.warn("Record is missing sort_key:", record);
@@ -96,18 +94,15 @@ const ProvinceModal = ({
 
   useEffect(() => {
     if (record && JSON.stringify(record) !== JSON.stringify(previousRecord)) {
-      checkIfLogExists(record);
+      checkAndLogInitialData(record);
     }
     setPreviousRecord(record);
   }, [record, previousRecord, isLogChecked]);
 
-  const checkIfLogExists = async (record) => {
+  const checkAndLogInitialData = async (currentRecord) => {
     try {
-      const ecc_cnc = record.ecc_cnc;
-      const response = await axios.get(
-        `http://10.14.77.100:8081/api/ucds-log?ecc_cnc=${ecc_cnc}`
-      );
-      const existingLogs = response.data;
+      const ecc_cnc = currentRecord.ecc_cnc;
+      const existingLogs = await checkExistingLogsByEccCnc(ecc_cnc);
 
       if (existingLogs.length > 0) {
         setIsLogChecked((prevIsLogChecked) => ({
@@ -115,14 +110,16 @@ const ProvinceModal = ({
           [ecc_cnc]: true,
         }));
       } else {
-        logInitialData(record);
+        await createInitialLogEntry(currentRecord);
         setIsLogChecked((prevIsLogChecked) => ({
           ...prevIsLogChecked,
           [ecc_cnc]: true,
         }));
       }
     } catch (error) {
-      console.error("Error checking existing logs:", error);
+      // Error is already logged in the service, but you can add component-specific handling if needed
+      // For example, display a notification to the user.
+      console.error("Component: Error in checkAndLogInitialData:", error);
     }
   };
 
@@ -134,15 +131,13 @@ const ProvinceModal = ({
 
     const now = new Date();
     const transactionDate = `${
-      now.getMonth() + 1
+      now.getMonth() + 1 // eslint-disable-line no-mixed-operators
     }/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
 
     try {
-      // Fetch all logs to determine the next transaction number
-      const response = await axios.get("http://10.14.77.100:8081/api/ucds-log");
-      const transactions = response.data;
+      const transactions = await fetchAllUcdsLogs();
 
       const existingLog = transactions.find(
         (log) =>
@@ -182,8 +177,7 @@ const ProvinceModal = ({
         ecc_cnc: record.ecc_cnc,
       };
 
-      // Save the log to ucds-log (POST)
-      await axios.post("http://10.14.77.100:8081/api/ucds-log", logData);
+      await createUcdsLogEntry(logData);
     } catch (error) {
       console.error("Error logging initial data:", error);
     } finally {
@@ -198,9 +192,8 @@ const ProvinceModal = ({
   useEffect(() => {
     // Only log if modal is visible and record is valid
     if (visible && record && record.ecc_cnc && record.title) {
-      logInitialData(record);
+      checkAndLogInitialData(record); // Ensures check is performed before logging
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, record]);
 
   const handleChange = (field, value) => {
@@ -234,12 +227,17 @@ const ProvinceModal = ({
           const fullSortKey = editedRecord.sort_key;
 
           if (!fullSortKey) {
-            console.error("Missing sort_key in editedRecord");
+            //console.error("Component: Missing sort_key in editedRecord for save");
+            Swal.fire(
+              "Error",
+              "Cannot save: Record identifier is missing.",
+              "error"
+            );
             return;
           }
 
-          const response = await axios.put(
-            `http://10.14.77.100:8081/api/update-data/${fullSortKey}`,
+          const response = await updateUcdsDataBySortKey(
+            fullSortKey,
             updatedRecord
           );
 
@@ -255,11 +253,20 @@ const ProvinceModal = ({
 
             // No need to manually create logs here — backend handles it
           } else {
-            Swal.fire("Error", "Failed to save changes", "error");
+            // This case might be less common if the service throws on non-200 statuses
+            Swal.fire(
+              "Error",
+              `Failed to save changes. Server responded with status: ${response.status}`,
+              "error"
+            );
           }
         } catch (error) {
-          Swal.fire("Error", "Failed to save changes", "error");
-          console.error("Error updating data:", error);
+          const errorMessage =
+            error.response?.data?.message ||
+            error.message ||
+            "An unexpected error occurred while saving.";
+          Swal.fire("Error", errorMessage, "error");
+          console.error("Component: Error updating data:", error);
         }
       }
     });

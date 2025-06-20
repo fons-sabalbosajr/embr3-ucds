@@ -11,7 +11,13 @@ import {
 } from "antd";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
-import axios from "axios";
+import {
+  checkUserAuth,
+  fetchDataValidationIssues,
+  fetchDuplicateDataIssues,
+  logoutUserService,
+  API_URL as backendUrl, // Import API_URL as backendUrl
+} from "./api/universeService"; // Import services
 import "./index.css";
 import CryptoJS from "crypto-js";
 import Dashboard from "./menu-component/Dashboard";
@@ -69,7 +75,7 @@ const Universe = () => {
     useState({});
   const [userRole, setUserRole] = useState(""); // New state for the user's role string
 
-  const backendUrl = "http://10.14.77.100:8081";
+  // backendUrl is now imported from universeService
   const navigate = useNavigate();
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
   const [provinceAccess, setProvinceAccess] = useState({
@@ -84,12 +90,8 @@ const Universe = () => {
 
   const checkAuth = async () => {
     try {
-      const { data } = await axios.get(`${backendUrl}/check-auth`, {
-        withCredentials: true,
-      });
-
-      if (data.status !== "Success") throw new Error();
-
+      const data = await checkUserAuth(); // Use service
+      // The service now ensures data.status is "Success" or throws
       setName(data.name);
       setAvatar(
         data.avatar
@@ -144,11 +146,10 @@ const Universe = () => {
 
       setAuth(true);
       setErrorMessage("");
-    } catch {
+    } catch (err) { // Catch errors thrown by the service
       setAuth(false);
-      setErrorMessage(
-        "Authentication failed. Please check your credentials and try again."
-      );
+      const message = err && err.message ? err.message : "Authentication failed. Please check your credentials and try again.";
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
@@ -163,33 +164,54 @@ const Universe = () => {
     if (!auth) return; // Ensure auth is true before fetching
     setIsLoading(true); // Set loading for notifications
     try {
-      const dataIssuesRes = await axios.post(`${backendUrl}/api/check-data`);
-      const duplicateIssuesRes = await axios.get(
-        `${backendUrl}/api/ucds/duplicates`
-      );
+      const dataIssuesPayload = await fetchDataValidationIssues(); // Assuming this returns the actual data object like { issues: ... }
+      const duplicateIssuesPayload = await fetchDuplicateDataIssues(); // Assuming this returns { duplicates: ... }
 
-      const dataIssues = Array.isArray(dataIssuesRes.data.issues)
-        ? dataIssuesRes.data.issues
-        : [dataIssuesRes.data.issues || "No issues detected"];
+      let dataIssues;
+      // Check if dataIssuesPayload itself is not null/undefined and has an 'issues' property
+      if (dataIssuesPayload && dataIssuesPayload.issues !== undefined) {
+        const issuesSource = dataIssuesPayload.issues;
+        if (Array.isArray(issuesSource)) {
+          // If issuesSource is an empty array, set to ["No issues detected"]
+          dataIssues = issuesSource.length > 0 ? issuesSource : ["No issues detected"];
+        } else if (issuesSource !== null && String(issuesSource).trim() !== "") {
+          // If issuesSource is a single string (or other non-array, non-null, non-empty value)
+          dataIssues = [issuesSource];
+        } else {
+          // If issuesSource is null, undefined, or an empty string
+          dataIssues = ["No issues detected"];
+        }
+      } else {
+        // If dataIssuesPayload is null/undefined or doesn't have 'issues'
+        console.warn("Warning: Data validation issues payload is missing or malformed. Response:", dataIssuesPayload);
+        dataIssues = ["No issues detected"]; // Default or error state for UI
+      }
 
-      const duplicateIssues = duplicateIssuesRes.data.duplicates.map((d) => ({
-        idNos: d.idNos,
-        ecc_cnc: d.ecc_cnc,
-        count: d.count,
-      }));
+      let duplicateIssues = [];
+      // Check if duplicateIssuesPayload is not null/undefined and has a 'duplicates' array
+      if (duplicateIssuesPayload && Array.isArray(duplicateIssuesPayload.duplicates)) {
+        duplicateIssues = duplicateIssuesPayload.duplicates
+          .filter(d => d && typeof d === 'object') // Ensure 'd' is an object before mapping
+          .map((d) => ({
+            idNos: Array.isArray(d.idNos) ? d.idNos : [],
+            ecc_cnc: d.ecc_cnc || "N/A", // Default if ecc_cnc is missing
+            count: typeof d.count === 'number' ? d.count : 0, // Default if count is missing or not a number
+          }));
+      } else {
+        console.warn("Warning: Duplicate issues payload is missing, malformed, or 'duplicates' is not an array. Response:", duplicateIssuesPayload);
+        // duplicateIssues is already defaulted to []
+      }
 
       const combined = [...dataIssues, ...duplicateIssues];
       setNotifications(combined);
-      // setPopoverContents(combined); // REMOVE THIS LINE
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error("Fetch error in fetchDataIssues:", err); // More specific log
       const errorMsg = ["Error fetching data issues."];
       setNotifications(errorMsg);
-      // setPopoverContents(errorMsg); // REMOVE THIS LINE
     } finally {
       setIsLoading(false); // Clear loading for notifications
     }
-  }, [auth, backendUrl, setIsLoading, setNotifications]); // Add dependencies
+  }, [auth, setIsLoading, setNotifications]); // backendUrl removed as it's not directly used here
 
   useEffect(() => {
     if (!auth) return; // Only fetch if authenticated
@@ -235,9 +257,10 @@ const Universe = () => {
 
     // Optionally, notify the backend (this runs in the background)
     try {
-      await axios.post(`${backendUrl}/logout`, {}, { withCredentials: true });
+      await logoutUserService(); // Use service
     } catch (err) {
       // Even if the backend fails, the user is logged out on the client
+      console.error("Logout API call failed:", err);
       // Optionally log error
     }
   };
