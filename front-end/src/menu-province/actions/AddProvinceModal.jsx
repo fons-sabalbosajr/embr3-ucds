@@ -102,7 +102,7 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://10.14.77.100:8081/api/ucds/next-id?province=${province}`
+        `http://10.14.77.107:8081/api/ucds/next-id?province=${province}`
       );
       const data = await response.json();
       setNextIdNo(data.nextIdNo);
@@ -136,7 +136,7 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
 
     try {
       const response = await fetch(
-        "http://10.14.77.100:8081/api/ucds/add-establishment",
+        "http://10.14.77.107:8081/api/ucds/add-establishment",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

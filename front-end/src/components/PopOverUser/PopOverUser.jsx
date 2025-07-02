@@ -7,9 +7,10 @@ import {
   BulbOutlined,
   LogoutOutlined,
 } from "@ant-design/icons";
-import Profile from "./Settings/Profile/Profile";
-import Help from "./Settings/Help/Help";
-import Suggestion from "./Settings/Suggestion/Suggestion";
+import Profile from "../Settings/Profile/Profile";
+import Help from "../Settings/Help/Help";
+import Suggestion from "../Settings/Suggestion/Suggestion";
+import "./popoveruser.css"
 
 const { Text } = Typography;
 
@@ -41,7 +42,7 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
   };
 
   const prefetchUserData = () => {
-    fetch(`http://10.14.77.100:8081/api/users?username=${userHandle}`)
+    fetch(`http://10.14.77.107:8081/api/users?username=${userHandle}`)
       .then((response) => response.json())
       .then((data) => setPrefetchedUserData(data[0]))
       .catch((error) => console.error("Error prefetching user data:", error));

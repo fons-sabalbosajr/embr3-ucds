@@ -13,7 +13,7 @@ const ECC_CNC = ({ isEditing }) => {
   const checkDuplicateInDatabase = async (value) => {
     try {
       const response = await fetch(
-        `http://10.14.77.100:8081/api/ucds/check-duplicate?query=${encodeURIComponent(value)}`
+        `http://10.14.77.107:8081/api/ucds/check-duplicate?query=${encodeURIComponent(value)}`
       );
       const data = await response.json();
       return data.duplicate ? data.details : null;
@@ -34,7 +34,7 @@ const ECC_CNC = ({ isEditing }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://10.14.77.100:8081/api/ucds/search-ecc-cnc?query=${encodeURIComponent(lastQuery)}`
+        `http://10.14.77.107:8081/api/ucds/search-ecc-cnc?query=${encodeURIComponent(lastQuery)}`
       );
       const data = await response.json();
       const uniqueNames = data

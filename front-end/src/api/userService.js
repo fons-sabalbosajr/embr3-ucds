@@ -1,7 +1,7 @@
 // src/api/userService.js
 import axios from "axios";
 
-const API_URL = "http://10.14.77.100:8081/api"; // Base URL for user-related endpoints
+const API_URL = "http://10.14.77.107:8081/api"; // Base URL for user-related endpoints
 
 /**
  * Fetches the list of online and offline users.

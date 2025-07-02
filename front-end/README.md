@@ -14,7 +14,7 @@ Currently, two official plugins are available:
 #for production
 #server.js
 
-#1.replace all  http://10.14.77.100:8081 to ' http://10.14.77.100:8081'
+#1.replace all  http://10.14.77.107:8081 to ' http://10.14.77.107:8081'
 #2.deploy to render.com (deploy latest commit)
 
 

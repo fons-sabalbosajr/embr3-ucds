@@ -119,7 +119,7 @@ const Inspectors = ({ value, readOnly, onChange, style, isEditing }) => {
             height: "29px",
             padding: "4px 8px",
             cursor: isEditing ? "text" : "not-allowed",
-            color: isEditing ? "" : "#aaa",
+           color: readOnly ? "#aaa" : "inherit",
           }}
           placeholder="select inspector/handler"
           placeholderStyle={{

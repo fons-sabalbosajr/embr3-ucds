@@ -31,7 +31,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
         return;
       }
       try {
-        const response = await axios.get("http://10.14.77.100:8081/api/ucds-log", {
+        const response = await axios.get("http://10.14.77.107:8081/api/ucds-log", {
           params: { ecc_cnc: editedRecord.ecc_cnc },
         });
         const fetchedTransactions = Array.isArray(response.data)
@@ -46,7 +46,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
         // Fetch user data for all unique usernames
         const userFetches = uniqueUsernames.map((username) =>
           axios
-            .get("http://10.14.77.100:8081/api/users", { params: { username } })
+            .get("http://10.14.77.107:8081/api/users", { params: { username } })
             .then((res) => ({
               username,
               user: res.data && res.data.length > 0 ? res.data[0] : null,
@@ -118,7 +118,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
       updated_by: currentUser?.username,
     };
     try {
-      await axios.put("http://10.14.77.100:8081/api/revert-by-ecc", payload);
+      await axios.put("http://10.14.77.107:8081/api/revert-by-ecc", payload);
       Swal.fire({
         icon: "success",
         title: "Revert Successful",
@@ -138,7 +138,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
   const handleDeleteTransaction = async (transactionID) => {
     try {
       const response = await fetch(
-        `http://10.14.77.100:8081/api/transaction/${transactionID}`, // Use transactionID instead of ID
+        `http://10.14.77.107:8081/api/transaction/${transactionID}`, // Use transactionID instead of ID
         {
           method: "DELETE",
           credentials: "include", // Include credentials if necessary

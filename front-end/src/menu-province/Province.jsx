@@ -374,12 +374,12 @@ const Province = ({ theme, currentUser }) => {
 
   useEffect(() => {
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.100:8081", {
+      socketRef.current = io("http://10.14.77.107:8081", {
         withCredentials: true,
       });
     }
     const socket = socketRef.current;
-    
+
     const handleConnect = () => {
       if (currentUser?.username && displayProvinceName) {
         socket.emit("joinProvince", {
@@ -397,22 +397,16 @@ const Province = ({ theme, currentUser }) => {
       setProvinceViewers(viewers);
     };
 
-    if (socket.connected) { // If already connected, join immediately
+    if (socket.connected) {
+      // If already connected, join immediately
       handleConnect();
     }
     socket.on("connect", handleConnect);
     socket.on("provinceViewers", provinceViewersHandler);
 
     return () => {
-      // The leaveProvince logic is primarily handled by SideMenu's navigation effect.
-      // If Province.jsx were to emit leaveProvince directly on unmount,
-      // it might prematurely remove the user if SideMenu's effect runs slightly later
-      // during a navigation event.
-      // However, cleaning up the specific listener for this component is good practice.
       socket.off("connect", handleConnect);
       socket.off("provinceViewers", provinceViewersHandler);
-      // Consider if a specific "leaveThisSpecificProvinceView" event is needed if SideMenu doesn't cover all cases.
-      // For now, relying on SideMenu's comprehensive join/leave logic.
     };
   }, [currentUser, displayProvinceName]);
 
@@ -453,24 +447,6 @@ const Province = ({ theme, currentUser }) => {
     setSelectedSection(""); // Clear the selected section
     setSelectedSectionData([]); // Clear the section data
     setSectionDetails([]); // Clear the section details
-  };
-
-  const filteredSectionData = (section) => {
-    return filteredData.filter((item) => {
-      const sections = item.section_incharged
-        ? item.section_incharged.split(",").map((s) => s.trim())
-        : ["NoSectionIncharged"];
-      return sections.includes(section);
-    });
-  };
-
-  const calculateFilteredSectionCounts = (data) => {
-    const sectionCounts = {};
-    data.forEach((item) => {
-      const section = item.section || "NoSectionIncharged";
-      sectionCounts[section] = (sectionCounts[section] || 0) + 1;
-    });
-    return sectionCounts;
   };
 
   const handleDateChange = (dates) => {
@@ -1597,7 +1573,6 @@ const Province = ({ theme, currentUser }) => {
             }}
           >
             {sections.map((section, index) => {
-              const textWidth = measureTextWidth(section);
               const backgroundColor = sectionBackgroundColor(section); // Base background color
               const darkerBackgroundColor = darkenColor(backgroundColor, -40); // Darker shade
 
@@ -1627,7 +1602,6 @@ const Province = ({ theme, currentUser }) => {
                       backgroundColor: backgroundColor,
                       padding: "5px",
                       margin: "2px",
-                      width: `${textWidth}px`,
                       display: "inline-block",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
@@ -1661,9 +1635,14 @@ const Province = ({ theme, currentUser }) => {
       width: 200,
     },
     {
-      title: "Monitoring Status",
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Monitoring Status
+        </div>
+      ),
       key: "monitoringStatus",
       width: 200,
+      align: "left",
       ...getColumnSearchProps("iis_no"),
       render: (text, record) => (
         <div className="monitoring-status-container-province">
@@ -1821,8 +1800,9 @@ const Province = ({ theme, currentUser }) => {
         <h3 className="header-title">{`${displayProvinceName} Universe of Firms and Industries`}</h3>
         <Button
           type="primary"
+          size="small"
           className="refresh-button-province"
-          icon={<ReloadOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
+          icon={<ReloadOutlined style={{ fontSize: "12px" }} />} // Adjusted font size
           onClick={() => handleReload(provinceName)}
           loading={loading}
           title="Reload Table"
@@ -1831,61 +1811,67 @@ const Province = ({ theme, currentUser }) => {
 
         <Button
           type="primary"
+          size="small"
           className="refresh-button-province"
-          icon={<ExportOutlined style={{ fontSize: "16px" }} />} // Adjusted font size
+          icon={<ExportOutlined style={{ fontSize: "12px" }} />} // Adjusted font size
           onClick={() => handleExportPDF(displayProvinceName)}
           title="Export Data"
         />
 
         {/* Display avatars of other users viewing this province */}
         {canViewDataHistory && provinceViewers[displayProvinceName] && (
-            <div
-              className="province-viewers-avatars"
-              style={{
-                marginLeft: "15px",
-                display: "flex",
-                alignItems: "center",
-                margin: "12px 0",
-              }}
-            >
-              <Avatar.Group
-                max={{ count: 3 }}
-                size={24}
-              >
-                {provinceViewers[displayProvinceName]
-                  .filter(viewer => viewer.username !== currentUser?.username) // Show OTHERS
-                  .map((viewer) => (
-                    <Tooltip
-                      key={viewer.username}
-                      title={
-                        <span style={{ fontSize: "9px" }}>
-                          {`${viewer.name || viewer.username} is viewing ${displayProvinceName}`}
-                        </span>
+          <div
+            className="province-viewers-avatars"
+            style={{
+              marginLeft: "15px",
+              display: "flex",
+              alignItems: "center",
+              margin: "12px 0",
+            }}
+          >
+            <Avatar.Group max={{ count: 3 }} size={24}>
+              {provinceViewers[displayProvinceName]
+                .filter((viewer) => viewer.username !== currentUser?.username) // Show OTHERS
+                .map((viewer) => (
+                  <Tooltip
+                    key={viewer.username}
+                    title={
+                      <span style={{ fontSize: "9px" }}>
+                        {`${
+                          viewer.name || viewer.username
+                        } is viewing ${displayProvinceName}`}
+                      </span>
+                    }
+                  >
+                    <Avatar
+                      src={
+                        viewer.avatar
+                          ? `http://10.14.77.107:8081${viewer.avatar}`
+                          : undefined
                       }
+                      style={{
+                        marginLeft: -8, // Overlap avatars slightly
+                        border: `2px solid ${
+                          theme === "dark" ? "#262626" : "#fff"
+                        }`, // Border for better visibility
+                      }}
                     >
-                      <Avatar
-                        src={viewer.avatar ? `http://10.14.77.100:8081${viewer.avatar}` : undefined}
-                        style={{
-                          marginLeft: -8, // Overlap avatars slightly
-                          border: `2px solid ${theme === 'dark' ? '#262626' : '#fff'}`, // Border for better visibility
-                        }}
-                      >
-                        {(!viewer.avatar && viewer.name)
-                          ? viewer.name[0].toUpperCase()
-                          : (!viewer.avatar && viewer.username)
-                            ? viewer.username[0].toUpperCase()
-                            : null}
-                      </Avatar>
-                    </Tooltip>
-                  ))}
-              </Avatar.Group>
-            </div>
-          )}
-
+                      {!viewer.avatar && viewer.name
+                        ? viewer.name[0].toUpperCase()
+                        : !viewer.avatar && viewer.username
+                        ? viewer.username[0].toUpperCase()
+                        : null}
+                    </Avatar>
+                  </Tooltip>
+                ))}
+            </Avatar.Group>
+          </div>
+        )}
 
         <Button
           type="primary"
           className="add-industry-button"
+          size="small "
           style={{
             backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
           }}
@@ -1897,6 +1883,7 @@ const Province = ({ theme, currentUser }) => {
         <AddProvinceModal
           visible={isModalVisibleAdd}
           onCancel={handleCancelAdd}
+           zIndex={1000}
         />
       </div>
 
@@ -1933,6 +1920,8 @@ const Province = ({ theme, currentUser }) => {
         width={1100}
         footer={null}
         onClose={handleCloseModal}
+        zIndex={1000}
+        style={{ top: 40 }}
       >
         {selectedRecord && (
           <ProvinceModal
@@ -1999,6 +1988,7 @@ const Province = ({ theme, currentUser }) => {
             Cancel
           </Button>,
         ]}
+         zIndex={1000}
       >
         <span
           style={{ fontSize: "12px", marginBottom: "10px", display: "block" }}
@@ -2038,7 +2028,7 @@ const Province = ({ theme, currentUser }) => {
         <ConfigProvider
           theme={{
             token: {
-              fontSize: 12,
+              fontSize: 11,
             },
           }}
         >
@@ -2051,18 +2041,25 @@ const Province = ({ theme, currentUser }) => {
               }}
             >
               <div style={{ display: "flex", alignItems: "center" }}>
-                <h4 style={{ marginRight: 16, fontWeight: 400 }}>
+                <h4 className="total-count-label">
                   Industry Count: {filteredData.length}
                 </h4>
 
-                <div style={{ display: "flex", alignItems: "center" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
                   {inputVisible ? (
                     <Input
                       ref={inputRef}
                       type="primary"
                       size="small"
-                      style={{ width: 200, marginRight: 16 }}
                       value={inputValue}
+                      className="search-input"
                       onChange={handleInputChange}
                       onBlur={handleInputConfirm}
                       onPressEnter={handleInputConfirm}
@@ -2073,6 +2070,7 @@ const Province = ({ theme, currentUser }) => {
                       onClick={() => setInputVisible(true)}
                       style={tagPlusStyle}
                       color="#108ee9"
+                      className="tag"
                     >
                       <PlusOutlined /> Search keyword here...
                     </Tag>
@@ -2082,10 +2080,11 @@ const Province = ({ theme, currentUser }) => {
               </div>
 
               <div style={{ display: "flex", alignItems: "center" }}>
-                {canAccessRangePicker && (
+                {/* {canAccessRangePicker && (
                   <>
                     <span className="date-signed">Date Report Signed:</span>
                     <RangePicker
+                    size="small"
                       style={{ marginLeft: 16 }}
                       onChange={handleDateChange}
                       value={dateRange || undefined} // Pass undefined if dateRange is null for RangePicker
@@ -2094,7 +2093,7 @@ const Province = ({ theme, currentUser }) => {
                       allowClear={true}
                     />
                   </>
-                )}
+                )} */}
 
                 <Pagination
                   simple={{
@@ -2225,6 +2224,7 @@ const Province = ({ theme, currentUser }) => {
               count={sectionCounts[selectedSection] || 0} // Pass the count for the selected section
               data={selectedSectionData} // Pass the filtered data for the section
               onClose={handleCloseSectionModal}
+              zIndex={1000}
             />
           </div>
         </ConfigProvider>

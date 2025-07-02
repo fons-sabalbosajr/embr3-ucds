@@ -12,7 +12,7 @@ const ReportDrafts = () => {
 
   const fetchCurrentUser = async () => {
     try {
-      const response = await axios.get("http://10.14.77.100:8081/check-auth", {
+      const response = await axios.get("http://10.14.77.107:8081/check-auth", {
         withCredentials: true,
       });
       setCurrentUser(response.data);
@@ -38,7 +38,7 @@ const ReportDrafts = () => {
   const fetchDraftReports = async () => {
     try {
       const response = await fetchWithRetry(
-        "http://10.14.77.100:8081/api/draft-report",
+        "http://10.14.77.107:8081/api/draft-report",
         { withCredentials: true }
       );
   
@@ -62,7 +62,7 @@ const ReportDrafts = () => {
           address: draft.reportInfo?.address || "No Address Available",
           fileName: draft.fileName || "No filename available",
           pdfUrl: draft.pdfUrl
-            ? `http://10.14.77.100:8081/api/files/${draft.fileName}`
+            ? `http://10.14.77.107:8081/api/files/${draft.fileName}`
             : "No URL Available",
         };
       });

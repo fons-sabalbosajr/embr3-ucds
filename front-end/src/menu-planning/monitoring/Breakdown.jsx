@@ -32,16 +32,16 @@ const Breakdown = ({
           let apiParams = {};
 
           if (criteria.type === "eccCncSubtype") {
-            apiUrl = "http://10.14.77.100:8081/api/ucds/list-by-ecc-cnc-subtype";
+            apiUrl = "http://10.14.77.107:8081/api/ucds/list-by-ecc-cnc-subtype";
             apiParams = { subtypeLabel: criteria.label };
           } else if (criteria.type === "permitStatus") {
-            apiUrl = "http://10.14.77.100:8081/api/ucds/list-by-permit-status"; // New API
+            apiUrl = "http://10.14.77.107:8081/api/ucds/list-by-permit-status"; // New API
             apiParams = {
               permitKey: criteria.permitKey,
               status: criteria.status,
             };
           } else if (criteria.type === "allIndustries") {
-            apiUrl = "http://10.14.77.100:8081/api/ucds/list-all-industries";
+            apiUrl = "http://10.14.77.107:8081/api/ucds/list-all-industries";
             apiParams = {}; // No specific parameters needed for fetching all
           } else {
             setLoading(false);

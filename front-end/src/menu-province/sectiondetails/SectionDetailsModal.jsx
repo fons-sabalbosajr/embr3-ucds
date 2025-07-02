@@ -811,23 +811,27 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
           )}
 
           {/* PISMU Tracking */}
-          {record.pismu_tracking && record.pismu_tracking.trim() !== "" && record.pismu_tracking.trim().toLowerCase() !== "none" && (
-            <p className="monitoring-label">
-              <Tooltip
-                title={
-                  <div style={{ fontSize: "10px" }}>Received by: {record.pismu_tracking}</div>
-                }
-                color="#0D92F4"
-              >
-                <span>
-                  <CheckCircleFilled
-                    style={{ color: "#0D92F4", marginRight: 8 }}
-                  />
-                  <span>Received by Planning Unit</span>
-                </span>
-              </Tooltip>
-            </p>
-          )}
+          {record.pismu_tracking &&
+            record.pismu_tracking.trim() !== "" &&
+            record.pismu_tracking.trim().toLowerCase() !== "none" && (
+              <p className="monitoring-label">
+                <Tooltip
+                  title={
+                    <div style={{ fontSize: "10px" }}>
+                      Received by: {record.pismu_tracking}
+                    </div>
+                  }
+                  color="#0D92F4"
+                >
+                  <span>
+                    <CheckCircleFilled
+                      style={{ color: "#0D92F4", marginRight: 8 }}
+                    />
+                    <span>Received by Planning Unit</span>
+                  </span>
+                </Tooltip>
+              </p>
+            )}
         </div>
       ),
     },
@@ -859,11 +863,12 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
         footer={null}
         width={1400}
         style={{
-          height: "90vh", // Set modal height to 80% of viewport
+          
           maxHeight: "90vh",
           overflow: "hidden",
           padding: "16px",
         }}
+        zIndex={1000}
         title={
           <div className="modal-header">
             <div className="modal-header-left">

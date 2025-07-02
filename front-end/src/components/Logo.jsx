@@ -4,20 +4,20 @@ import embLogo from "../../src/assets/UCDSInformation.png";
 
 const Logo = ({ theme, collapsed }) => {
   return (
-    <div className={`logo ${collapsed ? "collapsed" : ""}`}>
-      <div className={`logo-icon ${collapsed ? "collapsed" : ""}`}>
+    <div className={`logo${collapsed ? " collapsed" : ""}`}>
+      <div className="logo-icon-row">
         <img
-          src={embLogo} // Use the imported image
+          src={embLogo}
           alt="logo"
-          className="logo-icon-img"
+          className={`logo-icon-img${collapsed ? " collapsed" : ""}`}
         />
         {!collapsed && (
           <div
-            className={`logo-icon-text ${
-              theme === "light" ? "light-theme" : "dark-theme"
-            }`}
+            className={`logo-icon-text ${theme === "light" ? "light-theme" : "dark-theme"}`}
           >
-            EMBR3 UCDS
+            <span>
+              EMBR3&nbsp;<span className="logo-ucds">UCDS</span>
+            </span>
           </div>
         )}
       </div>

@@ -9,7 +9,7 @@ const ProtectedRoute = () => {
     const checkAuth = async () => {
       try {
         const response = await axios.get(
-          "http://10.14.77.100:8081/auth-check", // Updated endpoint
+          "http://10.14.77.107:8081/auth-check", // Updated endpoint
           { withCredentials: true }
         );
 

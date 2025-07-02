@@ -42,7 +42,7 @@ const ExtractData = () => {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          "http://10.14.77.100:8081/api/extract-province-data",
+          "http://10.14.77.107:8081/api/extract-province-data",
           {
             method: "GET",
             params: {
@@ -237,7 +237,7 @@ const ExtractData = () => {
       }
 
       const response = await fetch(
-        `http://10.14.77.100:8081/api/extract-province-data?${queryParams.toString()}`,
+        `http://10.14.77.107:8081/api/extract-province-data?${queryParams.toString()}`,
         {
           method: "GET",
         }

@@ -15,7 +15,7 @@ const PTO = ({ isEditing }) => {
       setLoading(true);
       try {
         const response = await fetch(
-          `http://10.14.77.100:8081/api/ucds/search-pto-code?query=${lastQuery}`
+          `http://10.14.77.107:8081/api/ucds/search-pto-code?query=${lastQuery}`
         );
         const data = await response.json();
         const uniqueNames = data

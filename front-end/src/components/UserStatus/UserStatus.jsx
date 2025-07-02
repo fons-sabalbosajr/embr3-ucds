@@ -101,26 +101,30 @@ const UserStatus = ({ theme }) => {
     .filter((user) => !user.isLoggedIn)
     .sort((a, b) => new Date(b.logoutTime) - new Date(a.logoutTime));
 
+  const indicators = (
+    <div className="user-status-indicators">
+      <div className="user-status-indicator">
+        <div className="user-status-indicator-dot online"></div>
+        <span className="user-status-indicator-text">
+          Online ({onlineUsers.filter((user) => user.isLoggedIn).length})
+        </span>
+      </div>
+      <div className="user-status-indicator">
+        <div className="user-status-indicator-dot offline"></div>
+        <span className="user-status-indicator-text">Offline</span>
+      </div>
+    </div>
+  );
+
   return (
     <div
       className={`user-status-wrapper ${
         theme === "dark" ? "theme-dark" : "theme-light"
       }`}
     >
-      <div className="user-status-header">
+     <div className="user-status-header">
         <h3 className="user-status-title">Online Users</h3>
-        <div className="user-status-indicators">
-          <div className="user-status-indicator">
-            <div className="user-status-indicator-dot online"></div>
-            <span className="user-status-indicator-text">
-              Online ({onlineUsers.filter((user) => user.isLoggedIn).length})
-            </span>
-          </div>
-          <div className="user-status-indicator">
-            <div className="user-status-indicator-dot offline"></div>
-            <span className="user-status-indicator-text">Offline</span>
-          </div>
-        </div>
+        {indicators}
       </div>
       {onlineUsers.length > 0 ? (
         <>
@@ -141,7 +145,7 @@ const UserStatus = ({ theme }) => {
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
-                          src={`http://10.14.77.100:8081${user.avatar}`}
+                          src={`http://10.14.77.107:8081${user.avatar}`}
                           alt="Avatar"
                           className="user-status-item-avatar"
                         />
@@ -177,6 +181,7 @@ const UserStatus = ({ theme }) => {
           {showScrollIndicator && (
             <Button
               type="primary"
+              size="small"
               onClick={handleOpenAllUsersModal}
               className="user-status-view-all-button"
             >
@@ -185,7 +190,7 @@ const UserStatus = ({ theme }) => {
           )}
         </>
       ) : (
-        <p>No online users</p>
+        <p className="user-status-no-users">No online users</p>
       )}
 
       <Modal
@@ -215,7 +220,7 @@ const UserStatus = ({ theme }) => {
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
-                          src={`http://10.14.77.100:8081${user.avatar}`}
+                          src={`http://10.14.77.107:8081${user.avatar}`}
                           alt="Avatar"
                           className="user-status-item-avatar" // modal-list will target this for size
                         />
@@ -260,7 +265,7 @@ const UserStatus = ({ theme }) => {
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
-                          src={`http://10.14.77.100:8081${user.avatar}`}
+                          src={`http://10.14.77.107:8081${user.avatar}`}
                           alt="Avatar"
                           className="user-status-item-avatar" // modal-list will target this for size
                         />

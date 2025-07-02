@@ -85,10 +85,11 @@ const Login = () => {
             />
             <Input.Password
               placeholder="Enter Password"
+              size="small"
               autoComplete="off"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={{ marginBottom: "20px" }}
+              style={{ marginBottom: "20px", fontSize:"14px" }}
             />
 
             <Button

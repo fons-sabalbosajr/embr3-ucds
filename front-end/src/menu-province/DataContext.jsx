@@ -38,7 +38,7 @@ export const DataProvider = ({ children }) => {
         }
 
         const response = await axios.get(
-          "http://10.14.77.100:8081/api/get-province-data",
+          "http://10.14.77.107:8081/api/get-province-data",
           {
             params: { province, _nocache: Date.now() },
           }

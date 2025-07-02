@@ -59,7 +59,7 @@ const SectionInCharged = ({
             height: "29px",
             padding: "4px 8px",
             cursor: isEditing ? "text" : "not-allowed",
-            color: isEditing ? "" : "#aaa",
+            color: readOnly ? "#aaa" : "inherit",
           }}
           readOnly={readOnly}
           placeholder="select section/unit"

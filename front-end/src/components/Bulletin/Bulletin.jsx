@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Carousel, Button, Typography, Modal } from "antd";
-import axios from "axios";
 import moment from "moment";
 import announcementIcon from "../../assets/announcement.png";
 import "./bulletin.css";
+import {
+  fetchActiveBulletins,
+  markBulletinAsRead,
+  disableShowAgain,
+} from "../../api/bulletinService";
 
 const Bulletin = ({ theme = "dark" }) => {
   const [bulletins, setBulletins] = useState([]);
@@ -14,18 +18,11 @@ const Bulletin = ({ theme = "dark" }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get(
-          "http://10.14.77.100:8081/api/postings"
-        );
-        const data = response.data;
-
-        const activeBulletins = data
-          .filter((item) => item.status === "active")
-          .sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
-
+        const activeBulletins = await fetchActiveBulletins();
         setBulletins(activeBulletins);
       } catch (error) {
-        console.error("Error fetching postings:", error);
+        // Error is already logged in the API file,
+        // but you could add component-specific error handling here if needed.
       }
     };
     fetchData();
@@ -35,16 +32,14 @@ const Bulletin = ({ theme = "dark" }) => {
     setSelectedBulletin(record);
     setIsModalVisible(true);
     try {
-      await axios.patch(`http://10.14.77.100:8081/api/postings/${record._id}`, {
-        isRead: true,
-      });
+      await markBulletinAsRead(record._id);
       setBulletins((prev) =>
         prev.map((item) =>
           item._id === record._id ? { ...item, isRead: true } : item
         )
       );
     } catch (error) {
-      console.error("Error marking bulletin as read:", error);
+      // Error is already logged in the API file.
     }
   };
 
@@ -52,14 +47,11 @@ const Bulletin = ({ theme = "dark" }) => {
 
   const handleDontShowAgain = async () => {
     try {
-      await axios.patch(
-        `http://10.14.77.100:8081/api/postings/${selectedBulletin._id}`,
-        { showAgain: false }
-      );
+      await disableShowAgain(selectedBulletin._id);
       setDontShowAgainIds((prev) => new Set(prev).add(selectedBulletin._id));
       setIsModalVisible(false);
     } catch (error) {
-      console.error("Error updating announcement status:", error);
+      // Error is already logged in the API file.
     }
   };
 

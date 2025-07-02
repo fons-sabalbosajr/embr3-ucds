@@ -153,12 +153,8 @@
 .ecc-cnc-tag {
   display: inline-block;
   padding: 2px 8px;
-  background-color: #f0f5ff;
-  color: #2f54eb;
-  border: 1px solid #adc6ff;
-  border-radius: 5px;
-  font-size: 8px;
-  font-weight: 500;
+  border-radius: 2px;
+  font-size: 9px;
   line-height: 1.4;
 }
 
@@ -181,4 +177,98 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+
+@media only screen and (min-width: 768px) and (max-width: 1080px) {
+  .activity-container {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .activity-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 0.5rem;
+  }
+
+  .activity-title {
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+
+  .pagination-buttons {
+    gap: 0.25rem;
+  }
+
+  .nav-button {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+   .panel-header {
+    padding: 4px 6px !important; /* Reduce padding for collapsible header */
+    margin-bottom: 2px;
+  }
+
+
+  .panel-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 9px;
+  }
+
+  .permit-tags-column {
+    align-items: flex-start;
+    margin-right: 0;
+    gap: 4px;
+  }
+
+  .permit-tags-container {
+    align-items: flex-start;
+    margin-right: 0;
+  }
+
+  .panel-title {
+    font-size: 9px;
+  }
+
+  .permit-list {
+    font-size: 8px;
+  }
+
+  .permit-item {
+    font-size: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .permit-tags-container {
+    flex-direction: row; /* Change to row to make tags appear on one line */
+    flex-wrap: wrap; /* Allow wrapping if tags exceed width */
+    justify-content: flex-start; /* Align tags to the left within their container */
+    align-items: center; /* Vertically center tags */
+  }
+
+  .permit-text {
+    display: flex; /* Make the permit text container a flexbox */
+    flex-direction: row; /* Arrange its children (icon and text) in a row */
+    align-items: center; /* Vertically align items in the center */
+  }
+
+  .permit-text {
+    font-size: 8px;
+  }
+
+  .ecc-cnc-tag {
+    font-size: 7px;
+    padding: 1px 2px;
+  }
+
+  .expand-icon-wrapper {
+    font-size: 12px;
+    margin-left: 4px;
+  }
 }

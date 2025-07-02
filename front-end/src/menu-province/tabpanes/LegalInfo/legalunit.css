@@ -90,3 +90,20 @@
 .row-penalty-label{
   margin-bottom: -10px;
 }
+
+
+.legalunit-card {
+  width: 500px;
+  max-width: 100%;
+  margin-bottom: 20px;
+  padding: 5px;
+}
+
+@media (max-width: 900px) {
+  .legalunit-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: 16px !important;
+    padding: 5px !important;
+  }
+}

@@ -44,6 +44,11 @@ import AddSurvey from "./actions/AddSurvey";
 import CryptoJS from "crypto-js";
 import { io } from "socket.io-client";
 import { useLocation } from "react-router-dom";
+import {
+  fetchSurveyData,
+  updateSurveyRowColor,
+  updateSurveyRecord,
+} from "../api/surveyService";
 
 const { Option } = Select;
 
@@ -102,7 +107,7 @@ const Survey = ({ theme, currentUser }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.100:8081", {
+      socketRef.current = io("http://10.14.77.107:8081", {
         withCredentials: true,
       });
     }
@@ -161,29 +166,16 @@ const Survey = ({ theme, currentUser }) => {
     setLoading(true);
     setProgress(0);
     let progressInterval = null;
+    const controller = new AbortController();
 
     try {
       progressInterval = setInterval(() => {
         setProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      const response = await fetch(
-        `http://10.14.77.100:8081/api/surveys/${year}`,
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
+      const result = await fetchSurveyData(year, controller.signal);
 
       if (progressInterval) clearInterval(progressInterval);
-      progressInterval = null;
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
-      }
-
-      const result = await response.json();
 
       const normalizedResult = result.map((item) => ({
         _id: item._id,
@@ -194,7 +186,7 @@ const Survey = ({ theme, currentUser }) => {
           item.survey_water === true ? "✔" : item.survey_water || "",
         survey_haz: item.survey_haz === true ? "✔" : item.survey_haz || "",
         survey_chem: item.survey_chem === true ? "✔" : item.survey_chem || "",
-         survey_eswm: item.survey_eswm === true ? "✔" : item.survey_eswm || "",
+        survey_eswm: item.survey_eswm === true ? "✔" : item.survey_eswm || "",
         project_title: item.project_title ?? "N/A",
         project_type: item.project_type ?? "N/A",
         project_subtype: item.project_subtype ?? "N/A",
@@ -593,38 +585,9 @@ const Survey = ({ theme, currentUser }) => {
   const updateRowColors = async (ids, color) => {
     setLoading(true);
     try {
-      const promises = ids.map((id) => {
-        return fetch(`http://10.14.77.100:8081/api/surveys/${id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ color }),
-          credentials: "include",
-        });
-      });
-
-      const responses = await Promise.all(promises);
-
-      const results = await Promise.all(
-        responses.map(async (response, index) => {
-          if (response.ok) {
-            const data = await response.json();
-            console.log(
-              `✅ Updated record ID: ${ids[index]}, Color: ${color}`,
-              data
-            );
-            return data;
-          } else {
-            throw new Error(
-              `❌ Error updating row color for ID ${ids[index]}: ${response.statusText}`
-            );
-          }
-        })
-      );
-
+      const promises = ids.map((id) => updateSurveyRowColor(id, color));
+      const results = await Promise.all(promises);
       console.log("🎨 All row colors updated successfully:", results);
-
       fetchData(selectedSurvey.replace("Survey ", "")); // Refetch updated table data
     } catch (error) {
       console.error("🚨 Error updating row colors:", error.message);
@@ -763,18 +726,14 @@ const Survey = ({ theme, currentUser }) => {
         payload.survey_chem = updatedRecord.survey_chem === "✔";
       }
 
-      const response = await axios.put(
-        `http://10.14.77.100:8081/api/survey/${record.id_no}`,
-        payload
-      );
+      const response = await updateSurveyRecord(record.id_no, payload);
 
-      if (response.data.message === "Update successful!") {
+      if (response.message === "Update successful!") {
         notification.success({
           message: "Update Successfully!",
           description: "Data updated successfully.",
         });
 
-        // ✅ Update only the affected row in dataSource
         setDataSource((prevData) =>
           prevData.map((item) =>
             item.id_no === record.id_no
@@ -782,14 +741,13 @@ const Survey = ({ theme, currentUser }) => {
               : item
           )
         );
-      } else if (response.data.message === "No changes made") {
+      } else if (response.message === "No changes made") {
         notification.info({
           message: "No Changes Made",
           description: "No changes were made to the data.",
         });
       }
 
-      // ✅ Remove modified row only
       setModifiedRows((prev) => {
         const newState = { ...prev };
         delete newState[record.id_no];
@@ -1000,7 +958,7 @@ const Survey = ({ theme, currentUser }) => {
       width: 250,
       render: (text, record) => (
         <div>
-          <div className="industry-label">
+          <div>
             <strong className="title">{text || "N/A"}</strong>
             <p style={{ fontStyle: "italic" }}>{record.address || "N/A"}</p>
             <p>Date Surveyed: {record.date_surveyed || "N/A"}</p>
@@ -1082,7 +1040,7 @@ const Survey = ({ theme, currentUser }) => {
       key: "survey_status", // Changed key for clarity
       ...getColumnSearchProps("iis_no"), // Assuming iis_no is the primary search field here
       render: (_, record) => (
-        <div className="industry-label">
+        <div>
           {" "}
           {/* Reused industry-label for consistent styling */}
           {record.date_surveyed && (

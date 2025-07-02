@@ -38,7 +38,7 @@ const Transaction = ({ editedRecord, currentUser }) => {
       if (editedRecord?.iis_no) {
         try {
           const response = await axios.get(
-            "http://10.14.77.100:8081/api/survey-log",
+            "http://10.14.77.107:8081/api/survey-log",
             {
               params: { iis_no: editedRecord.iis_no },
             }
@@ -79,7 +79,7 @@ const Transaction = ({ editedRecord, currentUser }) => {
  // Decrypt username and fetch user data
  const fetchUserByUsername = async (username) => {
   try {
-    const response = await axios.get(`http://10.14.77.100:8081/api/users`, {
+    const response = await axios.get(`http://10.14.77.107:8081/api/users`, {
       params: { username }, // This sends the username as a query parameter
     });
     return response.data.length > 0 ? response.data[0] : null; // Return the first user or null if not found
@@ -116,7 +116,7 @@ useEffect(() => {
   const handleDeleteTransaction = async (transactionID) => {
     try {
       const response = await fetch(
-        `http://10.14.77.100:8081/api/survey-transaction/${transactionID}`, // Use transactionID instead of ID
+        `http://10.14.77.107:8081/api/survey-transaction/${transactionID}`, // Use transactionID instead of ID
         {
           method: "DELETE",
           credentials: "include", // Include credentials if necessary

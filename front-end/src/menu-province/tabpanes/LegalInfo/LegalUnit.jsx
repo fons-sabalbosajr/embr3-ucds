@@ -12,18 +12,12 @@ import {
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import "./legalunit.css";
 import LegalOfficers from "../../../components/Autocomplete/LegalOfficers";
 
+dayjs.extend(isSameOrBefore);
 const { Paragraph } = Typography;
-
-const customToken = {
-  token: {
-    componentSize: "small",
-    fontSize: 9,
-    fontSizeSM: 9,
-  },
-};
 
 const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
   const handleDateChange = (dateString) => {
@@ -65,6 +59,28 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
     return (num < 10 ? "0" : "") + num;
   };
 
+  const countWorkingDays = (start, end) => {
+    // Parse dates using dayjs
+    let startDate = dayjs(start, "MM/DD/YYYY");
+    let endDate = dayjs(end, "MM/DD/YYYY");
+    if (!startDate.isValid() || !endDate.isValid()) return "";
+
+    // Ensure startDate is before or equal to endDate
+    if (endDate.isBefore(startDate)) return "";
+
+    let count = 0;
+    let current = startDate.clone();
+    while (current.isSameOrBefore(endDate, "day")) {
+      const day = current.day();
+      if (day !== 0 && day !== 6) {
+        // 0 = Sunday, 6 = Saturday
+        count++;
+      }
+      current = current.add(1, "day");
+    }
+    return count;
+  };
+
   // Convert the date before loading it into the DatePicker
   const formattedDate = convertToMMDDYYYY(editedRecord.tc_date_sched);
   const formattedDateTCAcual = convertToMMDDYYYY(editedRecord.tc_date_actual);
@@ -79,6 +95,14 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
   const [fields, setFields] = useState([
     { id: 1, penalty: "", amount: "", or_number: "" },
   ]);
+
+  const workingDaysDFDA =
+    formattedDateLegalForwarded && formattedDateLegalApproved
+      ? countWorkingDays(
+          formattedDateLegalForwarded,
+          formattedDateLegalApproved
+        )
+      : "";
 
   const addFieldSet = () => {
     setFields([
@@ -97,14 +121,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
     <div>
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 20,
-              padding: 5,
-            }}
-            size="small"
-          >
+          <Card className="legalunit-card" size="small">
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={12} lg={12}>
                 <Paragraph className="paragraph-container">
@@ -186,15 +203,19 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     </p>
                   </span>
                   <Input
-                    value={editedRecord ? editedRecord.days_dfda : ""}
-                    onChange={(e) => handleChange("days_dfda", e.target.value)}
-                    readOnly={!isEditing}
+                    value={
+                      workingDaysDFDA !== ""
+                        ? `${workingDaysDFDA} day${
+                            workingDaysDFDA === 1 ? "" : "s"
+                          }`
+                        : ""
+                    }
+                    readOnly={true}
                     placeholder="no data"
                     style={{
                       cursor: isEditing ? "text" : "not-allowed",
                       color: isEditing ? "" : "#aaa",
                     }}
-                    rows={1}
                   />
                 </Paragraph>
               </Col>
@@ -286,15 +307,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
             </Row>
           </Card>
 
-          <Card
-            style={{
-              width: 500,
-              marginBottom: 20,
-              padding: 5,
-            }}
-            size="small"
-            title="VIOLATION/S"
-          >
+          <Card className="legalunit-card" size="small" title="VIOLATION/S">
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={24} md={24} lg={24}>
                 <Paragraph className="paragraph-container">
@@ -382,11 +395,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
 
         <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
           <Card
-            style={{
-              width: 500,
-              marginBottom: 20,
-              padding: 5,
-            }}
+            className="legalunit-card"
             size="small"
             title="Technical Conference"
           >
@@ -529,11 +538,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
           </Card>
 
           <Card
-            style={{
-              width: 500,
-              marginBottom: 20,
-              padding: 5,
-            }}
+            className="legalunit-card"
             size="small"
             title="For Order/Resolution"
           >

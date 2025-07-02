@@ -36,7 +36,7 @@ const GenInfo = ({ editedRecord, handleChange, isEditing }) => {
       // Fetch project data when industry_class is not blank
       try {
         const response = await axios.get(
-          `http://10.14.77.100:8081/api/project_type?industry_class=${localRecord.industry_class}`
+          `http://10.14.77.107:8081/api/project_type?industry_class=${localRecord.industry_class}`
         );
         if (response.data) {
           const { psic_code, project_type, project_subtype } = response.data;

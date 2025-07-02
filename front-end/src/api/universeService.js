@@ -1,7 +1,7 @@
 // src/api/universeService.js
 import axios from "axios";
 
-export const API_URL = "http://10.14.77.100:8081"; // Define and export API base URL
+export const API_URL = "http://10.14.77.107:8081"; // Define and export API base URL
 
 /**
  * Checks the user's authentication status.

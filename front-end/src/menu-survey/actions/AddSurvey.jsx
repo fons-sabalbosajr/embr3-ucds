@@ -25,7 +25,7 @@ const AddSurvey = ({ currentUser, visible, onCancel, onCreate }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        "http://10.14.77.100:8081/api/surveys/last-id/2025"
+        "http://10.14.77.107:8081/api/surveys/last-id/2025"
       );
       const data = await response.json();
       setNextIdNo(data.lastIdNo + 1);

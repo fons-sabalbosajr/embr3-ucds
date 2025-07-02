@@ -9,15 +9,15 @@ import {
   CaretRightOutlined,
   LoadingOutlined,
 } from "@ant-design/icons";
-import axios from "axios";
+import { fetchPermitsSummary } from "../../api/permitmonitoringService";
 import PermitMonitoringModal from "./PermitMonitoring";
 import "./activity.css";
 
 const { Panel } = Collapse;
 
 const formatSortKeyDisplay = (sortKey) => {
-  if (typeof sortKey !== 'string') return sortKey;
-  const parts = sortKey.split('-');
+  if (typeof sortKey !== "string") return sortKey;
+  const parts = sortKey.split("-");
   if (parts.length === 2) {
     const prefix = parts[0];
     const numberStr = parts[1];
@@ -28,6 +28,13 @@ const formatSortKeyDisplay = (sortKey) => {
     }
   }
   return sortKey; // Return original if format is unexpected or no numeric part
+};
+
+const getPageSize = () => {
+  if (window.innerWidth >= 768 && window.innerWidth <= 1080) {
+    return 6; // Tablet size: show 6 items per page
+  }
+  return 10; // Default for desktop/mobile
 };
 
 const Activity = ({ theme, provinceAccess }) => {
@@ -41,7 +48,7 @@ const Activity = ({ theme, provinceAccess }) => {
     id_no: "",
     ecc_cnc: "",
   });
-  const pageSize = 10; // Number of id_no entries per page
+  const [pageSize, setPageSize] = useState(getPageSize());
 
   const provincePrefixes = {
     aurora: "AU",
@@ -58,26 +65,29 @@ const Activity = ({ theme, provinceAccess }) => {
     .map(([prov]) => provincePrefixes[prov]);
 
   useEffect(() => {
-    const fetchPermits = async () => {
+    setCurrentPage(1);
+  }, [pageSize]);
+
+  useEffect(() => {
+    const loadPermits = async () => {
+      // Renamed to avoid confusion with the imported function
+      if (allowedPrefixes.length === 0) {
+        setPermits([]);
+        setTotal(0);
+        return; // Exit early if no prefixes are allowed
+      }
+
+      setLoading(true);
       try {
-        setLoading(true);
-
-        const response = await axios.get(
-          "http://10.14.77.100:8081/api/permits-summary",
-          {
-            params: {
-              page: currentPage,
-              pageSize: pageSize,
-              prefixes: allowedPrefixes.join(","), // Send as query string
-            },
-          }
+        const { data, total } = await fetchPermitsSummary(
+          currentPage,
+          pageSize,
+          allowedPrefixes
         );
-
-        const { data, total } = response.data;
         setPermits(data);
         setTotal(total);
       } catch (error) {
-        console.error("Error fetching permit summary:", error);
+        // Error is already logged in the API file, but you can add component-specific handling here if needed
         setPermits([]);
         setTotal(0);
       } finally {
@@ -85,13 +95,16 @@ const Activity = ({ theme, provinceAccess }) => {
       }
     };
 
-    if (allowedPrefixes.length > 0) {
-      fetchPermits();
-    } else {
-      setPermits([]);
-      setTotal(0);
-    }
-  }, [currentPage, pageSize, allowedPrefixes.join(",")]);
+    loadPermits();
+  }, [currentPage, pageSize, allowedPrefixes.join(",")]); // Dependency array remains the same
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPageSize(getPageSize());
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const handleNext = () => {
     if (currentPage * pageSize < total) {
@@ -128,9 +141,7 @@ const Activity = ({ theme, provinceAccess }) => {
         <div className="permit-tags-column">
           <div className="permit-tags-container">
             {item.permits
-              .filter(
-                (permit) => permit.isNearExpiry || permit.isExpired
-              )
+              .filter((permit) => permit.isNearExpiry || permit.isExpired)
               .map((permit, index) => {
                 // Add this console.log to inspect the permit object
                 //console.log("Activity.jsx - Rendering Tag for Permit:", permit);
@@ -203,7 +214,9 @@ const Activity = ({ theme, provinceAccess }) => {
 
           return (
             <li key={index} className="permit-item">
-              <div className="permit-text">{iconElement} {textElement}</div>
+              <div className="permit-text">
+                {iconElement} {textElement}
+              </div>
             </li>
           );
         })}
@@ -267,7 +280,10 @@ const Activity = ({ theme, provinceAccess }) => {
 
       {loading ? (
         <div className="loading-container">
-          <Spin size="small" /> Loading Data...
+          <Spin size="small" />{" "}
+          <span style={{ marginLeft: "8px", fontSize: "10px" }}>
+            Loading Data...
+          </span>
         </div>
       ) : (
         <div className="collapsible-table-wrapper">
@@ -303,10 +319,13 @@ const Activity = ({ theme, provinceAccess }) => {
         style={{
           backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",
           color: theme === "dark" ? "#e0e0e0" : "#000000",
+          top: 40,
         }}
+        zIndex={1000}
       >
         <p>
-          <strong>ID No:</strong> {formatSortKeyDisplay(selectedRecord.sort_key)}
+          <strong>ID No:</strong>{" "}
+          {formatSortKeyDisplay(selectedRecord.sort_key)}
         </p>
         <p>
           <strong>ECC/CNC:</strong> {selectedRecord.ecc_cnc || "N/A"}

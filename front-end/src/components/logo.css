@@ -1,7 +1,81 @@
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 64px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+  padding-left: 16px;
+}
+
+.logo.collapsed {
+  justify-content: flex-start;
+  padding-left: 16px;
+}
+
+.logo-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .logo-icon-img {
-    width: 200px; /* Adjust this value as needed */
-    height: 200px; /* Adjust this value as needed */
-    object-fit: contain; /* This ensures the image maintains its aspect ratio */
-    background-color: transparent;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  background-color: transparent;
+  transition: width 0.2s, height 0.2s;
+  margin-left: 5px;
+}
+
+.logo-icon-img.collapsed {
+  width: 32px;
+  height: 32px;
+  margin-left: 3px;
+}
+
+.logo-icon-text {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+  transition: color 0.2s;
+  white-space: nowrap;
+  user-select: none;
+  line-height: 1;
+}
+
+.logo-icon-text.light-theme {
+  color: #222;
+}
+
+.logo-icon-text.dark-theme {
+  color: #f0f0f0;
+}
+
+.logo-ucds {
+  font-weight: 700;
+  color: var(--highlight-color, #1890ff);
+  letter-spacing: 1px;
+}
+
+@media (max-width: 1080px) {
+  .logo {
+    height: 56px;
   }
-  
+  .logo-icon-img {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 600px) {
+  .logo {
+    height: 48px;
+    padding-left: 8px;
+  }
+  .logo-icon-img {
+    width: 24px;
+    height: 24px;
+  }
+}

@@ -68,7 +68,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://10.14.77.100:8081/api/healthcare", {
+        const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
           method: "GET",
           credentials: "include",
         });
@@ -129,7 +129,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://10.14.77.100:8081/api/healthcare", {
+        const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
           method: "GET",
           credentials: "include",
         });
@@ -162,7 +162,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.100:8081", { withCredentials: true });
+      socketRef.current = io("http://10.14.77.107:8081", { withCredentials: true });
     }
     const socket = socketRef.current;
 
@@ -210,7 +210,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const handleReload = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://10.14.77.100:8081/api/healthcare", {
+      const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
         method: "GET",
         credentials: "include",
       });
@@ -688,13 +688,13 @@ const Healthcare = ({ theme, currentUser, data }) => {
       dataIndex: "id_no",
       key: "id_no",
       ...getColumnSearchProps("id_no"),
-      width: "65px",
+      width: "65",
     },
     {
       title: "Project Details",
       key: "project_details",
       align: "left",
-      width: "300px",
+      width: "200",
       ...getColumnSearchProps("project_details"),
       render: (text, record) => (
         <div>
@@ -758,6 +758,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
       title: "Permit/Clearances",
       key: "permit_clearances",
       align: "center",
+      width: "100",
       ...getPermitClearancesFilterProps(),
     },
     {
@@ -855,6 +856,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
       title: "Remarks/Recommendations",
       dataIndex: "remarks",
       key: "remarks",
+      width: 250,
       ...getColumnSearchProps("remarks"),
     },
     {

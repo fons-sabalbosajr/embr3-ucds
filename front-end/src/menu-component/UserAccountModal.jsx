@@ -67,7 +67,7 @@ const UserAccountModal = ({ userHandle, user }) => {
       }
   
       const response = await axios.put(
-        `http://10.14.77.100:8081/api/users/${editableUser._id}`,
+        `http://10.14.77.107:8081/api/users/${editableUser._id}`,
         updatedUserData,
         {
           headers: {

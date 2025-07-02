@@ -18,7 +18,7 @@ const ActivityLog = ({ theme }) => {
     // Fetch logs from the API
     const fetchLogs = async () => {
       try {
-        const response = await axios.get("http://10.14.77.100:8081/api/logs");
+        const response = await axios.get("http://10.14.77.107:8081/api/logs");
         //console.log("Fetched logs:", response.data); // Log the fetched data
         setLogs(response.data);
         setFilteredLogs(response.data);
@@ -71,26 +71,6 @@ const ActivityLog = ({ theme }) => {
       .join("\n");
   };
 
-  const formatActionLabel = (label) => {
-    try {
-      const cleanedLabel = label
-        .replace(/^Added data: /, "")
-        .replace(/^Updated fields: /, "");
-      const parsed = JSON.parse(cleanedLabel);
-      return Object.entries(parsed)
-        .map(([field, value]) => {
-          if (typeof value === "object" && value !== null) {
-            return `${field}: \n${JSON.stringify(value, null, 2)}`;
-          } else {
-            return `${field}: ${value}`;
-          }
-        })
-        .join("\n");
-    } catch (e) {
-      console.error("Error parsing actionLabel:", e);
-      return label;
-    }
-  };
 
   const getMethodStyle = (method) => {
     switch (method) {
@@ -183,29 +163,6 @@ const ActivityLog = ({ theme }) => {
     },
   ];
 
-  const customDropdownRender = (menu) => {
-    if (!menu.props || !menu.props.children) {
-      return menu; // Return the default menu if no children
-    }
-
-    return (
-      <div>
-        {React.Children.map(menu.props.children, (child) => {
-          if (!React.isValidElement(child)) {
-            return null; // Skip invalid elements
-          }
-
-          const method = child.props.value;
-          const style = getDropdownStyle(method);
-
-          return React.cloneElement(child, {
-            style: { ...child.props.style, ...style },
-            className: "dropdown-option",
-          });
-        })}
-      </div>
-    );
-  };
 
   return (
     <div

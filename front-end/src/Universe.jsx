@@ -49,9 +49,15 @@ import RecordsActivity from "./menu-records/recordsactivity/RecordsActivity";
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
-import UserPopover from "./components/PopOverUser";
+import UserPopover from "./components/PopOverUser/PopOverUser";
 import Z_CustomSpinner from "./Z_CustomSpinner";
 import { DataProvider } from "./menu-province/DataContext";
+
+// ERMS Components
+import ERMSDashboard from "./menu-ZERMS/menu-dashboard/ERMSDashboard";
+import ERMSUniverse from "./menu-ZERMS/menu-universe/ERMSUniverse";
+import ERMSStorageConfig from "./menu-ZERMS/menu-storageconfig/ERMSStorageConfig";
+import ERMSSettings from "./menu-ZERMS/menu-settings/ERMSSettings";
 
 const { Header, Content } = Layout;
 
@@ -146,9 +152,13 @@ const Universe = () => {
 
       setAuth(true);
       setErrorMessage("");
-    } catch (err) { // Catch errors thrown by the service
+    } catch (err) {
+      // Catch errors thrown by the service
       setAuth(false);
-      const message = err && err.message ? err.message : "Authentication failed. Please check your credentials and try again.";
+      const message =
+        err && err.message
+          ? err.message
+          : "Authentication failed. Please check your credentials and try again.";
       setErrorMessage(message);
     } finally {
       setLoading(false);
@@ -173,8 +183,12 @@ const Universe = () => {
         const issuesSource = dataIssuesPayload.issues;
         if (Array.isArray(issuesSource)) {
           // If issuesSource is an empty array, set to ["No issues detected"]
-          dataIssues = issuesSource.length > 0 ? issuesSource : ["No issues detected"];
-        } else if (issuesSource !== null && String(issuesSource).trim() !== "") {
+          dataIssues =
+            issuesSource.length > 0 ? issuesSource : ["No issues detected"];
+        } else if (
+          issuesSource !== null &&
+          String(issuesSource).trim() !== ""
+        ) {
           // If issuesSource is a single string (or other non-array, non-null, non-empty value)
           dataIssues = [issuesSource];
         } else {
@@ -183,22 +197,31 @@ const Universe = () => {
         }
       } else {
         // If dataIssuesPayload is null/undefined or doesn't have 'issues'
-        console.warn("Warning: Data validation issues payload is missing or malformed. Response:", dataIssuesPayload);
+        console.warn(
+          "Warning: Data validation issues payload is missing or malformed. Response:",
+          dataIssuesPayload
+        );
         dataIssues = ["No issues detected"]; // Default or error state for UI
       }
 
       let duplicateIssues = [];
       // Check if duplicateIssuesPayload is not null/undefined and has a 'duplicates' array
-      if (duplicateIssuesPayload && Array.isArray(duplicateIssuesPayload.duplicates)) {
+      if (
+        duplicateIssuesPayload &&
+        Array.isArray(duplicateIssuesPayload.duplicates)
+      ) {
         duplicateIssues = duplicateIssuesPayload.duplicates
-          .filter(d => d && typeof d === 'object') // Ensure 'd' is an object before mapping
+          .filter((d) => d && typeof d === "object") // Ensure 'd' is an object before mapping
           .map((d) => ({
             idNos: Array.isArray(d.idNos) ? d.idNos : [],
             ecc_cnc: d.ecc_cnc || "N/A", // Default if ecc_cnc is missing
-            count: typeof d.count === 'number' ? d.count : 0, // Default if count is missing or not a number
+            count: typeof d.count === "number" ? d.count : 0, // Default if count is missing or not a number
           }));
       } else {
-        console.warn("Warning: Duplicate issues payload is missing, malformed, or 'duplicates' is not an array. Response:", duplicateIssuesPayload);
+        console.warn(
+          "Warning: Duplicate issues payload is missing, malformed, or 'duplicates' is not an array. Response:",
+          duplicateIssuesPayload
+        );
         // duplicateIssues is already defaulted to []
       }
 
@@ -312,6 +335,7 @@ const Universe = () => {
     "tarlac",
     "zambales",
   ];
+  
   const provinceStringPermissions = {};
   provinceKeysForCurrentUser.forEach((key) => {
     provinceStringPermissions[key] = permissions;
@@ -520,6 +544,24 @@ const Universe = () => {
                   element={<RecordsActivity theme={theme} />}
                 />
                 <Route path="admin" element={<Admin theme={theme} />} />
+
+                {/* ERMS Routes */}
+                <Route
+                  path="erms/dashboard"
+                  element={<ERMSDashboard theme={theme} />}
+                />
+                <Route
+                  path="erms/universe"
+                  element={<ERMSUniverse theme={theme} />}
+                />
+                <Route
+                  path="erms/storage-config"
+                  element={<ERMSStorageConfig theme={theme} />}
+                />
+                <Route
+                  path="erms/settings"
+                  element={<ERMSSettings theme={theme} />}
+                />
 
                 <Route path="report" element={<Report theme={theme} />} />
                 <Route path="posting" element={<Posting theme={theme} />} />

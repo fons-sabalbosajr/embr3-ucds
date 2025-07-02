@@ -7,8 +7,8 @@ const { MongoClient, ObjectId, GridFSBucket } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, rgb } = require("pdf-lib");
-const dayjs = require('dayjs'); // For server-side date parsing
-const customParseFormat = require('dayjs/plugin/customParseFormat'); // For "MMMM YYYY"
+const dayjs = require("dayjs"); // For server-side date parsing
+const customParseFormat = require("dayjs/plugin/customParseFormat"); // For "MMMM YYYY"
 dayjs.extend(customParseFormat);
 const fontkit = require("@pdf-lib/fontkit");
 const zlib = require("zlib");
@@ -19,6 +19,7 @@ const cron = require("node-cron");
 const nodemailer = require("nodemailer"); // Nodemailer for sending emails
 const crypto = require("crypto"); // Crypto for generating a reset token
 const bodyParser = require("body-parser");
+const SMB2 = require("smb2");
 
 const app = express();
 const router = express.Router();
@@ -287,7 +288,7 @@ function buildSortKeyQuery(idString) {
 
 //#region DB CONNECTION
 //////////////////////////////////////////////////////////////////////////////////////////
-const allowedOrigins = ["http://localhost:5173", "http://10.14.77.100:5173"];
+const allowedOrigins = ["http://localhost:5173", "http://10.14.77.107:5173"];
 
 // MongoDB connection setup
 const mongoUri = process.env.MONGO_URI;
@@ -315,7 +316,7 @@ let trcCollection;
 let archiveCollection;
 let swmplanCollection;
 let mrfCollection;
-let slfCollection
+let slfCollection;
 let equipmentCollection;
 let odsCollection;
 
@@ -362,7 +363,6 @@ async function connectToMongo() {
     tsdCollection = db.collection("ucds-data-tsd");
     trcCollection = db.collection("ucds-data-trc");
     swmplanCollection = db.collection("ucds-eswm-ten_swm_plan"); // Initialized SWM Plan collection
-    swmplanCollection = db.collection("ucds-ewsm-ten_swm_plan");
     mrfCollection = db.collection("ucds-eswm-mrf");
     slfCollection = db.collection("ucds-eswm-slf");
     equipmentCollection = db.collection("ucds-eswm-equipment");
@@ -851,86 +851,146 @@ router.get("/ucds-data/:identifier", async (req, res) => {
 
 // Define these lists on the server, ideally matching or derived from client-side needs
 const monthTypeFilterFieldsForServer = [
-  'date_monitored', 'date_routed', 'date_signed', 'date_amended',
-  'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued',
-  'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date',
-  'resolution_issued'
+  "date_monitored",
+  "date_routed",
+  "date_signed",
+  "date_amended",
+  "date_approved",
+  "pto_issued",
+  "pto_expiration",
+  "wwdp_issued",
+  "wwdp_expiration",
+  "haz_issued",
+  "nov_issued",
+  "penalty_date",
+  "resolution_issued",
 ];
-const yearTypeFilterFieldsForServer = ['pco_validity'];
+const yearTypeFilterFieldsForServer = ["pco_validity"];
 
 // New route to get distinct values for dropdown fields
 router.get("/ucds-data/distinct-values", async (req, res) => {
   const { field } = req.query;
 
   if (!field) {
-    return res.status(400).json({ error: "Field query parameter is required." });
+    return res
+      .status(400)
+      .json({ error: "Field query parameter is required." });
   }
-  
+
   // Expanded whitelist to include all fields that might need distinct values for filters
   const allowedFields = [
-    'industry_type', 'industry_subtype', 'industry_class', 'psic_code',
-    'mbu_area', 'waterbody', 'emp_total', 'wwtf_type', 'cong_district',
-    'street', 'brgy', 'city', 'section_incharged', 'handler',
-    'monitoring_sched', 'insp_type', 'pismu_tracking', 'title_status',
-    'with_nov', 'pismu_count_month', 'permit_process', 'denr_pab_case_no', 'legal_officer', 
-    'tc_commitment', 'province',
+    "industry_type",
+    "industry_subtype",
+    "industry_class",
+    "psic_code",
+    "mbu_area",
+    "waterbody",
+    "emp_total",
+    "wwtf_type",
+    "cong_district",
+    "street",
+    "brgy",
+    "city",
+    "section_incharged",
+    "handler",
+    "monitoring_sched",
+    "insp_type",
+    "pismu_tracking",
+    "title_status",
+    "with_nov",
+    "pismu_count_month",
+    "permit_process",
+    "denr_pab_case_no",
+    "legal_officer",
+    "tc_commitment",
+    "province",
     ...monthTypeFilterFieldsForServer, // Add month fields
-    ...yearTypeFilterFieldsForServer   // Add year fields
+    ...yearTypeFilterFieldsForServer, // Add year fields
   ];
 
   if (!allowedFields.includes(field)) {
-    return res.status(400).json({ error: `Field '${field}' not allowed for distinct value query.` });
+    return res.status(400).json({
+      error: `Field '${field}' not allowed for distinct value query.`,
+    });
   }
 
   try {
-    if (!ucdsCollection) { // Ensure ucdsCollection is available
+    if (!ucdsCollection) {
+      // Ensure ucdsCollection is available
       return res.status(500).json({ error: "Database collection not found." });
     }
     // Fetch all distinct non-null, non-empty raw values for the field
     const distinctRawValues = await ucdsCollection.distinct(field, {
-      [field]: { $exists: true, $ne: null, $ne: "" } 
+      [field]: { $exists: true, $ne: null, $ne: "" },
     });
 
     let processedValues = [];
 
     if (monthTypeFilterFieldsForServer.includes(field)) {
       const uniqueMonths = new Set();
-      distinctRawValues.forEach(val => {
+      distinctRawValues.forEach((val) => {
         let date;
         if (val instanceof Date) {
           date = dayjs(val);
-        } else if (typeof val === 'string') {
+        } else if (typeof val === "string") {
           // Try parsing with multiple formats, non-strict
-          date = dayjs(val, ["YYYY-MM-DD", "M/D/YYYY", "MM/DD/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", dayjs.ISO_8601], false);
+          date = dayjs(
+            val,
+            [
+              "YYYY-MM-DD",
+              "M/D/YYYY",
+              "MM/DD/YYYY",
+              "YYYY-MM-DDTHH:mm:ss.SSSZ",
+              dayjs.ISO_8601,
+            ],
+            false
+          );
         } else {
           // If it's a number (timestamp) or other type, try to convert
           date = dayjs(val);
         }
 
         if (date.isValid()) {
-          uniqueMonths.add(date.format('MMMM YYYY'));
+          uniqueMonths.add(date.format("MMMM YYYY"));
         }
       });
-      processedValues = Array.from(uniqueMonths).sort((a, b) => dayjs(a, 'MMMM YYYY').valueOf() - dayjs(b, 'MMMM YYYY').valueOf());
+      processedValues = Array.from(uniqueMonths).sort(
+        (a, b) =>
+          dayjs(a, "MMMM YYYY").valueOf() - dayjs(b, "MMMM YYYY").valueOf()
+      );
     } else if (yearTypeFilterFieldsForServer.includes(field)) {
       const uniqueYears = new Set();
-      distinctRawValues.forEach(val => {
+      distinctRawValues.forEach((val) => {
         let date;
         if (val instanceof Date) {
           date = dayjs(val);
-        } else if (typeof val === 'string') {
-          date = dayjs(val, ["YYYY-MM-DD", "M/D/YYYY", "MM/DD/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", dayjs.ISO_8601], false);
+        } else if (typeof val === "string") {
+          date = dayjs(
+            val,
+            [
+              "YYYY-MM-DD",
+              "M/D/YYYY",
+              "MM/DD/YYYY",
+              "YYYY-MM-DDTHH:mm:ss.SSSZ",
+              dayjs.ISO_8601,
+            ],
+            false
+          );
         } else {
           date = dayjs(val);
         }
         if (date.isValid()) {
-          uniqueYears.add(date.format('YYYY'));
+          uniqueYears.add(date.format("YYYY"));
         }
       });
-      processedValues = Array.from(uniqueYears).sort((a,b) => parseInt(a) - parseInt(b));
+      processedValues = Array.from(uniqueYears).sort(
+        (a, b) => parseInt(a) - parseInt(b)
+      );
     } else {
       // General fields: convert to string and sort alphabetically
-      processedValues = distinctRawValues.map(val => String(val)).sort((a, b) => String(a).localeCompare(String(b)));
+      processedValues = distinctRawValues
+        .map((val) => String(val))
+        .sort((a, b) => String(a).localeCompare(String(b)));
     }
     res.status(200).json(processedValues); // Send array of processed strings
   } catch (error) {
@@ -938,7 +998,6 @@ router.get("/ucds-data/distinct-values", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
 
 module.exports = router;
 
@@ -1354,7 +1413,7 @@ app.post("/request-password-reset", async (req, res) => {
     return res.status(200).json({
       message: "Password reset email sent successfully.",
       status: "success",
-      resetLink: `http://localhost:5173/reset-password?token=${resetToken}`, // Optionally, you can include the reset link for easy access
+      resetLink: `http://localhost:5173/reset-password?token=${resetToken}`,
     });
   } catch (error) {
     console.error("Error during password reset request:", error);
@@ -1800,7 +1859,6 @@ app.post("/api/ucds-log", async (req, res) => {
 });
 
 //////////////////////////////////////////////////////////////////////////////////////////
-
 
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -2376,9 +2434,14 @@ app.get("/api/permits-summary", async (req, res) => {
     );
 
     if (shouldFilterByExpiry) {
-      finalRecordsToPaginate = finalRecordsToPaginate.filter((rec) =>
-        rec.permits.some((p) => p.isExpired || p.isNearExpiry)
-      );
+      finalRecordsToPaginate = finalRecordsToPaginate
+        .map((rec) => {
+          const filteredPermits = rec.permits.filter(
+            (p) => p.isExpired || p.isNearExpiry
+          );
+          return { ...rec, permits: filteredPermits };
+        })
+        .filter((rec) => rec.permits.length > 0);
     }
     const selectedPermitTypesArray = (permitTypesFilter || "")
       .split(",")
@@ -2457,8 +2520,10 @@ router.get("/ucds/permit-expiry-breakdown/:permitKey", async (req, res) => {
     }
 
     // Keywords for PTO application stages (defined here for use in counts and exclusion)
-    const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-    const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
+    const ptoOngoingKeywordsRegex =
+      /\b(In-process|In process|On Process|ON GOING)\b/i;
+    const ptoApplicationKeywordsRegex =
+      /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
 
     // --- Count for different statuses ---
     // Count for blank permits (where the permit field is null or empty)
@@ -2471,18 +2536,24 @@ router.get("/ucds/permit-expiry-breakdown/:permitKey", async (req, res) => {
 
     // Count for Ongoing Process (only for PTO)
     let ongoingProcessCount = 0; // Initialize for all types
-    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
-        ongoingProcessCount = await ucdsCollection.countDocuments({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } });
+    if (["pto_code", "wwdp_code", "haz_id"].includes(permitKey)) {
+      // Apply to PTO, WWDP, HAZ_ID
+      ongoingProcessCount = await ucdsCollection.countDocuments({
+        [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex },
+      });
     }
 
     // Count for Applications (only for PTO)
     let applicationCount = 0; // Initialize for all types
     let applicationStagesCount = 0; // For combined count
-    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
-        applicationCount = await ucdsCollection.countDocuments({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } });
-        // Combine counts for the new card
-        applicationStagesCount = ongoingProcessCount + applicationCount;
-    };
+    if (["pto_code", "wwdp_code", "haz_id"].includes(permitKey)) {
+      // Apply to PTO, WWDP, HAZ_ID
+      applicationCount = await ucdsCollection.countDocuments({
+        [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex },
+      });
+      // Combine counts for the new card
+      applicationStagesCount = ongoingProcessCount + applicationCount;
+    }
     // Fetch records that *have* the permit code for expiry status calculation
     const recordsWithPermitCode = await ucdsCollection
       .find(
@@ -2492,19 +2563,27 @@ router.get("/ucds/permit-expiry-breakdown/:permitKey", async (req, res) => {
       .toArray();
 
     // Filter out records that are counted as Ongoing Process or Application
-    const recordsForExpiryCalculation = recordsWithPermitCode.filter(record => {
-        if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
-            const ptoCodeValue = String(record[permitConfig.queryField] || "").trim();
-            return !ptoCodeValue.match(ptoOngoingKeywordsRegex) && !ptoCodeValue.match(ptoApplicationKeywordsRegex);
+    const recordsForExpiryCalculation = recordsWithPermitCode.filter(
+      (record) => {
+        if (["pto_code", "wwdp_code", "haz_id"].includes(permitKey)) {
+          // Apply to PTO, WWDP, HAZ_ID
+          const ptoCodeValue = String(
+            record[permitConfig.queryField] || ""
+          ).trim();
+          return (
+            !ptoCodeValue.match(ptoOngoingKeywordsRegex) &&
+            !ptoCodeValue.match(ptoApplicationKeywordsRegex)
+          );
         }
         return true; // Include all records for other permit types
-    });
+      }
+    );
 
     let expiredCount = 0;
     let nearExpiryCount = 0;
     let notExpiredCount = 0;
     const now = new Date();
-    
+
     recordsForExpiryCalculation.forEach((record) => {
       const dateValue = record[permitConfig.dateField];
       let actualExpiryDate = null;
@@ -2549,7 +2628,8 @@ router.get("/ucds/permit-expiry-breakdown/:permitKey", async (req, res) => {
       totalWithPermit: recordsForExpiryCalculation.length, // Count of records used for expiry check
     };
 
-    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) { // Apply to PTO, WWDP, HAZ_ID
+    if (["pto_code", "wwdp_code", "haz_id"].includes(permitKey)) {
+      // Apply to PTO, WWDP, HAZ_ID
       // Send the combined count
       responsePayload.applicationStages = applicationStagesCount;
     }
@@ -2589,7 +2669,9 @@ router.get("/ucds/list-all-industries", async (req, res) => {
     res.json(allIndustries);
   } catch (error) {
     console.error("Error fetching all industries:", error);
-    res.status(500).json({ message: "Server error while fetching all industries." });
+    res
+      .status(500)
+      .json({ message: "Server error while fetching all industries." });
   }
 });
 
@@ -2619,7 +2701,9 @@ router.get("/ucds/list-all-industries", async (req, res) => {
     res.json(allIndustries);
   } catch (error) {
     console.error("Error fetching all industries:", error);
-    res.status(500).json({ message: "Server error while fetching all industries." });
+    res
+      .status(500)
+      .json({ message: "Server error while fetching all industries." });
   }
 });
 
@@ -2956,7 +3040,7 @@ app.get("/api/ucds/list-by-permit-status", async (req, res) => {
         "Ongoing Process",
         "Application", // Keep individual statuses for direct fetching if ever needed
         "Application Stages", // New combined status
-        "All" // New status to fetch all records for a permit type
+        "All", // New status to fetch all records for a permit type
       ].includes(status)
     ) {
       return res.status(400).json({ message: "Invalid status." });
@@ -3018,7 +3102,10 @@ app.get("/api/ucds/list-by-permit-status", async (req, res) => {
         )
         .sort({ sort_key: 1 })
         .toArray();
-    } else if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && status === "Ongoing Process") {
+    } else if (
+      ["pto_code", "wwdp_code", "haz_id"].includes(permitKey) &&
+      status === "Ongoing Process"
+    ) {
       const ptoOngoingKeywordsRegex =
         /\b(In-process|In process|On Process|ON GOING)\b/i; // Added "ON GOING"
       industriesToReturn = await ucdsCollection
@@ -3028,7 +3115,10 @@ app.get("/api/ucds/list-by-permit-status", async (req, res) => {
         )
         .sort({ sort_key: 1 })
         .toArray();
-    } else if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && status === "Application") {
+    } else if (
+      ["pto_code", "wwdp_code", "haz_id"].includes(permitKey) &&
+      status === "Application"
+    ) {
       const ptoApplicationKeywordsRegex =
         /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i; // Made more flexible
       // Ensure these are not also "Ongoing Process" if there's overlap in keywords, though unlikely with current regex.
@@ -3042,16 +3132,29 @@ app.get("/api/ucds/list-by-permit-status", async (req, res) => {
         )
         .sort({ sort_key: 1 })
         .toArray();
-    } else if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && status === "Application Stages") {
+    } else if (
+      ["pto_code", "wwdp_code", "haz_id"].includes(permitKey) &&
+      status === "Application Stages"
+    ) {
       // Fetch records matching EITHER ongoing OR application keywords
-      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
+      const ptoOngoingKeywordsRegex =
+        /\b(In-process|In process|On Process|ON GOING)\b/i;
+      const ptoApplicationKeywordsRegex =
+        /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
       industriesToReturn = await ucdsCollection
         .find(
-          { $or: [
-              { [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } },
-              { [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } }
-          ]},
+          {
+            $or: [
+              {
+                [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex },
+              },
+              {
+                [permitConfig.queryField]: {
+                  $regex: ptoApplicationKeywordsRegex,
+                },
+              },
+            ],
+          },
           { projection: projectionFields }
         )
         .sort({ sort_key: 1 })
@@ -3075,15 +3178,22 @@ app.get("/api/ucds/list-by-permit-status", async (req, res) => {
 
       const now = new Date();
       // Define these regex patterns here as well, as they are used in this scope
-      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-
+      const ptoOngoingKeywordsRegex =
+        /\b(In-process|In process|On Process|ON GOING)\b/i;
+      const ptoApplicationKeywordsRegex =
+        /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
 
       allRecordsWithPermit.forEach((record) => {
-        const ptoCodeValue = String(record[permitConfig.queryField] || "").trim(); // Used for PTO, WWDP, HAZ_ID application check
+        const ptoCodeValue = String(
+          record[permitConfig.queryField] || ""
+        ).trim(); // Used for PTO, WWDP, HAZ_ID application check
 
         // Skip records that are in application/ongoing stages for expiry calculations
-        if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey) && (ptoCodeValue.match(ptoOngoingKeywordsRegex) || ptoCodeValue.match(ptoApplicationKeywordsRegex))) {
+        if (
+          ["pto_code", "wwdp_code", "haz_id"].includes(permitKey) &&
+          (ptoCodeValue.match(ptoOngoingKeywordsRegex) ||
+            ptoCodeValue.match(ptoApplicationKeywordsRegex))
+        ) {
           return;
         }
 
@@ -3268,7 +3378,6 @@ app.get("/api/ucds-data", async (req, res) => {
       // Add any other fields you want to be included in the global text search
     ];
 
-
     // 1. Handle Global Search (if present)
     if (req.query.search) {
       const searchTermTrimmed = String(req.query.search).trim();
@@ -3279,7 +3388,12 @@ app.get("/api/ucds-data", async (req, res) => {
             if (parts.length === 2 && parts[0] && /^\d+$/.test(parts[1])) {
               const prefix = parts[0];
               const numberPart = parts[1];
-              return { [sField]: { $regex: `^${prefix}-0*${numberPart}$`, $options: "i" } };
+              return {
+                [sField]: {
+                  $regex: `^${prefix}-0*${numberPart}$`,
+                  $options: "i",
+                },
+              };
             } else {
               return { [sField]: { $regex: searchTermTrimmed, $options: "i" } };
             }
@@ -3296,11 +3410,15 @@ app.get("/api/ucds-data", async (req, res) => {
     // Define fields that are handled as specific top-level filters
     // and should not be re-processed by the column filter loop.
     const topLevelFilterKeys = [
-      'search', 'page', 'pageSize', 
-      'projectStatus', 'sectionFilter', 'permitTypeKey', 'filterExpired',
-      'province' // Province is handled as a top-level filter from global dropdown
+      "search",
+      "page",
+      "pageSize",
+      "projectStatus",
+      "sectionFilter",
+      "permitTypeKey",
+      "filterExpired",
+      "province", // Province is handled as a top-level filter from global dropdown
     ];
-
 
     const { projectStatus, sectionFilter, permitTypeKey, filterExpired } =
       req.query;
@@ -3314,72 +3432,197 @@ app.get("/api/ucds-data", async (req, res) => {
     const columnFilterableFields = [
       // This list should contain ALL fields that can be filtered from the client table.
       // It's used to iterate and check req.query for corresponding filter values.
-      'sort_key', 'name', 'title', 'long', 'lat', 'bod', 'address',
-      'iis_no_2024', 'iis_no_2025', 'days_dmds', 'days_drds', 'remarks',
-      'ecc_cnc', 'pco_no', 'pto_code', 'wwdp_code', 'haz_id', 'pco_name',
-      'docket_no', 'v_pd1586', 'v_ra9275', 'v_ra8749', 'v_ra6969_haz',
-      'v_ra6969_tchem', 'tc_date_actual', 'tc_compliance_link', 'pos_paper',
-      'amount', 'or_number', 'other_tc_remarks', 'order_issued', 'order_status',
-      'date_monitored', 'date_routed', 'date_signed', 'date_amended', // Was month
-      'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued', // Was month
-      'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date', // Was month
-      'resolution_issued', 'pco_validity', 'province', 'industry_type', 'industry_subtype', // Was year/general
-      'industry_class', 'psic_code', 'mbu_area', 'waterbody', 'emp_total',
-      'wwtf_type', 'cong_district', 'street', 'brgy', 'city', 'section_incharged',
-      'handler', 'monitoring_sched', 'insp_type', 'pismu_tracking', 'title_status',
-      'with_nov', 'pismu_count_month', 'permit_process', 'denr_pab_case_no',
-      'legal_officer', 'tc_commitment' // All these were general dropdowns
+      "sort_key",
+      "name",
+      "title",
+      "long",
+      "lat",
+      "bod",
+      "address",
+      "iis_no_2024",
+      "iis_no_2025",
+      "days_dmds",
+      "days_drds",
+      "remarks",
+      "ecc_cnc",
+      "pco_no",
+      "pto_code",
+      "wwdp_code",
+      "haz_id",
+      "pco_name",
+      "docket_no",
+      "v_pd1586",
+      "v_ra9275",
+      "v_ra8749",
+      "v_ra6969_haz",
+      "v_ra6969_tchem",
+      "tc_date_actual",
+      "tc_compliance_link",
+      "pos_paper",
+      "amount",
+      "or_number",
+      "other_tc_remarks",
+      "order_issued",
+      "order_status",
+      "date_monitored",
+      "date_routed",
+      "date_signed",
+      "date_amended", // Was month
+      "date_approved",
+      "pto_issued",
+      "pto_expiration",
+      "wwdp_issued", // Was month
+      "wwdp_expiration",
+      "haz_issued",
+      "nov_issued",
+      "penalty_date", // Was month
+      "resolution_issued",
+      "pco_validity",
+      "province",
+      "industry_type",
+      "industry_subtype", // Was year/general
+      "industry_class",
+      "psic_code",
+      "mbu_area",
+      "waterbody",
+      "emp_total",
+      "wwtf_type",
+      "cong_district",
+      "street",
+      "brgy",
+      "city",
+      "section_incharged",
+      "handler",
+      "monitoring_sched",
+      "insp_type",
+      "pismu_tracking",
+      "title_status",
+      "with_nov",
+      "pismu_count_month",
+      "permit_process",
+      "denr_pab_case_no",
+      "legal_officer",
+      "tc_commitment", // All these were general dropdowns
     ];
 
     const inputTypeFilterFields = [
       // All fields that should be treated with a regex text search.
-      'sort_key', 'name', 'title', 'long', 'lat', 'bod', 'address',
-      'iis_no_2024', 'iis_no_2025', 'days_dmds', 'days_drds', 'remarks',
-      'ecc_cnc', 'pco_no', 'pto_code', 'wwdp_code', 'haz_id', 'pco_name',
-      'docket_no', 'v_pd1586', 'v_ra9275', 'v_ra8749', 'v_ra6969_haz',
-      'v_ra6969_tchem', 'tc_date_actual', 'tc_compliance_link', 'pos_paper',
-      'amount', 'or_number', 'other_tc_remarks', 'order_issued', 'order_status',
+      "sort_key",
+      "name",
+      "title",
+      "long",
+      "lat",
+      "bod",
+      "address",
+      "iis_no_2024",
+      "iis_no_2025",
+      "days_dmds",
+      "days_drds",
+      "remarks",
+      "ecc_cnc",
+      "pco_no",
+      "pto_code",
+      "wwdp_code",
+      "haz_id",
+      "pco_name",
+      "docket_no",
+      "v_pd1586",
+      "v_ra9275",
+      "v_ra8749",
+      "v_ra6969_haz",
+      "v_ra6969_tchem",
+      "tc_date_actual",
+      "tc_compliance_link",
+      "pos_paper",
+      "amount",
+      "or_number",
+      "other_tc_remarks",
+      "order_issued",
+      "order_status",
       // Add previously month-type fields
-      'date_monitored', 'date_routed', 'date_signed', 'date_amended',
-      'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued',
-      'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date',
-      'resolution_issued',
+      "date_monitored",
+      "date_routed",
+      "date_signed",
+      "date_amended",
+      "date_approved",
+      "pto_issued",
+      "pto_expiration",
+      "wwdp_issued",
+      "wwdp_expiration",
+      "haz_issued",
+      "nov_issued",
+      "penalty_date",
+      "resolution_issued",
       // Add previously year-type fields
-      'pco_validity',
+      "pco_validity",
       // Add previously general-dropdown-type fields
-      'industry_type', 'industry_subtype', 'industry_class', 'psic_code',
-      'mbu_area', 'waterbody', 'emp_total', 'wwtf_type', 'cong_district',
-      'street', 'brgy', 'city', 'section_incharged', 'handler',
-      'monitoring_sched', 'insp_type', 'pismu_tracking', 'title_status',
-      'with_nov', 'pismu_count_month', 'permit_process', 'denr_pab_case_no',
-      'legal_officer', 'tc_commitment', 'province'
+      "industry_type",
+      "industry_subtype",
+      "industry_class",
+      "psic_code",
+      "mbu_area",
+      "waterbody",
+      "emp_total",
+      "wwtf_type",
+      "cong_district",
+      "street",
+      "brgy",
+      "city",
+      "section_incharged",
+      "handler",
+      "monitoring_sched",
+      "insp_type",
+      "pismu_tracking",
+      "title_status",
+      "with_nov",
+      "pismu_count_month",
+      "permit_process",
+      "denr_pab_case_no",
+      "legal_officer",
+      "tc_commitment",
+      "province",
     ];
 
     const monthTypeFilterFields = [
-      'date_monitored', 'date_routed', 'date_signed', 'date_amended',
-      'date_approved', 'pto_issued', 'pto_expiration', 'wwdp_issued',
-      'wwdp_expiration', 'haz_issued', 'nov_issued', 'penalty_date',
-      'resolution_issued' 
+      "date_monitored",
+      "date_routed",
+      "date_signed",
+      "date_amended",
+      "date_approved",
+      "pto_issued",
+      "pto_expiration",
+      "wwdp_issued",
+      "wwdp_expiration",
+      "haz_issued",
+      "nov_issued",
+      "penalty_date",
+      "resolution_issued",
       // These fields are now in inputTypeFilterFields. This array can be emptied
       // or the logic below adjusted if no fields will match this anymore.
     ];
 
-    const yearTypeFilterFields = ['pco_validity'];
+    const yearTypeFilterFields = ["pco_validity"];
     // Similar to monthTypeFilterFields, 'pco_validity' is now in inputTypeFilterFields.
-    columnFilterableFields.forEach(field => {
-       if (req.query[field] && req.query[field].length > 0 && !topLevelFilterKeys.includes(field)) {
-        const filterValues = Array.isArray(req.query[field]) ? req.query[field] : [req.query[field]];
+    columnFilterableFields.forEach((field) => {
+      if (
+        req.query[field] &&
+        req.query[field].length > 0 &&
+        !topLevelFilterKeys.includes(field)
+      ) {
+        const filterValues = Array.isArray(req.query[field])
+          ? req.query[field]
+          : [req.query[field]];
 
         const firstFilterValue = String(filterValues[0]).trim();
         let handledBySpecificLogic = false;
 
-        if (field === 'sort_key') {
+        if (field === "sort_key") {
           const parts = firstFilterValue.split("-");
           if (parts.length === 2 && parts[0] && /^\d+$/.test(parts[1])) {
             const prefix = parts[0];
             const numberPart = parts[1];
             queryConditions.push({
-              [field]: { $regex: `^${prefix}-0*${numberPart}$`, $options: "i" }
+              [field]: { $regex: `^${prefix}-0*${numberPart}$`, $options: "i" },
             });
             handledBySpecificLogic = true;
           }
@@ -3387,30 +3630,38 @@ app.get("/api/ucds-data", async (req, res) => {
 
         if (!handledBySpecificLogic) {
           if (inputTypeFilterFields.includes(field)) {
-            queryConditions.push({ [field]: { $regex: firstFilterValue, $options: "i" } });
-          // The following 'else if' blocks for monthTypeFilterFields and yearTypeFilterFields
-          // will likely not be hit if these arrays are empty or their fields moved to inputTypeFilterFields.
+            queryConditions.push({
+              [field]: { $regex: firstFilterValue, $options: "i" },
+            });
+            // The following 'else if' blocks for monthTypeFilterFields and yearTypeFilterFields
+            // will likely not be hit if these arrays are empty or their fields moved to inputTypeFilterFields.
           } else if (monthTypeFilterFields.includes(field)) {
             const targetMonth = dayjs(firstFilterValue, "MMMM YYYY");
             if (targetMonth.isValid()) {
-              const startDate = targetMonth.startOf('month').toDate();
-              const endDate = targetMonth.endOf('month').toDate();
-              queryConditions.push({ [field]: { $gte: startDate, $lte: endDate } });
+              const startDate = targetMonth.startOf("month").toDate();
+              const endDate = targetMonth.endOf("month").toDate();
+              queryConditions.push({
+                [field]: { $gte: startDate, $lte: endDate },
+              });
             }
           } else if (yearTypeFilterFields.includes(field)) {
             const targetYear = dayjs(firstFilterValue, "YYYY");
             if (targetYear.isValid()) {
-              const startDate = targetYear.startOf('year').toDate();
-              const endDate = targetYear.endOf('year').toDate();
-              queryConditions.push({ [field]: { $gte: startDate, $lte: endDate } });
+              const startDate = targetYear.startOf("year").toDate();
+              const endDate = targetYear.endOf("year").toDate();
+              queryConditions.push({
+                [field]: { $gte: startDate, $lte: endDate },
+              });
             }
-          } else { 
+          } else {
             // This 'else' block would previously handle general dropdowns.
             // Since they are now intended to be text inputs and moved to inputTypeFilterFields,
             // this block might only catch fields in columnFilterableFields but not in any specific type list.
             // For consistency with "input filter type", consider if these should also be regex.
             // However, if they are not in inputTypeFilterFields, this $in will perform an exact match.
-            queryConditions.push({ [field]: { $in: filterValues.map(val => String(val).trim()) } });
+            queryConditions.push({
+              [field]: { $in: filterValues.map((val) => String(val).trim()) },
+            });
           }
         }
       }
@@ -3479,8 +3730,15 @@ app.get("/api/ucds-data", async (req, res) => {
 
     // Handle top-level province filter (from global dropdown)
     const { province: queryProvince } = req.query;
-    if (queryProvince && typeof queryProvince === 'string' && queryProvince.trim() !== "" && queryProvince.trim().toLowerCase() !== "all provinces") {
-      queryConditions.push({ province: { $regex: `^${queryProvince.trim()}$`, $options: "i" } });
+    if (
+      queryProvince &&
+      typeof queryProvince === "string" &&
+      queryProvince.trim() !== "" &&
+      queryProvince.trim().toLowerCase() !== "all provinces"
+    ) {
+      queryConditions.push({
+        province: { $regex: `^${queryProvince.trim()}$`, $options: "i" },
+      });
     }
 
     if (queryConditions.length > 0) {
@@ -3613,7 +3871,7 @@ app.get("/api/ucds-data", async (req, res) => {
 });
 
 // API endpoint for SWM Plan data
-app.get("/api/swm-plan-data", async (req, res) => {
+router.get("/swm-plan-data", async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 20;
@@ -3628,7 +3886,7 @@ app.get("/api/swm-plan-data", async (req, res) => {
       "province",
       "planId", // Assuming a unique ID field for the plan
       "status", // Assuming a status field
-      "remarks"
+      "remarks",
     ];
 
     if (req.query.search) {
@@ -3646,48 +3904,140 @@ app.get("/api/swm-plan-data", async (req, res) => {
     // Column-specific filters for SWM Plans
     // Adjust these fields based on your swmplanCollection schema and client-side table columns
     const columnFilterableFieldsSWM = [
-      "lguName", "province", "status", "yearSubmitted", "yearApproved", "planId", "remarks"
+      "lguName",
+      "province",
+      "status",
+      "yearSubmitted",
+      "yearApproved",
+      "planId",
+      "remarks",
     ];
 
-    columnFilterableFieldsSWM.forEach(field => {
-      if (req.query[field] && req.query[field].length > 0 && !['search', 'page', 'pageSize'].includes(field)) {
-        const filterValues = Array.isArray(req.query[field]) ? req.query[field] : [req.query[field]];
+    columnFilterableFieldsSWM.forEach((field) => {
+      if (
+        req.query[field] &&
+        req.query[field].length > 0 &&
+        !["search", "page", "pageSize"].includes(field)
+      ) {
+        const filterValues = Array.isArray(req.query[field])
+          ? req.query[field]
+          : [req.query[field]];
         const firstFilterValue = String(filterValues[0]).trim();
         if (firstFilterValue) {
           // Assuming all column filters are text-based for SWM Plan for now
-          queryConditions.push({ [field]: { $regex: firstFilterValue, $options: "i" } });
+          queryConditions.push({
+            [field]: { $regex: firstFilterValue, $options: "i" },
+          });
         }
       }
     });
 
     // Specific top-level filters (e.g., province, status)
-    if (req.query.province && typeof req.query.province === 'string' && req.query.province.trim() !== "" && req.query.province.trim().toLowerCase() !== "all provinces") {
-      queryConditions.push({ province: { $regex: `^${req.query.province.trim()}$`, $options: "i" } });
+    if (
+      req.query.province &&
+      typeof req.query.province === "string" &&
+      req.query.province.trim() !== "" &&
+      req.query.province.trim().toLowerCase() !== "all provinces"
+    ) {
+      queryConditions.push({
+        province: { $regex: `^${req.query.province.trim()}$`, $options: "i" },
+      });
     }
-    if (req.query.planStatus && typeof req.query.planStatus === 'string' && req.query.planStatus.trim() !== "") {
-      queryConditions.push({ status: { $regex: `^${req.query.planStatus.trim()}$`, $options: "i" } }); // Assuming 'status' field for plan status
+    if (
+      req.query.planStatus &&
+      typeof req.query.planStatus === "string" &&
+      req.query.planStatus.trim() !== ""
+    ) {
+      queryConditions.push({
+        status: { $regex: `^${req.query.planStatus.trim()}$`, $options: "i" },
+      }); // Assuming 'status' field for plan status
     }
-
 
     if (queryConditions.length > 0) {
       mongoQuery.$and = queryConditions;
     }
 
     if (!swmplanCollection) {
-      return res.status(500).json({ error: "SWM Plan collection not initialized." });
+      return res
+        .status(500)
+        .json({ error: "SWM Plan collection not initialized." });
     }
 
-    const total = await swmplanCollection.countDocuments(mongoQuery);
-    // Basic sort, adjust as needed (e.g., by lguName, submissionDate)
+    const total = await swmplanCollection.countDocuments(mongoQuery); // Get total count before aggregation
+
+    const pipeline = [];
+
+    // 1. Initial Match based on filters from request query
+    if (Object.keys(mongoQuery).length > 0) {
+      pipeline.push({ $match: mongoQuery });
+    }
+
+    // 2. Add fields for sorting by id_no (prefix and numeric part)
+    pipeline.push(
+      {
+        $addFields: {
+          _temp_id_no: { $ifNull: ["$id_no", ""] },
+        },
+      },
+      {
+        $addFields: {
+          _id_no_parts: { $split: ["$_temp_id_no", "-"] },
+        },
+      },
+      {
+        $addFields: {
+          _id_no_prefix: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ["$_id_no_parts", []] } }, 0] },
+              then: { $arrayElemAt: ["$_id_no_parts", 0] },
+              else: "$_temp_id_no",
+            },
+          },
+          _id_no_number_str: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ["$_id_no_parts", []] } }, 1] },
+              then: { $arrayElemAt: ["$_id_no_parts", 1] },
+              else: null,
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          _id_no_number: {
+            $convert: {
+              input: "$_id_no_number_str",
+              to: "int",
+              onError: null,
+              onNull: null,
+            },
+          },
+        },
+      }
+    );
+
+    // 3. Sort stage
+    pipeline.push({ $sort: { _id_no_prefix: 1, _id_no_number: 1 } });
+
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: pageSize });
+
+    // 5. Project stage to remove temporary sort fields (optional, but good practice)
+    pipeline.push({
+      $project: {
+        _temp_id_no: 0,
+        _id_no_parts: 0,
+        _id_no_prefix: 0,
+        _id_no_number_str: 0,
+        _id_no_number: 0,
+      },
+    });
+
     const plans = await swmplanCollection
-      .find(mongoQuery)
-      .sort({ lguName: 1 }) // Example sort
-      .skip(skip)
-      .limit(pageSize)
+      .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
 
     res.status(200).json({ data: plans, total });
-
   } catch (error) {
     console.error("Error fetching SWM Plan data:", error);
     res.status(500).send("Internal Server Error");
@@ -3695,76 +4045,113 @@ app.get("/api/swm-plan-data", async (req, res) => {
 });
 
 // API endpoint for SWM Plan dashboard statistics
-app.get("/api/swm-plan-stats", async (req, res) => {
+router.get("/swm-plan-stats", async (req, res) => {
   try {
     if (!swmplanCollection) {
-      return res.status(500).json({ error: "SWM Plan collection not initialized." });
+      return res
+        .status(500)
+        .json({ error: "SWM Plan collection not initialized." });
     }
 
     const totalPlans = await swmplanCollection.countDocuments({});
 
     // Example: Breakdown by plan status (assuming a 'status' field)
-    const statusBreakdown = await swmplanCollection.aggregate([
-      { $match: { status: { $exists: true, $ne: null, $ne: "" } } },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-      { $project: { _id: 0, status: "$_id", count: 1 } },
-      { $sort: { count: -1 } }
-    ]).toArray();
+    const statusBreakdown = await swmplanCollection
+      .aggregate([
+        { $match: { status: { $exists: true, $ne: null, $ne: "" } } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+        { $project: { _id: 0, status: "$_id", count: 1 } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
 
     // Example: Breakdown by province
-    const provinceBreakdown = await swmplanCollection.aggregate([
-      { $match: { province: { $exists: true, $ne: null, $ne: "" } } },
-      { $group: { _id: "$province", count: { $sum: 1 } } },
-      { $project: { _id: 0, province: "$_id", count: 1 } },
-      { $sort: { count: -1 } }
-    ]).toArray();
-    
+    const provinceBreakdown = await swmplanCollection
+      .aggregate([
+        { $match: { province: { $exists: true, $ne: null, $ne: "" } } },
+        { $group: { _id: "$province", count: { $sum: 1 } } },
+        { $project: { _id: 0, province: "$_id", count: 1 } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
+
+    // New: Breakdown by remarks_recommendations
+    const remarksBreakdown = await swmplanCollection
+      .aggregate([
+        {
+          $match: {
+            remarks_recommendations: { $exists: true, $ne: null, $ne: "" },
+          },
+        },
+        { $group: { _id: "$remarks_recommendations", count: { $sum: 1 } } },
+        { $project: { _id: 0, remarkType: "$_id", count: 1 } }, // Rename _id to remarkType for clarity
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
+
+    // Convert array to object for easier consumption on frontend (key-value pairs)
+    const remarksBreakdownObject = remarksBreakdown.reduce((acc, item) => {
+      acc[item.remarkType] = item.count;
+      return acc;
+    }, {});
+
     // Example: Count of plans submitted this year (assuming 'submissionDate' field)
     const currentYear = new Date().getFullYear();
     const plansSubmittedThisYear = await swmplanCollection.countDocuments({
-        submissionDate: { // Assuming 'submissionDate' is a Date object
-            $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
-            $lt: new Date(`${currentYear + 1}-01-01T00:00:00.000Z`)
-        }
+      submissionDate: {
+        // Assuming 'submissionDate' is a Date object
+        $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
+        $lt: new Date(`${currentYear + 1}-01-01T00:00:00.000Z`),
+      },
     });
 
     res.json({
       totalPlans,
       statusBreakdown, // e.g., [{status: "Approved", count: 50}, {status: "Submitted", count: 30}]
       provinceBreakdown, // e.g., [{province: "Pampanga", count: 20}, {province: "Bulacan", count: 15}]
-      plansSubmittedThisYear 
+      plansSubmittedThisYear,
+      remarksBreakdown: remarksBreakdownObject, // Include the new breakdown
       // Add more stats as needed
     });
-
   } catch (error) {
     console.error("Error fetching SWM Plan dashboard stats:", error);
-    res.status(500).json({ error: "Failed to fetch SWM Plan dashboard statistics." });
+    res
+      .status(500)
+      .json({ error: "Failed to fetch SWM Plan dashboard statistics." });
   }
 });
 
 // API endpoint for updating SWM Plan data
-app.put("/api/update-swm-plan-data/:id", logActivity, async (req, res) => { // Assuming logActivity middleware is generic enough
+router.put("/update-swm-plan-data/:id", logActivity, async (req, res) => {
   try {
     const { id } = req.params; // Assuming id is MongoDB _id
     const newData = req.body;
 
     if (!swmplanCollection) {
-      return res.status(500).json({ error: "SWM Plan collection not initialized." });
+      return res
+        .status(500)
+        .json({ error: "SWM Plan collection not initialized." });
     }
     if (!ObjectId.isValid(id)) {
-        return res.status(400).json({ error: "Invalid ID format for SWM Plan." });
+      return res.status(400).json({ error: "Invalid ID format for SWM Plan." });
     }
 
     const { _id, ...updatePayload } = newData; // Exclude _id from the payload itself
 
-    const result = await swmplanCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatePayload });
+    const result = await swmplanCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updatePayload }
+    );
 
-    if (result.matchedCount === 0) return res.status(404).json({ error: "SWM Plan not found." });
-    if (result.modifiedCount === 0) return res.status(200).json({ message: "No changes made to the SWM Plan." });
+    if (result.matchedCount === 0)
+      return res.status(404).json({ error: "SWM Plan not found." });
+    if (result.modifiedCount === 0)
+      return res
+        .status(200)
+        .json({ message: "No changes made to the SWM Plan." });
 
     // TODO: Add detailed logging to a specific SWM plan log collection if needed, similar to ucds-log
     res.status(200).json({ message: "SWM Plan updated successfully." });
-
   } catch (error) {
     console.error("Error updating SWM Plan data:", error);
     res.status(500).json({ error: "Failed to update SWM Plan data." });
@@ -3861,30 +4248,39 @@ app.get("/api/survey-dashboard-stats/:year", async (req, res) => {
     }
 
     if (!surveyMonitoringCollection) {
-      return res.status(500).json({ error: `Survey collection for year ${year} not found or initialized.` });
+      return res.status(500).json({
+        error: `Survey collection for year ${year} not found or initialized.`,
+      });
     }
 
     const totalSurveys = await surveyMonitoringCollection.countDocuments({});
 
-    const projectTypeBreakdown = await surveyMonitoringCollection.aggregate([
-      { $match: { project_type: { $exists: true, $ne: null, $ne: "" } } },
-      { $group: { _id: "$project_type", count: { $sum: 1 } } },
-      { $project: { _id: 0, type: "$_id", count: 1 } },
-      { $sort: { count: -1 } }
-    ]).toArray();
+    const projectTypeBreakdown = await surveyMonitoringCollection
+      .aggregate([
+        { $match: { project_type: { $exists: true, $ne: null, $ne: "" } } },
+        { $group: { _id: "$project_type", count: { $sum: 1 } } },
+        { $project: { _id: 0, type: "$_id", count: 1 } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
 
-    const provinceBreakdown = await surveyMonitoringCollection.aggregate([
-      { $match: { province: { $exists: true, $ne: null, $ne: "" } } },
-      { $group: { _id: "$province", count: { $sum: 1 } } },
-      { $project: { _id: 0, province: "$_id", count: 1 } },
-      { $sort: { count: -1 } }
-    ]).toArray();
+    const provinceBreakdown = await surveyMonitoringCollection
+      .aggregate([
+        { $match: { province: { $exists: true, $ne: null, $ne: "" } } },
+        { $group: { _id: "$province", count: { $sum: 1 } } },
+        { $project: { _id: 0, province: "$_id", count: 1 } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
 
-    const eiaSurveyCount = await surveyMonitoringCollection.countDocuments({ survey_eia: true });
-    const mbuAreaSurveyCount = await surveyMonitoringCollection.countDocuments({ mbu_area: true });
+    const eiaSurveyCount = await surveyMonitoringCollection.countDocuments({
+      survey_eia: true,
+    });
+    const mbuAreaSurveyCount = await surveyMonitoringCollection.countDocuments({
+      mbu_area: true,
+    });
     // Example: Count for "Completed" status_survey
     // const completedSurveyCount = await surveyMonitoringCollection.countDocuments({ status_survey: "Completed" });
-
 
     res.status(200).json({
       totalSurveys,
@@ -3894,12 +4290,11 @@ app.get("/api/survey-dashboard-stats/:year", async (req, res) => {
       mbuAreaSurveyCount,
       // completedSurveyCount, // Add other stats as needed
     });
-
   } catch (error) {
     console.error("Error fetching survey dashboard stats:", error);
     res.status(500).json({
       error: "Failed to fetch survey dashboard statistics.",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -3922,7 +4317,9 @@ app.get("/api/surveys-monitoring-data/:year", async (req, res) => {
     }
 
     if (!surveyMonitoringCollection) {
-      return res.status(500).json({ error: `Survey collection for year ${year} not found or initialized.` });
+      return res.status(500).json({
+        error: `Survey collection for year ${year} not found or initialized.`,
+      });
     }
 
     const mongoQuery = {};
@@ -3954,31 +4351,65 @@ app.get("/api/surveys-monitoring-data/:year", async (req, res) => {
     }
 
     // Handle top-level province filter
-    if (req.query.province && typeof req.query.province === 'string' && req.query.province.trim() !== "" && req.query.province.trim().toLowerCase() !== "all provinces") {
-      queryConditions.push({ province: { $regex: `^${req.query.province.trim()}$`, $options: "i" } });
+    if (
+      req.query.province &&
+      typeof req.query.province === "string" &&
+      req.query.province.trim() !== "" &&
+      req.query.province.trim().toLowerCase() !== "all provinces"
+    ) {
+      queryConditions.push({
+        province: { $regex: `^${req.query.province.trim()}$`, $options: "i" },
+      });
     }
-    
+
     // Handle survey status filter (example)
-    if (req.query.status && typeof req.query.status === 'string' && req.query.status.trim() !== "") {
-        queryConditions.push({ status_survey: { $regex: `^${req.query.status.trim()}$`, $options: "i" } }); // Assuming 'status_survey' field
+    if (
+      req.query.status &&
+      typeof req.query.status === "string" &&
+      req.query.status.trim() !== ""
+    ) {
+      queryConditions.push({
+        status_survey: {
+          $regex: `^${req.query.status.trim()}$`,
+          $options: "i",
+        },
+      }); // Assuming 'status_survey' field
     }
 
     // Handle Column-Specific Filters (all as text search for simplicity)
     // Client should send filter key matching dataIndex of the column
-    const surveyColumnFilterableFields = [ // Match these with baseColumns dataIndex in monitoring_survey.jsx
-        'id_no', 'project_title', 'industry_class', 'address', 'province', 
-        'city', 'brgy', 'lat', 'long', 'date_surveyed', 'status_survey', 'remarks_survey'
+    const surveyColumnFilterableFields = [
+      // Match these with baseColumns dataIndex in monitoring_survey.jsx
+      "id_no",
+      "project_title",
+      "industry_class",
+      "address",
+      "province",
+      "city",
+      "brgy",
+      "lat",
+      "long",
+      "date_surveyed",
+      "status_survey",
+      "remarks_survey",
     ];
 
-    surveyColumnFilterableFields.forEach(field => {
-      if (req.query[field] && req.query[field].length > 0 && !['search', 'page', 'pageSize', 'province', 'status'].includes(field)) {
-        const filterValue = Array.isArray(req.query[field]) ? String(req.query[field][0]).trim() : String(req.query[field]).trim();
+    surveyColumnFilterableFields.forEach((field) => {
+      if (
+        req.query[field] &&
+        req.query[field].length > 0 &&
+        !["search", "page", "pageSize", "province", "status"].includes(field)
+      ) {
+        const filterValue = Array.isArray(req.query[field])
+          ? String(req.query[field][0]).trim()
+          : String(req.query[field]).trim();
         if (filterValue) {
-          queryConditions.push({ [field]: { $regex: filterValue, $options: "i" } });
+          queryConditions.push({
+            [field]: { $regex: filterValue, $options: "i" },
+          });
         }
       }
     });
-
 
     if (queryConditions.length > 0) {
       mongoQuery.$and = queryConditions;
@@ -3999,7 +4430,6 @@ app.get("/api/surveys-monitoring-data/:year", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
 
 // Search by name
 app.get("/api/ucds/search-name", async (req, res) => {
@@ -5155,7 +5585,7 @@ app.get("/api/user/avatar", async (req, res) => {
 // Example API endpoint to fetch monitored dates
 app.get("/api/monitored_dates", async (req, res) => {
   try {
-    const monitoredDates = await ucdsCollection
+    const monitoredDates = await dailyNoticesCollection
       .find({
         title: { $exists: true, $ne: "" },
         date_monitored: { $exists: true, $ne: "" },
@@ -5174,29 +5604,47 @@ app.get("/api/monitored_dates", async (req, res) => {
 
 app.get("/api/daily_notices", async (req, res) => {
   try {
-    const notices = await dailyNoticesCollection
-      .find(
-        { date_monitored: { $exists: true, $ne: "" } },
-        {
-          projection: {
-            date_monitored: 1,
-            title: 1,
-            address: 1,
-            industry_class: 1,
-            date_routed: 1,
-            date_signed: 1,
-            iis_no: 1,
-            section_incharge: 1,
-            fmr_section_incharged: 1, // Ensure these fields are included
-            handler: 1,
-            monitoring_sched: 1,
-            insp_type: 1,
-            remarks_recommendation: 1,
-            _id: 0,
-          },
-        }
-      )
+    const rawNotices = await dailyNoticesCollection
+      .find({
+        date_monitored: { $exists: true, $ne: "" },
+      })
       .toArray();
+
+    // Explicitly map all fields to ensure they are present in the response,
+    // providing default empty strings for any missing values.
+    const notices = rawNotices.map((doc) => ({
+      _id: doc._id,
+      sort_key: doc.sort_key || "",
+      title: doc.title || "",
+      name: doc.name || "",
+      address: doc.address || "",
+      industry_class: doc.industry_class || "",
+      date_monitored: doc.date_monitored || "",
+      date_routed: doc.date_routed || "",
+      date_signed: doc.date_signed || "",
+      iis_no_2024: doc.iis_no_2024 || "",
+      iis_no_2025: doc.iis_no_2025 || "",
+      pismu_tracking: doc.pismu_tracking || "",
+      section_incharged: doc.section_incharged || "",
+      fmr_section_incharged: doc.fmr_section_incharged || "",
+      handler: doc.handler || "",
+      monitoring_sched: doc.monitoring_sched || "",
+      insp_type: doc.insp_type || "",
+      remarks: doc.remarks || "",
+      ecc_cnc: doc.ecc_cnc || "",
+      pto_code: doc.pto_code || "",
+      wwdp_code: doc.wwdp_code || "",
+      haz_id: doc.haz_id || "",
+      pco_no: doc.pco_no || "",
+      pismu_count_month: doc.pismu_count_month || "", // Added for PISMU Tracking
+      title_status: doc.title_status || "", // Added for Remarks tooltip logic
+      docket_no: doc.docket_no || "", // Added for Remarks tooltip logic
+      v_pd1586: doc.v_pd1586 || "", // Added for Remarks tooltip logic
+      v_ra9275: doc.v_ra9275 || "", // Added for Remarks tooltip logic
+      v_ra8749: doc.v_ra8749 || "", // Added for Remarks tooltip logic
+      v_ra6969_haz: doc.v_ra6969_haz || "", // Added for Remarks tooltip logic
+      v_ra6969_tchem: doc.v_ra6969_tchem || "", // Added for Remarks tooltip logic
+    }));
 
     res.json({ notices });
   } catch (error) {
@@ -5660,7 +6108,9 @@ app.put("/api/surveys-monitoring-data/:year/:id", async (req, res) => {
     const newData = req.body;
 
     if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid survey record ID format." });
+      return res
+        .status(400)
+        .json({ error: "Invalid survey record ID format." });
     }
 
     let surveyMonitoringCollection;
@@ -5672,8 +6122,10 @@ app.put("/api/surveys-monitoring-data/:year/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid survey year provided." });
     }
 
-     if (!surveyMonitoringCollection) {
-      return res.status(500).json({ error: `Survey collection for year ${year} not found or initialized.` });
+    if (!surveyMonitoringCollection) {
+      return res.status(500).json({
+        error: `Survey collection for year ${year} not found or initialized.`,
+      });
     }
 
     // Exclude _id from $set payload if it's present in newData
@@ -5684,8 +6136,12 @@ app.put("/api/surveys-monitoring-data/:year/:id", async (req, res) => {
       { $set: updatePayload }
     );
 
-    if (result.matchedCount === 0) return res.status(404).json({ error: "Survey record not found." });
-    if (result.modifiedCount === 0) return res.status(200).json({ message: "No changes made to the survey record." });
+    if (result.matchedCount === 0)
+      return res.status(404).json({ error: "Survey record not found." });
+    if (result.modifiedCount === 0)
+      return res
+        .status(200)
+        .json({ message: "No changes made to the survey record." });
 
     res.status(200).json({ message: "Survey record updated successfully." });
   } catch (error) {
@@ -6633,6 +7089,125 @@ app.delete("/api/survey-transaction/:transactionID", async (req, res) => {
 
 //#endregion
 
+//#region ERMS
+
+// Middleware to check for ERMS authentication in session
+const requireErmsAuth = (req, res, next) => {
+  if (req.session && req.session.erms_credentials) {
+    return next();
+  }
+  res.status(401).json({ message: "Not authenticated for ERMS. Please log in." });
+};
+
+// ✅ POST /api/erms/login - Authenticate and create a session for ERMS
+app.post("/api/erms/login", async (req, res) => {
+  const { share, username: rawUsername, password, domain: rawDomain } = req.body;
+
+  if (!share || !rawUsername || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Share path, username, and password required.",
+    });
+  }
+
+  let username = rawUsername.trim();
+  let domain = rawDomain?.trim();
+
+  if (username.includes("\\")) {
+    [domain, username] = username.split("\\");
+  }
+
+  const smbConfig = {
+    share: share.trim().replace(/^\\{1,2}/, "\\\\"),
+    username,
+    password,
+    domain: domain || "EMBR3SYNOLOG",
+    autoCloseTimeout: 0,
+  };
+
+  //console.log("🔐 Attempting SMB login with config:", smbConfig);
+
+  const smb2Client = new SMB2(smbConfig);
+
+  smb2Client.readdir("", (err, files) => {
+    if (err) {
+      console.error("❌ SMB login failed:", err.code, err.message);
+      return res.status(401).json({
+        success: false,
+        message: err.message || "SMB login failed",
+        code: err.code,
+      });
+    }
+
+    // ✅ Store session credentials
+    req.session.erms_credentials = {
+      share: smbConfig.share,
+      username,
+      password,
+      domain: smbConfig.domain,
+    };
+
+    res.json({ success: true });
+  });
+});
+
+// ✅ GET /api/erms/files — list files using session credentials
+app.get("/api/erms/files", requireErmsAuth, (req, res) => {
+  const { share, username, password, domain } = req.session.erms_credentials;
+
+  const smb2Client = new SMB2({
+    share,
+    username,
+    password,
+    domain,
+    autoCloseTimeout: 0,
+  });
+
+  smb2Client.readdir("", (err, files) => {
+    if (err) {
+      console.error("📁 File list error:", err);
+      return res.status(500).json({
+        error: "Drive access failed",
+        message: err.message,
+      });
+    }
+    res.json({ files });
+  });
+});
+
+// ✅ GET /api/erms/view-pdf?file=filename.pdf — read PDF using session credentials
+app.get("/api/erms/view-pdf", requireErmsAuth, (req, res) => {
+  const { file: fileName } = req.query;
+  if (!fileName) {
+    return res.status(400).json({ error: "File name is required." });
+  }
+
+  const { share, username, password, domain } = req.session.erms_credentials;
+
+  const smb2Client = new SMB2({
+    share,
+    username,
+    password,
+    domain,
+    autoCloseTimeout: 0,
+  });
+
+  smb2Client.readFile(fileName, (err, data) => {
+    if (err) {
+      console.error(`📄 Failed to read file "${fileName}":`, err);
+      return res.status(500).json({
+        error: "File read failed",
+        message: err.message,
+      });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.send(data);
+  });
+});
+
+//#endregion
+
 // Handle graceful shutdown
 process.on("SIGINT", () => {
   if (client.isConnected()) {
@@ -6648,6 +7223,6 @@ const setupSocket = require("./socket").setupSocket; // Import setupSocket
 const server = http.createServer(app);
 setupSocket(server, allowedOrigins);
 
-server.listen(8081, '0.0.0.0', () => {
+server.listen(8081, "0.0.0.0", () => {
   console.log(`Server running with Socket.IO and DB Port on port ${PORT}`);
 });

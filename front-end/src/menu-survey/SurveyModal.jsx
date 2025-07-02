@@ -69,7 +69,7 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
     try {
       const iisNo = record.iis_no;
       const response = await axios.get(
-        `http://10.14.77.100:8081/api/survey-log?iis_no=${iisNo}`
+        `http://10.14.77.107:8081/api/survey-log?iis_no=${iisNo}`
       );
       const existingLogs = response.data;
 
@@ -118,7 +118,7 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
     ).padStart(2, "0")}`;
 
     try {
-      const response = await axios.get("http://10.14.77.100:8081/api/survey-log");
+      const response = await axios.get("http://10.14.77.107:8081/api/survey-log");
       const transactions = response.data;
 
       let transactionCounter = 1; // Default counter if there are no transactions
@@ -149,7 +149,7 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
 
       try {
         const response = await axios.post(
-          "http://10.14.77.100:8081/api/survey-log",
+          "http://10.14.77.107:8081/api/survey-log",
           logData
         );
         // if (response.status === 200) {
@@ -198,7 +198,7 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
           };
 
           const response = await axios.put(
-            `http://10.14.77.100:8081/api/update-survey-data/${editedRecord.id_no}`,
+            `http://10.14.77.107:8081/api/update-survey-data/${editedRecord.id_no}`,
             updatedRecord // Send the updated record
           );
 
@@ -211,7 +211,7 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
 
                 // Get the latest transaction ID from the survey-log collection
                 axios
-                  .get("http://10.14.77.100:8081/api/survey-log")
+                  .get("http://10.14.77.107:8081/api/survey-log")
                   .then((response) => {
                     const transactions = response.data;
 
@@ -246,7 +246,7 @@ const SurveyModal = ({ record, handleReload, currentUser, theme }) => {
                     // Save the survey log entry to the survey-log collection
                     axios
                       .post(
-                        "http://10.14.77.100:8081/api/survey-log",
+                        "http://10.14.77.107:8081/api/survey-log",
                         surveyLogEntry
                       )
                       .then((response) => {

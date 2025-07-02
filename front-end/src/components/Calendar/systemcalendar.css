@@ -1,8 +1,32 @@
+/* Theme-dependent CSS variables */
+:root {
+  --calendar-bg-light: #ffffff;
+  --calendar-text-light: #000000;
+  --calendar-search-bg-light: #ffffff;
+  --calendar-table-bg-light: #ffffff;
+}
+
+.calendar-container.theme-dark {
+  --calendar-bg: #121212;
+  --calendar-text: #ffffff;
+  --calendar-search-bg: #333333;
+  --calendar-table-bg: #1f1f1f;
+}
+
+.calendar-container.theme-light {
+  --calendar-bg: var(--calendar-bg-light);
+  --calendar-text: var(--calendar-text-light);
+  --calendar-search-bg: var(--calendar-search-bg-light);
+  --calendar-table-bg: var(--calendar-table-bg-light);
+}
+
 .calendar-container {
   height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
+  font-family: "Poppins", sans-serif; /* Moved from inline */
+  color: var(--calendar-text); /* Use CSS variable */
 }
 
 .custom-calendar .ant-picker-calendar {
@@ -13,23 +37,43 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  
+}
+
+/* Calendar component specific styles */
+.custom-calendar {
+  background-color: var(--calendar-bg); /* Use CSS variable */
+  color: var(--calendar-text); /* Use CSS variable */
+  padding: 10px; /* Moved from inline */
+  border-radius: 8px; /* Moved from inline */
 }
 
 .clickable-date {
   cursor: pointer;
 }
 
+/* Event list styles */
 .events {
   list-style: none;
   margin: 0;
-  padding: 0;
-  
+  padding: 0; /* Moved from inline */
 }
 
-.event-title{
-  font-size: 8px;
+.events li {
+  font-size: 9px; /* Moved from inline */
+  line-height: 1.1; /* Moved from inline */
+  margin-bottom: 1px; /* Moved from inline */
+  overflow: hidden; /* Moved from inline */
+  text-overflow: ellipsis; /* Moved from inline */
+  white-space: nowrap; /* Moved from inline */
 }
+
+.events .ant-badge-status-text { /* Target the text inside the badge */
+  font-size: 9px; /* Set font size for event titles */
+  font-weight: 400; /* Moved from inline */
+  vertical-align: middle; /* Moved from inline */
+  color: var(--calendar-text); /* Use CSS variable */
+}
+
 
 .events .ant-badge-status {
   display: block;
@@ -42,16 +86,166 @@
 .see-more {
   color: #1890ff;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 9px; /* Moved from inline */
 }
 
 .calendar-title {
-  font-size: 10px;
-  color: #5a5a5a;
+  font-size: 16px; /* Moved from inline */
+  color: var(--calendar-text); /* Use CSS variable */
   margin-bottom: 10px; 
   font-weight: 500;
 }
 
+/* Modal styles */
+.calendar-modal .ant-modal-content {
+  color: var(--calendar-text); /* Use CSS variable */
+}
+
+.modal-controls-container {
+  display: flex;
+  justify-content: space-between; /* Changed to align search left and pagination right */
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+.search-input-calendar {
+  width: 250px; /* Moved from inline */
+  background-color: var(--calendar-search-bg); /* Use CSS variable */
+  color: var(--calendar-text); /* Use CSS variable */
+  font-size: 12px; /* Moved from inline */
+}
+
+.search-input-calendar .ant-input { /* Target the actual input element */
+  background-color: var(--calendar-search-bg);
+  color: var(--calendar-text);
+}
+
+/* Table styles */
+.custom-table {
+  background-color: var(--calendar-table-bg); /* Use CSS variable */
+  color: var(--calendar-text); /* Use CSS variable */
+}
+.custom-table .ant-table-tbody > tr > td { /* Ensure text color applies to table cells */
+  color: var(--calendar-text);
+}
 .data-label{
+  font-size: 11px;
+}
+
+.modal-controls-container {
+  display: flex;
+  justify-content: space-between; /* Changed to align search left and pagination right */
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+/* Section Incharge label styles */
+.section-incharge-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center; /* Center the items horizontally */
+}
+
+.industry-label {
+  padding: 5px;
+  margin: 2px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 10px;
+  display: inline-block; /* Ensure it respects width */
+  overflow: hidden; /* For ellipsis */
+  white-space: nowrap; /* For ellipsis */
+  text-overflow: ellipsis; /* For ellipsis */
+  text-align: center; /* Center the text inside the label */
+  background-color: var(--calendar-bg-light); /* Default background */
+  color: var(--calendar-text-light); /* Default text color */
+  transition: background-color 0.3s, color 0.3s; /* Smooth transition for hover effect */
+}
+
+/* New class for PCO link */
+.pco-link {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pco-link:hover {
+  color: #40a9ff; /* Lighter blue on hover */
+}
+
+/* Override Ant Design Tooltip background and text color */
+.ant-tooltip-inner {
+  background-color: #1677ff; /* A standard Ant Design blue */
+  color: white; /* Make default text white for contrast */
+}
+
+.ant-tooltip-arrow-content {
+  background-color: #1677ff;
+}
+
+/* New class for smaller tooltip font size */
+.tooltip-content-small {
+  font-size: 10px !important; /* Smaller font size for general tooltip content */
+}
+
+/* Ensure NOV tooltip content also has smaller font */
+.tooltip-content-violations {
+  font-size: 11px;
+}
+
+/* Style for IIS links inside the blue tooltip */
+.iis-tooltip a {
+  color: white !important; /* Ensure link is white */
+  text-decoration: underline;
+}
+
+.iis-tooltip a:hover {
+  color: #f0f0f0 !important; /* Lighter white on hover */
+}
+
+/* Permit alignment styles */
+.permit-row {
+  display: flex;
+  align-items: flex-start; /* Align items to the top */
+  margin-bottom: 0; /* Remove vertical margin between permit rows */ /* Keep this as 0 for minimal gap */
+  line-height: 0.60; /* Adjust line height to reduce vertical space while maintaining readability */
+}
+
+.permit-row > div > div {
+  line-height: 1 !important;
+  margin-bottom: 2px;
+}
+
+.permit-label {
+  display: inline-block;
+  width: 75px; /* Fixed width for all labels */
+  flex-shrink: 0; /* Prevent label from shrinking */
+  padding-right: 5px; /* Space between label and value */
+  text-align: left; /* Ensure label text is left-aligned */
+}
+
+.iis-label{
+  text-align: left;
+  margin-left: 20px;
+}
+
+/* Custom modal title styles */
+.modal-title-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%; /* Ensure it takes full width of the header */
+}
+
+.modal-title-count {
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  margin-right: 30px;
+}
+
+
+.tooltip-header{
   font-size: 11px;
 }

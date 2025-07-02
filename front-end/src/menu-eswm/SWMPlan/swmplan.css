@@ -1,5 +1,6 @@
 /* General Page Styles */
-.swmplan-page-container { /* Renamed from .monitoring-page-container */
+.swmplan-page-container {
+  /* Renamed from .monitoring-page-container */
   padding: 24px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -26,15 +27,15 @@
 /* Dashboard Tiles Styles */
 .dashboard-tile-card {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
-  height: 100%; 
-  display: flex; 
-  flex-direction: column; 
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashboard-tile-card > .ant-card-body {
-  flex-grow: 1; 
-  display: flex; 
-  flex-direction: column; 
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashboard-tile-card .ant-card-head {
@@ -42,23 +43,24 @@
   text-align: center;
 }
 
-.dashboard-tile-card-body { /* This class might not be used if content is directly in ant-card-body */
+.dashboard-tile-card-body {
+  /* This class might not be used if content is directly in ant-card-body */
   text-align: center;
   display: flex;
   flex-direction: column;
-  justify-content: center; 
+  justify-content: center;
 }
 
 /* Styles for the small stat cards used within larger dashboard cards */
 .dashboard-small-stat-card {
   text-align: center;
   flex: 1; /* Allow it to grow if needed within a flex row/col */
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
   min-height: 70px; /* Ensure a minimum height */
 }
 
 .dashboard-small-stat-card .ant-card-body {
-  padding: 5px !important; 
+  padding: 5px !important;
 }
 
 .dashboard-small-stat-card .ant-statistic-title {
@@ -74,19 +76,20 @@
 
 .dashboard-small-stat-card.clickable-card {
   cursor: pointer;
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out,
+    border-color 0.2s ease-in-out;
 }
 .dashboard-small-stat-card.clickable-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 .dashboard-small-stat-card.clickable-card.active-filter {
-  border: 1.5px solid #1890ff; 
-  box-shadow: 0 0 0 2px rgba(24,144,255,0.2); 
+  border: 1.5px solid #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 .theme-dark .dashboard-small-stat-card.clickable-card.active-filter {
   border: 1.5px solid #177ddc;
-  box-shadow: 0 0 0 2px rgba(23,125,220,0.25);
+  box-shadow: 0 0 0 2px rgba(23, 125, 220, 0.25);
 }
 
 /* SWM Plan specific card styles (if any, e.g., for status colors) */
@@ -96,14 +99,15 @@
 .swm-plan-status-approved .ant-statistic-content-value { color: white; }
 */
 
-.dashboard-section-card-body { /* If you have a section for LGUs or similar */
+.dashboard-section-card-body {
+  /* If you have a section for LGUs or similar */
   padding: 3px;
 }
 
-.dashboard-project-status-card-body { /* If you use a similar layout for plan statuses */
+.dashboard-project-status-card-body {
+  /* If you use a similar layout for plan statuses */
   padding: 10px;
 }
-
 
 .loading-stats-container {
   text-align: center;
@@ -140,7 +144,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center; /* Align items vertically */
-  margin-bottom: 16px;
+  margin-top: 20px;
 }
 .table-controls-left {
   display: flex;
@@ -166,7 +170,8 @@
 
 /* Custom Dropdown Wrapper for Column/Freeze Menus */
 .custom-dropdown-wrapper {
-  box-shadow: 0 3px 6px -4px rgba(0,0,0,0.12), 0 6px 16px 0 rgba(0,0,0,0.08), 0 9px 28px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 3px 6px -4px rgba(0, 0, 0, 0.12),
+    0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
   border-radius: 4px;
 }
 .theme-light .custom-dropdown-wrapper {
@@ -187,7 +192,7 @@
 
 /* Table Styles */
 .table-header-center .ant-table-column-title {
-  display: block; 
+  display: block;
   text-align: center;
 }
 
@@ -204,11 +209,11 @@
 }
 .theme-light .table-header-frozen {
   background-color: #e6f4ff; /* Light blue for frozen header */
-  color: rgba(0,0,0,0.88);
+  color: rgba(0, 0, 0, 0.88);
 }
 .theme-dark .table-header-frozen {
   background-color: #003a8c; /* Darker blue for frozen header in dark theme */
-  color: rgba(255,255,255,0.85);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .theme-light .table-cell-frozen {
@@ -218,25 +223,25 @@
   background-color: #00275c; /* Darker blue for frozen cells in dark theme */
 }
 
-
 /* Menu Styles for Column Visibility and Freeze */
 .column-visibility-menu {
   max-height: 400px;
   overflow-y: auto;
   max-width: 300px; /* Adjust as needed */
-  font-size: 11px; 
+  font-size: 11px;
 }
 .column-visibility-menu .ant-menu-item,
 .column-visibility-menu .ant-menu-item-group-title {
-  font-size: 11px; 
+  font-size: 11px;
 }
 .column-visibility-menu-item-indented {
-  padding-left: 35px !important; 
+  padding-left: 35px !important;
 }
 .column-visibility-menu-item-default-indent {
   padding-left: 20px !important; /* Default AntD indent for non-grouped items */
 }
-.column-visibility-menu .ant-checkbox-wrapper span:last-child { /* Text next to checkbox */
+.column-visibility-menu .ant-checkbox-wrapper span:last-child {
+  /* Text next to checkbox */
   font-size: 11px;
 }
 
@@ -249,7 +254,8 @@
   width: 100%; /* Make checkbox label clickable across width */
 }
 .freeze-column-menu .ant-menu-item,
-.freeze-column-menu .ant-checkbox-wrapper span:last-child { /* Text next to checkbox */
+.freeze-column-menu .ant-checkbox-wrapper span:last-child {
+  /* Text next to checkbox */
   font-size: 11px;
 }
 
@@ -269,26 +275,33 @@
 }
 
 /* Utility for text alignment in table cells if AntD's align prop is not enough */
-.text-align-left { text-align: left; }
-.text-align-center { text-align: center; }
-.text-align-right { text-align: right; }
+.text-align-left {
+  text-align: left;
+}
+.text-align-center {
+  text-align: center;
+}
+.text-align-right {
+  text-align: right;
+}
 
 /* Editable Cell Inputs */
 .editable-cell-input .ant-picker,
 .editable-cell-input .ant-select,
 .editable-cell-input .ant-input-number,
-.editable-cell-input.ant-input { /* Target Ant Input directly if not wrapped */
+.editable-cell-input.ant-input {
+  /* Target Ant Input directly if not wrapped */
   width: 100%;
   margin-top: -1px; /* Fine-tune alignment */
   margin-bottom: -1px;
   margin-left: -1px;
   margin-right: -1px;
-  border-radius: 4px; 
+  border-radius: 4px;
 }
 
 /* Ensure inputs within editable cells don't add extra vertical space via Form.Item if used */
 .editable-cell .ant-form-item {
-  margin-top: -1px; 
+  margin-top: -1px;
   margin-bottom: 0;
 }
 
@@ -296,8 +309,8 @@
 .theme-dark .ant-input-disabled,
 .theme-dark .ant-input[disabled],
 .theme-dark textarea.ant-input:disabled {
-  background-color: #262626 !important; 
-  color: rgba(255,255,255,0.3) !important;
+  background-color: #262626 !important;
+  color: rgba(255, 255, 255, 0.3) !important;
   border-color: #303030;
 }
 
@@ -310,44 +323,147 @@
 
 /* Pagination styling */
 .ant-pagination {
-    margin-left: 8px; /* Add some space from the last button */
+  margin-left: 8px; /* Add some space from the last button */
 }
 
 .ant-pagination.ant-pagination-simple .ant-pagination-simple-pager input {
-    margin: 0 4px; /* Adjust spacing around the pager input */
-    padding: 0 4px; /* Adjust padding inside the pager input */
-    height: 22px; /* Match button height */
-    font-size: 12px;
+  margin: 0 4px; /* Adjust spacing around the pager input */
+  padding: 0 4px; /* Adjust padding inside the pager input */
+  height: 22px; /* Match button height */
+  font-size: 12px;
 }
 
-.ant-pagination.ant-pagination-simple .ant-pagination-prev .ant-pagination-item-link,
-.ant-pagination.ant-pagination-simple .ant-pagination-next .ant-pagination-item-link {
-    height: 22px; /* Match button height */
-    line-height: 22px;
-    font-size: 12px;
+.ant-pagination.ant-pagination-simple
+  .ant-pagination-prev
+  .ant-pagination-item-link,
+.ant-pagination.ant-pagination-simple
+  .ant-pagination-next
+  .ant-pagination-item-link {
+  height: 22px; /* Match button height */
+  line-height: 22px;
+  font-size: 12px;
 }
 
 .ant-pagination-options {
-    margin-left: 8px; /* Space before page size changer */
+  margin-left: 8px; /* Space before page size changer */
 }
 
 .ant-pagination-options .ant-select-selector {
-    height: 22px !important; /* Match button height */
-    padding: 0 8px !important;
-    font-size: 12px;
+  height: 22px !important; /* Match button height */
+  padding: 0 8px !important;
+  font-size: 12px;
 }
 .ant-pagination-options .ant-select-arrow {
-    font-size: 10px; /* Smaller arrow */
+  font-size: 10px; /* Smaller arrow */
 }
 
 .ant-pagination-options .ant-select-selection-item {
-    line-height: 20px !important; /* Align text vertically */
-    font-size: 12px;
+  line-height: 20px !important; /* Align text vertically */
+  font-size: 12px;
 }
 
 /* Ensure table controls right buttons are vertically aligned */
 .table-controls-right .ant-btn,
 .table-controls-right .ant-dropdown-trigger,
 .table-controls-right .ant-pagination {
-    vertical-align: middle;
+  vertical-align: middle;
+}
+
+.left-align {
+  text-align: left;
+}
+
+.coordinates {
+  margin-left: 40px;
+}
+
+.reso {
+  margin-left: 30px;
+}
+
+.validity {
+  margin-left: 20px;
+}
+
+.total-days {
+  color: #ffe418;
+}
+
+.green {
+  color: #4caf50;
+}
+
+.blue {
+  color: #2196f3;
+}
+
+.view-summary-button {
+  font-size: 9px;
+  padding: 2px 6px;
+  margin-top: 10px;
+}
+
+.dashboard-panel-header{
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
+}
+
+/* Remark Status Tile Colors */
+.theme-light .remark-compliant {
+  background-color: #f6ffed; /* Light green */
+  border-color: #b7eb8f;
+}
+.theme-dark .remark-compliant {
+  background-color: #273422; /* Darker green for dark theme */
+  border-color: #435c34;
+}
+.theme-light .remark-compliant .ant-statistic-title,
+.theme-light .remark-compliant .ant-statistic-content-value {
+  color: #389e0d;
+}
+.theme-dark .remark-compliant .ant-statistic-title,
+.theme-dark .remark-compliant .ant-statistic-content-value {
+  color: #78d333;
+}
+
+.theme-light .remark-non-compliant {
+  background-color: #fff1f0; /* Light red */
+  border-color: #ffccc7;
+}
+.theme-dark .remark-non-compliant {
+  background-color: #3c2022; /* Darker red for dark theme */
+  border-color: #612529;
+}
+.theme-light .remark-non-compliant .ant-statistic-title,
+.theme-light .remark-non-compliant .ant-statistic-content-value {
+  color: #cf1322;
+}
+.theme-dark .remark-non-compliant .ant-statistic-title,
+.theme-dark .remark-non-compliant .ant-statistic-content-value {
+  color: #ffccc7;
+}
+
+/* Total LGU Count Tile Color */
+.theme-light .overview-total-lgu {
+  background-color: #e6f7ff; /* Light blue */
+  border-color: #91d5ff;
+}
+.theme-dark .overview-total-lgu {
+  background-color: #112a45; /* Darker blue for dark theme */
+  border-color: #1d3959;
+}
+.theme-light .overview-total-lgu .ant-statistic-title,
+.theme-light .overview-total-lgu .ant-statistic-content-value {
+  color: #096dd9;
+}
+.theme-dark .overview-total-lgu .ant-statistic-title,
+.theme-dark .overview-total-lgu .ant-statistic-content-value {
+  color: #91d5ff;
+}
+
+.custom-radio-button {
+  height: 24px; 
+  font-size: 11px;
+  line-height: 24px;
 }

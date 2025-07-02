@@ -51,7 +51,6 @@ const FocalPerson = ({
   handleChange,
   isEditing,
   currentUser,
-  theme,
 }) => {
   const [pismuTracking, setpismuTracking] = useState("");
   const convertToMMDDYYYY = (dateString) => {
@@ -88,6 +87,7 @@ const FocalPerson = ({
   const formattedDateMonitored = convertToMMDDYYYY(editedRecord.date_monitored);
   const formattedDateRouted = convertToMMDDYYYY(editedRecord.date_routed);
   const formattedDateSigned = convertToMMDDYYYY(editedRecord.date_signed);
+  const [useMonthRange, setUseMonthRange] = useState(false);
 
   const [daysDmds, setDaysDmds] = useState(
     editedRecord ? editedRecord.days_dmds : 0
@@ -204,13 +204,8 @@ const FocalPerson = ({
 
   // Extract permissions from currentUser
   const permissions = currentUser?.permissions || [];
-  const canGenerateData = permissions[0];
   const canManageData = permissions[1];
-  const canViewAdminPanel = permissions[2];
-  const canViewDataHistory = permissions[3];
-
   const isCardDisabled = !canManageData;
-
   const isPismuTracked = !!editedRecord?.pismu_tracking;
 
   return (
@@ -282,19 +277,21 @@ const FocalPerson = ({
               />
             </Paragraph>
           </Col>
-          <Paragraph>
-            <strong>Inspector/Handler</strong>
-            <Inspector
-              value={editedRecord ? editedRecord.handler : ""}
-              onChange={(value) => handleChange("handler", value)}
-              readOnly={!isEditing}
-              placeholder="No data"
-              style={{
-                cursor: isEditing ? "text" : "not-allowed",
-                color: isEditing ? "" : "#aaa",
-              }}
-            />
-          </Paragraph>
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+            <Paragraph>
+              <strong>Inspector/Handler</strong>
+              <Inspector
+                value={editedRecord ? editedRecord.handler : ""}
+                onChange={(value) => handleChange("handler", value)}
+                readOnly={!isEditing}
+                placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+              />
+            </Paragraph>
+          </Col>
         </Row>
 
         <Row gutter={[16, 16]} className="row-auto">
@@ -328,46 +325,14 @@ const FocalPerson = ({
             </Paragraph>
           </Col>
         </Row>
-      </Col>
 
-      <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
-        <Paragraph>
-          <strong>IIS Reference No. (2024 | 2025)</strong>
-          <Input
-            value={iisCombined}
-            onChange={handleIisCombinedChange}
-            readOnly={!isEditing}
-            placeholder="No data"
-            style={{
-              cursor: isEditing ? "text" : "not-allowed",
-              color: isEditing ? "" : "#aaa",
-            }}
-          />
-        </Paragraph>
-
-        <Row gutter={[16, 16]} className="row-auto-date">
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+        <Row gutter={[16, 16]} className="row-auto">
+          <Col xs={24} sm={24} md={24} lg={24} className="modal-col">
             <Paragraph>
-              <strong>Type of Inspection</strong>
-              <InspectionType
-                value={editedRecord ? editedRecord.insp_type : ""}
-                onChange={(value) => handleChange("insp_type", value)}
-                readOnly={!isEditing}
-                placeholder="No data"
-                style={{
-                  cursor: isEditing ? "text" : "not-allowed",
-                  color: isEditing ? "" : "#aaa",
-                }}
-              />
-            </Paragraph>
-          </Col>
-
-          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
-            <Paragraph>
-              <strong>Type of Report Submitted</strong>
-              <ReportType
-                value={editedRecord ? editedRecord.report_type : ""}
-                onChange={(value) => handleChange("report_type", value)}
+              <strong>IIS Reference No. (2024 | 2025)</strong>
+              <Input
+                value={iisCombined}
+                onChange={handleIisCombinedChange}
                 readOnly={!isEditing}
                 placeholder="No data"
                 style={{
@@ -492,6 +457,42 @@ const FocalPerson = ({
             </Paragraph>
           </Col>
         </Row>
+      </Col>
+
+      <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+        <Row gutter={[16, 16]} className="row-auto-date">
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+            <Paragraph>
+              <strong>Type of Inspection</strong>
+              <InspectionType
+                value={editedRecord ? editedRecord.insp_type : ""}
+                onChange={(value) => handleChange("insp_type", value)}
+                readOnly={!isEditing}
+                placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+              />
+            </Paragraph>
+          </Col>
+
+          <Col xs={24} sm={24} md={12} lg={12} className="modal-col">
+            <Paragraph>
+              <strong>Type of Report Submitted</strong>
+              <ReportType
+                value={editedRecord ? editedRecord.report_type : ""}
+                onChange={(value) => handleChange("report_type", value)}
+                readOnly={!isEditing}
+                placeholder="No data"
+                style={{
+                  cursor: isEditing ? "text" : "not-allowed",
+                  color: isEditing ? "" : "#aaa",
+                }}
+              />
+            </Paragraph>
+          </Col>
+        </Row>
 
         <Row gutter={[16, 16]} className="row-auto">
           <Col xs={24} sm={24} md={8} lg={8} className="modal-col">
@@ -573,7 +574,7 @@ const FocalPerson = ({
               <Paragraph>
                 <Checkbox
                   checked={isPismuTracked}
-                  disabled={!isEditing || isCardDisabled} // <-- Disable if not editing
+                  disabled={!isEditing || isCardDisabled}
                   onChange={(e) => {
                     const isChecked = e.target.checked;
                     if (!isChecked) {
@@ -581,15 +582,14 @@ const FocalPerson = ({
                       handleChange("pismu_tracking", "");
                     }
                   }}
-                  style={{ fontSize: "12px" }}
+                  style={{ fontSize: "11px" }}
                 >
-                  <span className="permit-label"></span>
+                  <span> Tracking of Reports Received by Planning Unit</span>
                 </Checkbox>
-                <strong>Tracking of Reports (Received by Planning Unit)</strong>
               </Paragraph>
               <Paragraph>
                 <Row gutter={[16, 16]} className="row-auto">
-                  <Col xs={24} sm={24} md={16} lg={16} className="modalcol">
+                  <Col xs={24} sm={24} md={9} lg={9} className="modalcol">
                     <Paragraph>
                       <ConfigProvider
                         theme={{
@@ -637,24 +637,40 @@ const FocalPerson = ({
                       </ConfigProvider>
                     </Paragraph>
                   </Col>
+
+                  <Col xs={24} sm={24} md={15} lg={15} className="modalcol">
+                    <Paragraph>
+                      <Input
+                        value={editedRecord ? editedRecord.pismu_count_month : ""}
+                        onChange={(e) =>
+                          handleChange("pismu_count_month", e.target.value)
+                        }
+                        readOnly={!isEditing}
+                        placeholder="No data"
+                        style={{
+                          cursor: isEditing ? "text" : "not-allowed",
+                          color: isEditing ? "" : "#aaa",
+                          height: "29px",
+                        }}
+                      />
+                    </Paragraph>
+                  </Col>
                 </Row>
               </Paragraph>
               <Paragraph>
                 <Checkbox
                   checked={editedRecord?.with_nov === "✔"}
-                  disabled={isCardDisabled}
+                  disabled={!isEditing || isCardDisabled}
                   onChange={(e) => {
                     const isChecked = e.target.checked;
                     const newValue = isChecked ? "✔" : "✘";
                     handleValueChange("with_nov", newValue);
                     handleChange("with_nov", newValue);
                   }}
-                  style={{ fontSize: "12px" }}
+                  style={{ fontSize: "11px" }}
                 >
-                  <span className="permit-label"></span>
+                  <span> With previously issued NOV</span>
                 </Checkbox>
-
-                <strong>With previously issued NOV</strong>
               </Paragraph>
             </Card>
           </Col>

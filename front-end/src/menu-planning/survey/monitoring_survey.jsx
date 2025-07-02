@@ -70,7 +70,7 @@ const DashboardTiles = ({
       try {
         // Assuming survey data is for a specific year, e.g., 2025.
         // Adjust the endpoint year if needed.
-        const response = await axios.get("http://10.14.77.100:8081/api/survey-dashboard-stats/2025");
+        const response = await axios.get("http://10.14.77.107:8081/api/survey-dashboard-stats/2025");
         setStats(response.data);
       } catch (error) {
         console.error("Error fetching survey dashboard stats:", error);
@@ -240,7 +240,7 @@ const MonitoringSurvey = ({ theme = "light" }) => {
       // Assuming survey data is for a specific year, e.g., 2025.
       // Adjust the endpoint and parameters as per your server.js implementation.
       const res = await axios.get(
-        `http://10.14.77.100:8081/api/surveys-monitoring-data/2025`,
+        `http://10.14.77.107:8081/api/surveys-monitoring-data/2025`,
         {
           params: {
             page,
@@ -556,7 +556,7 @@ const MonitoringSurvey = ({ theme = "light" }) => {
       for (const update of updatesToApi) {
         // Adjust year or make it dynamic if necessary
         await axios.put(
-          `http://10.14.77.100:8081/api/surveys-monitoring-data/2025/${update.identifier}`,
+          `http://10.14.77.107:8081/api/surveys-monitoring-data/2025/${update.identifier}`,
           update.payload
         );
       }
@@ -614,7 +614,7 @@ const MonitoringSurvey = ({ theme = "light" }) => {
       if (dataIndex === "industry_class" && value) {
         try {
           const response = await axios.get(
-            `http://10.14.77.100:8081/api/industry-details-by-class`,
+            `http://10.14.77.107:8081/api/industry-details-by-class`,
             { params: { className: value } }
           );
           const details = response.data;

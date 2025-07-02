@@ -17,6 +17,10 @@ import {
   EditOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
+import {
+  fetchPermitsForMonitoring,
+  updatePermitExpiry,
+} from "../../api/permitmonitoringService";
 
 const { Option } = Select;
 
@@ -68,23 +72,16 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     if (!visible) return;
     setLoading(true);
     try {
-      const alwaysFilterByExpiryOnServer = true;
-      const prefixQuery = selectedPrefixes.join(",");
-      // Extract only actual permit types for the API query from the combined filters
-      const typesForApiQuery = activePermitFilters
-        .filter((f) => f.startsWith("type_"))
-        .map((f) => f.replace("type_", ""))
-        .join(",");
+      const { data, total } = await fetchPermitsForMonitoring({
+        currentPage,
+        pageSize,
+        selectedPrefixes,
+        debouncedSearchText,
+        activePermitFilters,
+      });
 
-      const res = await fetch(
-        `http://10.14.77.100:8081/api/permits-summary?page=${currentPage}&pageSize=${pageSize}&prefixes=${prefixQuery}&searchText=${debouncedSearchText}&filterEstablishmentsByExpiryStatus=${alwaysFilterByExpiryOnServer}&permitTypesFilter=${typesForApiQuery}`
-      );
-      if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-
-      const json = await res.json();
-
-      setData(json.data);
-      setTotal(json.total);
+      setData(data);
+      setTotal(total);
     } catch (err) {
       console.error("Error fetching permits:", err);
       message.error("Failed to fetch permits.");
@@ -213,27 +210,13 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
     }
     setLoading(true);
     try {
-      const response = await fetch(
-        `http://10.14.77.100:8081/api/permits-summary/update-expiry`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sort_key: record.sort_key,
-            permitType: permitType,
-            newExpiryDate: editingPermitDate, // Send as YYYY-MM-DD
-            newPermitCode: editingPermitCodeValue,
-          }),
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || `HTTP error! Status: ${response.status}`
-        );
-      }
+      await updatePermitExpiry({
+        sort_key: record.sort_key,
+        permitType: permitType,
+        newExpiryDate: editingPermitDate,
+        newPermitCode: editingPermitCodeValue,
+      });
+
       message.success("Permit expiry updated successfully.");
       setEditingPermitKey(null);
       setEditingPermitDate("");
@@ -241,7 +224,8 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
       fetchPermits(); // Refetch data to show updated information
     } catch (err) {
       console.error("Error saving permit expiry:", err);
-      message.error(`Failed to update permit: ${err.message}`);
+      const errorMessage = err.message || "An unknown error occurred.";
+      message.error(`Failed to update permit: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -399,7 +383,7 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
 
     const expiryDate = new Date(permit.expiry);
     if (isNaN(expiryDate.getTime())) {
-       return <Tag color="purple">{permit.type} (Date Error)</Tag>;
+      return <Tag color="purple">{permit.type} (Date Error)</Tag>;
     }
 
     const tagColor = permit.isExpired
@@ -437,7 +421,8 @@ const PermitMonitoringModal = ({ visible, onClose, provinceAccess }) => {
       onCancel={onClose}
       footer={null}
       width={1000}
-      style={{ maxHeight: "75vh", overflow: "hidden" }}
+      style={{ maxHeight: "75vh", overflow: "hidden", top: 40 }}
+      zIndex={1000}
     >
       {/* Header controls */}
       <div

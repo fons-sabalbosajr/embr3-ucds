@@ -1,7 +1,7 @@
 // src/api/authService.js
 import axios from "axios";
 
-const API_URL = "http://10.14.77.100:8081"; // Define your API base URL
+const API_URL = "http://10.14.77.107:8081"; // Define your API base URL
 
 export const loginUser = async (username, password) => {
   try {

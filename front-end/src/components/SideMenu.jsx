@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { ConfigProvider, Layout, Menu, Button, Avatar, Tooltip } from "antd";
+import {
+  ConfigProvider,
+  Layout,
+  Menu,
+  Button,
+  Avatar,
+  Tooltip,
+  theme as antdTheme,
+} from "antd";
 import {
   DashboardFilled,
   CheckCircleFilled,
@@ -9,8 +17,9 @@ import {
   ReconciliationFilled,
   EnvironmentFilled,
   DatabaseFilled,
-  MenuUnfoldOutlined,
-  MenuFoldOutlined,
+  ContainerFilled,
+  CaretLeftOutlined,
+  CaretRightOutlined,
 } from "@ant-design/icons";
 import { BsClipboardDataFill } from "react-icons/bs"; // Example icon, choose one you like
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -69,6 +78,7 @@ const rootSubmenuKeys = [
   "planning-unit",
   "reports",
   "admin",
+  "electronic-records-management", // Added for the new ERMS submenu
   "eswm-database", // Added for the new submenu
 ];
 
@@ -84,15 +94,16 @@ const visibleProvincesList = [
 
 const SideMenu = ({ theme, currentUser }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [siderWidth, setSiderWidth] = useState(220);
   const [openKeys, setOpenKeys] = useState([]);
   const [provinceViewers, setProvinceViewers] = useState({});
   const [surveyViewers, setSurveyViewers] = useState([]);
   const [mbuViewers, setMbuViewers] = useState([]);
   const [eswmViewers, setEswmViewers] = useState([]);
-  const [monitoringViewers, setMonitoringViewers] = useState([]); // New state for Planning Unit Monitoring
-  const [surveyActivitiesViewers, setSurveyActivitiesViewers] = useState([]); // New state for Planning Unit Survey Activities
-  const [validationsViewers, setValidationsViewers] = useState([]); // New state for Planning Unit Validations
-  const [generatedReportsViewers, setGeneratedReportsViewers] = useState([]); // New state for Planning Unit Generated Reports
+  const [monitoringViewers, setMonitoringViewers] = useState([]);
+  const [surveyActivitiesViewers, setSurveyActivitiesViewers] = useState([]);
+  const [validationsViewers, setValidationsViewers] = useState([]);
+  const [generatedReportsViewers, setGeneratedReportsViewers] = useState([]);
   const [healthcareViewers, setHealthcareViewers] = useState([]);
   const [chemicalsViewers, setChemicalsViewers] = useState([]);
   const [tsdViewers, setTsdViewers] = useState([]);
@@ -103,33 +114,14 @@ const SideMenu = ({ theme, currentUser }) => {
   const navigate = useNavigate();
   const { setCurrentProvince } = useContext(DataContext);
   const prevLocationPathnameRef = useRef(location.pathname); // To track previous path
-
-  // Style for the text part of menu items, allowing wrapping
-  const textWithAvatarsStyle = {
-    whiteSpace: "normal",
-    wordBreak: "break-word",
-    textAlign: "left",
-    lineHeight: "1.4",
-    marginRight: "8px", // Creates a gap before the avatars
-  };
-
-  const textOnlyMenuItemStyle = {
-    whiteSpace: "normal",
-    wordBreak: "break-word",
-    textAlign: "left",
-    lineHeight: "1.4",
-    width: "100%", // Ensure it uses available space for wrapping
-  };
   const permissions = currentUser?.permissions || [];
   const canViewDataHistory = permissions[3];
   const visibleProvinces = visibleProvincesList.filter(
     (_, i) => permissions[i + 5]
   );
 
-  // Handle menu open state based on path
   useEffect(() => {
     const path = location.pathname;
-    // Using startsWith for more precise path matching.
     if (path.startsWith("/universe/dashboard")) {
       setOpenKeys([]);
     } else if (path.startsWith("/universe/province/")) {
@@ -163,16 +155,25 @@ const SideMenu = ({ theme, currentUser }) => {
       path.startsWith("/universe/records/activity") // Added this line
     ) {
       setOpenKeys(["admin"]);
+    } else if (path.startsWith("/universe/erms/")) {
+      setOpenKeys(["electronic-records-management"]); // Keep the ERMS submenu open
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
   }, [location.pathname]);
 
-  // useEffect(() => {
-  //   if (currentUser?.username === "asabalbosa") {
-  //     setOpenKeys(rootSubmenuKeys);
-  //   }
-  // }, [currentUser]);
+  // Effect for handling responsive sidebar width
+  useEffect(() => {
+    const handleResize = () => {
+      const newWidth = window.innerWidth <= 1080 ? 180 : 220; // Set to 160px for tablet
+      setSiderWidth(newWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    handleResize(); // Set initial width
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Effect for initializing socket and setting up listeners
   useEffect(() => {
@@ -511,9 +512,8 @@ const SideMenu = ({ theme, currentUser }) => {
     navigate(`/universe/province/${province}`);
   };
 
-  // Avatar group rendering utility
   const renderAvatars = (viewers) =>
-    canViewDataHistory && viewers.length > 0 ? ( // Re-added canViewDataHistory check
+    canViewDataHistory && viewers.length > 0 ? (
       <Avatar.Group
         max={{ count: 1 }}
         maxStyle={{
@@ -522,18 +522,30 @@ const SideMenu = ({ theme, currentUser }) => {
           fontSize: 11,
         }}
         size={18}
-        style={{ marginLeft: 4 }}
+        style={{
+          marginLeft: 8,
+          alignSelf: "center",
+          display: "flex",
+          alignItems: "center",
+        }}
       >
         {viewers.map((user) => (
           <Tooltip
             key={user.username}
             title={
-              <span style={{ fontSize: "9px" }}>
-                {`${user.username} is here`}
-              </span>
+              <span
+                style={{ fontSize: "9px" }}
+              >{`${user.username} is here`}</span>
             }
           >
-            <Avatar src={user.avatar} style={{ verticalAlign: "middle" }}>
+            <Avatar
+              src={user.avatar}
+              style={{
+                verticalAlign: "middle",
+                backgroundColor: "#1890ff",
+                fontSize: 10,
+              }}
+            >
               {!user.avatar && user.username
                 ? user.username[0].toUpperCase()
                 : ""}
@@ -543,131 +555,81 @@ const SideMenu = ({ theme, currentUser }) => {
       </Avatar.Group>
     ) : null;
 
+  const LabelWithAvatars = ({ to, label, viewers }) => (
+    <div className="menu-label-wrapper submenu-item-label">
+      <Link to={to}>{label}</Link>
+      {renderAvatars(viewers)}
+    </div>
+  );
+
   const menuItems = [
     {
       key: "/universe/dashboard",
       icon: <DashboardFilled />,
-      label: <Link to="/universe/dashboard">Dashboard</Link>,
+      label: (
+        <div className="menu-label-wrapper main">
+          <Link to="/universe/dashboard">Dashboard</Link>
+        </div>
+      ),
     },
     {
       key: "r3-monitoring",
       icon: <CheckCircleFilled />,
-      label: "Monitoring Plan",
-      children: visibleProvinces.map((province) => {
-        const viewers = provinceViewers[province] || [];
-        return {
-          key: `/universe/province/${province}`,
-          label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>{province}</span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0, // Prevent avatars from shrinking
-                }}
-              >
-                {renderAvatars(viewers)}
-              </span>
-            </span>
-          ),
-        };
-      }),
+      label: <div className="menu-label-wrapper main">Monitoring Plan</div>,
+      children: visibleProvinces.map((province) => ({
+        key: `/universe/province/${province}`,
+        label: (
+          <LabelWithAvatars
+            to={`/universe/province/${province}`}
+            label={province}
+            viewers={provinceViewers[province] || []}
+          />
+        ),
+      })),
     },
     {
       key: "healthcare",
       icon: <MedicineBoxFilled />,
-      label: "Healthcare",
+      label: <div className="menu-label-wrapper main">Healthcare</div>,
       children: [
         {
           key: "/universe/healthcare",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/healthcare">Healthcare Industries</Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {renderAvatars(healthcareViewers)} {/* Added avatars */}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/healthcare"
+              label="Healthcare Industries"
+              viewers={healthcareViewers}
+            />
           ),
         },
         {
           key: "/universe/chemicals",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/chemicals">Chemical Industries</Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {renderAvatars(chemicalsViewers)} {/* Added avatars */}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/chemicals"
+              label="Chemical Industries"
+              viewers={chemicalsViewers}
+            />
           ),
         },
         {
           key: "/universe/tsd",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/tsd">TSD Facilities</Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {renderAvatars(tsdViewers)} {/* Added avatars */}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/tsd"
+              label="TSD Facilities"
+              viewers={tsdViewers}
+            />
           ),
         },
         {
           key: "/universe/trc",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/trc">TRC Permits</Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {renderAvatars(trcViewers)} {/* Added avatars */}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/trc"
+              label="TRC Permits"
+              viewers={trcViewers}
+            />
           ),
         },
       ],
@@ -676,289 +638,160 @@ const SideMenu = ({ theme, currentUser }) => {
       key: "/universe/survey",
       icon: <ReconciliationFilled />,
       label: (
-        <span style={{ display: "flex", alignItems: "center", width: "100%" }}>
-          <span style={textWithAvatarsStyle}>
-            <Link to="/universe/survey">Survey</Link>
-          </span>
-          <span
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            {renderAvatars(surveyViewers)}
-          </span>
-        </span>
+        <div className="menu-label-wrapper main">
+          <Link to="/universe/survey">Survey</Link>
+          {renderAvatars(surveyViewers)}
+        </div>
       ),
     },
-    permissions[2] &&{
+    permissions[2] && {
       key: "/universe/mbu",
       icon: <EnvironmentFilled />,
       label: (
-        <span style={{ display: "flex", alignItems: "center", width: "100%" }}>
-          <span style={textWithAvatarsStyle}>
-            <Link to="/universe/mbu">Manila Bay Pipeline</Link>
-          </span>
-          <span
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            {renderAvatars(mbuViewers)}
-          </span>
-        </span>
+        <div className="menu-label-wrapper main">
+          <Link to="/universe/mbu">Manila Bay Pipeline</Link>
+          {renderAvatars(mbuViewers)}
+        </div>
       ),
     },
-    permissions[2] &&{
-      key: "eswm-database", // Changed to be a submenu key
+    permissions[2] && {
+      key: "eswm-database",
       icon: <DatabaseFilled />,
-      label: (
-        <span style={{ display: "flex", alignItems: "center", width: "100%" }}>
-          ESWM Database
-        </span>
-      ),
+      label: <div className="menu-label-wrapper main">ESWM Database</div>,
       children: [
         {
           key: "/universe/eswm-database/swm-plan",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/swm-plan">
-                  10 Year SWM Plan
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {" "}
-                {/* Only render avatars if this is the currently active ESWM sub-route */}
-                {location.pathname === "/universe/eswm-database/swm-plan" &&
-                  renderAvatars(eswmViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/eswm-database/swm-plan"
+              label="10 Year SWM Plan"
+              viewers={
+                location.pathname === "/universe/eswm-database/swm-plan"
+                  ? eswmViewers
+                  : []
+              }
+            />
           ),
         },
         {
           key: "/universe/eswm-database/mrf",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/mrf">
-                  Material Recovery Facility (MRF)
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {" "}
-                {/* Only render avatars if this is the currently active ESWM sub-route */}
-                {location.pathname === "/universe/eswm-database/mrf" &&
-                  renderAvatars(eswmViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/eswm-database/mrf"
+              label="Material Recovery Facility (MRF)"
+              viewers={
+                location.pathname === "/universe/eswm-database/mrf"
+                  ? eswmViewers
+                  : []
+              }
+            />
           ),
         },
         {
           key: "/universe/eswm-database/slf",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/slf">
-                  Sanitary Landfill (SLF)
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {" "}
-                {/* Only render avatars if this is the currently active ESWM sub-route */}
-                {location.pathname === "/universe/eswm-database/slf" &&
-                  renderAvatars(eswmViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/eswm-database/slf"
+              label="Sanitary Landfill (SLF)"
+              viewers={
+                location.pathname === "/universe/eswm-database/slf"
+                  ? eswmViewers
+                  : []
+              }
+            />
           ),
         },
         {
           key: "/universe/eswm-database/ods",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/ods">
-                  Open Dump Sites (ODS)
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {" "}
-                {/* Only render avatars if this is the currently active ESWM sub-route */}
-                {location.pathname === "/universe/eswm-database/ods" &&
-                  renderAvatars(eswmViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/eswm-database/ods"
+              label="Open Dump Sites (ODS)"
+              viewers={
+                location.pathname === "/universe/eswm-database/ods"
+                  ? eswmViewers
+                  : []
+              }
+            />
           ),
         },
         {
           key: "/universe/eswm-database/equipments",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/eswm-database/equipments">Equipments</Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {location.pathname === "/universe/eswm-database/equipments" &&
-                  renderAvatars(eswmViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/eswm-database/equipments"
+              label="Equipments"
+              viewers={
+                location.pathname === "/universe/eswm-database/equipments"
+                  ? eswmViewers
+                  : []
+              }
+            />
           ),
         },
       ],
     },
     permissions[2] && {
-      key: "planning-unit", // New menu key
-      icon: <BsClipboardDataFill />, // Example Icon
-      label: "Planning Unit",
+      key: "planning-unit",
+      icon: <BsClipboardDataFill />,
+      label: <div className="menu-label-wrapper main">Planning Unit</div>,
       children: [
         {
           key: "/universe/planning-unit/monitoring",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/planning-unit/monitoring">Monitoring</Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {location.pathname === "/universe/planning-unit/monitoring" &&
-                  renderAvatars(monitoringViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/planning-unit/monitoring"
+              label="Monitoring"
+              viewers={
+                location.pathname === "/universe/planning-unit/monitoring"
+                  ? monitoringViewers
+                  : []
+              }
+            />
           ),
         },
         {
-          key: "/universe/planning-unit/survey-activities", // Made path more specific
+          key: "/universe/planning-unit/survey-activities",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/planning-unit/survey-activities">
-                  Survey Activities
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {location.pathname ===
-                  "/universe/planning-unit/survey-activities" &&
-                  renderAvatars(surveyActivitiesViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/planning-unit/survey-activities"
+              label="Survey Activities"
+              viewers={
+                location.pathname ===
+                "/universe/planning-unit/survey-activities"
+                  ? surveyActivitiesViewers
+                  : []
+              }
+            />
           ),
         },
         {
           key: "/universe/planning-unit/validations",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/planning-unit/validations">
-                  Validations
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {location.pathname === "/universe/planning-unit/validations" &&
-                  renderAvatars(validationsViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/planning-unit/validations"
+              label="Validations"
+              viewers={
+                location.pathname === "/universe/planning-unit/validations"
+                  ? validationsViewers
+                  : []
+              }
+            />
           ),
         },
         {
-          key: "/universe/planning-unit/generated-reports", // Made path more specific
+          key: "/universe/planning-unit/generated-reports",
           label: (
-            <span
-              style={{ display: "flex", alignItems: "center", width: "100%" }}
-            >
-              <span style={textWithAvatarsStyle}>
-                <Link to="/universe/planning-unit/generated-reports">
-                  Generated Reports
-                </Link>
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {location.pathname ===
-                  "/universe/planning-unit/generated-reports" &&
-                  renderAvatars(generatedReportsViewers)}
-              </span>
-            </span>
+            <LabelWithAvatars
+              to="/universe/planning-unit/generated-reports"
+              label="Generated Reports"
+              viewers={
+                location.pathname ===
+                "/universe/planning-unit/generated-reports"
+                  ? generatedReportsViewers
+                  : []
+              }
+            />
           ),
         },
       ],
@@ -966,22 +799,22 @@ const SideMenu = ({ theme, currentUser }) => {
     {
       key: "reports",
       icon: <PushpinFilled />,
-      label: "Reports",
+      label: <div className="menu-label-wrapper main">Reports</div>,
       children: [
         {
           key: "/universe/extract",
           label: (
-            <span style={textOnlyMenuItemStyle}>
+            <div className="menu-label-wrapper submenu-item-label">
               <Link to="/universe/extract">Extract Data</Link>
-            </span>
+            </div>
           ),
         },
         {
           key: "/universe/deleted_firms",
           label: (
-            <span style={textOnlyMenuItemStyle}>
+            <div className="menu-label-wrapper submenu-item-label">
               <Link to="/universe/deleted_firms">Deleted Industries</Link>
-            </span>
+            </div>
           ),
         },
       ],
@@ -989,39 +822,89 @@ const SideMenu = ({ theme, currentUser }) => {
     permissions[2] && {
       key: "admin",
       icon: <SettingFilled />,
-      label: "Admin",
+      label: <div className="menu-label-wrapper main">Admin</div>,
       children: [
         {
           key: "/universe/accounts",
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/accounts">User Accounts</Link>
-            </span>
+            <LabelWithAvatars
+              to="/universe/accounts"
+              label="User Accounts"
+              viewers={chemicalsViewers}
+            />
           ),
         },
         {
           key: "/universe/posting",
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/posting">Post to Bulletin</Link>
-            </span>
+            <LabelWithAvatars
+              to="/universe/posting"
+              label="Post to Bulletin"
+              viewers={chemicalsViewers}
+            />
           ),
         },
-
         {
           key: "/universe/records/config",
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/records/config">Monitoring Config</Link>
-            </span>
+            <LabelWithAvatars
+              to="/universe/records/config"
+              label="Monitoring Config"
+              viewers={chemicalsViewers}
+            />
           ),
         },
         {
           key: "/universe/records/activity",
           label: (
-            <span style={textOnlyMenuItemStyle}>
-              <Link to="/universe/records/activity">Records Activity</Link>
-            </span>
+            <LabelWithAvatars
+              to="/universe/records/activity"
+              label="Records Activity"
+              viewers={chemicalsViewers}
+            />
+          ),
+        },
+      ],
+    },
+    permissions[2] && {
+      key: "electronic-records-management",
+      icon: <ContainerFilled/>,
+      label: (
+        <div className="menu-label-wrapper main erms">Electronic Records <br/> Management System</div>
+      ),
+      children: [
+        {
+          key: "/universe/erms/dashboard",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/dashboard">Dashboard</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/universe",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/universe">Universe</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/storage-config",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/storage-config">
+                Storage Configuration
+              </Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/settings",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/settings">Settings</Link>
+            </div>
           ),
         },
       ],
@@ -1033,20 +916,46 @@ const SideMenu = ({ theme, currentUser }) => {
       collapsed={collapsed}
       onCollapse={setCollapsed}
       theme={theme}
-      width={collapsed ? 80 : 220}
+      width={210} // expanded
+      collapsedWidth={68} // collapsed
       trigger={null}
     >
-      <div className="sider-header">
-        <Logo theme={theme} collapsed={collapsed} />
-      </div>
-      <Button
-        type="primary"
-        onClick={() => setCollapsed(!collapsed)}
-        className="collapse-toggle-button"
-        icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-        size="small"
-      />
-      <ConfigProvider>
+      <Logo theme={theme} collapsed={collapsed} />
+
+      {window.innerWidth >= 600 && (
+        <Button
+          type="primary"
+          onClick={() => setCollapsed(!collapsed)}
+          icon={collapsed ? <CaretRightOutlined /> : <CaretLeftOutlined />}
+          size="small"
+          style={{
+            position: "absolute",
+            top: 18,
+            right: collapsed ? -10 : -14,
+            zIndex: 101,
+            borderRadius: "50%",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            background: "var(--highlight-color)",
+            border: "none",
+            width: 20,
+            height: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "right 0.2s cubic-bezier(.4,0,.2,1)",
+          }}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        />
+      )}
+
+      <ConfigProvider
+        theme={{
+          algorithm:
+            theme === "dark"
+              ? antdTheme.darkAlgorithm
+              : antdTheme.defaultAlgorithm,
+        }}
+      >
         <Menu
           theme={theme}
           mode="inline"
@@ -1059,7 +968,6 @@ const SideMenu = ({ theme, currentUser }) => {
             );
           }}
           inlineCollapsed={collapsed}
-          className="menu-container"
           items={menuItems}
           onClick={({ key }) => {
             if (key.startsWith("/universe/province/")) {
