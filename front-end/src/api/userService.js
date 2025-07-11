@@ -21,3 +21,36 @@ export const getOnlineUsers = async () => {
     );
   }
 };
+
+export const fetchUserByUsername = async (username) => {
+  try {
+    const response = await fetch(`${API_URL}/users?username=${username}`);
+    const data = await response.json();
+    return data[0];
+  } catch (error) {
+    console.error("Error fetching user data:", error);
+    throw error;
+  }
+};
+
+export const fetchUserDetails = async (username) => {
+  const res = await fetch(`${API_URL}/user/details?username=${username}`);
+  if (!res.ok) throw new Error("Failed to fetch user details");
+  return await res.json();
+};
+
+export const uploadUserPhoto = async (username, file) => {
+  const formData = new FormData();
+  formData.append("photo", file);
+  formData.append("username", username);
+
+  const res = await fetch(`${API_URL}/users/update`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || "Failed to update photo");
+  }
+  return await res.json();
+};

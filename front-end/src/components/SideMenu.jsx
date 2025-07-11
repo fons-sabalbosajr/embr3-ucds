@@ -15,25 +15,21 @@ import {
   SettingFilled,
   MedicineBoxFilled,
   ReconciliationFilled,
-  EnvironmentFilled,
   DatabaseFilled,
   ContainerFilled,
   CaretLeftOutlined,
   CaretRightOutlined,
+  FileProtectOutlined,
 } from "@ant-design/icons";
 import { BsClipboardDataFill } from "react-icons/bs"; // Example icon, choose one you like
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { DataContext } from "./../menu-province/DataContext";
 import {
   initializeSocket,
-  disconnectSocket,
-  getSocket,
   emitJoinProvince,
   emitLeaveProvince,
   emitJoinSurvey,
-  emitLeaveSurvey,
-  emitJoinMbu,
-  emitLeaveMbu,
+  emitLeaveSurvey, // Corrected typo here
   emitJoinEswm,
   emitJoinPlanningUnitMonitoring,
   emitLeavePlanningUnitMonitoring,
@@ -52,16 +48,16 @@ import {
   emitLeaveTsd,
   emitJoinTrc,
   emitLeaveTrc,
-  onProvinceViewersUpdate,
-  onSurveyViewersUpdate,
-  onMbuViewersUpdate,
-  onPlanningUnitMonitoringViewersUpdate,
-  onPlanningUnitSurveyActivitiesViewersUpdate,
-  onPlanningUnitValidationsViewersUpdate,
-  onPlanningUnitGeneratedReportsViewersUpdate,
-  onEswmViewersUpdate,
-  onHealthcareViewersUpdate,
-  onChemicalsViewersUpdate,
+  onProvinceViewersUpdate, // Corrected typo here
+  onSurveyViewersUpdate, // Corrected typo here
+  onMbuViewersUpdate, // Corrected typo here
+  onPlanningUnitMonitoringViewersUpdate, // Corrected typo here
+  onPlanningUnitSurveyActivitiesViewersUpdate, // Corrected typo here
+  onPlanningUnitValidationsViewersUpdate, // Corrected typo here
+  onPlanningUnitGeneratedReportsViewersUpdate, // Corrected typo here
+  onEswmViewersUpdate, // Corrected typo here
+  onHealthcareViewersUpdate, // Corrected typo here
+  onChemicalsViewersUpdate, // Corrected typo here
   onTsdViewersUpdate,
   onTrcViewersUpdate,
   onSocketConnect,
@@ -78,6 +74,7 @@ const rootSubmenuKeys = [
   "planning-unit",
   "reports",
   "admin",
+  "legal",
   "electronic-records-management", // Added for the new ERMS submenu
   "eswm-database", // Added for the new submenu
 ];
@@ -135,9 +132,8 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["healthcare"]);
     } else if (path.startsWith("/universe/survey")) {
       setOpenKeys([]);
-    } else if (path.startsWith("/universe/mbu")) {
-      // Corrected from path.startsWith("/universe/eswm-database") for mbu
-      setOpenKeys([]);
+      // } else if (path.startsWith("/universe/mbu")) {
+      //   setOpenKeys([]);
     } else if (path.startsWith("/universe/eswm-database")) {
       setOpenKeys(["eswm-database"]); // Keep the 'eswm-database' submenu open
     } else if (path.startsWith("/universe/planning-unit/")) {
@@ -211,9 +207,9 @@ const SideMenu = ({ theme, currentUser }) => {
       if (location.pathname === "/universe/survey") {
         emitJoinSurvey(userPayload);
       }
-      if (location.pathname === "/universe/mbu") {
-        emitJoinMbu(userPayload);
-      }
+      // if (location.pathname === "/universe/mbu") {
+      //   emitJoinMbu(userPayload);
+      // }
       if (location.pathname === "/universe/planning-unit/monitoring") {
         emitJoinPlanningUnitMonitoring(userPayload);
       }
@@ -300,31 +296,31 @@ const SideMenu = ({ theme, currentUser }) => {
   }, [location.pathname, currentUser, setCurrentProvince]); // Removed canViewDataHistory from deps
 
   // MBU join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      // Removed canViewDataHistory check
-      return;
-    }
+  // useEffect(() => {
+  //   if (!currentUser?.username) {
+  //     // Removed canViewDataHistory check
+  //     return;
+  //   }
 
-    let didJoinMbuThisEffect = false;
+  //   let didJoinMbuThisEffect = false;
 
-    if (location.pathname === "/universe/mbu") {
-      //console.log("[SideMenu] Path is /universe/mbu, attempting to joinMbu.");
-      emitJoinMbu({
-        // Corrected payload, removed path
-        username: currentUser.username,
-        avatar: currentUser.avatar || currentUser.avatarUrl,
-        name: currentUser.name,
-      });
-      didJoinMbuThisEffect = true;
-    }
+  //   if (location.pathname === "/universe/mbu") {
+  //     //console.log("[SideMenu] Path is /universe/mbu, attempting to joinMbu.");
+  //     emitJoinMbu({
+  //       // Corrected payload, removed path
+  //       username: currentUser.username,
+  //       avatar: currentUser.avatar || currentUser.avatarUrl,
+  //       name: currentUser.name,
+  //     });
+  //     didJoinMbuThisEffect = true;
+  //   }
 
-    return () => {
-      if (didJoinMbuThisEffect && currentUser?.username) {
-        emitLeaveMbu();
-      }
-    };
-  }, [currentUser, location.pathname]);
+  //   return () => {
+  //     if (didJoinMbuThisEffect && currentUser?.username) {
+  //       emitLeaveMbu();
+  //     }
+  //   };
+  // }, [currentUser, location.pathname]);
 
   // ESWM join/leave logic
   useEffect(() => {
@@ -645,16 +641,6 @@ const SideMenu = ({ theme, currentUser }) => {
       ),
     },
     permissions[2] && {
-      key: "/universe/mbu",
-      icon: <EnvironmentFilled />,
-      label: (
-        <div className="menu-label-wrapper main">
-          <Link to="/universe/mbu">Manila Bay Pipeline</Link>
-          {renderAvatars(mbuViewers)}
-        </div>
-      ),
-    },
-    permissions[2] && {
       key: "eswm-database",
       icon: <DatabaseFilled />,
       label: <div className="menu-label-wrapper main">ESWM Database</div>,
@@ -727,6 +713,37 @@ const SideMenu = ({ theme, currentUser }) => {
                   : []
               }
             />
+          ),
+        },
+      ],
+    },
+    permissions[2] && {
+      key: "legal",
+      icon: <FileProtectOutlined />,
+      label: <div className="menu-label-wrapper main">Legal Services Unit</div>,
+      children: [
+        {
+          key: "/universe/legal/dashboard",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/legal/dashboard">Legal Dashboard</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/legal/docket",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/legal/docket">Legal Docket</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/legal/envi-laws",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/legal/envi-laws">Environmental Laws</Link>
+            </div>
           ),
         },
       ],
@@ -868,9 +885,11 @@ const SideMenu = ({ theme, currentUser }) => {
     },
     permissions[2] && {
       key: "electronic-records-management",
-      icon: <ContainerFilled/>,
+      icon: <ContainerFilled />,
       label: (
-        <div className="menu-label-wrapper main erms">Electronic Records <br/> Management System</div>
+        <div className="menu-label-wrapper main erms">
+          Electronic Records <br /> Management System
+        </div>
       ),
       children: [
         {
@@ -909,6 +928,17 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
+
+    // permissions[2] && {
+    //   key: "/universe/mbu",
+    //   icon: <EnvironmentFilled />,
+    //   label: (
+    //     <div className="menu-label-wrapper main">
+    //       <Link to="/universe/mbu">Manila Bay Pipeline</Link>
+    //       {renderAvatars(mbuViewers)}
+    //     </div>
+    //   ),
+    // },
   ].filter(Boolean);
 
   return (

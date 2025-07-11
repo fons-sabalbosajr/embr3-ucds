@@ -106,3 +106,37 @@
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+
+@media (max-width: 1080px) {
+  .suggestion-card {
+    max-width: 500px;
+    padding: 16px;
+    border-radius: 8px;
+  }
+  .suggestion-card h2 {
+    font-size: 1.1rem;
+  }
+  .suggestion-card p {
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .suggestion-card input,
+  .suggestion-card textarea {
+    font-size: 12px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+  }
+  .suggestion-card button {
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    gap: 6px;
+  }
+  .contact-section {
+    margin-top: 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+}

@@ -1,0 +1,38 @@
+.row-date-picker {
+  margin-top: 2px;
+}
+
+.card-focal {
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.column-title-add {
+  font-weight: bold;
+  font-size: 11px;
+  font-family: "Poppins", sans-serif;
+}
+
+.column-subtitle-add{
+  font-size: 8px;
+  font-family: "Poppins", sans-serif;
+  text-align: center;
+  margin-top: -5px;
+}
+
+.styled-input {
+  font-size: 11px;
+  height: 29px;
+  padding: 4px 8px;
+  background-color: #f5f5f5;
+  color: #a9a9a9;
+  cursor: not-allowed;
+}
+
+.row-auto-pismu{
+    margin-top: 20px;
+}
+
+.checkbox-pismu{
+    font-size: 11px;
+}

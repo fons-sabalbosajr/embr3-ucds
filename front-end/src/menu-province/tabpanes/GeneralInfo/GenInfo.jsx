@@ -136,7 +136,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
           <TextArea
             value={proponentName}
             onChange={(e) => setProponentName(e.target.value)}
-            placeholder="Enter street"
+            placeholder="Enter Proponent Name"
             style={{
               fontSize: "11px",
               padding: "4px 8px",

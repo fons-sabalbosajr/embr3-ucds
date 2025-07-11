@@ -1,7 +1,11 @@
 .profile-container {
   display: flex;
   flex-direction: column;
-  align-items: center; /* Center entire section */
+  align-items: center;
+  max-width: 400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 8px;
 }
 
 .avatar-section {
@@ -66,4 +70,31 @@
 
 .input-field:disabled::placeholder {
   color: #000;
+}
+
+@media (max-width: 1080px) {
+   .profile-container {
+    max-width: 98vw;
+    min-width: 0;
+    padding: 0 4px;
+  }
+  .profile-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0px 10px;
+  }
+  .paragraph-input {
+    margin-bottom: 0;
+  }
+}
+
+/* For very small modals (e.g., on mobile), stack fields in one column */
+@media (max-width: 480px) {
+  .profile-container {
+    max-width: 100vw;
+    padding: 0 2px;
+  }
+  .profile-info {
+    grid-template-columns: 1fr;
+  }
 }

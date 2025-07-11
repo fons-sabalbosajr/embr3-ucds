@@ -301,38 +301,42 @@ const Province = ({ theme, currentUser }) => {
     setSectionCounts(counts);
   }, [filterData]); // Depends on the memoized filterData function
 
-  const handleReload = async (provinceNameForReload) => {
+  const handleReload = async (provinceNameForReload, updatedRecord = null) => {
     setLoading(true);
     setProgress(0);
     let intervalId = null;
 
     try {
       intervalId = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 10, 90)); // Cap at 90 during loading
+        setProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      const fetchedData = await fetchData(provinceNameForReload);
-
-      if (intervalId) clearInterval(intervalId);
-      intervalId = null;
-
-      if (fetchedData) {
-        setOriginalData(fetchedData); // This will trigger the useEffect above to filter and set counts
+      if (updatedRecord) {
+        setOriginalData((prevData) =>
+          prevData.map((item) =>
+            item.sort_key === updatedRecord.sort_key
+              ? { ...item, ...updatedRecord }
+              : item
+          )
+        );
+      } else {
+        // Fallback: fetch full province data
+       const fetchedData = await fetchData(provinceNameForReload, true);
+        if (fetchedData) {
+          setOriginalData(fetchedData);
+        }
       }
-      // If fetchedData is null/error, originalData might remain as is or be empty.
-      // The useEffect will still run with the current originalData.
 
-      setProgress(100); // Mark as complete
+      setProgress(100);
     } catch (error) {
       console.error("Error fetching data in handleReload:", error);
       if (intervalId) clearInterval(intervalId);
       setProgress(100);
     } finally {
-      if (intervalId) clearInterval(intervalId); // Ensure clearance
-
+      if (intervalId) clearInterval(intervalId);
       setTimeout(() => {
         setLoading(false);
-        setProgress(0); // Reset for next time
+        setProgress(0);
       }, 500);
     }
   };
@@ -447,25 +451,6 @@ const Province = ({ theme, currentUser }) => {
     setSelectedSection(""); // Clear the selected section
     setSelectedSectionData([]); // Clear the section data
     setSectionDetails([]); // Clear the section details
-  };
-
-  const handleDateChange = (dates) => {
-    // Check if dates is valid and contains two elements
-    if (
-      !dates ||
-      !Array.isArray(dates) ||
-      dates.length < 2 ||
-      !dates[0] ||
-      !dates[1]
-    ) {
-      setDateRange(null); // Clear the date range state
-      setIsDateRangeApplied(false);
-      // The main filtering useEffect will handle updates with dateRange set to null.
-    } else {
-      setDateRange(dates);
-      setIsDateRangeApplied(true);
-      // The main filtering useEffect will handle updates with the new dateRange.
-    }
   };
 
   const onRowClick = (record) => {
@@ -762,13 +747,6 @@ const Province = ({ theme, currentUser }) => {
     // This reset is for the AntD column filter.
     // If it needs to affect global filters, this logic would need to change.
     // For now, it resets the column's specific filter.
-  };
-
-  const measureTextWidth = (text, font = "14px Poppins") => {
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    context.font = font;
-    return context.measureText(text).width;
   };
 
   const sectionBackgroundColor = (section) => {
@@ -1883,7 +1861,7 @@ const Province = ({ theme, currentUser }) => {
         <AddProvinceModal
           visible={isModalVisibleAdd}
           onCancel={handleCancelAdd}
-           zIndex={1000}
+          zIndex={1000}
         />
       </div>
 
@@ -1988,7 +1966,7 @@ const Province = ({ theme, currentUser }) => {
             Cancel
           </Button>,
         ]}
-         zIndex={1000}
+        zIndex={1000}
       >
         <span
           style={{ fontSize: "12px", marginBottom: "10px", display: "block" }}

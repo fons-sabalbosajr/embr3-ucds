@@ -58,10 +58,6 @@
   margin-left: 8px;
 }
 
-.healthcare-add-industry-button {
-  margin-left: 8px;
-}
-
 .table-container {
   display: flex;
   flex-direction: column;
@@ -104,7 +100,7 @@
 
 .custom-table-healthcare .ant-table-thead > tr > th {
   height: 50px;
-  line-height: 50px; 
+  line-height: 50px;
 }
 
 .search-input-tags {
@@ -241,7 +237,6 @@
   box-shadow: none !important;
 }
 
-
 /* Container for modal header */
 .healthcare-modal-header {
   display: flex;
@@ -279,4 +274,33 @@
   font-weight: 600;
   white-space: nowrap;
   margin-right: 20px;
+}
+
+.custom-button-red{
+  background-color: maroon;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.custom-table-healthcare .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
+.monitoring-status-container {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.monitoring-label {
+  margin: 0 0 2px 0;
+  padding: 0;
+}
+
+
+@media (max-width: 1080px) {
+  .header-content-survey {
+    display: flex;
+    align-items: center; /* vertical middle alignment */
+    justify-content: space-between;
+    gap: 16px;
+  }
 }

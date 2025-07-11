@@ -118,11 +118,6 @@ const PermitsAdd = ({ isEditing }) => {
               />
             </Col>
           </Row>
-
-
-
-
-
           
         </Card>
       </Col>

@@ -21,7 +21,6 @@ const GenInfoAdd = ({
   selectedProvince,
   setSelectedProvince,
   extractedData,
-  setGeneralInfo, generalInfo
 }) => {
   const [selectedIndustryClass, setSelectedIndustryClass] = useState("n/a");
   const [industryType, setIndustryType] = useState("n/a");

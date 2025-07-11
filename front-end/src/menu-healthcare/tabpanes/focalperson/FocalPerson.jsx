@@ -7,7 +7,8 @@ import {
   Typography,
   Card,
   DatePicker,
-  Select,
+  ConfigProvider,
+  AutoComplete,
 } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
@@ -21,27 +22,27 @@ import ReportType from "../../../components/Autocomplete/ReportType";
 
 const { Paragraph } = Typography;
 
-const FocalPerson = ({
-  record,
-  isEditing,
-  handleChange,
-}) => {
-
-
+const FocalPerson = ({ record, isEditing, handleChange }) => {
   const convertToMMDDYYYY = (dateString) => {
     if (typeof dateString === "number") {
       const date = new Date(Math.round((dateString - 25569) * 86400 * 1000));
-      return `${padZero(date.getMonth() + 1)}/${padZero(date.getDate())}/${date.getFullYear()}`;
+      return `${padZero(date.getMonth() + 1)}/${padZero(
+        date.getDate()
+      )}/${date.getFullYear()}`;
     } else {
-      const date = dayjs(dateString, [
-        "MM/DD/YYYY",
-        "M/D/YYYY",
-        "YYYY-MM-DD",
-        "YYYY/MM/DD",
-        "@",
-        "MMM D, YYYY",
-        "MMMM DD, YYYY",
-      ], true);
+      const date = dayjs(
+        dateString,
+        [
+          "MM/DD/YYYY",
+          "M/D/YYYY",
+          "YYYY-MM-DD",
+          "YYYY/MM/DD",
+          "@",
+          "MMM D, YYYY",
+          "MMMM DD, YYYY",
+        ],
+        true
+      );
       return date.isValid() ? date.format("MM/DD/YYYY") : null;
     }
   };
@@ -128,7 +129,10 @@ const FocalPerson = ({
 
   useEffect(() => {
     if (formattedDateMonitored && formattedDateRouted) {
-      const daysDiff = calculateWeekdayDiff(formattedDateMonitored, formattedDateRouted);
+      const daysDiff = calculateWeekdayDiff(
+        formattedDateMonitored,
+        formattedDateRouted
+      );
       setDaysDmds(daysDiff);
       handleChange("days_dmds", daysDiff);
     } else {
@@ -139,7 +143,10 @@ const FocalPerson = ({
 
   useEffect(() => {
     if (formattedDateRouted && formattedDateSigned) {
-      const daysDiff = calculateWeekdayDiff(formattedDateRouted, formattedDateSigned);
+      const daysDiff = calculateWeekdayDiff(
+        formattedDateRouted,
+        formattedDateSigned
+      );
       setDaysDsdrs(daysDiff);
       handleChange("days_dsdrs", daysDiff);
     } else {
@@ -287,8 +294,17 @@ const FocalPerson = ({
             <Paragraph>
               <strong>Date Monitored</strong>
               <DatePicker
-                value={formattedDateMonitored ? dayjs(formattedDateMonitored, "MM/DD/YYYY") : null}
-                onChange={(date) => handleChange("date_monitored", date ? date.format("MM/DD/YYYY") : "")}
+                value={
+                  formattedDateMonitored
+                    ? dayjs(formattedDateMonitored, "MM/DD/YYYY")
+                    : null
+                }
+                onChange={(date) =>
+                  handleChange(
+                    "date_monitored",
+                    date ? date.format("MM/DD/YYYY") : ""
+                  )
+                }
                 disabled={!isEditing}
                 format="MM/DD/YYYY"
                 placeholder="MM/DD/YYYY"
@@ -301,8 +317,17 @@ const FocalPerson = ({
             <Paragraph>
               <strong>Date Routed (IIS)</strong>
               <DatePicker
-                value={formattedDateRouted ? dayjs(formattedDateRouted, "MM/DD/YYYY") : null}
-                onChange={(date) => handleChange("date_routed", date ? date.format("MM/DD/YYYY") : "")}
+                value={
+                  formattedDateRouted
+                    ? dayjs(formattedDateRouted, "MM/DD/YYYY")
+                    : null
+                }
+                onChange={(date) =>
+                  handleChange(
+                    "date_routed",
+                    date ? date.format("MM/DD/YYYY") : ""
+                  )
+                }
                 disabled={!isEditing}
                 format="MM/DD/YYYY"
                 placeholder="MM/DD/YYYY"
@@ -315,8 +340,17 @@ const FocalPerson = ({
             <Paragraph>
               <strong>Date Signed</strong>
               <DatePicker
-                value={formattedDateSigned ? dayjs(formattedDateSigned, "MM/DD/YYYY") : null}
-                onChange={(date) => handleChange("date_signed", date ? date.format("MM/DD/YYYY") : "")}
+                value={
+                  formattedDateSigned
+                    ? dayjs(formattedDateSigned, "MM/DD/YYYY")
+                    : null
+                }
+                onChange={(date) =>
+                  handleChange(
+                    "date_signed",
+                    date ? date.format("MM/DD/YYYY") : ""
+                  )
+                }
                 disabled={!isEditing}
                 format="MM/DD/YYYY"
                 placeholder="MM/DD/YYYY"
@@ -379,7 +413,9 @@ const FocalPerson = ({
                 <strong>Remarks/Recommendations:</strong> <br />
                 <TextArea
                   value={safeRecord?.remarks_recommendations || ""}
-                  onChange={(e) => handleChange("remarks_recommendations", e.target.value)}
+                  onChange={(e) =>
+                    handleChange("remarks_recommendations", e.target.value)
+                  }
                   readOnly={!isEditing}
                   placeholder="No data"
                   rows={3}
@@ -388,8 +424,18 @@ const FocalPerson = ({
               </Paragraph>
               <Paragraph>
                 <Checkbox
-                  checked={safeRecord?.pismu_tracking === "Report Tracked (received/routed to Planning Unit)"}
-                  onChange={(e) => handleChange("pismu_tracking", e.target.checked ? "Report Tracked (received/routed to Planning Unit)" : "Report Untracked")}
+                  checked={
+                    safeRecord?.pismu_tracking ===
+                    "Report Tracked (received/routed to Planning Unit)"
+                  }
+                  onChange={(e) =>
+                    handleChange(
+                      "pismu_tracking",
+                      e.target.checked
+                        ? "Report Tracked (received/routed to Planning Unit)"
+                        : "Report Untracked"
+                    )
+                  }
                   disabled={!isEditing}
                   style={{ fontSize: "12px" }}
                 >

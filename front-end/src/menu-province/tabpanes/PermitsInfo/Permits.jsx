@@ -517,7 +517,14 @@ function renderWithExpiryCheck(value, record, field) {
   return <span style={style}>{value || "-"}</span>;
 }
 
-const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
+const Permits = ({
+  editedRecord,
+  handleChange,
+  onSaveChanges,
+  isEditing,
+  ra8749Array,
+  onRa8749Change,
+}) => {
   const [pd1586Data, setPd1586Data] = useState([]);
   const [ra8749Data, setRa8749Data] = useState([]);
   const [ra9275Data, setRa9275Data] = useState([]);
@@ -589,6 +596,7 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
       prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
     );
   }
+
   const handleAddNewDataPD1586 = () => {
     const newKey = (pd1586Data.length + 1).toString();
     setPd1586Data([
@@ -607,12 +615,14 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
   };
 
   // RA8749 handlers
-  function handleFieldChangeRA8749(field, value, key) {
-    setRa8749Data((prev) =>
-      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
-    );
-    if (key === "1") handleChange(field, value);
-  }
+ function handleFieldChangeRA8749(field, value, key) {
+  const updated = ra8749Array.map((row) =>
+    row.key === key ? { ...row, [field]: value } : row
+  );
+  onRa8749Change(updated); // ⬅️ updated via lifted state
+  if (key === "1") handleChange(field, value);
+}
+
   function handleRemoveLastRowRA8749() {
     setRa8749Data((prev) =>
       prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
@@ -642,11 +652,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
     );
     if (key === "1") handleChange(field, value);
   }
+
   function handleRemoveLastRowRA9275() {
     setRa9275Data((prev) =>
       prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
     );
   }
+
   const handleAddNewDataRA9275 = () => {
     const newKey = (ra9275Data.length + 1).toString();
     setRa9275Data([
@@ -669,11 +681,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
     );
     if (key === "1") handleChange(field, value);
   }
+
   function handleRemoveLastRowRA6969() {
     setRa6969Data((prev) =>
       prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
     );
   }
+
   const handleAddNewDataRA6969 = () => {
     const newKey = (ra6969Data.length + 1).toString();
     setRa6969Data([
@@ -696,11 +710,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
     );
     if (key === "1") handleChange(field, value);
   }
+
   function handleRemoveLastRowPCO() {
     setPcoData((prev) =>
       prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
     );
   }
+
   const handleAddNewDataPCO = () => {
     const newKey = (pcoData.length + 1).toString();
     setPcoData([
@@ -717,6 +733,13 @@ const Permits = ({ editedRecord, handleChange, onSaveChanges, isEditing }) => {
       },
     ]);
   };
+
+  useEffect(() => {
+    if (typeof onRa8749Change === "function") {
+      onRa8749Change(ra8749Data.filter((r) => !r.isAddRow)); // Remove dummy add-row
+    }
+  }, [ra8749Data]);
+  
 
   const tableDataPD1586 = isEditing
     ? [...pd1586Data, { key: "add-row", isAddRow: true }]

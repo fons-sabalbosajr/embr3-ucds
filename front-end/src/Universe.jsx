@@ -59,6 +59,11 @@ import ERMSUniverse from "./menu-ZERMS/menu-universe/ERMSUniverse";
 import ERMSStorageConfig from "./menu-ZERMS/menu-storageconfig/ERMSStorageConfig";
 import ERMSSettings from "./menu-ZERMS/menu-settings/ERMSSettings";
 
+// Legal Services Unit Components
+import LegalDashboard from "./menu-legal/legal-dashboard/LegalDashboard"; // Assuming these are the correct paths
+import LegalDocket from "./menu-legal/docket/LegalDocket";
+import EnviLaws from "./menu-legal/envi-laws/EnviLaws";
+
 const { Header, Content } = Layout;
 
 const Universe = () => {
@@ -372,7 +377,6 @@ const Universe = () => {
                   </span>
 
                   <NotificationsPopover
-                    // popoverContent={popoverContents} // REMOVE THIS PROP
                     theme={theme}
                     notifications={notifications}
                     isLoading={isLoading} // Pass the loading state for notifications
@@ -562,6 +566,23 @@ const Universe = () => {
                   path="erms/settings"
                   element={<ERMSSettings theme={theme} />}
                 />
+
+                {/* Legal Services Unit Routes */}
+                <Route
+                  path="legal/dashboard"
+                  element={<LegalDashboard theme={theme} />}
+                />
+                <Route
+                  path="legal/docket"
+                  element={<LegalDocket theme={theme} />}
+                />
+                <Route
+                  path="legal/envi-laws"
+                  element={<EnviLaws theme={theme} />}
+                />
+                {/* Add a default route for /legal if needed, e.g., redirect to dashboard */}
+                <Route path="legal" element={<Navigate to="legal/dashboard" replace />} />
+
 
                 <Route path="report" element={<Report theme={theme} />} />
                 <Route path="posting" element={<Posting theme={theme} />} />

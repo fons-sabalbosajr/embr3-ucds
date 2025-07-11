@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Table, Spin, Input, Tooltip, Button, Modal, message } from "antd";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
-import Draggable from "react-draggable";
 import fieldLabels from "../../constants/fieldLabels";
 import {
   getUcdsRecordById,
@@ -10,11 +9,7 @@ import {
 } from "../../api/notificationService"; // Import the consolidated service
 import "./duplicatenotif.css";
 
-const DuplicateNotif = ({
-  duplicateData,
-  onDuplicateResolved,
-  theme
-}) => {
+const DuplicateNotif = ({ duplicateData, onDuplicateResolved, theme }) => {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState([]);
   const [editingKey, setEditingKey] = useState("");
@@ -35,7 +30,7 @@ const DuplicateNotif = ({
         const fetchedRecords = await Promise.all(
           duplicateData.idNos.map(async (id_no, index) => {
             // Use the service function
-            const record = await getUcdsRecordById(id_no).catch(error => {
+            const record = await getUcdsRecordById(id_no).catch((error) => {
               // Errors are logged in the service, but we can add component-specific handling
               message.error(`Could not load details for record ${id_no}.`);
               return null;
@@ -90,25 +85,24 @@ const DuplicateNotif = ({
     }
   }, [records]);
 
-  const EditableCell = ({
-    editing,
-    dataIndex,
-    record,
-    children,
-    ...restProps
-  }) => {
+  const EditableCell = ({ editing, dataIndex, record, children }) => {
     const handleChange = (e) => {
       const newValue = e.target.value;
-      setDataSource((prev) =>
-        prev.map((row) =>
-          row.key === record.key ? { ...row, [dataIndex]: newValue } : row
-        )
-      );
-      setHasChanges(true); // Mark that changes have been made
+      const recordIndex = dataSource.findIndex((row) => row.key === record.key); // Find the index of the record being edited
+      if (recordIndex !== -1) {
+        setDataSource((prev) => {
+          const updatedDataSource = [...prev];
+          const updatedRow = { ...updatedDataSource[recordIndex] };
+          updatedRow[dataIndex] = newValue; // Update the specific cell in the row
+          updatedDataSource[recordIndex] = updatedRow;
+          return updatedDataSource;
+        });
+        setHasChanges(true); // Mark that changes have been made
+      }
     };
 
     return (
-      <td {...restProps}>
+      <td>
         {editing ? (
           <Input
             value={record[dataIndex]}
@@ -135,104 +129,356 @@ const DuplicateNotif = ({
     //message.success("Changes saved.");
   };
 
- const detectIssues = (records) => {
-  if (!Array.isArray(records) || records.length < 2) {
-    return <p>No records to compare.</p>;
-  }
-
-  const issues = [];
-
-  const checkFieldDuplicate = (field, label, message) => {
-    const values = records.map((r) => r[field]);
-    const allSame = values.every((val) => val === values[0]);
-    if (allSame && values[0]) {
-      issues.push(`${label}: ${message}`);
+  const detectIssues = (records) => {
+    if (!Array.isArray(records) || records.length < 2) {
+      return <p>No records to compare.</p>;
     }
+
+    const issues = [];
+
+    const checkFieldDuplicate = (field, label, message) => {
+      const values = records.map((r) => r[field]);
+      const allSame = values.every((val) => val === values[0]);
+      if (allSame && values[0]) {
+        issues.push(`${label}: ${message}`);
+      }
+    };
+
+    //region Duplicate Checks
+    checkFieldDuplicate(
+      "ecc_cnc",
+      "ECC/CNC",
+      "All records have the same ECC/CNC, which may indicate a duplicate permit."
+    );
+    checkFieldDuplicate(
+      "title",
+      "Project Title",
+      "All records have the same project title, which may indicate a double entry."
+    );
+    checkFieldDuplicate(
+      "address",
+      "Address",
+      "All records have the same address, which may indicate a duplicate entry."
+    );
+    checkFieldDuplicate(
+      "name",
+      "Name",
+      "All records have the same facility name, possibly indicating a reused name."
+    );
+    checkFieldDuplicate(
+      "industry_class",
+      "Industry Class",
+      "Same industry classification across records."
+    );
+    checkFieldDuplicate(
+      "industry_type",
+      "Industry Type",
+      "Same industry type across records."
+    );
+    checkFieldDuplicate(
+      "industry_subtype",
+      "Industry Subtype",
+      "Same industry subtype across records."
+    );
+    checkFieldDuplicate(
+      "psic_code",
+      "PSIC Code",
+      "Identical PSIC code across all records."
+    );
+    checkFieldDuplicate(
+      "mbu_area",
+      "MBU Area",
+      "Identical MBU area values across records."
+    );
+    checkFieldDuplicate(
+      "waterbody",
+      "Waterbody",
+      "Same waterbody assigned to all records."
+    );
+    checkFieldDuplicate(
+      "long",
+      "Longitude",
+      "Identical longitude may imply same location."
+    );
+    checkFieldDuplicate(
+      "lat",
+      "Latitude",
+      "Identical latitude may imply same location."
+    );
+    checkFieldDuplicate(
+      "cong_district",
+      "Congressional District",
+      "All records are in the same congressional district."
+    );
+    checkFieldDuplicate(
+      "street",
+      "Street",
+      "Identical street name in all records."
+    );
+    checkFieldDuplicate(
+      "brgy",
+      "Barangay",
+      "Same barangay across all entries."
+    );
+    checkFieldDuplicate("city", "City", "Same city indicated in all records.");
+    checkFieldDuplicate(
+      "province",
+      "Province",
+      "All entries are from the same province."
+    );
+    checkFieldDuplicate(
+      "emp_total",
+      "Total Employees",
+      "Identical employee count might imply same business."
+    );
+    checkFieldDuplicate(
+      "wwtf_type",
+      "WWTF Type",
+      "Same wastewater facility type."
+    );
+    checkFieldDuplicate(
+      "bod",
+      "BOD",
+      "Identical BOD values across all records."
+    );
+    checkFieldDuplicate(
+      "section_incharged",
+      "Section In-Charge",
+      "Same section is handling all records."
+    );
+    checkFieldDuplicate(
+      "handler",
+      "Handler",
+      "Same handler is assigned to all records."
+    );
+    checkFieldDuplicate(
+      "monitoring_sched",
+      "Monitoring Schedule",
+      "Identical schedule detected."
+    );
+    checkFieldDuplicate(
+      "iis_no",
+      "IIS No",
+      "Same IIS number may mean duplicate tracking."
+    );
+    checkFieldDuplicate(
+      "iis_no_2025",
+      "IIS No 2025",
+      "Same 2025 IIS number may indicate duplicate entry."
+    );
+    checkFieldDuplicate(
+      "insp_type",
+      "Inspection Type",
+      "Same inspection type across all entries."
+    );
+    checkFieldDuplicate(
+      "date_monitored",
+      "Date Monitored",
+      "Identical monitoring dates."
+    );
+    checkFieldDuplicate(
+      "date_routed",
+      "Date Routed",
+      "Same routing date detected."
+    );
+    checkFieldDuplicate(
+      "date_signed",
+      "Date Signed",
+      "Same date signed value."
+    );
+    checkFieldDuplicate(
+      "days_dmds",
+      "Days in DMDS",
+      "Same DMDS duration across records."
+    );
+    checkFieldDuplicate(
+      "days_drds",
+      "Days in DRDS",
+      "Same DRDS duration across records."
+    );
+    checkFieldDuplicate(
+      "pismu_tracking",
+      "PISMU Tracking",
+      "Same tracking code used."
+    );
+    checkFieldDuplicate(
+      "title_status",
+      "Title Status",
+      "Identical title status values."
+    );
+    checkFieldDuplicate(
+      "with_nov",
+      "With NOV",
+      "Same NOV status in all records."
+    );
+    checkFieldDuplicate(
+      "operational",
+      "Operational",
+      "All records have same operational status."
+    );
+    checkFieldDuplicate(
+      "permit_process",
+      "Permit Process",
+      "Same permit process value."
+    );
+    checkFieldDuplicate(
+      "date_amended",
+      "Date Amended",
+      "Same amendment date detected."
+    );
+    checkFieldDuplicate(
+      "date_approved",
+      "Date Approved",
+      "Identical approval dates."
+    );
+    checkFieldDuplicate(
+      "pto_code",
+      "PTO Code",
+      "Same PTO code across all records."
+    );
+    checkFieldDuplicate("pto_issued", "PTO Issued", "Same PTO issuance date.");
+    checkFieldDuplicate(
+      "pto_expiration",
+      "PTO Expiration",
+      "Same PTO expiration date."
+    );
+    checkFieldDuplicate(
+      "wwdp_code",
+      "WWDP Code",
+      "Same WWDP code across all records."
+    );
+    checkFieldDuplicate(
+      "wwdp_issued",
+      "WWDP Issued",
+      "Same WWDP issuance date."
+    );
+    checkFieldDuplicate(
+      "wwdp_expiration",
+      "WWDP Expiration",
+      "Same WWDP expiration date."
+    );
+    checkFieldDuplicate(
+      "haz_id",
+      "HazWaste ID",
+      "Same hazardous waste ID across all records."
+    );
+    checkFieldDuplicate(
+      "haz_issued",
+      "HazWaste Issued",
+      "Same hazardous waste issuance date."
+    );
+    checkFieldDuplicate("pco_no", "PCO Number", "Same PCO number used.");
+    checkFieldDuplicate("pco_name", "PCO Name", "Same PCO assigned.");
+    checkFieldDuplicate(
+      "pco_validity",
+      "PCO Validity",
+      "Same PCO validity date."
+    );
+    checkFieldDuplicate(
+      "docket_no",
+      "Docket Number",
+      "Same docket number detected."
+    );
+    checkFieldDuplicate(
+      "denr_pab_case_no",
+      "DENR-PAB Case No",
+      "Same PAB case number."
+    );
+    checkFieldDuplicate("nov_issued", "NOV Issued", "Same NOV issuance.");
+    checkFieldDuplicate(
+      "v_pd1586",
+      "PD 1586 Violation",
+      "Same violation of PD 1586."
+    );
+    checkFieldDuplicate(
+      "v_ra9275",
+      "RA 9275 Violation",
+      "Same violation under RA 9275."
+    );
+    checkFieldDuplicate(
+      "v_ra8749",
+      "RA 8749 Violation",
+      "Same violation under RA 8749."
+    );
+    checkFieldDuplicate(
+      "v_ra6969_haz",
+      "RA 6969 Hazardous",
+      "Same violation under RA 6969 - hazardous."
+    );
+    checkFieldDuplicate(
+      "v_ra6969_tchem",
+      "RA 6969 Toxic",
+      "Same violation under RA 6969 - toxic."
+    );
+    checkFieldDuplicate(
+      "tc_date_actual",
+      "TC Actual Date",
+      "Same technical conference date."
+    );
+    checkFieldDuplicate(
+      "legal_officer",
+      "Legal Officer",
+      "Same legal officer assigned."
+    );
+    checkFieldDuplicate(
+      "tc_compliance_link",
+      "TC Compliance Link",
+      "Same TC compliance link detected."
+    );
+    checkFieldDuplicate(
+      "pos_paper",
+      "Position Paper",
+      "Same position paper noted."
+    );
+    checkFieldDuplicate(
+      "penalty_date",
+      "Penalty Date",
+      "Same penalty issuance date."
+    );
+    checkFieldDuplicate(
+      "amount",
+      "Penalty Amount",
+      "Identical penalty amount."
+    );
+    checkFieldDuplicate(
+      "or_number",
+      "OR Number",
+      "Same official receipt number."
+    );
+    checkFieldDuplicate(
+      "tc_commitment",
+      "TC Commitment",
+      "Same commitment statement."
+    );
+    checkFieldDuplicate(
+      "other_tc_remarks",
+      "Other TC Remarks",
+      "Same technical conference remarks."
+    );
+    checkFieldDuplicate(
+      "resolution_issued",
+      "Resolution",
+      "Same resolution issued."
+    );
+    checkFieldDuplicate("order_issued", "Order", "Same order issued.");
+    checkFieldDuplicate("order_status", "Order Status", "Same order status.");
+    checkFieldDuplicate(
+      "color",
+      "Color Tag",
+      "All records tagged with the same color."
+    );
+    //endregion
+
+    return issues.length > 0 ? (
+      <ul>
+        {issues.map((issue, index) => (
+          <li key={index}>{issue}</li>
+        ))}
+      </ul>
+    ) : (
+      <p>No issues detected between the records.</p>
+    );
   };
-
-  // General duplicate checks
-  checkFieldDuplicate("ecc_cnc", "ECC/CNC", "All records have the same ECC/CNC, which may indicate a duplicate permit.");
-  checkFieldDuplicate("title", "Project Title", "All records have the same project title, which may indicate a double entry.");
-  checkFieldDuplicate("address", "Address", "All records have the same address, which may indicate a duplicate entry.");
-  checkFieldDuplicate("name", "Name", "All records have the same facility name, possibly indicating a reused name.");
-  checkFieldDuplicate("industry_class", "Industry Class", "Same industry classification across records.");
-  checkFieldDuplicate("industry_type", "Industry Type", "Same industry type across records.");
-  checkFieldDuplicate("industry_subtype", "Industry Subtype", "Same industry subtype across records.");
-  checkFieldDuplicate("psic_code", "PSIC Code", "Identical PSIC code across all records.");
-  checkFieldDuplicate("mbu_area", "MBU Area", "Identical MBU area values across records.");
-  checkFieldDuplicate("waterbody", "Waterbody", "Same waterbody assigned to all records.");
-  checkFieldDuplicate("long", "Longitude", "Identical longitude may imply same location.");
-  checkFieldDuplicate("lat", "Latitude", "Identical latitude may imply same location.");
-  checkFieldDuplicate("cong_district", "Congressional District", "All records are in the same congressional district.");
-  checkFieldDuplicate("street", "Street", "Identical street name in all records.");
-  checkFieldDuplicate("brgy", "Barangay", "Same barangay across all entries.");
-  checkFieldDuplicate("city", "City", "Same city indicated in all records.");
-  checkFieldDuplicate("province", "Province", "All entries are from the same province.");
-  checkFieldDuplicate("emp_total", "Total Employees", "Identical employee count might imply same business.");
-  checkFieldDuplicate("wwtf_type", "WWTF Type", "Same wastewater facility type.");
-  checkFieldDuplicate("bod", "BOD", "Identical BOD values across all records.");
-  checkFieldDuplicate("section_incharged", "Section In-Charge", "Same section is handling all records.");
-  checkFieldDuplicate("handler", "Handler", "Same handler is assigned to all records.");
-  checkFieldDuplicate("monitoring_sched", "Monitoring Schedule", "Identical schedule detected.");
-  checkFieldDuplicate("iis_no", "IIS No", "Same IIS number may mean duplicate tracking.");
-  checkFieldDuplicate("iis_no_2025", "IIS No 2025", "Same 2025 IIS number may indicate duplicate entry.");
-  checkFieldDuplicate("insp_type", "Inspection Type", "Same inspection type across all entries.");
-  checkFieldDuplicate("date_monitored", "Date Monitored", "Identical monitoring dates.");
-  checkFieldDuplicate("date_routed", "Date Routed", "Same routing date detected.");
-  checkFieldDuplicate("date_signed", "Date Signed", "Same date signed value.");
-  checkFieldDuplicate("days_dmds", "Days in DMDS", "Same DMDS duration across records.");
-  checkFieldDuplicate("days_drds", "Days in DRDS", "Same DRDS duration across records.");
-  checkFieldDuplicate("pismu_tracking", "PISMU Tracking", "Same tracking code used.");
-  checkFieldDuplicate("title_status", "Title Status", "Identical title status values.");
-  checkFieldDuplicate("with_nov", "With NOV", "Same NOV status in all records.");
-  checkFieldDuplicate("operational", "Operational", "All records have same operational status.");
-  checkFieldDuplicate("permit_process", "Permit Process", "Same permit process value.");
-  checkFieldDuplicate("date_amended", "Date Amended", "Same amendment date detected.");
-  checkFieldDuplicate("date_approved", "Date Approved", "Identical approval dates.");
-  checkFieldDuplicate("pto_code", "PTO Code", "Same PTO code across all records.");
-  checkFieldDuplicate("pto_issued", "PTO Issued", "Same PTO issuance date.");
-  checkFieldDuplicate("pto_expiration", "PTO Expiration", "Same PTO expiration date.");
-  checkFieldDuplicate("wwdp_code", "WWDP Code", "Same WWDP code across all records.");
-  checkFieldDuplicate("wwdp_issued", "WWDP Issued", "Same WWDP issuance date.");
-  checkFieldDuplicate("wwdp_expiration", "WWDP Expiration", "Same WWDP expiration date.");
-  checkFieldDuplicate("haz_id", "HazWaste ID", "Same hazardous waste ID across all records.");
-  checkFieldDuplicate("haz_issued", "HazWaste Issued", "Same hazardous waste issuance date.");
-  checkFieldDuplicate("pco_no", "PCO Number", "Same PCO number used.");
-  checkFieldDuplicate("pco_name", "PCO Name", "Same PCO assigned.");
-  checkFieldDuplicate("pco_validity", "PCO Validity", "Same PCO validity date.");
-  checkFieldDuplicate("docket_no", "Docket Number", "Same docket number detected.");
-  checkFieldDuplicate("denr_pab_case_no", "DENR-PAB Case No", "Same PAB case number.");
-  checkFieldDuplicate("nov_issued", "NOV Issued", "Same NOV issuance.");
-  checkFieldDuplicate("v_pd1586", "PD 1586 Violation", "Same violation of PD 1586.");
-  checkFieldDuplicate("v_ra9275", "RA 9275 Violation", "Same violation under RA 9275.");
-  checkFieldDuplicate("v_ra8749", "RA 8749 Violation", "Same violation under RA 8749.");
-  checkFieldDuplicate("v_ra6969_haz", "RA 6969 Hazardous", "Same violation under RA 6969 - hazardous.");
-  checkFieldDuplicate("v_ra6969_tchem", "RA 6969 Toxic", "Same violation under RA 6969 - toxic.");
-  checkFieldDuplicate("tc_date_actual", "TC Actual Date", "Same technical conference date.");
-  checkFieldDuplicate("legal_officer", "Legal Officer", "Same legal officer assigned.");
-  checkFieldDuplicate("tc_compliance_link", "TC Compliance Link", "Same TC compliance link detected.");
-  checkFieldDuplicate("pos_paper", "Position Paper", "Same position paper noted.");
-  checkFieldDuplicate("penalty_date", "Penalty Date", "Same penalty issuance date.");
-  checkFieldDuplicate("amount", "Penalty Amount", "Identical penalty amount.");
-  checkFieldDuplicate("or_number", "OR Number", "Same official receipt number.");
-  checkFieldDuplicate("tc_commitment", "TC Commitment", "Same commitment statement.");
-  checkFieldDuplicate("other_tc_remarks", "Other TC Remarks", "Same technical conference remarks.");
-  checkFieldDuplicate("resolution_issued", "Resolution", "Same resolution issued.");
-  checkFieldDuplicate("order_issued", "Order", "Same order issued.");
-  checkFieldDuplicate("order_status", "Order Status", "Same order status.");
-  checkFieldDuplicate("color", "Color Tag", "All records tagged with the same color.");
-
-  return issues.length > 0 ? (
-    <ul>
-      {issues.map((issue, index) => (
-        <li key={index}>{issue}</li>
-      ))}
-    </ul>
-  ) : (
-    <p>No issues detected between the records.</p>
-  );
-};
-
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
@@ -294,7 +540,7 @@ const DuplicateNotif = ({
     setIsSaving(true); // Indicate saving/processing state
     try {
       // Use the service function
-      await archiveUcdsRecord(id_no);
+      await archiveUcdsRecord(String(selectedRecord.id_no));
 
       // console.log(`Successfully archived record: ${id_no}`);
 
@@ -358,45 +604,52 @@ const DuplicateNotif = ({
         </div>
       ),
     },
-    ...records.map((_, index) => ({
-      title: `Record ${index + 1}`,
-      dataIndex: `record${index + 1}`,
-      key: `record${index + 1}`,
-      align: "center",
-      className: "table-header-center",
-      render: (cellValue, tableRowRecord) => { // cellValue is the text for this cell, tableRowRecord is the row data for the AntD table (e.g., { field: 'ecc_cnc', record1: 'val1', ...})
-        const fieldKey = tableRowRecord.field; // The field name for this row (e.g., 'ecc_cnc', 'title')
+    ...records.map((_, index) => {
+      const columnKey = `record${index + 1}`;
+      return {
+        title: `Record ${index + 1}`,
+        dataIndex: columnKey,
+        key: columnKey,
+        align: "center",
+        className: "table-header-center",
+        render: (cellValue, tableRowRecord) => {
+          const fieldKey = tableRowRecord.field;
 
-        let isDuplicateField = false;
-        if (records.length > 1) {
-          const allValuesForThisField = records.map(r => r[fieldKey]);
-          const firstValue = allValuesForThisField[0];
+          let isDuplicateField = false;
+          if (records.length > 1) {
+            const allValuesForThisField = records.map((r) => r[fieldKey]);
+            const firstValue = allValuesForThisField[0];
 
-          // Check if the first value is meaningful (not null, undefined, or an empty/whitespace string)
-          // and if all other values strictly match it.
-          if (firstValue !== null &&
+            if (
+              firstValue !== null &&
               firstValue !== undefined &&
-              String(firstValue).trim() !== '' && // Ensures "  " is treated as empty
-              allValuesForThisField.every(val => val === firstValue)) {
-            isDuplicateField = true;
+              String(firstValue).trim() !== "" &&
+              allValuesForThisField.every((val) => val === firstValue)
+            ) {
+              isDuplicateField = true;
+            }
           }
-        }
 
-        return (
-          <div
-            className={isDuplicateField ? 'duplicate-data-text' : ''} // Apply class if data is duplicate
-            style={{ textAlign: "left" }}
-          >
-            {cellValue === null || cellValue === undefined || String(cellValue).trim() === '' ? "N/A" : String(cellValue)}
-          </div>
-        );
-      },
-      onCell: (record) => ({
-        record,
-        dataIndex: `record${index + 1}`,
-        editing: isEditing(record),
-      }),
-    })),
+          return (
+            <div
+              className={isDuplicateField ? "duplicate-data-text" : ""}
+              style={{ textAlign: "left" }}
+            >
+              {cellValue === null ||
+              cellValue === undefined ||
+              String(cellValue).trim() === ""
+                ? "N/A"
+                : String(cellValue)}
+            </div>
+          );
+        },
+        onCell: (rowRecord) => ({
+          record: rowRecord,
+          dataIndex: columnKey, // ✅ Use the correct column key for binding
+          editing: isEditing(rowRecord),
+        }),
+      };
+    }),
     {
       title: "Actions",
       key: "actions",
@@ -454,7 +707,9 @@ const DuplicateNotif = ({
   return loading ? (
     <Spin />
   ) : (
-     <div className={`${theme}-theme`}> {/* Ensure this line exists and uses the theme prop */}
+    <div className={`${theme}-theme`}>
+      {" "}
+      {/* Ensure this line exists and uses the theme prop */}
       <Table
         components={{
           body: {
@@ -470,10 +725,6 @@ const DuplicateNotif = ({
           emptyText: loading ? <Spin /> : "No duplicate records found.",
         }}
         rowClassName={(tableRowRecord) => {
-          // 'records' is the component's state: array of original data objects
-          // 'tableRowRecord' is a row from 'dataSource', representing one field across all original records
-          // e.g., tableRowRecord = { field: 'ecc_cnc', record1: 'val1', record2: 'val2', ... }
-
           if (records.length < 2) {
             return "table-row"; // No comparison or highlight if less than 2 original records
           }
@@ -483,7 +734,9 @@ const DuplicateNotif = ({
             fieldValuesInRow.push(tableRowRecord[`record${i + 1}`]);
           }
 
-          const allSame = fieldValuesInRow.every((val) => val === fieldValuesInRow[0]);
+          const allSame = fieldValuesInRow.every(
+            (val) => val === fieldValuesInRow[0]
+          );
           return "table-row"; // Remove row-level class, cell-level styling will handle it
         }}
         scroll={{ y: 400 }} // Set the height for vertical scrolling
@@ -516,7 +769,6 @@ const DuplicateNotif = ({
           </Button>
         </div>
       </div>
-
       <Modal
         title={
           <div
@@ -538,7 +790,7 @@ const DuplicateNotif = ({
           <Button
             type={selectedRecord === records[0] ? "primary" : "default"}
             onClick={() => {
-              console.log("Selected Record 1:", records[0]);
+              //console.log("Selected Record 1:", records[0]);
               setSelectedRecord(records[0]);
             }}
           >
@@ -547,7 +799,7 @@ const DuplicateNotif = ({
           <Button
             type={selectedRecord === records[1] ? "primary" : "default"}
             onClick={() => {
-              console.log("Selected Record 2:", records[1]);
+              //console.log("Selected Record 2:", records[1]);
               setSelectedRecord(records[1]);
             }}
             style={{ marginLeft: "10px" }}
@@ -556,7 +808,6 @@ const DuplicateNotif = ({
           </Button>
         </div>
       </Modal>
-
       <Modal
         title={`Confirm ${actionType === "save" ? "Save" : "Cancel"}`}
         open={showConfirmModal}

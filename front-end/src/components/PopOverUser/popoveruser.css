@@ -1,0 +1,14 @@
+@media (max-width: 1080px) {
+  .popover-user-menu {
+    font-size: 10px !important;
+    min-width: 190px !important;
+    width: 90% !important;
+  }
+  .popover-user-menu .ant-menu-item {
+    font-size: 10px !important;
+  }
+  .popover-user-name,
+  .popover-user-handle {
+    font-size: 10px !important;
+  }
+}

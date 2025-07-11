@@ -17,6 +17,7 @@ import {
 } from "@ant-design/icons";
 import CryptoJS from "crypto-js";
 import "./profile.css";
+import { fetchUserDetails, uploadUserPhoto } from "../../../api/userService";
 
 const { Paragraph } = Typography;
 
@@ -50,21 +51,14 @@ const Profile = ({ username }) => {
   const fetchUserData = useCallback(async () => {
     setFetching(true);
     try {
-      const res = await fetch(
-        `http://10.14.77.107:8081/api/user/details?username=${username}`
-      );
-      const data = await res.json();
-      if (res.ok && data) {
-        setUserData(data);
-        if (encryptionKey) {
-          const encrypted = CryptoJS.AES.encrypt(
-            JSON.stringify(data),
-            encryptionKey
-          ).toString();
-          localStorage.setItem("ucds_user_profile", encrypted);
-        }
-      } else {
-        message.error("No user data found.");
+      const data = await fetchUserDetails(username);
+      setUserData(data);
+      if (encryptionKey) {
+        const encrypted = CryptoJS.AES.encrypt(
+          JSON.stringify(data),
+          encryptionKey
+        ).toString();
+        localStorage.setItem("ucds_user_profile", encrypted);
       }
     } catch (error) {
       message.error("Error fetching user details.");
@@ -92,33 +86,21 @@ const Profile = ({ username }) => {
       return;
     }
     setUploading(true);
-    const formData = new FormData();
-    formData.append("photo", photo.file);
-    formData.append("username", username);
-
     try {
-      const res = await fetch("http://10.14.77.107:8081/api/users/update", {
-        method: "POST",
-        body: formData,
-      });
-      const updatedUser = await res.json();
-      if (res.ok) {
-        setUserData(updatedUser);
-        if (encryptionKey) {
-          const encrypted = CryptoJS.AES.encrypt(
-            JSON.stringify(updatedUser),
-            encryptionKey
-          ).toString();
-          localStorage.setItem("ucds_user_profile", encrypted);
-        }
-        message.success("Profile photo updated successfully!");
-        setPhoto(null);
-        setShowUploadButtons(false);
-      } else {
-        message.error(updatedUser.message || "Failed to update photo.");
+      const updatedUser = await uploadUserPhoto(username, photo.file);
+      setUserData(updatedUser);
+      if (encryptionKey) {
+        const encrypted = CryptoJS.AES.encrypt(
+          JSON.stringify(updatedUser),
+          encryptionKey
+        ).toString();
+        localStorage.setItem("ucds_user_profile", encrypted);
       }
+      message.success("Profile photo updated successfully!");
+      setPhoto(null);
+      setShowUploadButtons(false);
     } catch (error) {
-      message.error("Error updating photo.");
+      message.error(error.message || "Failed to update photo.");
     } finally {
       setUploading(false);
     }
@@ -167,7 +149,9 @@ const Profile = ({ username }) => {
         <Col>
           <div className="avatar-container">
             <img
-              src={photo ? photo.url : `http://10.14.77.107:8081${userData.avatar}`}
+              src={
+                photo ? photo.url : `http://10.14.77.107:8081${userData.avatar}`
+              }
               alt="Profile Avatar"
               className="profile-avatar"
             />

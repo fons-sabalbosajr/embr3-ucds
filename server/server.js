@@ -7,8 +7,8 @@ const { MongoClient, ObjectId, GridFSBucket } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, rgb } = require("pdf-lib");
-const dayjs = require("dayjs"); // For server-side date parsing
-const customParseFormat = require("dayjs/plugin/customParseFormat"); // For "MMMM YYYY"
+const dayjs = require("dayjs");
+const customParseFormat = require("dayjs/plugin/customParseFormat");
 dayjs.extend(customParseFormat);
 const fontkit = require("@pdf-lib/fontkit");
 const zlib = require("zlib");
@@ -750,74 +750,63 @@ router.post("/ucds/update-duplicates", async (req, res) => {
 router.post("/archive-data", async (req, res) => {
   const { id_no } = req.body;
 
-  if (!id_no || typeof id_no !== "string" || id_no.trim() === "") {
+  // Check for missing or invalid id_no
+  if (id_no === undefined || id_no === null || id_no === "") {
     console.error("Invalid or missing id_no in the request body.");
-    return res
-      .status(400)
-      .json({ message: "Invalid or missing id_no in the request body." });
+    return res.status(400).json({ message: "Invalid or missing id_no in the request body." });
   }
 
-  //console.log(`Attempting to archive record with id_no: ${id_no}`);
+  // Coerce id_no to number
+  const idNoNumber = Number(id_no);
+  if (isNaN(idNoNumber)) {
+    console.error("id_no must be a valid number.");
+    return res.status(400).json({ message: "id_no must be a valid number." });
+  }
 
-  const session = client.startSession(); // Start a MongoDB session for the transaction
+  const session = client.startSession();
 
   try {
     await session.withTransaction(async () => {
-      // Find the record in ucds-data
+      // Find the record using numeric match (no regex!)
       const record = await ucdsCollection.findOne(
-        { id_no: { $regex: `^${id_no.trim()}$`, $options: "i" } }, // Case-insensitive match
-        { session } // Use the session for the transaction
+        { id_no: idNoNumber },
+        { session }
       );
 
       if (!record) {
-        console.error(`Record with id_no: ${id_no} not found in ucds-data.`);
-        throw new Error(`Record with id_no: ${id_no} not found in ucds-data.`);
+        console.error(`Record with id_no: ${idNoNumber} not found in ucds-data.`);
+        throw new Error(`Record with id_no: ${idNoNumber} not found in ucds-data.`);
       }
 
-      //console.log(`Record found: ${JSON.stringify(record)}`);
-
-      // Insert the record into archive-data
-      const archiveResult = await archiveCollection.insertOne(record, {
-        session,
-      });
+      // Insert to archive
+      const archiveResult = await archiveCollection.insertOne(record, { session });
       if (!archiveResult.acknowledged) {
         console.error("Failed to archive the record.");
         throw new Error("Failed to archive the record.");
       }
 
-      //console.log(`Record successfully archived: ${JSON.stringify(archiveResult)}`);
-
-      // Delete the record from ucds-data
+      // Delete from original collection
       const deleteResult = await ucdsCollection.deleteOne(
-        { _id: record._id }, // Use the unique _id field for deletion
+        { _id: record._id },
         { session }
       );
 
       if (deleteResult.deletedCount === 0) {
-        console.error(
-          `Failed to delete the record from ucds-data. id_no: ${id_no}`
-        );
-        throw new Error(
-          "Failed to delete the record from ucds-data after archiving."
-        );
+        console.error(`Failed to delete the record from ucds-data. id_no: ${idNoNumber}`);
+        throw new Error("Failed to delete the record from ucds-data after archiving.");
       }
-
-      //console.log(`Record successfully deleted from ucds-data: ${JSON.stringify(deleteResult)}`);
     });
 
-    // If the transaction completes successfully
-    res
-      .status(201)
-      .json({ message: "Record successfully transferred to archive-data." });
+    res.status(201).json({ message: "Record successfully transferred to archive-data." });
+
   } catch (error) {
     console.error("Error transferring record:", error);
-    res
-      .status(500)
-      .json({ message: error.message || "Failed to transfer the record." });
+    res.status(500).json({ message: error.message || "Failed to transfer the record." });
   } finally {
-    await session.endSession(); // End the session
+    await session.endSession();
   }
 });
+
 
 router.get("/ucds-data/:identifier", async (req, res) => {
   // Changed param name for clarity
@@ -6086,11 +6075,6 @@ app.put("/api/update-data/:id", logActivity, async (req, res) => {
       // Insert audit log entry
       await logsCollection.insertOne(logEntry);
 
-      // Respond success with audit log info
-      res.status(200).json(logEntry);
-    } else if (result.matchedCount === 1 && result.modifiedCount === 0) {
-      res.status(200).json({ message: "No changes were made to the data" });
-    } else {
       res.status(404).json({ error: "Data not found or no changes were made" });
     }
   } catch (error) {
@@ -6150,39 +6134,120 @@ app.put("/api/surveys-monitoring-data/:year/:id", async (req, res) => {
   }
 });
 
-// Bulk update UCDS records
+// Bulk update UCDS records using sort_key or id_no
 router.put("/ucds-data/bulk-update", logActivity, async (req, res) => {
   try {
-    const updatesArray = req.body.updates; // Expecting an array of { _id: "...", changes: { field1: value1, ... } }
+    const updatesArray = req.body.updates;
 
     if (!Array.isArray(updatesArray) || updatesArray.length === 0) {
       return res.status(400).json({ error: "Invalid or empty updates array." });
     }
 
-    if (!ucdsCollection) {
-      return res.status(500).json({ error: "Database collection not found." });
+    if (!ucdsCollection || !ucdsLogCollection) {
+      return res.status(500).json({ error: "Required collections not found." });
     }
 
-    const bulkOps = updatesArray
-      .map((item) => {
+    const logsToInsert = [];
+    const now = new Date();
+    const transactionDate = now.toLocaleString("en-US", { hour12: true });
+    const updatedBy =
+      req.session && req.session.user
+        ? req.session.user.username
+        : "Unknown User";
+
+    // Get latest transactionID
+    const latestLog = await ucdsLogCollection
+      .find({})
+      .sort({ transactionID: -1 })
+      .limit(1)
+      .toArray();
+
+    let transactionCounter = 1;
+    if (latestLog.length && latestLog[0].transactionID) {
+      const lastTxnNum = parseInt(
+        latestLog[0].transactionID.replace("TRXM-", ""),
+        10
+      );
+      if (!isNaN(lastTxnNum)) {
+        transactionCounter = lastTxnNum + 1;
+      }
+    }
+
+    const bulkOps = [];
+
+    const deepEqual = (a, b) => {
+      return JSON.stringify(a) === JSON.stringify(b);
+    };
+
+    for (const item of updatesArray) {
+      const { changes, sort_key, id_no } = item;
+
+      if (!changes || Object.keys(changes).length === 0) {
+        console.warn("Invalid update item (no changes):", item);
+        continue;
+      }
+
+      let filter = {};
+      if (sort_key) filter = { sort_key };
+      else if (id_no) filter = { id_no };
+      else {
+        console.warn("Missing identifier in update item:", item);
+        continue;
+      }
+
+      const oldDoc = await ucdsCollection.findOne(filter);
+      if (!oldDoc) {
+        console.warn("Document not found for update:", filter);
+        continue;
+      }
+
+      // Log only changed fields
+      const changeLogs = [];
+      for (const field in changes) {
+        const oldVal = oldDoc[field] ?? "-";
+        const newVal = changes[field] ?? "-";
+
         if (
-          !item._id ||
-          !ObjectId.isValid(item._id) ||
-          !item.changes ||
-          Object.keys(item.changes).length === 0
+          typeof oldVal === "string" && typeof newVal === "string"
+            ? oldVal.trim() !== newVal.trim()
+            : !deepEqual(oldVal, newVal)
         ) {
-          // Log invalid item but don't stop the whole batch
-          console.warn("Invalid item in bulk update:", item);
-          return null; // Will be filtered out
+          changeLogs.push({
+            field,
+            old_value: oldVal,
+            new_value: newVal,
+          });
         }
-        return {
-          updateOne: {
-            filter: { _id: new ObjectId(item._id) },
-            update: { $set: item.changes },
-          },
-        };
-      })
-      .filter((op) => op !== null); // Remove any null operations from invalid items
+      }
+
+      if (changeLogs.length === 0) {
+        console.warn("No actual changes detected for:", filter);
+        continue;
+      }
+
+      const transactionID = `TRXM-${String(transactionCounter).padStart(
+        4,
+        "0"
+      )}`;
+      transactionCounter++;
+
+      logsToInsert.push({
+        transactionID,
+        transactionDate,
+        actionType: "Modified",
+        ecc_cnc: changes.ecc_cnc || oldDoc.ecc_cnc,
+        userActed: updatedBy,
+        dateActed: transactionDate,
+        changes: changeLogs,
+      });
+
+      bulkOps.push({
+        updateOne: {
+          filter,
+          update: { $set: changes },
+        },
+      });
+    }
 
     if (bulkOps.length === 0) {
       return res
@@ -6191,12 +6256,11 @@ router.put("/ucds-data/bulk-update", logActivity, async (req, res) => {
     }
 
     const result = await ucdsCollection.bulkWrite(bulkOps);
+    if (logsToInsert.length > 0) {
+      await ucdsLogCollection.insertMany(logsToInsert);
+    }
 
-    // TODO: Enhance logging for bulk updates in ucds-log collection if needed.
-    // This would involve iterating through each successful update in `result`
-    // and creating individual log entries, similar to the single update logic.
-
-    res.status(200).json({
+    return res.status(200).json({
       message: `${result.modifiedCount} records updated successfully.`,
       result,
     });
@@ -6222,16 +6286,23 @@ app.put("/api/revert-by-ecc", logActivity, async (req, res) => {
 
     const db = client.db("universe-db");
     const dataCollection = db.collection("ucds-data");
-    const logsCollection = db.collection("ucds-log"); // 👈 updated here
+    const logsCollection = db.collection("ucds-log");
 
-    const filter = { ecc_cnc: ecc_cnc };
+    const filter = { ecc_cnc };
     const originalDoc = await dataCollection.findOne(filter);
 
     if (!originalDoc) {
       return res.status(404).json({ error: "Document not found." });
     }
 
-    // Update the document with the old value
+    const currentValue = originalDoc[field];
+
+    // Only proceed if oldValue is different
+    if (currentValue === oldValue) {
+      return res.status(200).json({ message: "No changes to revert." });
+    }
+
+    // Perform revert update
     const update = {
       $set: {
         [field]: oldValue,
@@ -6243,17 +6314,37 @@ app.put("/api/revert-by-ecc", logActivity, async (req, res) => {
     const result = await dataCollection.updateOne(filter, update);
 
     if (result.modifiedCount === 1) {
-      // Log the revert operation in ucds-log
+      // Generate transaction ID
+      const lastLog = await logsCollection
+        .find()
+        .sort({ transactionID: -1 })
+        .limit(1)
+        .toArray();
+      let newTxnNumber = 1;
+      if (lastLog.length && lastLog[0].transactionID?.startsWith("TRXM-")) {
+        const lastNum = parseInt(
+          lastLog[0].transactionID.replace("TRXM-", ""),
+          10
+        );
+        if (!isNaN(lastNum)) newTxnNumber = lastNum + 1;
+      }
+      const transactionID = `TRXM-${String(newTxnNumber).padStart(4, "0")}`;
+
+      // Log format using changes array
       const revertLog = {
-        transactionID: `REVERT-${Date.now()}`,
-        transactionDate: new Date().toLocaleString(),
+        transactionID,
+        transactionDate: new Date().toLocaleString("en-US", { hour12: true }),
         actionType: "Reverted",
         ecc_cnc,
-        field,
-        oldValue,
-        newValue: originalDoc[field], // what it was before revert
         userActed: updated_by,
-        dateActed: new Date().toLocaleString(),
+        dateActed: new Date().toLocaleString("en-US", { hour12: true }),
+        changes: [
+          {
+            field,
+            old_value: currentValue, // what was there before revert
+            new_value: oldValue, // the value we're reverting to
+          },
+        ],
       };
 
       await logsCollection.insertOne(revertLog);
@@ -7096,12 +7187,19 @@ const requireErmsAuth = (req, res, next) => {
   if (req.session && req.session.erms_credentials) {
     return next();
   }
-  res.status(401).json({ message: "Not authenticated for ERMS. Please log in." });
+  res
+    .status(401)
+    .json({ message: "Not authenticated for ERMS. Please log in." });
 };
 
 // ✅ POST /api/erms/login - Authenticate and create a session for ERMS
 app.post("/api/erms/login", async (req, res) => {
-  const { share, username: rawUsername, password, domain: rawDomain } = req.body;
+  const {
+    share,
+    username: rawUsername,
+    password,
+    domain: rawDomain,
+  } = req.body;
 
   if (!share || !rawUsername || !password) {
     return res.status(400).json({

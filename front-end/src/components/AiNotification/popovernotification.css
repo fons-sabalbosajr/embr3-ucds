@@ -39,3 +39,16 @@
 .icon-hover:hover {
   color: #3d9ef9; /* Change to blue on hover */
 }
+
+.ant-popover-inner-content {
+  padding: 0 !important;
+}
+.warnings-popover {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+  box-sizing: border-box;
+}
+
+.warnings-popover::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}

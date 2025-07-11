@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Table, Tag, Button, Tooltip, Modal } from "antd";
 import { RollbackOutlined, DeleteOutlined } from "@ant-design/icons";
 import moment from "moment";
@@ -7,11 +7,18 @@ import Swal from "sweetalert2";
 import CryptoJS from "crypto-js";
 import "./provtransaction.css";
 
-const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
+const ProvTransaction = ({
+  editedRecord,
+  currentUser,
+  handleReload,
+  reloadEditedRecord,
+}) => {
   const [transactions, setTransactions] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
+  const [initialLog, setInitialLog] = useState(null);
+  const [totalViewItems, setTotalViewItems] = useState(0);
   const [userMap, setUserMap] = useState({});
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [revertRecord, setRevertRecord] = useState(null);
@@ -31,9 +38,12 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
         return;
       }
       try {
-        const response = await axios.get("http://10.14.77.107:8081/api/ucds-log", {
-          params: { ecc_cnc: editedRecord.ecc_cnc },
-        });
+        const response = await axios.get(
+          "http://10.14.77.107:8081/api/ucds-log",
+          {
+            params: { ecc_cnc: editedRecord.ecc_cnc },
+          }
+        );
         const fetchedTransactions = Array.isArray(response.data)
           ? response.data
           : [];
@@ -68,8 +78,17 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
           ).values(),
         ];
         setTransactions(uniqueTransactions);
+        // Find and store the "Initial Data" log entry
+        const initialDataLog = uniqueTransactions.find(
+          (t) => t.actionType === "Initial Data"
+        );
+        setInitialLog(initialDataLog || null); // Set to null if not found
         setUserMap(userMapObj);
         setTotalItems(uniqueTransactions.length);
+        const viewActionCount = uniqueTransactions.filter(
+          (t) => t.actionType === "View"
+        ).length;
+        setTotalViewItems(viewActionCount);
       } catch (error) {
         setTransactions([]);
         setUserMap({});
@@ -81,7 +100,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
 
     const intervalId = setInterval(fetchTransactions, 1000);
     return () => clearInterval(intervalId);
-  }, [editedRecord]);
+  }, [editedRecord, handleReload]);
 
   const handleTableChange = (pagination) => {
     setCurrentPage(pagination.current);
@@ -94,7 +113,6 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
     setRevertRecord(null); // Clear the record after closing
   };
 
-  // Revert logic
   const handleRevertConfirm = async (record) => {
     if (!record || !record.ecc_cnc) {
       Swal.fire({
@@ -104,33 +122,43 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
       });
       return;
     }
-    // Support both oldValue or changes array
+
     let field = "date_approved";
     let oldValue = record.oldValue;
     if (Array.isArray(record.changes) && record.changes.length > 0) {
       field = record.changes[0].field;
-      oldValue = record.changes[0].old_value;
+      oldValue = record.changes[0].new_value; // Revert to previous value
     }
+
     const payload = {
       ecc_cnc: record.ecc_cnc,
       field,
       oldValue,
       updated_by: currentUser?.username,
     };
+
     try {
-      await axios.put("http://10.14.77.107:8081/api/revert-by-ecc", payload);
+      await axios.put(`http://10.14.77.107:8081/api/revert-by-ecc`, payload);
+
       Swal.fire({
         icon: "success",
         title: "Revert Successful",
         text: "The changes have been reverted successfully.",
+        confirmButtonText: "OK",
       });
+
+      // 🔁 Refresh both main record and table log
       if (typeof handleReload === "function") handleReload();
+      if (typeof reloadEditedRecord === "function") {
+        await reloadEditedRecord(record.ecc_cnc); // ← reload modal data
+      }
     } catch (error) {
       console.error("Revert error:", error);
       Swal.fire({
         icon: "error",
         title: "Revert Failed",
         text: "Something went wrong while reverting the data.",
+        confirmButtonText: "OK",
       });
     }
   };
@@ -232,7 +260,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
       align: "center",
     },
     {
-      title: <span className="table-header">Old Value</span>,
+      title: <span className="table-header">Old Data</span>,
       dataIndex: "oldValue",
       key: "oldValue",
       align: "center",
@@ -295,7 +323,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
       },
     },
     {
-      title: <span className="table-header">New Value</span>,
+      title: <span className="table-header">New Data</span>,
       dataIndex: "newValue",
       key: "newValue",
       align: "center",
@@ -417,7 +445,6 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
     }
   );
 
-  // Conditionally add the Actions column if the user can manage data
   if (canManageData) {
     columns.push({
       title: <span className="table-header">Actions</span>,
@@ -435,18 +462,24 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
                 size="small"
                 style={{ marginRight: 20 }}
                 onClick={async () => {
+                  const field = record.changes?.[0]?.field || "-";
+                  const oldValue = record.changes?.[0]?.old_value ?? "-";
+                  const newValue = record.changes?.[0]?.new_value ?? "-";
+
                   const result = await Swal.fire({
                     title: "Revert Changes?",
                     html: `
-                    <div style='text-align:left'>
+                    <div style='text-align:left; font-size: 14px;'>
                       <b>Transaction ID:</b> ${record.transactionID}<br/>
+                      <b>Field:</b> ${field}<br/>
                       <b>User Acted:</b> ${
                         userMap[record.userActed]?.name || "N/A"
                       }<br/>
                       <b>Date Acted:</b> ${moment(record.dateActed).format(
                         "MM/DD/yyyy hh:mm A"
                       )}<br/>
-                      <b>Old Value:</b> ${record.oldValue}
+                      <b>Old Value:</b> ${oldValue}<br/>
+                      <b>New Value:</b> ${newValue}
                     </div>
                   `,
                     icon: "warning",
@@ -457,6 +490,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
                     cancelButtonText: "Cancel",
                     width: 600,
                   });
+
                   if (result.isConfirmed) {
                     await handleRevertConfirm(record);
                   }
@@ -464,6 +498,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
               />
             </Tooltip>
           )}
+
           {/* Delete Button */}
           {record.actionType !== "Initial Data" && (
             <Tooltip title="Delete Transaction">
@@ -532,13 +567,18 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
                 <strong>Date Acted:</strong>{" "}
                 {moment(revertRecord.dateActed).format("MM/DD/yyyy hh:mm A")}
               </p>
+              <p className="revert-paragraph">
+                <strong>Field:</strong>{" "}
+                {revertRecord.changes?.[0]?.field ?? "-"}
+              </p>
             </div>
+
             <Table
               dataSource={[
                 {
                   key: "1",
-                  oldValue: revertRecord.oldValue,
-                  newValue: revertRecord.newValue,
+                  oldValue: revertRecord.changes?.[0]?.old_value ?? "-",
+                  newValue: revertRecord.changes?.[0]?.new_value ?? "-",
                 },
               ]}
               pagination={false}
@@ -550,10 +590,16 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
                   width: "200px",
                   align: "center",
                   render: (newValue) => {
-                    // Split the newValue by new lines and filter out ECC values
-                    const filteredValues = newValue
-                      .split("\n")
-                      .filter((val) => !val.includes("ECC")); // Adjust the filter condition as needed
+                    const safeSplit =
+                      typeof newValue === "string"
+                        ? newValue.split("\n")
+                        : [String(newValue)];
+                    const filteredValues = safeSplit.filter(
+                      (val) =>
+                        val &&
+                        val.trim() !== "" &&
+                        val.trim().toLowerCase() !== "undefined"
+                    );
                     return (
                       <div>
                         {filteredValues.map((val, index) => (
@@ -569,19 +615,28 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload }) => {
                   width: "200px",
                   align: "center",
                   render: (oldValue) => {
-                    if (!oldValue) return null; // Handle undefined or null oldValue
-                    // Split the oldValue by new lines
-                    const filteredValues = oldValue
-                      .split("\n")
-                      .filter((val) => val !== "undefined" && val !== "0");
-                    return filteredValues.map((val, index) => (
-                      <p key={index}>{val}</p>
-                    ));
+                    const safeSplit =
+                      typeof oldValue === "string"
+                        ? oldValue.split("\n")
+                        : [String(oldValue)];
+                    const filteredValues = safeSplit.filter(
+                      (val) =>
+                        val &&
+                        val.trim() !== "" &&
+                        val.trim().toLowerCase() !== "undefined"
+                    );
+                    return (
+                      <div>
+                        {filteredValues.map((val, index) => (
+                          <p key={index}>{val}</p>
+                        ))}
+                      </div>
+                    );
                   },
                 },
               ]}
               size="small"
-              style={{ fontSize: "14px" }} // Reduce the font size of the values table
+              style={{ fontSize: "14px" }}
             />
           </div>
         ) : (

@@ -1,0 +1,27 @@
+.autocomplete-option {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+  }
+  
+  .autocomplete-count {
+    color: #325eb6;
+  }
+
+  .autocomplete-keyword {
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 100%;
+    font-weight: 300;
+    font-size: 10px;
+  }
+
+  .loading-text{
+    font-size: 10px;
+    gap: 5px; 
+  }
+
+  .duplicate-details{
+    font-size: 11px;
+    gap: 5px;
+  }

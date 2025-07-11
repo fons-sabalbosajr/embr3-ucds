@@ -51,21 +51,30 @@ const NotificationsPopover = ({
   const [isDuplicateModalVisible, setIsDuplicateModalVisible] = useState(false);
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
   // Granular state for internal processing and processed data
-  const [isProcessingNotifications, setIsProcessingNotifications] = useState(false);
+  const [isProcessingNotifications, setIsProcessingNotifications] =
+    useState(false);
   const [isProcessingWarnings, setIsProcessingWarnings] = useState(false);
-  const [processedGroupedNotifications, setProcessedGroupedNotifications] = useState({});
-  const [processedComputedWarnings, setProcessedComputedWarnings] = useState([]);
-  const [refreshTrigger, setRefreshTrigger] = useState('initial'); // 'initial', 'archive'
+  const [processedGroupedNotifications, setProcessedGroupedNotifications] =
+    useState({});
+  const [processedComputedWarnings, setProcessedComputedWarnings] = useState(
+    []
+  );
+  const [refreshTrigger, setRefreshTrigger] = useState("initial"); // 'initial', 'archive'
 
   // Determine which province prefixes the user has "readWrite" access to
   const allowedReadWriteProvincesPrefixes = useMemo(() => {
     if (!currentUser?.provinceStringPermissions) return [];
     const prefixes = [];
-    for (const [provinceNameKey, permission] of Object.entries(currentUser.provinceStringPermissions)) {
-       if (permission === 'readWrite') {
+    for (const [provinceNameKey, permission] of Object.entries(
+      currentUser.provinceStringPermissions
+    )) {
+      if (permission === "readWrite") {
         for (const [prefix, name] of Object.entries(prefixToProvince)) {
           // Normalize both names for comparison (e.g., "Nueva Ecija" vs "nuevaEcija")
-          if (name.toLowerCase().replace(/ /g, '').replace(/_/g, '') === provinceNameKey.toLowerCase()) {
+          if (
+            name.toLowerCase().replace(/ /g, "").replace(/_/g, "") ===
+            provinceNameKey.toLowerCase()
+          ) {
             prefixes.push(prefix);
             break;
           }
@@ -76,24 +85,25 @@ const NotificationsPopover = ({
   }, [currentUser?.provinceStringPermissions, prefixToProvince]);
 
   useEffect(() => {
-    if (isLoading) { // If parent is loading, don't start internal processing
+    if (isLoading) {
+      // If parent is loading, don't start internal processing
       setIsProcessingNotifications(false);
       setIsProcessingWarnings(false);
       setProcessedGroupedNotifications({}); // Clear processed data
-      setProcessedComputedWarnings([]);   // Clear processed data
-      setRefreshTrigger('initial'); // Reset trigger
+      setProcessedComputedWarnings([]); // Clear processed data
+      setRefreshTrigger("initial"); // Reset trigger
       return;
     }
 
     if (notifications && notifications.length > 0) {
-      if (refreshTrigger === 'initial') {
+      if (refreshTrigger === "initial") {
         setIsProcessingNotifications(true);
       }
       setIsProcessingWarnings(true); // Always set warnings to processing initially
 
       // Defer heavy processing to allow UI to update (e.g., show "Processing..." spinner)
       const timerId = setTimeout(() => {
-        if (refreshTrigger === 'initial') {
+        if (refreshTrigger === "initial") {
           // Process Notifications (Missing Data Issues)
           const localProvinceFilteredDataIssues = notifications
             .filter((notification) => typeof notification === "string")
@@ -103,18 +113,23 @@ const NotificationsPopover = ({
               return allowedReadWriteProvincesPrefixes.includes(idPrefix);
             });
 
-          const localGroupedNotifications = localProvinceFilteredDataIssues.reduce((acc, notificationString) => {
-            const parts = notificationString.split(" - ");
-            const id_no = parts[0];
-            const issue = parts[1];
-            const idPrefix = id_no.split("-")[0]?.toUpperCase();
-            const province = prefixToProvince[idPrefix] || "Unknown Province";
-            if (!acc[id_no]) {
-              acc[id_no] = { province, issues: [] };
-            }
-            acc[id_no].issues.push(issue);
-            return acc;
-          }, {});
+          const localGroupedNotifications =
+            localProvinceFilteredDataIssues.reduce(
+              (acc, notificationString) => {
+                const parts = notificationString.split(" - ");
+                const id_no = parts[0];
+                const issue = parts[1];
+                const idPrefix = id_no.split("-")[0]?.toUpperCase();
+                const province =
+                  prefixToProvince[idPrefix] || "Unknown Province";
+                if (!acc[id_no]) {
+                  acc[id_no] = { province, issues: [] };
+                }
+                acc[id_no].issues.push(issue);
+                return acc;
+              },
+              {}
+            );
           setProcessedGroupedNotifications(localGroupedNotifications);
           setIsProcessingNotifications(false); // Notifications processing done
         }
@@ -123,9 +138,11 @@ const NotificationsPopover = ({
         // This part always runs if notifications change, as duplicates might have been resolved
         // or new ones appeared.
         const localComputedWarnings = notifications
-          .filter((n) => typeof n === "object" && n.ecc_cnc && Array.isArray(n.idNos))
-          .filter(dup => {
-            return dup.idNos.some(idNo => {
+          .filter(
+            (n) => typeof n === "object" && n.ecc_cnc && Array.isArray(n.idNos)
+          )
+          .filter((dup) => {
+            return dup.idNos.some((idNo) => {
               const idPrefix = String(idNo).split("-")[0]?.toUpperCase();
               return allowedReadWriteProvincesPrefixes.includes(idPrefix);
             });
@@ -138,8 +155,8 @@ const NotificationsPopover = ({
         setProcessedComputedWarnings(localComputedWarnings);
         setIsProcessingWarnings(false); // Warnings processing done
 
-        if (refreshTrigger === 'archive') {
-          setRefreshTrigger('initial'); // Reset trigger after archive-specific processing
+        if (refreshTrigger === "archive") {
+          setRefreshTrigger("initial"); // Reset trigger after archive-specific processing
         }
       }, 0); // setTimeout with 0ms delay
 
@@ -150,17 +167,29 @@ const NotificationsPopover = ({
       setProcessedComputedWarnings([]);
       setIsProcessingNotifications(false);
       setIsProcessingWarnings(false);
-      setRefreshTrigger('initial'); // Reset trigger
+      setRefreshTrigger("initial"); // Reset trigger
     }
-  }, [notifications, isLoading, allowedReadWriteProvincesPrefixes, refreshTrigger, prefixToProvince]);
+  }, [
+    notifications,
+    isLoading,
+    allowedReadWriteProvincesPrefixes,
+    refreshTrigger,
+    prefixToProvince,
+  ]);
 
+  const groupedKeys = useMemo(
+    () => Object.keys(processedGroupedNotifications),
+    [processedGroupedNotifications]
+  );
 
-  const groupedKeys = useMemo(() => Object.keys(processedGroupedNotifications), [processedGroupedNotifications]);
-
-  const paginatedKeys = useMemo(() => groupedKeys.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  ), [groupedKeys, currentPage, itemsPerPage]);
+  const paginatedKeys = useMemo(
+    () =>
+      groupedKeys.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      ),
+    [groupedKeys, currentPage, itemsPerPage]
+  );
 
   const paginatedWarnings = useMemo(() => {
     const start = (warningsPage - 1) * itemsPerPage;
@@ -209,16 +238,23 @@ const NotificationsPopover = ({
   const handleDuplicateResolved = async (resolvedId) => {
     setIsDuplicateModalVisible(false);
     setSelectedDuplicate(null);
-    setRefreshTrigger('archive'); // Set trigger before calling refresh
+    setRefreshTrigger("archive"); // Set trigger before calling refresh
     if (refreshNotifications) {
       await refreshNotifications(); // Trigger refetch in parent
     }
   };
 
+  const screenHeight = window.innerHeight;
+  const screenWidth = window.innerWidth;
+
+  // Set dynamic limits based on screen resolution
+  const maxPopoverHeight = Math.min(440, screenHeight * 0.5); // Use 50% of screen height or 440px max
+  // const popoverWidth = Math.min(360, screenWidth * 0.3); // This is no longer needed.
+  
   const notificationsContent = (
     <div style={{ maxHeight: "700px", overflowY: "auto" }}>
       {isLoading || isProcessingNotifications ? (
-        <div style={{ textAlign: 'center', padding: '20px' }}>
+        <div style={{ textAlign: "center", padding: "20px" }}>
           <Spin tip={isLoading ? "Fetching data..." : "Processing issues..."} />
         </div>
       ) : (
@@ -245,7 +281,11 @@ const NotificationsPopover = ({
                 : "No IDs for repair"}
             </span>
             <div
-              style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
+              style={{
+                textAlign: "right",
+                marginTop: "1px",
+                marginRight: "10px",
+              }}
             >
               <Button
                 onClick={goToPreviousPage}
@@ -283,7 +323,8 @@ const NotificationsPopover = ({
               .map((key) => {
                 return {
                   id_no: key,
-                  province: processedGroupedNotifications[key]?.province || "Unknown",
+                  province:
+                    processedGroupedNotifications[key]?.province || "Unknown",
                   issues: processedGroupedNotifications[key]?.issues || [],
                 };
               })
@@ -298,9 +339,7 @@ const NotificationsPopover = ({
                   ? numA - numB
                   : prefixA.localeCompare(prefixB);
               })}
-            renderItem={(
-              { id_no, province, issues }
-            ) => (
+            renderItem={({ id_no, province, issues }) => (
               <div key={id_no}>
                 <Collapse
                   bordered={false}
@@ -371,10 +410,22 @@ const NotificationsPopover = ({
   );
 
   const warningsContent = (
-    <div style={{ maxHeight: "700px", overflowY: "auto" }}>
+    <div
+      className="warnings-popover"
+      style={{
+        maxHeight: `${maxPopoverHeight}px`,
+        overflowY: "auto",
+        padding: "10px",
+        backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",
+        color: theme === "dark" ? "#e0e0e0" : "#333333",
+        borderRadius: "8px",
+      }}
+    >
       {isLoading || isProcessingWarnings ? (
-         <div style={{ textAlign: 'center', padding: '20px' }}>
-          <Spin tip={isLoading ? "Fetching data..." : "Processing warnings..."} />
+        <div style={{ textAlign: "center", padding: "20px" }}>
+          <Spin
+            tip={isLoading ? "Fetching data..." : "Processing warnings..."}
+          />
         </div>
       ) : (
         <>
@@ -400,7 +451,11 @@ const NotificationsPopover = ({
                 : "No ECC/CNC for repair"}
             </span>
             <div
-              style={{ textAlign: "right", marginTop: "1px", marginRight: "10px" }}
+              style={{
+                textAlign: "right",
+                marginTop: "1px",
+                marginRight: "10px",
+              }}
             >
               <Button
                 onClick={() =>
@@ -422,12 +477,16 @@ const NotificationsPopover = ({
               <Button
                 onClick={() =>
                   setWarningsPage((prevPage) =>
-                    warningsPage * itemsPerPage < processedComputedWarnings.length
+                    warningsPage * itemsPerPage <
+                    processedComputedWarnings.length
                       ? prevPage + 1
                       : prevPage
                   )
                 }
-                disabled={warningsPage * itemsPerPage >= processedComputedWarnings.length}
+                disabled={
+                  warningsPage * itemsPerPage >=
+                  processedComputedWarnings.length
+                }
                 style={{
                   padding: "0 6px",
                   fontSize: "10px",
@@ -521,7 +580,7 @@ const NotificationsPopover = ({
   const messagesContent = (
     <div style={{ maxHeight: "700px", overflowY: "auto" }}>
       {isLoading ? ( // Messages don't have separate client-side processing for now
-        <div style={{ textAlign: 'center', padding: '20px' }}>
+        <div style={{ textAlign: "center", padding: "20px" }}>
           <Spin tip="Fetching data..." />
         </div>
       ) : (
@@ -533,7 +592,7 @@ const NotificationsPopover = ({
   );
 
   const popoverContent = (
-    <Tabs defaultActiveKey="1" size="small" style={{width: '330px'}}>
+    <Tabs defaultActiveKey="1" size="small" style={{ width: "300px" }}>
       <TabPane tab="Notifications" key="1">
         {/* {notificationsContent} */}
       </TabPane>
@@ -549,61 +608,52 @@ const NotificationsPopover = ({
   return (
     <>
       <Popover
-        content={popoverContent} // The content of the popover
-        trigger="click" // Trigger action
-        placement="bottomRight" // Placement of the popover
+        content={popoverContent}
+        trigger="click"
+        placement="bottomRight"
+        overlayStyle={{ padding: 0 }}
       >
-        <span> {/* Wrap Badge with a span to resolve findDOMNode warning */}
-          <Badge
-            count={
-              isLoading || isProcessingNotifications || isProcessingWarnings ? ( // Reflect all loading states
-                <LoadingOutlined
-                  style={{
-                    fontSize: "8px",
-                    color: "white",
-                    backgroundColor: "green",
-                    borderRadius: "50%",
-                    padding: "5px",
-                  }}
-                />
-              ) : (
-                groupedKeys.length + processedComputedWarnings.length // Use processed data for count
-              )
-            }
-            offset={[1, 0]}
-            size="small"
-            style={{
-              marginRight: "15px",
-              fontSize: "8px",
-              padding: "1px",
-              backgroundColor: isLoading || isProcessingNotifications || isProcessingWarnings // Reflect all for background
-                ? theme === "dark"
-                  ? "#444444"
-                  : "#d9d9d9"
-                : groupedKeys.length + // Use processed data for color logic
-                    processedComputedWarnings.length >
-                  0
-                ? "green"
-                : "#d9d9d9",
-            }}
-          >
-            {/* Explicitly wrap BellOutlined in a span.
-                While AntD icons usually forward refs, this ensures Badge's direct child
-                is a DOM element, which can help prevent findDOMNode warnings if Badge
-                is the source. */}
-            <span>
-              <BellOutlined
-                className={`notification-icon ${
-                  theme === "dark" ? "dark-theme" : "light-theme"
-                }`}
+        <Badge
+          count={
+            isLoading || isProcessingNotifications || isProcessingWarnings ? (
+              <LoadingOutlined
                 style={{
-                  color: theme === "dark" ? "#e0e0e0" : "#333333",
-                  backgroundColor: "transparent",
+                  fontSize: "8px",
+                  color: "white",
+                  backgroundColor: "green",
+                  borderRadius: "50%",
+                  padding: "5px",
+                  marginRight: "10px",
                 }}
               />
-            </span>
-          </Badge>
-        </span>
+            ) : (
+              groupedKeys.length + processedComputedWarnings.length
+            )
+          }
+          offset={[0, 4]}
+          size="small"
+          style={{
+            fontSize: "8px",
+            padding: "1px",
+            marginRight: "10px",
+            backgroundColor:
+              isLoading || isProcessingNotifications || isProcessingWarnings
+                ? theme === "dark"
+                  ? "#444"
+                  : "#d9d9d9"
+                : groupedKeys.length + processedComputedWarnings.length > 0
+                ? "green"
+                : "#d9d9d9",
+          }}
+        >
+          <BellOutlined
+            style={{
+              fontSize: "18px",
+              verticalAlign: "middle",
+              marginRight: "10px",
+            }}
+          />
+        </Badge>
       </Popover>
 
       <Modal

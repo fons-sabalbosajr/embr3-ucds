@@ -78,7 +78,6 @@
 
 /* DARK THEME hover for tiles */
 .help-container.dark .help-tiles-container .help-tile:hover {
- 
   background-color: #003a8c; /* darker blue to reduce harshness */
   color: #e6f7ff; /* light blue text */
 }
@@ -146,7 +145,7 @@
   transition: box-shadow 0.2s ease, background-color 0.25s ease,
     color 0.25s ease;
   user-select: none;
-  border: 1px solid #3d3d3d ;
+  border: 1px solid #3d3d3d;
 }
 
 .help-tile:hover .help-tile-icon,
@@ -168,4 +167,89 @@
 
 .help-tile-desc {
   font-size: 13px;
+}
+
+@media (max-width: 1080px) {
+  .help-container {
+    max-width: 600px;
+    width: 80vw;
+    padding: 2px 1px;
+  }
+  .help-welcome-card {
+    padding: 6px 8px;
+    margin-bottom: 8px;
+  }
+  .help-welcome-card h2 {
+    font-size: 1.1rem;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .help-search-box input,
+  .help-search-box button {
+    font-size: 13px;
+    padding: 4px 6px;
+  }
+  .help-text-section h3 {
+    font-size: 1rem;
+    text-align: center;
+  }
+  .help-text-section small {
+    font-size: 12px;
+    text-align: center;
+  }
+  .help-tiles-container {
+    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .help-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px;
+  }
+  .help-tile-icon {
+    font-size: 15px;
+  }
+  .help-tile-title {
+    margin-bottom: 4px;
+    min-height: 18px;
+    display: block;
+    text-align: center;
+    font-size: 14px;
+  }
+  .help-tile-desc {
+    font-size: 10px;
+    width: 100%;
+    text-align: center;
+    min-height: 16px;
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .help-container {
+    max-width: 100vw;
+    padding: 0;
+  }
+  .help-welcome-card {
+    padding: 4px 2px;
+  }
+  .help-tiles-container {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .help-tile {
+    padding: 3px;
+  }
+  .help-tile-icon {
+    font-size: 22px;
+  }
+  .help-tile-title {
+    font-size: 12px;
+  }
+  .help-tile-desc {
+    font-size: 10px;
+  }
 }

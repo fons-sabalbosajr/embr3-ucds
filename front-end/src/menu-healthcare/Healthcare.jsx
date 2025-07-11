@@ -29,24 +29,26 @@ import {
   InfoCircleOutlined,
   EditOutlined,
   ClockCircleFilled,
+  TagsOutlined,
+  ExclamationCircleOutlined,
+  ExceptionOutlined,
 } from "@ant-design/icons";
 import Highlighter from "react-highlight-words";
-import axios from "axios";
 import "./healthcare.css";
 import Swal from "sweetalert2";
 import HealthcareModal from "./HealthcareModal";
 import { io } from "socket.io-client"; // Added io
+import { fetchHealthcareData } from "../api/healthcareService";
+import AddHealthcareModal from "./actions/AddHealthcareModal";
 
 const Healthcare = ({ theme, currentUser, data }) => {
   const [loading, setLoading] = useState(false);
-  const [buttonColor, setButtonColor] = useState("primary");
   const [searchText, setSearchText] = useState("");
   const [searchedColumn, setSearchedColumn] = useState("");
   const [inputVisible, setInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [filteredData, setFilteredData] = useState([]);
   const [tags, setTags] = useState([]); // State to store tags
-  const [initialState, setInitialState] = useState(new Map());
   const [industryOptions, setIndustryOptions] = useState([]);
   const [filteredCount, setFilteredCount] = useState(0);
   const searchInput = useRef(null);
@@ -61,41 +63,8 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const [progress, setProgress] = useState(0);
   const [healthcareViewers, setHealthcareViewers] = useState([]); // Added state for viewers
   const socketRef = useRef(null); // Added socket ref
-
+  const [addModalVisible, setAddModalVisible] = useState(false);
   const canViewDataHistory = currentUser?.permissions?.[3]; // For Avatar.Group visibility
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
-          method: "GET",
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText);
-        }
-
-        const result = await response.json();
-        const sortedResult = sortByIdNo(result);
-        setFilteredData(sortedResult);
-        setFilteredCount(sortedResult.length);
-
-        if (sortedResult.length > 0) {
-          setCurrentRecord(sortedResult[0]);
-          setOriginalRecord(sortedResult[0]);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
 
   useEffect(() => {
     if (filteredData.length > 0) {
@@ -129,17 +98,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
-          method: "GET",
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText);
-        }
-
-        const result = await response.json();
+        const result = await fetchHealthcareData();
         const sortedResult = sortByIdNo(result);
         setFilteredData(sortedResult);
         setFilteredCount(sortedResult.length);
@@ -162,7 +121,9 @@ const Healthcare = ({ theme, currentUser, data }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", { withCredentials: true });
+      socketRef.current = io("http://10.14.77.107:8081", {
+        withCredentials: true,
+      });
     }
     const socket = socketRef.current;
 
@@ -210,16 +171,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const handleReload = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
-        method: "GET",
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
-      }
-      const result = await response.json();
+      const result = await fetchHealthcareData();
       const sortedResult = sortByIdNo(result);
       setFilteredData(sortedResult);
       setFilteredCount(sortedResult.length);
@@ -446,217 +398,306 @@ const Healthcare = ({ theme, currentUser, data }) => {
       };
       return permitValues[value];
     },
-    render: (text, record) => (
-      <div style={{ position: "relative" }}>
-        {/* ECC or CNC */}
-        {record.ecc_cnc &&
-          record.ecc_cnc !== "no records found per OPMS" &&
-          record.ecc_value !== "n/a" && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "10px" }}>
-                  <div>ECC Information</div>
-                  <div>Reference No.: {record.ecc_cnc}</div>
-                  <div>Date Approved: {record.date_approved}</div>
-                </div>
-              }
-              color={record.ecc_cnc.includes("ECC") ? "#083f50" : "#8a5200"}
-            >
-              <span
-                className={
-                  record.ecc_cnc.includes("ECC")
-                    ? "custom-button-cyan"
-                    : "custom-button-yellow"
+    // Inside getPermitClearancesFilterProps render:
+    render: (text, record) => {
+      // Helper to check expiration
+      const isExpired = (dateStr) => {
+        if (!dateStr || dateStr === "Not Applicable" || dateStr === "n/a")
+          return false;
+        const [month, day, year] = dateStr
+          .split(/[\/\-]/)
+          .map((v) => parseInt(v, 10));
+        let d;
+        if (year > 1900 && year < 2100 && month && day) {
+          d = new Date(year, month - 1, day);
+        } else if (month > 1900 && month < 2100 && year && day) {
+          d = new Date(month, day - 1, year);
+        } else {
+          d = new Date(dateStr);
+        }
+        if (isNaN(d.getTime())) return false;
+        const today = new Date();
+        d.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        return d < today;
+      };
+
+      // Helper to get background color if expired
+      const expiredBg = { background: "maroon", borderRadius: 4 }; // Ant Design error bg
+
+      return (
+        <div
+          style={{
+            position: "relative",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 2,
+          }}
+        >
+          {/* ECC or CNC */}
+          {record.ecc_cnc &&
+            record.ecc_cnc !== "no records found per OPMS" &&
+            record.ecc_value !== "n/a" && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>
+                    <div>ECC Information</div>
+                    <div>Reference No.: {record.ecc_cnc}</div>
+                    <div>Date Approved: {record.date_approved}</div>
+                  </div>
                 }
-                style={{ position: "relative" }}
+                color={record.ecc_cnc.includes("ECC") ? "#083f50" : "#8a5200"}
               >
-                {record.ecc_cnc.includes("ECC") ? "ECC" : "CNC"}
-                {/* Add Icon for Ongoing Application if "App", "Application", etc. is in the value */}
-                {(record.ecc_cnc.includes("App") ||
-                  record.ecc_cnc.includes("Application") ||
-                  record.ecc_cnc.includes("Application No.")) && (
-                  <ClockCircleFilled
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: -6,
-                      fontSize: "12px",
-                      color: "#3B6790",
-                      backgroundColor: "#ffffff", // White background
-                      borderRadius: "50%", // Make it circular
-                      padding: "1px",
-                    }}
-                  />
-                )}
-              </span>
-            </Tooltip>
-          )}
+                <span
+                  className={
+                    record.ecc_cnc.includes("ECC")
+                      ? "custom-button-cyan"
+                      : "custom-button-yellow"
+                  }
+                  style={{ position: "relative" }}
+                >
+                  {record.ecc_cnc.includes("ECC") ? "ECC" : "CNC"}
+                  {(record.ecc_cnc.includes("App") ||
+                    record.ecc_cnc.includes("Application") ||
+                    record.ecc_cnc.includes("Application No.")) && (
+                    <ClockCircleFilled
+                      style={{
+                        position: "absolute",
+                        top: -8,
+                        right: -6,
+                        fontSize: "12px",
+                        color: "#3B6790",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "50%",
+                        padding: "1px",
+                      }}
+                    />
+                  )}
+                </span>
+              </Tooltip>
+            )}
 
-        {/* PTO */}
-        {record.pto_code &&
-          record.pto_code !== "no records found per OPMS" &&
-          record.pto_code !== "n/a" && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "10px" }}>
-                  <div>PTO Information</div>
-                  <div>Code: {record.pto_code}</div>
-                  <div>Date Issued: {record.pto_issued}</div>
-                  <div>Date of Expiration: {record.pto_expiration}</div>
-                </div>
-              }
-              color="#321838"
-            >
-              <span
-                className="custom-button-blue"
-                style={{ position: "relative" }}
-              >
-                PTO
-                {/* Add Icon for Ongoing Application if "App", "Application", etc. is in the value */}
-                {(record.pto_code.includes("App") ||
-                  record.pto_code.includes("Application") ||
-                  record.pto_code.includes("Application No.")) && (
-                  <ClockCircleFilled
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: -6,
-                      fontSize: "12px",
-                      color: "#3B6790",
-                      backgroundColor: "#ffffff", // White background
-                      borderRadius: "50%", // Make it circular
-                      padding: "1px",
-                    }}
-                  />
-                )}
-              </span>
-            </Tooltip>
-          )}
+          {/* PTO */}
+          {record.pto_code &&
+            record.pto_code !== "no records found per OPMS" &&
+            record.pto_code !== "n/a" && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>
+                    <div>PTO Information</div>
+                    <div>Code: {record.pto_code}</div>
 
-        {/* WWDP */}
-        {record.wwdp_code &&
-          record.wwdp_code !== "no records found per OPMS" &&
-          record.wwdp_code !== "n/a" && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "10px" }}>
-                  <div>WWDP Information</div>
-                  <div>Code: {record.wwdp_code}</div>
-                  <div>Date Issued: {record.wwdp_issued}</div>
-                  <div>Date of Expiration: {record.wwdp_expiration}</div>
-                </div>
-              }
-              color="#873c34"
-            >
-              <span
-                className="custom-button-orange"
-                style={{ position: "relative" }}
+                    {isExpired(record.pto_expiration) && (
+                      <div className="custom-button-red">
+                        <span>
+                          Date Issued: {record.pto_issued} <br />
+                        </span>
+                        <span>Date of Expiration: {record.pto_expiration}</span>
+                      </div>
+                    )}
+                  </div>
+                }
+                color="#321838"
               >
-                WWDP
-                {/* Add Icon for Ongoing Application if "App", "Application", etc. is in the value */}
-                {(record.wwdp_code.includes("App") ||
-                  record.wwdp_code.includes("Application") ||
-                  record.wwdp_code.includes("Application No.")) && (
-                  <ClockCircleFilled
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: -6,
-                      fontSize: "12px",
-                      color: "#3B6790",
-                      backgroundColor: "#ffffff", // White background
-                      borderRadius: "50%", // Make it circular
-                      padding: "1px",
-                    }}
-                  />
-                )}
-              </span>
-            </Tooltip>
-          )}
+                <span
+                  className="custom-button-blue"
+                  style={{
+                    position: "relative",
+                    ...(isExpired(record.pto_expiration) ? expiredBg : {}),
+                  }}
+                >
+                  PTO
+                  {(record.pto_code.includes("App") ||
+                    record.pto_code.includes("Application") ||
+                    record.pto_code.includes("Application No.")) && (
+                    <ClockCircleFilled
+                      style={{
+                        position: "absolute",
+                        top: -8,
+                        right: -6,
+                        fontSize: "12px",
+                        color: "#3B6790",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "50%",
+                        padding: "1px",
+                      }}
+                    />
+                  )}
+                  {isExpired(record.pto_expiration) && (
+                    <ExclamationCircleOutlined
+                      style={{
+                        color: "white",
+                        marginLeft: 4,
+                        fontSize: 14,
+                        verticalAlign: "middle",
+                      }}
+                      title="Expired"
+                    />
+                  )}
+                </span>
+              </Tooltip>
+            )}
 
-        {/* HAZWASTE */}
-        {record.haz_id &&
-          record.haz_id !== "no records found per OPMS" &&
-          record.haz_id !== "n/a" && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "10px" }}>
-                  <div>HAZWASTE Information</div>
-                  <div>Code: {record.haz_id}</div>
-                  <div>Date Issued: {record.haz_issued}</div>
-                </div>
-              }
-              color="#2d4115"
-            >
-              <span
-                className="custom-button-skyblue"
-                style={{ position: "relative" }}
-              >
-                HWG ID
-                {/* Add Icon for Ongoing Application if "App", "Application", etc. is in the value */}
-                {String(record.haz_id).includes("App") ||
-                String(record.haz_id).includes("Application") ||
-                String(record.haz_id).includes("Application No.") ? (
-                  <ClockCircleFilled
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: -6,
-                      fontSize: "12px",
-                      color: "#3B6790",
-                      backgroundColor: "#ffffff", // White background
-                      borderRadius: "50%", // Make it circular
-                      padding: "1px",
-                    }}
-                  />
-                ) : null}
-              </span>
-            </Tooltip>
-          )}
+          {/* WWDP */}
+          {record.wwdp_code &&
+            record.wwdp_code !== "no records found per OPMS" &&
+            record.wwdp_code !== "n/a" && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>
+                    <div>WWDP Information</div>
+                    <div>Code: {record.wwdp_code}</div>
 
-        {/* PCO */}
-        {record.pco_np &&
-          record.pco_np !== "no records found per OPMS" &&
-          record.pco_np !== "n/a" && (
-            <Tooltip
-              title={
-                <div style={{ fontSize: "10px" }}>
-                  <div>PCO Information</div>
-                  <div>Code: {record.pco_np}</div>
-                  <div>Name: {record.pco_name}</div>
-                  <div>Tel. No: {record.pco_tel_no}</div>
-                  <div>PCO Validity: {record.pco_validity}</div>
-                </div>
-              }
-              color="#181a19"
-            >
-              <span
-                className="custom-button-stone"
-                style={{ position: "relative" }}
+                    {isExpired(record.wwdp_expiration) && (
+                      <div className="custom-button-red">
+                        <div>Date Issued: {record.wwdp_issued}</div>
+                        <div>Date of Expiration: {record.wwdp_expiration}</div>
+                      </div>
+                    )}
+                  </div>
+                }
+                color="#873c34"
               >
-                PCO
-                {/* Add Icon for Ongoing Application if "App", "Application", etc. is in the value */}
-                {(record.pco_np.includes("App") ||
-                  record.pco_np.includes("Application") ||
-                  record.pco_np.includes("Application No.")) && (
-                  <ClockCircleFilled
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: -6,
-                      fontSize: "12px",
-                      color: "#3B6790",
-                      backgroundColor: "#ffffff", // White background
-                      borderRadius: "50%", // Make it circular
-                      padding: "1px",
-                    }}
-                  />
-                )}
-              </span>
-            </Tooltip>
-          )}
-      </div>
-    ),
+                <span
+                  className="custom-button-orange"
+                  style={{
+                    position: "relative",
+                    ...(isExpired(record.wwdp_expiration) ? expiredBg : {}),
+                  }}
+                >
+                  WWDP
+                  {(record.wwdp_code.includes("App") ||
+                    record.wwdp_code.includes("Application") ||
+                    record.wwdp_code.includes("Application No.")) && (
+                    <ClockCircleFilled
+                      style={{
+                        position: "absolute",
+                        top: -8,
+                        right: -6,
+                        fontSize: "12px",
+                        color: "#3B6790",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "50%",
+                        padding: "1px",
+                      }}
+                    />
+                  )}
+                  {isExpired(record.wwdp_expiration) && (
+                    <ExclamationCircleOutlined
+                      style={{
+                        color: "white",
+                        marginLeft: 4,
+                        fontSize: 14,
+                        verticalAlign: "middle",
+                      }}
+                      title="Expired"
+                    />
+                  )}
+                </span>
+              </Tooltip>
+            )}
+
+          {/* HAZWASTE */}
+          {record.haz_id &&
+            record.haz_id !== "no records found per OPMS" &&
+            record.haz_id !== "n/a" && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>
+                    <div>HAZWASTE Information</div>
+                    <div>Code: {record.haz_id}</div>
+                    <div>Date Issued: {record.haz_issued}</div>
+                  </div>
+                }
+                color="#2d4115"
+              >
+                <span
+                  className="custom-button-skyblue"
+                  style={{ position: "relative" }}
+                >
+                  HWG ID
+                  {String(record.haz_id).includes("App") ||
+                  String(record.haz_id).includes("Application") ||
+                  String(record.haz_id).includes("Application No.") ? (
+                    <ClockCircleFilled
+                      style={{
+                        position: "absolute",
+                        top: -8,
+                        right: -6,
+                        fontSize: "12px",
+                        color: "#3B6790",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "50%",
+                        padding: "1px",
+                      }}
+                    />
+                  ) : null}
+                </span>
+              </Tooltip>
+            )}
+
+          {/* PCO */}
+          {record.pco_np &&
+            record.pco_np !== "no records found per OPMS" &&
+            record.pco_np !== "n/a" && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>
+                    <div>PCO Information</div>
+                    <div>Code: {record.pco_np}</div>
+                    <div>Name: {record.pco_name}</div>
+                    <div>Tel. No: {record.pco_tel_no}</div>
+
+                    {isExpired(record.pco_validity) && (
+                      <div className="custom-button-red">
+                        PCO Validity: {record.pco_validity}
+                      </div>
+                    )}
+                  </div>
+                }
+                color="#181a19"
+              >
+                <span
+                  className="custom-button-stone"
+                  style={{
+                    position: "relative",
+                    ...(isExpired(record.pco_validity) ? expiredBg : {}),
+                  }}
+                >
+                  PCO
+                  {(record.pco_np.includes("App") ||
+                    record.pco_np.includes("Application") ||
+                    record.pco_np.includes("Application No.")) && (
+                    <ClockCircleFilled
+                      style={{
+                        position: "absolute",
+                        top: -8,
+                        right: -6,
+                        fontSize: "12px",
+                        color: "#3B6790",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "50%",
+                        padding: "1px",
+                      }}
+                    />
+                  )}
+                  {isExpired(record.pco_validity) && (
+                    <ExclamationCircleOutlined
+                      style={{
+                        color: "#d4380d",
+                        marginLeft: 4,
+                        fontSize: 14,
+                        verticalAlign: "middle",
+                      }}
+                      title="Expired"
+                    />
+                  )}
+                </span>
+              </Tooltip>
+            )}
+        </div>
+      );
+    },
   });
 
   const showModal = (record) => {
@@ -684,25 +725,30 @@ const Healthcare = ({ theme, currentUser, data }) => {
 
   const columns = [
     {
-      title: "ID No",
+      title: <div style={{ textAlign: "center", width: "100%" }}>ID No.</div>,
       dataIndex: "id_no",
       key: "id_no",
+      width: 70,
+      ellipsis: true,
       ...getColumnSearchProps("id_no"),
-      width: "65",
     },
     {
-      title: "Project Details",
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Project Details
+        </div>
+      ),
       key: "project_details",
       align: "left",
-      width: "200",
+      width: 320, // Increased width for better readability
+      ellipsis: false, // Disable ellipsis to allow wrapping
       ...getColumnSearchProps("project_details"),
       render: (text, record) => (
-        <div>
+        <div style={{ wordBreak: "break-word", whiteSpace: "normal" }}>
           <div>{record.name}</div>
           <div style={{ fontWeight: "bold" }}>{record.title}</div>
           <div>{record.address}</div>
           <div>
-            {/* Check if ecc_cnc is defined and check the value */}
             <a
               href={
                 record.ecc_cnc && record.ecc_cnc.startsWith("ECC-OL")
@@ -714,15 +760,12 @@ const Healthcare = ({ theme, currentUser, data }) => {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => {
-                // Only prevent default and show SweetAlert for values that do NOT start with "ECC-OL" or "CNC-OL"
                 if (
                   record.ecc_cnc &&
                   !record.ecc_cnc.startsWith("ECC-OL") &&
                   !record.ecc_cnc.startsWith("CNC-OL")
                 ) {
-                  e.preventDefault(); // Prevent the default link action
-
-                  // Show SweetAlert
+                  e.preventDefault();
                   Swal.fire({
                     title:
                       "Reference Code in Electronic Records Management System",
@@ -732,7 +775,6 @@ const Healthcare = ({ theme, currentUser, data }) => {
                     cancelButtonText: "Ok",
                     showCancelButton: true,
                     preConfirm: () => {
-                      // Redirect to email client with pre-filled email address
                       window.location.href =
                         "mailto:emb.idms@gmail.com?subject=Verification of Code&body=Hello, I would like to verify the reference code: " +
                         record.ecc_cnc;
@@ -752,123 +794,142 @@ const Healthcare = ({ theme, currentUser, data }) => {
       dataIndex: "industry_class",
       key: "industry_class",
       align: "center",
+      width: 160,
+      ellipsis: true,
       ...getColumnDropdownProps("industry_class", industryOptions),
     },
     {
       title: "Permit/Clearances",
       key: "permit_clearances",
       align: "center",
-      width: "100",
+      width: 200,
+      ellipsis: true,
       ...getPermitClearancesFilterProps(),
     },
     {
-      title: "Monitoring Status",
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Monitoring Status
+        </div>
+      ),
       key: "monitoring_status",
+      align: "left",
+      width: 220,
+      ellipsis: true,
       render: (text, record) => (
-        <div className="industry-label">
-          <a
-            href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
-              record.iis_no
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {record.iis_no || ""}
-          </a>
-
-          <div>
-            {/* Date Monitored */}
-            {record.date_monitored && (
-              <div>
-                <Tooltip
-                  title={<div style={{ fontSize: "10px" }}>Date Monitored</div>}
-                  color="#0f5c9e" // Darker color than the source
+        <div className="monitoring-status-container">
+          {/* IIS No */}
+          {record.iis_no && (
+            <p className="monitoring-label">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>IIS Transaction No.</div>
+                }
+                color="#1890ff"
+              >
+                <TagsOutlined style={{ marginRight: 6, color: "#1890ff" }} />
+                <a
+                  href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(
+                    record.iis_no
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#1890ff", textDecoration: "none" }}
                 >
-                  <MonitorOutlined
-                    style={{ marginRight: 8, color: "#1890ff" }}
-                  />{" "}
-                  {record.date_monitored}
-                </Tooltip>
-              </div>
-            )}
+                  {record.iis_no}
+                </a>
+              </Tooltip>
+            </p>
+          )}
 
-            {/* Date Routed */}
-            {record.date_routed && (
-              <div>
-                <Tooltip
-                  title={
-                    <div style={{ fontSize: "10px" }}>Date Routed to IIS</div>
-                  }
-                  color="#3a8f1a" // Darker color than the source
-                >
-                  <GlobalOutlined
-                    style={{ marginRight: 8, color: "#52c41a" }}
-                  />{" "}
-                  {record.date_routed}
-                </Tooltip>
-              </div>
-            )}
+          {/* Date Monitored */}
+          {record.date_monitored && (
+            <p className="monitoring-label">
+              <Tooltip
+                title={<div style={{ fontSize: "10px" }}>Date Monitored</div>}
+                color="#1890ff"
+              >
+                <MonitorOutlined style={{ marginRight: 6, color: "#1890ff" }} />
+                {record.date_monitored}
+              </Tooltip>
+            </p>
+          )}
 
-            {/* Date Signed */}
-            {record.date_signed && (
-              <div>
-                <Tooltip
-                  title={
-                    <div style={{ fontSize: "10px" }}>Date Report Signed</div>
-                  }
-                  color="#b8860b" // Darker color than the source
-                >
-                  <CheckCircleFilled
-                    style={{ marginRight: 8, color: "#faad14" }}
-                  />{" "}
-                  {record.date_signed}
-                </Tooltip>
-              </div>
-            )}
+          {/* Date Routed */}
+          {record.date_routed && (
+            <p className="monitoring-label">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>Date Routed to IIS</div>
+                }
+                color="#52c41a"
+              >
+                <GlobalOutlined style={{ marginRight: 6, color: "#52c41a" }} />
+                {record.date_routed}
+              </Tooltip>
+            </p>
+          )}
 
-            {/* PISMU Tracking */}
-            <div>
+          {/* Date Signed */}
+          {record.date_signed && (
+            <p className="monitoring-label">
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "10px" }}>Date Report Signed</div>
+                }
+                color="#faad14"
+              >
+                <CheckCircleFilled
+                  style={{ marginRight: 6, color: "#faad14" }}
+                />
+                {record.date_signed}
+              </Tooltip>
+            </p>
+          )}
+
+          {/* PISMU Tracking */}
+          {record.pismu_tracking && record.pismu_tracking.trim() !== "" && (
+            <p className="monitoring-label">
               <Tooltip
                 title={
                   <div style={{ fontSize: "10px" }}>
-                    PISMU Tracking of Report
+                    Received by PISMU: {record.pismu_tracking}
                   </div>
                 }
-                color="#0a6bbf" // Darker color than the source
+                color="#0D92F4"
               >
-                {record.pismu_tracking === "✔" ? (
-                  <span>
-                    <CheckCircleFilled style={{ color: "#0D92F4" }} />{" "}
-                    <span style={{ marginLeft: 8 }}>
-                      Received by Planning Unit
-                    </span>
-                  </span>
-                ) : (
-                  <span></span>
-                )}
+                <span>
+                  <CheckCircleFilled
+                    style={{ color: "#0D92F4", marginRight: 6 }}
+                  />
+                  Received by PISMU
+                </span>
               </Tooltip>
-            </div>
-          </div>
+            </p>
+          )}
         </div>
       ),
     },
     {
-      title: "Remarks/Recommendations",
+      title: (
+        <div style={{ textAlign: "center", width: "100%" }}>
+          Remarks/Recommendations
+        </div>
+      ),
       dataIndex: "remarks",
       key: "remarks",
-      width: 250,
+      width: 220,
+      ellipsis: true,
       ...getColumnSearchProps("remarks"),
     },
     {
       title: "Action",
       key: "action",
       align: "center",
+      width: 80,
+      fixed: "right",
       render: (text, record) => (
-        <Button
-          type="primary"
-          size="small"
-          onClick={() => showModal(record)} // Pass the row data to the modal
-        >
+        <Button type="primary" size="small" onClick={() => showModal(record)}>
           <EyeOutlined />
         </Button>
       ),
@@ -878,36 +939,45 @@ const Healthcare = ({ theme, currentUser, data }) => {
   return (
     <div className={`healthcare-container-card ${theme}-theme`}>
       <div className="header-content-survey">
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-          <h3
-            className="header-title-survey"
-            style={{ margin: 0, marginRight: 16 }}
+        <h3
+          className="header-title-survey"
+          style={{ margin: 0, marginRight: 16 }}
+        >
+          Universe of Industries (Healthcare)
+        </h3>
+
+        {canViewDataHistory && healthcareViewers.length > 0 && (
+          <Avatar.Group
+            max={{ count: 3 }}
+            maxStyle={{
+              color: "#f56a00",
+              backgroundColor: "#fde3cf",
+              fontSize: 11,
+            }}
+            size={24}
           >
-            Universe of Industries (Healthcare)
-          </h3>
-          {canViewDataHistory && healthcareViewers.length > 0 && (
-            <Avatar.Group
-              max={{ count: 3 }}
-              maxStyle={{
-                color: "#f56a00",
-                backgroundColor: "#fde3cf",
-                fontSize: 11,
-              }}
-              size={24}
-            >
-              {healthcareViewers.map((user) => (
-                <Tooltip
-                  key={user.username}
-                  title={<span style={{ fontSize: "10px" }}>{`${user.username} is here`}</span>}
+            {healthcareViewers.map((user) => (
+              <Tooltip
+                key={user.username}
+                title={
+                  <span
+                    style={{ fontSize: "10px" }}
+                  >{`${user.username} is here`}</span>
+                }
+              >
+                <Avatar
+                  src={user.avatar}
+                  style={{ marginLeft: 2, verticalAlign: "middle" }}
                 >
-                  <Avatar src={user.avatar} style={{ marginLeft: 2, verticalAlign: "middle" }}>
-                    {!user.avatar && user.username ? user.username[0].toUpperCase() : ""}
-                  </Avatar>
-                </Tooltip>
-              ))}
-            </Avatar.Group>
-          )}
-        </div>
+                  {!user.avatar && user.username
+                    ? user.username[0].toUpperCase()
+                    : ""}
+                </Avatar>
+              </Tooltip>
+            ))}
+          </Avatar.Group>
+        )}
+
         <div className="header-action-buttons">
           <Button
             type="primary"
@@ -919,16 +989,21 @@ const Healthcare = ({ theme, currentUser, data }) => {
           />
           <Button
             type="primary"
-            className="add-industry-button"
-            style={{
-              backgroundColor:
-                buttonColor === "primary" ? "#1890ff" : "#03396c",
-            }}
+            size="large"
+            className="add-industry-survey"
+            onClick={() => setAddModalVisible(true)}
           >
             Add Industry
           </Button>
         </div>
       </div>
+
+      <AddHealthcareModal
+        visible={addModalVisible}
+        onCancel={() => setAddModalVisible(false)}
+        onOk={() => setAddModalVisible(false)}
+        dataSource={filteredData}
+      />
 
       <div className="healthcare-table-header">
         <div className="search-input-tags">
@@ -977,7 +1052,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
           simple: true,
           size: "small",
         }}
-        scroll={{ x: "max-content", y: "calc(100vh - 300px)" }} 
+        scroll={{ x: "max-content", y: "calc(100vh - 300px)" }}
         loading={{
           spinning: loading,
           indicator: (

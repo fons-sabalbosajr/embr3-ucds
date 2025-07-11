@@ -1,0 +1,128 @@
+.paragraph-container {
+  margin-top: -10px;
+}
+
+.paragraph-container-legal {
+  width: 200px;
+}
+
+
+.label_container_legal {
+  margin-bottom: -10px;
+  display: flex;
+  width: 100%; /* Adjust as needed */
+}
+
+.label_title{
+  margin-bottom: 15px;
+  margin-right: -35px;
+  flex: 1;
+}
+
+.label_legal {
+  font-size: 8px;
+  margin-top: -2px;
+  flex: 2;
+}
+
+.label-tc {
+  display: flex;
+}
+
+.text-area-legal {
+  font-size: 11px;
+}
+
+.col-format {
+  margin-top: -10px;
+  margin-bottom: -10px;
+}
+
+.col-format-tc {
+  //margin-top: -5px;
+  margin-bottom: -10px;
+}
+
+.tc_commitment {
+  margin-bottom: -11px;
+}
+
+.custom-date-picker {
+  margin-top: 7px;
+}
+
+.custom-time-picker {
+  margin-top: 7px;
+}
+
+.textbox_legal {
+  margin-top: 7px;
+}
+
+.textbox-prov{
+  margin-top: 7px;
+}
+
+.paste-here{
+  font-size: 9px;
+}
+
+.row-margin{
+  margin-top: 10px;
+}
+
+.col-add-fields{
+  margin-left: -10px;
+}
+
+.ant-picker-input input {
+  font-size: 11px !important;
+}
+
+.text-penalty{
+  font-size: 11px;
+}
+
+.row-penalty-add + .row-penalty-add {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.row-penalty-label{
+  margin-bottom: -10px;
+}
+
+
+.legalunit-card {
+  width: 500px;
+  max-width: 100%;
+  margin-bottom: 20px;
+  padding: 5px;
+}
+
+.action-buttons-col {
+  display: flex;
+  align-items: center;
+  margin-left: -8px;
+  margin-bottom: 10px;
+  margin-top: 5px;
+}
+
+.checkbox-compliance{
+  font-size: 10px;
+  margin-right: 5px;
+  margin-bottom: 10px;
+}
+
+.order{
+  margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .legalunit-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: 16px !important;
+    padding: 5px !important;
+  }
+}

@@ -22,6 +22,7 @@ import {
   fetchAllUcdsLogs,
   createUcdsLogEntry,
   updateUcdsDataBySortKey,
+  fetchRecordByEccCnc,
 } from "../api/provinceService";
 
 const { TabPane } = Tabs;
@@ -100,6 +101,10 @@ const ProvinceModal = ({
   }, [record, previousRecord, isLogChecked]);
 
   const checkAndLogInitialData = async (currentRecord) => {
+    if (!currentRecord || !currentRecord.ecc_cnc) {
+      console.warn("Component: Missing currentRecord or ecc_cnc");
+      return;
+    }
     try {
       const ecc_cnc = currentRecord.ecc_cnc;
       const existingLogs = await checkExistingLogsByEccCnc(ecc_cnc);
@@ -125,7 +130,18 @@ const ProvinceModal = ({
 
   let isLogging = false;
 
-  const logInitialData = async (record) => {
+  useEffect(() => {
+    setEditedRecord(record);
+  }, [record]);
+
+  const handleChange = (field, value) => {
+    setEditedRecord({
+      ...editedRecord,
+      [field]: value,
+    });
+  };
+
+  const createInitialLogEntry = async (record) => {
     if (isLogging) return;
     isLogging = true;
 
@@ -138,17 +154,6 @@ const ProvinceModal = ({
 
     try {
       const transactions = await fetchAllUcdsLogs();
-
-      const existingLog = transactions.find(
-        (log) =>
-          log.ecc_cnc === record.ecc_cnc &&
-          log.newValue === `${record.ecc_cnc} \n ${record.title}`
-      );
-
-      if (existingLog) {
-        isLogging = false;
-        return;
-      }
 
       let transactionCounter = 1;
 
@@ -185,26 +190,26 @@ const ProvinceModal = ({
     }
   };
 
-  useEffect(() => {
-    setEditedRecord(record);
-  }, [record]);
+  const pruneUnchangedFields = (original, updated) => {
+    const changes = {};
+    for (const key in updated) {
+      const originalVal = original[key] ?? "";
+      const updatedVal = updated[key] ?? "";
 
-  useEffect(() => {
-    // Only log if modal is visible and record is valid
-    if (visible && record && record.ecc_cnc && record.title) {
-      checkAndLogInitialData(record); // Ensures check is performed before logging
+      const isEqual =
+        typeof originalVal === "string" && typeof updatedVal === "string"
+          ? originalVal.trim() === updatedVal.trim()
+          : JSON.stringify(originalVal) === JSON.stringify(updatedVal);
+
+      if (!isEqual) {
+        changes[key] = updatedVal;
+      }
     }
-  }, [visible, record]);
-
-  const handleChange = (field, value) => {
-    setEditedRecord({
-      ...editedRecord,
-      [field]: value,
-    });
+    return changes;
   };
 
-  const handleSaveChanges = async (showNotification = true) => {
-    Swal.fire({
+  const handleSaveChanges = async () => {
+    const result = await Swal.fire({
       title: "Confirm Save",
       text: "Do you want to save the changes?",
       icon: "question",
@@ -212,64 +217,72 @@ const ProvinceModal = ({
       confirmButtonColor: "#3085d6",
       cancelButtonColor: "#d33",
       confirmButtonText: "Save Data",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const { _id, ...recordToUpdate } = editedRecord;
-
-          const currentUsername = currentUser?.username;
-          const updatedRecord = {
-            ...recordToUpdate,
-            ecc_cnc: editedRecord.ecc_cnc,
-            updated_by: currentUsername, // Add username
-          };
-
-          const fullSortKey = editedRecord.sort_key;
-
-          if (!fullSortKey) {
-            //console.error("Component: Missing sort_key in editedRecord for save");
-            Swal.fire(
-              "Error",
-              "Cannot save: Record identifier is missing.",
-              "error"
-            );
-            return;
-          }
-
-          const response = await updateUcdsDataBySortKey(
-            fullSortKey,
-            updatedRecord
-          );
-
-          if (response.status === 200) {
-            if (showNotification) {
-              Swal.fire("Success", "Changes saved successfully!", "success");
-            }
-            if (setShouldRefreshTable) {
-              setShouldRefreshTable(true);
-            }
-            setIsEditing(false);
-            // handleReload(); // Optional reload if needed
-
-            // No need to manually create logs here — backend handles it
-          } else {
-            // This case might be less common if the service throws on non-200 statuses
-            Swal.fire(
-              "Error",
-              `Failed to save changes. Server responded with status: ${response.status}`,
-              "error"
-            );
-          }
-        } catch (error) {
-          const errorMessage =
-            error.response?.data?.message ||
-            error.message ||
-            "An unexpected error occurred while saving.";
-          Swal.fire("Error", errorMessage, "error");
-          console.error("Component: Error updating data:", error);
-        }
-      }
     });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const currentUsername = currentUser?.username || "Unknown User";
+
+      const changedFields = pruneUnchangedFields(record, editedRecord);
+
+      if (Object.keys(changedFields).length === 0) {
+        await Swal.fire({
+          icon: "info",
+          title: "No Changes Detected",
+          text: "You haven't made any modifications to save.",
+        });
+        return;
+      }
+
+      const updatePayload = {
+        updates: [
+          {
+            id_no: editedRecord.id_no,
+            sort_key: editedRecord.sort_key,
+            changes: {
+              ...changedFields,
+              updated_by: currentUsername,
+            },
+          },
+        ],
+      };
+
+      const response = await updateUcdsDataBySortKey(
+        editedRecord.sort_key,
+        updatePayload
+      );
+
+      if (response.status === 200) {
+        await Swal.fire({
+          icon: "success",
+          title: "Changes Saved",
+          text: response.data.message,
+          timer: 2000,
+          confirmButtonText: "OK",
+        });
+
+        if (typeof handleReload === "function") {
+          await handleReload(editedRecord.province, editedRecord);
+        }
+
+        setIsEditing(false);
+        setEditedRecord(null);
+      } else {
+        Swal.fire(
+          "Error",
+          `Failed to save changes. Server responded with status: ${response.status}`,
+          "error"
+        );
+      }
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        "An unexpected error occurred while saving.";
+      Swal.fire("Error", errorMessage, "error");
+      console.error("Component: Error updating data:", error);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -308,30 +321,37 @@ const ProvinceModal = ({
     setActiveTab(key);
   };
 
-  // Helper function to get the permission key for the current province
-  const getProvincePermissionKey = (provinceNameFromRecord) => {
-    if (!provinceNameFromRecord) return null;
-    const name = String(provinceNameFromRecord).toUpperCase(); // Ensure it's a string and standardize to uppercase
-    switch (name) {
-      case "AURORA":
-        return "aurora";
-      case "BATAAN":
-        return "bataan";
-      case "BULACAN":
-        return "bulacan";
-      case "NUEVA ECIJA":
-        return "nuevaEcija";
-      case "PAMPANGA":
-        return "pampanga";
-      case "TARLAC":
-        return "tarlac";
-      case "ZAMBALES":
-        return "zambales";
-      default:
-        console.warn(
-          `Unknown province name for permission key: ${provinceNameFromRecord}`
-        );
-        return null;
+const getProvincePermissionKey = (provinceNameFromRecord) => {
+  if (!provinceNameFromRecord) return null;
+
+  // Normalize: convert to uppercase and replace underscores with spaces
+  const name = String(provinceNameFromRecord).toUpperCase().replace(/_/g, " ");
+
+  switch (name) {
+    case "AURORA":
+      return "aurora";
+    case "BATAAN":
+      return "bataan";
+    case "BULACAN":
+      return "bulacan";
+    case "NUEVA ECIJA":
+      return "nuevaEcija";
+    case "PAMPANGA":
+      return "pampanga";
+    case "TARLAC":
+      return "tarlac";
+    case "ZAMBALES":
+      return "zambales";
+    default:
+      console.warn(`Unknown province name for permission key: ${provinceNameFromRecord}`);
+      return null;
+  }
+};
+
+  const reloadEditedRecord = async (eccCncKey) => {
+    const updated = await fetchRecordByEccCnc(eccCncKey);
+    if (updated) {
+      setEditedRecord(updated);
     }
   };
 
@@ -389,7 +409,6 @@ const ProvinceModal = ({
                   setEditedRecord(updatedRecord);
                   handleSaveChanges(showNotification);
                 }}
-                theme={theme}
               />
             </TabPane>
             <TabPane
@@ -425,7 +444,7 @@ const ProvinceModal = ({
                 editedRecord={editedRecord}
                 currentUser={currentUser}
                 theme={theme}
-                handleReload={handleReload}
+                reloadEditedRecord={reloadEditedRecord}
               />
             </TabPane>
           </Tabs>

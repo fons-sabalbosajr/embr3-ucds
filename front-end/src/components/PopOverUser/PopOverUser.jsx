@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Avatar, Typography, Menu, Modal } from "antd";
 import {
   UserOutlined,
@@ -10,7 +10,8 @@ import {
 import Profile from "../Settings/Profile/Profile";
 import Help from "../Settings/Help/Help";
 import Suggestion from "../Settings/Suggestion/Suggestion";
-import "./popoveruser.css"
+import { fetchUserByUsername } from "../../api/userService";
+import "./popoveruser.css";
 
 const { Text } = Typography;
 
@@ -18,6 +19,22 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalContent, setModalContent] = useState("");
   const [prefetchedUserData, setPrefetchedUserData] = useState(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const getModalWidth = () => {
+    if (modalContent === "help") return 700;
+    if (modalContent === "feature") return 600;
+    if (modalContent === "profile") {
+      return windowWidth <= 1080 ? 600 : 400;
+    }
+    return 400;
+  };
 
   const showModal = (content) => {
     setModalContent(content);
@@ -42,9 +59,8 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
   };
 
   const prefetchUserData = () => {
-    fetch(`http://10.14.77.107:8081/api/users?username=${userHandle}`)
-      .then((response) => response.json())
-      .then((data) => setPrefetchedUserData(data[0]))
+    fetchUserByUsername(userHandle)
+      .then((user) => setPrefetchedUserData(user))
       .catch((error) => console.error("Error prefetching user data:", error));
   };
 
@@ -53,14 +69,19 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
       style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
     >
       <div style={{ textAlign: "center" }}>
-        <Text strong style={{ fontSize: "11px" }}>
+        <Text strong className="popover-user-name" style={{ fontSize: "11px" }}>
           {name}
         </Text>
       </div>
-      <Text type="secondary" style={{ fontSize: "11px" }}>
+      <Text
+        type="secondary"
+        className="popover-user-handle"
+        style={{ fontSize: "11px" }}
+      >
         @{userHandle}
       </Text>
       <Menu
+        className="popover-user-menu"
         selectedKeys={[selection]}
         onClick={({ key }) => {
           if (key === "logout") {
@@ -70,10 +91,9 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
           }
         }}
         style={{
-          background: "transparent", // Remove background
+          background: "transparent",
         }}
         mode="vertical"
-        theme="light"
       >
         <Menu.Item
           key="profile"
@@ -96,7 +116,7 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
           Log Out
         </Menu.Item>
       </Menu>
-
+      
       <Modal
         title={
           modalContent === "profile"
@@ -110,9 +130,7 @@ const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
         open={isModalVisible}
         onCancel={handleCloseModal}
         footer={null}
-        width={
-          modalContent === "help" ? 700 : modalContent === "feature" ? 600 : 400
-        }
+        width={getModalWidth()}
       >
         {renderModalContent()}
       </Modal>

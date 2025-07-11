@@ -1,0 +1,45 @@
+.card-title {
+  padding: 8px;
+  border-radius: 4px;
+  color: #fff;
+}
+
+.pd1586 {
+  background: linear-gradient(to right, #0b5f74, #0a4e5e); /* Dark teal to darker teal */
+}
+
+.pd1586-card {
+  border: 1px solid #0c6b7a; /* Lightened teal */
+}
+
+.ra8749 {
+  background: linear-gradient(to right, #4a2250, #3e1c42); /* Dark purple to darker purple */
+}
+
+.ra8749-card {
+  border: 1px solid #50275a; /* Lightened purple */
+}
+
+.ra9275 {
+  background: linear-gradient(to right, #b45248, #993e35); /* Dark red to darker red */
+}
+
+.ra9275-card {
+  border: 1px solid #c45a4e; /* Lightened red */
+}
+
+.ra6969 {
+  background: linear-gradient(to right, #415e20, #354b1a); /* Dark green to darker green */
+}
+
+.ra6969-card {
+  border: 1px solid #4a6b24; /* Lightened green */
+}
+
+.pco {
+  background: linear-gradient(to right, #242726, #1d1f1e); /* Dark gray to darker gray */
+}
+
+.pco-card {
+  border: 1px solid #2a2c2b; /* Lightened gray */
+}

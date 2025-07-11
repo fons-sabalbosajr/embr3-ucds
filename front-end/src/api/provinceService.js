@@ -1,6 +1,6 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = 'http://10.14.77.107:8081/api';
+const API_BASE_URL = "http://10.14.77.107:8081/api";
 
 /**
  * Fetches detailed information for a record by its sort_key.
@@ -12,7 +12,10 @@ export const fetchRecordDetailsBySortKey = async (sortKey) => {
     const response = await axios.get(`${API_BASE_URL}/ucds-data/${sortKey}`);
     return response.data;
   } catch (error) {
-    console.error(`Error fetching record details for sortKey ${sortKey}:`, error.response?.data || error.message);
+    console.error(
+      `Error fetching record details for sortKey ${sortKey}:`,
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -24,10 +27,15 @@ export const fetchRecordDetailsBySortKey = async (sortKey) => {
  */
 export const checkExistingLogsByEccCnc = async (eccCnc) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/ucds-log?ecc_cnc=${eccCnc}`);
+    const response = await axios.get(
+      `${API_BASE_URL}/ucds-log?ecc_cnc=${eccCnc}`
+    );
     return response.data;
   } catch (error) {
-    console.error(`Error checking existing logs for ecc_cnc ${eccCnc}:`, error.response?.data || error.message);
+    console.error(
+      `Error checking existing logs for ecc_cnc ${eccCnc}:`,
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -41,7 +49,10 @@ export const fetchAllUcdsLogs = async () => {
     const response = await axios.get(`${API_BASE_URL}/ucds-log`);
     return response.data;
   } catch (error) {
-    console.error('Error fetching all UCDS logs:', error.response?.data || error.message);
+    console.error(
+      "Error fetching all UCDS logs:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -56,7 +67,10 @@ export const createUcdsLogEntry = async (logData) => {
     const response = await axios.post(`${API_BASE_URL}/ucds-log`, logData);
     return response.data;
   } catch (error) {
-    console.error('Error creating UCDS log entry:', error.response?.data || error.message);
+    console.error(
+      "Error creating UCDS log entry:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -67,12 +81,39 @@ export const createUcdsLogEntry = async (logData) => {
  * @param {Object} dataToUpdate - The data to update.
  * @returns {Promise<Object>} The full response object from axios.
  */
-export const updateUcdsDataBySortKey = async (sortKey, dataToUpdate) => {
+export const updateUcdsDataBySortKey = async (sortKey, updatePayload) => {
   try {
-    const response = await axios.put(`${API_BASE_URL}/update-data/${sortKey}`, dataToUpdate);
-    return response; // Returning the full response as the original code checks response.status
+    const response = await axios.put(
+      `${API_BASE_URL}/ucds-data/bulk-update`,
+      updatePayload
+    );
+    return response;
   } catch (error) {
-    console.error(`Error updating UCDS data for sortKey ${sortKey}:`, error.response?.data || error.message);
+    console.error(
+      `Error updating UCDS data for sortKey ${sortKey}:`,
+      error.response?.data || error.message
+    );
     throw error;
+  }
+};
+
+
+/**
+ * Fetch a UCDS record by ECC/CNC key (sort_key)
+ * @param {string} eccCncKey - The ECC/CNC (sort_key) of the record
+ * @returns {Promise<Object|null>} The record or null if not found
+ */
+export const fetchRecordByEccCnc = async (eccCncKey) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/ucds-data/by-ecc/${eccCncKey}`);
+    if (response.status === 200 && response.data) {
+      return response.data;
+    } else {
+      console.warn("No record found for:", eccCncKey);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching record by ECC/CNC:", error);
+    return null;
   }
 };

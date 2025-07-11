@@ -13,6 +13,7 @@ import {
 import TextArea from "antd/es/input/TextArea";
 import dayjs from "dayjs";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import { NumericFormat } from "react-number-format";
 import "./legalunit.css";
 import LegalOfficers from "../../../components/Autocomplete/LegalOfficers";
 
@@ -593,7 +594,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                             )
                           );
                         }}
-                        disabled={!isEditing}
+                        readOnly ={!isEditing}
                         format="MM/DD/YYYY"
                         placeholder="MM/DD/YYYY"
                         className="text-penalty"
@@ -602,25 +603,25 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                     </ConfigProvider>
                   </Col>
                   <Col xs={24} sm={24} md={8} lg={8}>
-                    <Input
-                      prefix={<span>&#x20B1;</span>}
+                    <NumericFormat
+                      prefix="₱"
                       value={field.amount}
-                      onChange={(e) => {
-                        const regex = /^[0-9]+(\.[0-9][0-9]?)?$/;
-                        if (regex.test(e.target.value)) {
-                          setFields(
-                            fields.map((f) =>
-                              f.id === field.id
-                                ? { ...f, amount: e.target.value }
-                                : f
-                            )
-                          );
-                          handleChange("amount", e.target.value);
-                        }
+                      thousandSeparator
+                      decimalScale={2}
+                      fixedDecimalScale
+                      allowNegative={false}
+                      placeholder="0.00"
+                      className="text-penalty ant-input"
+                      customInput={Input}
+                      onValueChange={(values) => {
+                        const { value } = values; // raw numeric value (e.g. "1000.00")
+                        setFields(
+                          fields.map((f) =>
+                            f.id === field.id ? { ...f, amount: value } : f
+                          )
+                        );
                       }}
-                      disabled={!isEditing}
-                      placeholder="No data"
-                      className="text-penalty"
+                      readOnly={!isEditing}
                     />
                   </Col>
                   <Col xs={24} sm={24} md={8} lg={8}>
@@ -637,7 +638,7 @@ const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
                         );
                         handleChange("or_number", e.target.value);
                       }}
-                      disabled={!isEditing}
+                      readOnly={!isEditing}
                       placeholder="No data"
                       className="text-penalty"
                     />

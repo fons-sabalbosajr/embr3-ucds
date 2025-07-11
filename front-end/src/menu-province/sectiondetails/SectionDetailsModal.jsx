@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import {
   Modal,
@@ -26,6 +26,7 @@ import {
 import "./sectiondetailsmodal.css";
 import ProvinceModal from "../ProvinceModal";
 import moment from "moment"; // For date comparison
+import CryptoJS from "crypto-js";
 import dayjs from "dayjs";
 
 const { RangePicker } = DatePicker;
@@ -43,6 +44,8 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
   const [pismuTrackingFilter, setPismuTrackingFilter] = useState(null);
   const [dateField, setDateField] = useState("date_monitored");
   const [mainFilterText, setMainFilterText] = useState("");
+  const [accessedRecords, setAccessedRecords] = useState(new Set());
+  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
   const [loading, setLoading] = useState(true); // Loading state
   const [progress, setProgress] = useState(0);
 
@@ -110,6 +113,42 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
     });
     setFilteredData(filtered);
   }, [mainFilterText, data]);
+
+  // Local Storage for Accessed Records
+  const loadAccessedRecords = () => {
+    try {
+      const encryptedRecords = localStorage.getItem("sectionDetailsAccessedRecords");
+      if (encryptedRecords && encryptionKey) {
+        const bytes = CryptoJS.AES.decrypt(encryptedRecords, encryptionKey);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        return new Set(JSON.parse(decrypted));
+      }
+      return new Set(); // Default if decryption fails or no data
+    } catch (error) {
+      console.error("Error loading accessed records:", error);
+      return new Set(); // Default on error
+    }
+  };
+  
+  const saveAccessedRecords = (records) => {
+    try {
+      if (encryptionKey) {
+        const encrypted = CryptoJS.AES.encrypt(JSON.stringify(Array.from(records)), encryptionKey).toString();
+        localStorage.setItem("sectionDetailsAccessedRecords", encrypted);
+      } else {
+        console.warn("Encryption key not available. Accessed records not encrypted.");
+        localStorage.setItem("sectionDetailsAccessedRecords", JSON.stringify(Array.from(records)));
+      }
+    } catch (error) {
+      console.error("Error saving accessed records:", error);
+    }
+  };
+  
+  useEffect(() => {
+    const initialRecords = loadAccessedRecords();
+    setAccessedRecords(initialRecords);
+  }, []); // Load on mount
+
 
   // Checkbox change handler
   const handleCheckboxChange = (e) => {
@@ -323,6 +362,14 @@ const SectionDetailsModal = ({ visible, section, count, data, onClose }) => {
   const handleActionClick = (record) => {
     setSelectedRecord(record); // Set the selected record
     setIsModalVisible(true); // Open the ProvinceModal
+
+    // Track record access
+    setAccessedRecords((prevRecords) => {
+      const newRecords = new Set(prevRecords);
+      newRecords.add(record.sort_key);
+      saveAccessedRecords(newRecords);
+      return newRecords;
+    });
   };
 
   const handleModalClose = () => {
