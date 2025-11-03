@@ -1,8 +1,5 @@
 import axios from "axios";
-
-// It's a good practice to manage API base URLs,
-// potentially using environment variables for different environments.
-const API_BASE_URL = "http://10.14.77.107:8081";
+import { API_BASE as API_BASE_URL } from "../config/api";
 
 /**
  * Fetches a summary of permits from the API for the dashboard widget.
@@ -13,7 +10,7 @@ const API_BASE_URL = "http://10.14.77.107:8081";
  */
 export const fetchPermitsSummary = async (currentPage, pageSize, allowedPrefixes) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/permits-summary`, {
+    const response = await axios.get(`${API_BASE_URL}/permits-summary`, {
       params: { page: currentPage, pageSize: pageSize, prefixes: allowedPrefixes.join(","), filterEstablishmentsByExpiryStatus: "true" },
     });
     return response.data;
@@ -47,7 +44,7 @@ export const fetchPermitsForMonitoring = async ({
     .join(",");
 
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/permits-summary`, {
+    const response = await axios.get(`${API_BASE_URL}/permits-summary`, {
       params: {
         page: currentPage,
         pageSize: pageSize,
@@ -76,7 +73,7 @@ export const fetchPermitsForMonitoring = async ({
 export const updatePermitExpiry = async (payload) => {
   try {
     const response = await axios.put(
-      `${API_BASE_URL}/api/permits-summary/update-expiry`,
+      `${API_BASE_URL}/permits-summary/update-expiry`,
       payload
     );
     return response.data;

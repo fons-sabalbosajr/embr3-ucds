@@ -99,7 +99,7 @@ const DashboardTiles = ({
         onClick ? "clickable-card" : ""
       } ${isActive ? "active-filter" : ""}`}
       style={cardStyle}
-      bodyStyle={{ padding: "4px 8px" }}
+      styles={{ body: { padding: "4px 8px" } }}
       onClick={onClick}
     >
       <Statistic

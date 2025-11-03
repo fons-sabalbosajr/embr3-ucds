@@ -16,8 +16,8 @@ import {
   fetchDataValidationIssues,
   fetchDuplicateDataIssues,
   logoutUserService,
-  API_URL as backendUrl, // Import API_URL as backendUrl
 } from "./api/universeService"; // Import services
+import { API_BASE_URL as backendUrl } from "./config/api";
 import "./index.css";
 import CryptoJS from "crypto-js";
 import Dashboard from "./menu-component/Dashboard";
@@ -46,12 +46,18 @@ import MonitoringSurvey from "./menu-planning/survey/monitoring_survey";
 import Validations from "./menu-planning/validations/Validations";
 import RecordsConfig from "./menu-records/recordsconfig/RecordsConfig";
 import RecordsActivity from "./menu-records/recordsactivity/RecordsActivity";
+import FieldManagement from "./menu-developer/FieldManagement";
+import DatabaseSettings from "./menu-developer/DatabaseSettings";
+import PdfForms from "./menu-developer/PdfForms";
+import ActivityHistoryConfig from "./menu-developer/ActivityHistoryConfig";
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
 import UserPopover from "./components/PopOverUser/PopOverUser";
 import Z_CustomSpinner from "./Z_CustomSpinner";
 import { DataProvider } from "./menu-province/DataContext";
+import EnvStatus from "./components/EnvStatus";
+import moment from "moment";
 
 // ERMS Components
 import ERMSDashboard from "./menu-ZERMS/menu-dashboard/ERMSDashboard";
@@ -85,6 +91,7 @@ const Universe = () => {
   const [userProvinceStringPermissions, setUserProvinceStringPermissions] =
     useState({});
   const [userRole, setUserRole] = useState(""); // New state for the user's role string
+  const [now, setNow] = useState(moment());
 
   // backendUrl is now imported from universeService
   const navigate = useNavigate();
@@ -172,6 +179,12 @@ const Universe = () => {
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  // Live clock updater for header timestamp
+  useEffect(() => {
+    const timer = setInterval(() => setNow(moment()), 30 * 1000);
+    return () => clearInterval(timer);
   }, []);
 
   // Define fetchDataIssues outside of useEffect, memoized with useCallback
@@ -321,13 +334,65 @@ const Universe = () => {
     );
   }
 
+  const isDark = theme === "dark";
   const themeConfig = {
-    algorithm:
-      theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: {
-      colorPrimary: "#296ba8", // Keep the primary color if you want to maintain it
-      colorBgContainer: theme === "dark" ? "#121212" : "#f4f4f4", // Change to a lighter color (you can choose any color you like)
-      colorText: theme === "dark" ? "#e0e0e0" : "#333333", // Adjust text color for dark/light mode
+      colorPrimary: "#2f7ecb",
+      borderRadius: 8,
+      fontSize: 13,
+      controlHeight: 36,
+      colorBgBase: isDark ? "#0f1113" : "#ffffff",
+      colorBgContainer: isDark ? "#14181c" : "#f7f8fa",
+      colorBgElevated: isDark ? "#1b2026" : "#ffffff",
+      colorText: isDark ? "#e6eaf0" : "#1f2937",
+      colorTextSecondary: isDark ? "#b5bfcc" : "#4b5563",
+      colorBorder: isDark ? "#2a323b" : "#e5e7eb",
+      colorLink: "#2f7ecb",
+      colorLinkHover: "#3b82f6",
+      colorSuccess: isDark ? "#3fb950" : "#16a34a",
+      colorWarning: isDark ? "#d29922" : "#d97706",
+      colorError: isDark ? "#f85149" : "#dc2626",
+    },
+    components: {
+      Layout: {
+        headerBg: isDark ? "#14181c" : "#ffffff",
+        bodyBg: isDark ? "#0f1113" : "#f5f6f8",
+        siderBg: isDark ? "#12161a" : "#ffffff",
+      },
+      Menu: {
+        darkItemBg: "transparent",
+        itemBorderRadius: 6,
+      },
+      Button: {
+        borderRadius: 6,
+        paddingInline: 14,
+        fontWeight: 500,
+      },
+      Input: {
+        colorBgContainer: isDark ? "#0f1113" : "#ffffff",
+        colorBorder: isDark ? "#2a323b" : "#e5e7eb",
+        activeBorderColor: "#2f7ecb",
+        hoverBorderColor: "#2f7ecb",
+        borderRadius: 6,
+      },
+      Table: {
+        headerBg: isDark ? "#111418" : "#f3f4f6",
+        headerColor: isDark ? "#d1d5db" : "#374151",
+        rowHoverBg: isDark ? "#111418" : "#f9fafb",
+        borderColor: isDark ? "#262c35" : "#e5e7eb",
+      },
+      Card: {
+        colorBgContainer: isDark ? "#14181c" : "#ffffff",
+        borderRadiusLG: 12,
+      },
+      Modal: {
+        colorBgElevated: isDark ? "#14181c" : "#ffffff",
+        borderRadiusLG: 12,
+      },
+      Popover: {
+        colorBgElevated: isDark ? "#14181c" : "#ffffff",
+      },
     },
   };
 
@@ -340,7 +405,7 @@ const Universe = () => {
     "tarlac",
     "zambales",
   ];
-  
+
   const provinceStringPermissions = {};
   provinceKeysForCurrentUser.forEach((key) => {
     provinceStringPermissions[key] = permissions;
@@ -357,245 +422,275 @@ const Universe = () => {
   };
 
   return (
-    <ConfigProvider theme={themeConfig}>
-      <DataProvider>
-        <Layout className={`layout-container ${theme}-theme`}>
-          <SideMenu
-            theme={theme}
-            collapsed={collapsed}
-            setCollapsed={setCollapsed}
-            permissions={permissions}
-            currentUser={currentUser}
-            provinceAccess={provinceAccess}
-          />
-          <Layout>
-            <Header className={`header-container ${theme}-theme`}>
-              <div className="header-content">
-                <div className="profile_container">
-                  <span className="user-name">
-                    {name} | {division}
-                  </span>
-
-                  <NotificationsPopover
-                    theme={theme}
-                    notifications={notifications}
-                    isLoading={isLoading} // Pass the loading state for notifications
-                    className="notification-icon"
-                    currentUser={currentUser}
-                    refreshNotifications={fetchDataIssues} // Pass the refresh handler
-                  />
-
-                  <Popover
-                    content={
-                      <UserPopover
-                        name={name}
-                        handleLogout={handleLogout}
-                        toggleTheme={toggleTheme}
-                        userHandle={userHandle}
-                        userData={currentUser}
-                        theme={theme}
-                      />
-                    }
-                    trigger="click"
-                    placement="bottomRight"
+    <>
+      <ConfigProvider theme={themeConfig}>
+        <DataProvider>
+          <Layout className={`layout-container ${theme}-theme`}>
+            <SideMenu
+              theme={theme}
+              collapsed={collapsed}
+              setCollapsed={setCollapsed}
+              permissions={permissions}
+              currentUser={currentUser}
+              provinceAccess={provinceAccess}
+            />
+            <Layout>
+              <Header className={`header-container ${theme}-theme`}>
+                <div className="header-content">
+                  <div
+                    className="profile_container"
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
-                    <div className="avatar-header">
-                      <AvatarWithName userHandle={userHandle} />
-                    </div>
-                  </Popover>
+                    <span className="user-name" style={{ whiteSpace: "nowrap" }}>
+                      {now.format("MMMM DD, YYYY hh:mm A")} | {name} | {division}
+                    </span>
 
-                  <Popover
-                    open={showThemeHint}
-                    title="Toggle Theme"
-                    content={
-                      <div
-                        style={{
-                          maxWidth: 220,
-                          fontSize: "12px",
-                          padding: "4px 0",
-                        }}
-                      >
-                        <p style={{ marginBottom: 8 }}>
-                          Click to switch between light and dark mode.
-                        </p>
+                    <NotificationsPopover
+                      theme={theme}
+                      notifications={notifications}
+                      isLoading={isLoading} // Pass the loading state for notifications
+                      className="notification-icon"
+                      currentUser={currentUser}
+                      refreshNotifications={fetchDataIssues} // Pass the refresh handler
+                    />
+
+                    <Popover
+                      content={
+                        <UserPopover
+                          name={name}
+                          handleLogout={handleLogout}
+                          toggleTheme={toggleTheme}
+                          userHandle={userHandle}
+                          userData={currentUser}
+                          theme={theme}
+                        />
+                      }
+                      trigger="click"
+                      placement="bottomRight"
+                    >
+                      <div className="avatar-header">
+                        <AvatarWithName userHandle={userHandle} />
+                      </div>
+                    </Popover>
+
+                    <Popover
+                      open={showThemeHint}
+                      title="Toggle Theme"
+                      content={
                         <div
                           style={{
-                            display: "flex",
-                            justifyContent: "flex-end",
-                            gap: 6,
+                            maxWidth: 220,
+                            fontSize: "12px",
+                            padding: "4px 0",
                           }}
                         >
-                          <Button size="small" onClick={handleDismissHint}>
-                            Dismiss
-                          </Button>
-                          <Button
-                            size="small"
-                            type="primary"
-                            onClick={handleDontShowAgainHint}
+                          <p style={{ marginBottom: 8 }}>
+                            Click to switch between light and dark mode.
+                          </p>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "flex-end",
+                              gap: 6,
+                            }}
                           >
-                            Don’t Show Again
-                          </Button>
+                            <Button size="small" onClick={handleDismissHint}>
+                              Dismiss
+                            </Button>
+                            <Button
+                              size="small"
+                              type="primary"
+                              onClick={handleDontShowAgainHint}
+                            >
+                              Don’t Show Again
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    }
-                    placement="bottomRight"
-                    className={theme === "dark" ? "dark-mode" : ""}
-                  >
-                    <Button
-                      className="theme-button"
-                      type="text"
-                      onClick={toggleTheme}
-                      icon={
-                        theme === "dark" ? (
-                          <SunOutlined style={{ fontSize: 15 }} />
-                        ) : (
-                          <MoonOutlined style={{ fontSize: 15 }} />
-                        )
                       }
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    />
-                  </Popover>
+                      placement="bottomRight"
+                      className={theme === "dark" ? "dark-mode" : ""}
+                    >
+                      <Button
+                        className="theme-button"
+                        type="text"
+                        onClick={toggleTheme}
+                        icon={
+                          theme === "dark" ? (
+                            <SunOutlined style={{ fontSize: 15 }} />
+                          ) : (
+                            <MoonOutlined style={{ fontSize: 15 }} />
+                          )
+                        }
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      />
+                    </Popover>
+                  </div>
                 </div>
-              </div>
-            </Header>
+              </Header>
 
-            <Content className="content-container">
-              <Routes>
-                <Route path="/" element={<Navigate to="dashboard" replace />} />
-                <Route
-                  path="dashboard"
-                  element={
-                    <Dashboard
-                      avatar={avatar}
-                      name={name}
-                      theme={theme}
-                      provinceAccess={provinceAccess}
-                    />
-                  }
-                />
-                <Route
-                  path="/province/:provinceName"
-                  element={<Province currentUser={currentUser} theme={theme} />}
-                />
-                <Route
-                  path="survey"
-                  element={<Survey currentUser={currentUser} theme={theme} />}
-                />
-                <Route
-                  path="healthcare"
-                  element={<Healthcare theme={theme} />}
-                />
-                <Route path="chemicals" element={<Chemicals theme={theme} />} />
-                <Route path="tsd" element={<TSD theme={theme} />} />
-                <Route path="trc" element={<TRC theme={theme} />} />
-                <Route path="mbu" element={<MBU theme={theme} />} />
-                {/* ESWM Database Parent Route - can render a default page or redirect */}
-                <Route
-                  path="eswm-database"
-                  element={<Navigate to="swm-plan" replace />}
-                />
-                <Route
-                  path="eswm-database/swm-plan"
-                  element={<SWMPlan theme={theme} />}
-                />
-                <Route
-                  path="eswm-database/mrf"
-                  element={<MRF theme={theme} />}
-                />
-                <Route
-                  path="eswm-database/slf"
-                  element={<SLF theme={theme} />}
-                />
-                <Route
-                  path="eswm-database/ods"
-                  element={<ODS theme={theme} />}
-                />
-                <Route
-                  path="eswm-database/equipments"
-                  element={<Equipments theme={theme} />}
-                />
-                <Route path="accounts" element={<Accounts theme={theme} />} />
-                <Route path="extract" element={<Extract theme={theme} />} />
-                <Route
-                  path="activity-log"
-                  element={<ActivityLog theme={theme} />}
-                />
-                <Route
-                  path="planning-unit/monitoring"
-                  element={<Monitoring theme={theme} />}
-                />
-                <Route
-                  path="planning-unit/survey-activities" // Path updated to match SideMenu
-                  element={<MonitoringSurvey theme={theme} />}
-                />
-                <Route
-                  path="planning-unit/validations"
-                  element={<Validations theme={theme} />}
-                />
-                <Route
-                  path="records/config"
-                  element={<RecordsConfig theme={theme} />}
-                />
-                <Route
-                  path="records/activity"
-                  element={<RecordsActivity theme={theme} />}
-                />
-                <Route path="admin" element={<Admin theme={theme} />} />
+              <Content className="content-container">
+                <Routes>
+                  <Route
+                    path="/"
+                    element={<Navigate to="dashboard" replace />}
+                  />
+                  <Route
+                    path="dashboard"
+                    element={
+                      <Dashboard
+                        avatar={avatar}
+                        name={name}
+                        theme={theme}
+                        provinceAccess={provinceAccess}
+                      />
+                    }
+                  />
+                  <Route
+                    path="/province/:provinceName"
+                    element={
+                      <Province currentUser={currentUser} theme={theme} />
+                    }
+                  />
+                  <Route
+                    path="survey"
+                    element={<Survey currentUser={currentUser} theme={theme} />}
+                  />
+                  <Route
+                    path="healthcare"
+                    element={<Healthcare theme={theme} />}
+                  />
+                  <Route
+                    path="chemicals"
+                    element={<Chemicals theme={theme} />}
+                  />
+                  <Route path="tsd" element={<TSD theme={theme} />} />
+                  <Route path="trc" element={<TRC theme={theme} />} />
+                  <Route path="mbu" element={<MBU theme={theme} />} />
+                  {/* ESWM Database Parent Route - can render a default page or redirect */}
+                  <Route
+                    path="eswm-database"
+                    element={<Navigate to="swm-plan" replace />}
+                  />
+                  <Route
+                    path="eswm-database/swm-plan"
+                    element={<SWMPlan theme={theme} />}
+                  />
+                  <Route
+                    path="eswm-database/mrf"
+                    element={<MRF theme={theme} />}
+                  />
+                  <Route
+                    path="eswm-database/slf"
+                    element={<SLF theme={theme} />}
+                  />
+                  <Route
+                    path="eswm-database/ods"
+                    element={<ODS theme={theme} />}
+                  />
+                  <Route
+                    path="eswm-database/equipments"
+                    element={<Equipments theme={theme} />}
+                  />
+                  <Route path="accounts" element={<Accounts theme={theme} />} />
+                  <Route path="extract" element={<Extract theme={theme} />} />
+                  <Route
+                    path="activity-log"
+                    element={<ActivityLog theme={theme} />}
+                  />
+                  <Route
+                    path="planning-unit/monitoring"
+                    element={<Monitoring theme={theme} />}
+                  />
+                  <Route
+                    path="planning-unit/survey-activities" // Path updated to match SideMenu
+                    element={<MonitoringSurvey theme={theme} />}
+                  />
+                  <Route
+                    path="planning-unit/validations"
+                    element={<Validations theme={theme} />}
+                  />
+                  <Route
+                    path="records/config"
+                    element={<RecordsConfig theme={theme} />}
+                  />
+                  <Route
+                    path="records/activity"
+                    element={<RecordsActivity theme={theme} />}
+                  />
+                  {/* Developer Settings */}
+                  <Route
+                    path="developer/field-management"
+                    element={<FieldManagement />}
+                  />
+                  <Route
+                    path="developer/database-settings"
+                    element={<DatabaseSettings />}
+                  />
+                  <Route path="developer/pdf-forms" element={<PdfForms />} />
+                  <Route
+                    path="developer/activity-history"
+                    element={<ActivityHistoryConfig />}
+                  />
+                  <Route path="admin" element={<Admin theme={theme} />} />
 
-                {/* ERMS Routes */}
-                <Route
-                  path="erms/dashboard"
-                  element={<ERMSDashboard theme={theme} />}
-                />
-                <Route
-                  path="erms/universe"
-                  element={<ERMSUniverse theme={theme} />}
-                />
-                <Route
-                  path="erms/storage-config"
-                  element={<ERMSStorageConfig theme={theme} />}
-                />
-                <Route
-                  path="erms/settings"
-                  element={<ERMSSettings theme={theme} />}
-                />
+                  {/* ERMS Routes */}
+                  <Route
+                    path="erms/dashboard"
+                    element={<ERMSDashboard theme={theme} />}
+                  />
+                  <Route
+                    path="erms/universe"
+                    element={<ERMSUniverse theme={theme} />}
+                  />
+                  <Route
+                    path="erms/storage-config"
+                    element={<ERMSStorageConfig theme={theme} />}
+                  />
+                  <Route
+                    path="erms/settings"
+                    element={<ERMSSettings theme={theme} />}
+                  />
 
-                {/* Legal Services Unit Routes */}
-                <Route
-                  path="legal/dashboard"
-                  element={<LegalDashboard theme={theme} />}
-                />
-                <Route
-                  path="legal/docket"
-                  element={<LegalDocket theme={theme} />}
-                />
-                <Route
-                  path="legal/envi-laws"
-                  element={<EnviLaws theme={theme} />}
-                />
-                {/* Add a default route for /legal if needed, e.g., redirect to dashboard */}
-                <Route path="legal" element={<Navigate to="legal/dashboard" replace />} />
+                  {/* Legal Services Unit Routes */}
+                  <Route
+                    path="legal/dashboard"
+                    element={<LegalDashboard theme={theme} />}
+                  />
+                  <Route
+                    path="legal/docket"
+                    element={<LegalDocket theme={theme} />}
+                  />
+                  <Route
+                    path="legal/envi-laws"
+                    element={<EnviLaws theme={theme} />}
+                  />
+                  {/* Add a default route for /legal if needed, e.g., redirect to dashboard */}
+                  <Route
+                    path="legal"
+                    element={<Navigate to="legal/dashboard" replace />}
+                  />
 
-
-                <Route path="report" element={<Report theme={theme} />} />
-                <Route path="posting" element={<Posting theme={theme} />} />
-                <Route
-                  path="duplicates"
-                  element={<Duplicates theme={theme} />}
-                />
-              </Routes>
-            </Content>
+                  <Route path="report" element={<Report theme={theme} />} />
+                  <Route path="posting" element={<Posting theme={theme} />} />
+                  <Route
+                    path="duplicates"
+                    element={<Duplicates theme={theme} />}
+                  />
+                </Routes>
+              </Content>
+            </Layout>
           </Layout>
-        </Layout>
-      </DataProvider>
-    </ConfigProvider>
+        </DataProvider>
+      </ConfigProvider>
+      <EnvStatus />
+    </>
   );
 };
 

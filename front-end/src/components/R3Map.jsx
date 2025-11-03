@@ -4,6 +4,7 @@ import {
   LoadScript,
   Marker,
   InfoWindow,
+  Circle,
 } from "@react-google-maps/api";
 import { Card, Row, Col, Button, Alert, Spin } from "antd";
 
@@ -14,7 +15,12 @@ const mapContainerStyle = {
   height: "550px",
 };
 
-const R3Map = ({ latitude, longitude }) => {
+const R3Map = ({
+  latitude,
+  longitude,
+  showLegend = true,
+  legendLabel = "Establishment Location",
+}) => {
   const [isStreetView, setIsStreetView] = useState(false);
   const [center, setCenter] = useState(null);
   const [error, setError] = useState(null);
@@ -96,45 +102,114 @@ const R3Map = ({ latitude, longitude }) => {
         ) : (
           <Row gutter={[16, 16]}>
             <Col span={24}>
-              <GoogleMap
-                mapTypeId={"satellite"}
-                mapContainerStyle={mapContainerStyle}
-                center={center}
-                zoom={25} // Adjust zoom level as needed
-                onLoad={onLoad}
-                options={{
-                  disableDefaultUI: true,
-                  streetViewControl: true,
-                  mapTypeControl: true,
-                  fullscreenControl: true,
-                  scaleControl: true,
-                  zoomControl: true,
-                  rotateControl: true,
-                }}
-              >
-                {center && (
-                  <Marker
-                    position={center}
-                    onClick={() =>
-                      handleMarkerClick({
-                        name: "Marker Name",
-                        details: "Marker Details",
-                      })
-                    }
-                  />
-                )}
-                {showInfoWindow && selectedPlace && (
-                  <InfoWindow
-                    position={center}
-                    onCloseClick={handleInfoWindowClose}
+              <div style={{ position: "relative" }}>
+                <GoogleMap
+                  mapTypeId={"satellite"}
+                  mapContainerStyle={mapContainerStyle}
+                  center={center}
+                  zoom={19} // Reduced a bit so the marker is easier to notice
+                  onLoad={onLoad}
+                  options={{
+                    disableDefaultUI: true,
+                    streetViewControl: true,
+                    mapTypeControl: true,
+                    fullscreenControl: true,
+                    scaleControl: true,
+                    zoomControl: true,
+                    rotateControl: true,
+                  }}
+                >
+                  {center && (
+                    <>
+                      {/* Highlight circle to make the point obvious */}
+                      <Circle
+                        center={center}
+                        radius={30}
+                        options={{
+                          strokeColor: "#d84a4a",
+                          strokeOpacity: 0.9,
+                          strokeWeight: 2,
+                          fillColor: "#d84a4a",
+                          fillOpacity: 0.25,
+                          clickable: false,
+                        }}
+                      />
+                      <Marker
+                        position={center}
+                        label={{
+                          text: "•",
+                          color: "#b40000",
+                          fontSize: "22px",
+                        }}
+                        onClick={() =>
+                          handleMarkerClick({
+                            name: "Establishment",
+                            details: `${center.lat.toFixed(
+                              6
+                            )}, ${center.lng.toFixed(6)}`,
+                          })
+                        }
+                      />
+                    </>
+                  )}
+                  {showInfoWindow && selectedPlace && (
+                    <InfoWindow
+                      position={center}
+                      onCloseClick={handleInfoWindowClose}
+                    >
+                      <div>
+                        <h3 style={{ margin: 0 }}>{selectedPlace.name}</h3>
+                        <p style={{ margin: 0 }}>{selectedPlace.details}</p>
+                      </div>
+                    </InfoWindow>
+                  )}
+                </GoogleMap>
+
+                {showLegend && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 12,
+                      bottom: 12,
+                      background: "rgba(255, 255, 255, 0.92)",
+                      border: "1px solid rgba(0,0,0,0.15)",
+                      borderRadius: 6,
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                      padding: "8px 10px",
+                      zIndex: 2,
+                      minWidth: 180,
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                    }}
                   >
-                    <div>
-                      <h3>{selectedPlace.name}</h3>
-                      <p>{selectedPlace.details}</p>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                      Legend
                     </div>
-                  </InfoWindow>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          display: "inline-block",
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          background: "#d84a4a",
+                          border: "1px solid #b23b3b",
+                        }}
+                      />
+                      <span>{legendLabel}</span>
+                    </div>
+                    {center && (
+                      <div style={{ marginTop: 6, color: "#444" }}>
+                        <div>Lat: {center.lat.toFixed(6)}</div>
+                        <div>Lng: {center.lng.toFixed(6)}</div>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </GoogleMap>
+              </div>
             </Col>
           </Row>
         )}

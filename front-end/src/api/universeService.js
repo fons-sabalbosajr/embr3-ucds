@@ -1,7 +1,6 @@
 // src/api/universeService.js
 import axios from "axios";
-
-export const API_URL = "http://10.14.77.107:8081"; // Define and export API base URL
+import { API_BASE_URL, API_BASE } from "../config/api";
 
 /**
  * Checks the user's authentication status.
@@ -10,7 +9,7 @@ export const API_URL = "http://10.14.77.107:8081"; // Define and export API base
  */
 export const checkUserAuth = async () => {
   try {
-    const response = await axios.get(`${API_URL}/check-auth`, {
+    const response = await axios.get(`${API_BASE_URL}/check-auth`, {
       withCredentials: true,
     });
     if (response.data && response.data.status === "Success") {
@@ -34,7 +33,7 @@ export const checkUserAuth = async () => {
  */
 export const fetchDataValidationIssues = async () => {
   try {
-    const response = await axios.post(`${API_URL}/api/check-data`);
+    const response = await axios.post(`${API_BASE}/check-data`);
     return response.data;
   } catch (error) {
     if (error.response && error.response.data) {
@@ -50,7 +49,7 @@ export const fetchDataValidationIssues = async () => {
  */
 export const fetchDuplicateDataIssues = async () => {
   try {
-    const response = await axios.get(`${API_URL}/api/ucds/duplicates`);
+    const response = await axios.get(`${API_BASE}/ucds/duplicates`);
     return response.data;
   } catch (error) {
     if (error.response && error.response.data) {
@@ -66,7 +65,7 @@ export const fetchDuplicateDataIssues = async () => {
  */
 export const logoutUserService = async () => { // Renamed to avoid conflict if Universe.jsx has a logoutUser function
   try {
-    const response = await axios.post(`${API_URL}/logout`, {}, {
+    const response = await axios.post(`${API_BASE_URL}/logout`, {}, {
       withCredentials: true,
     });
     return response.data;
@@ -78,3 +77,6 @@ export const logoutUserService = async () => { // Renamed to avoid conflict if U
     throw error;
   }
 };
+
+// Re-export for consumers that previously imported API_URL from this module
+export { API_BASE_URL };

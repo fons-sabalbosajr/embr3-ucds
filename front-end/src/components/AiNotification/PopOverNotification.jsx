@@ -612,48 +612,68 @@ const NotificationsPopover = ({
         trigger="click"
         placement="bottomRight"
         overlayStyle={{ padding: 0 }}
+        destroyTooltipOnHide
+        getPopupContainer={() => document.body}
       >
-        <Badge
-          count={
-            isLoading || isProcessingNotifications || isProcessingWarnings ? (
-              <LoadingOutlined
+        {/* Wrap trigger in a native element so Popover can attach a ref without findDOMNode */}
+        <span style={{ display: "inline-block", cursor: "pointer" }}>
+          <Badge
+            count={
+              isLoading || isProcessingNotifications || isProcessingWarnings ? (
+                <LoadingOutlined
+                  style={{
+                    fontSize: "8px",
+                    color: "white",
+                    backgroundColor: "green",
+                    borderRadius: "50%",
+                    padding: "5px",
+                    marginRight: "10px",
+                  }}
+                />
+              ) : (
+                groupedKeys.length + processedComputedWarnings.length
+              )
+            }
+            offset={[0, 4]}
+            size="small"
+            style={{
+              fontSize: "8px",
+              padding: "1px",
+              marginRight: "10px",
+              backgroundColor:
+                isLoading || isProcessingNotifications || isProcessingWarnings
+                  ? theme === "dark"
+                    ? "#444"
+                    : "#d9d9d9"
+                  : groupedKeys.length + processedComputedWarnings.length > 0
+                  ? "green"
+                  : "#d9d9d9",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Notifications"
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <BellOutlined
                 style={{
-                  fontSize: "8px",
-                  color: "white",
-                  backgroundColor: "green",
-                  borderRadius: "50%",
-                  padding: "5px",
+                  fontSize: "18px",
+                  verticalAlign: "middle",
                   marginRight: "10px",
+                  color: theme === "dark" ? "#e6eaf0" : "#1f2937",
                 }}
               />
-            ) : (
-              groupedKeys.length + processedComputedWarnings.length
-            )
-          }
-          offset={[0, 4]}
-          size="small"
-          style={{
-            fontSize: "8px",
-            padding: "1px",
-            marginRight: "10px",
-            backgroundColor:
-              isLoading || isProcessingNotifications || isProcessingWarnings
-                ? theme === "dark"
-                  ? "#444"
-                  : "#d9d9d9"
-                : groupedKeys.length + processedComputedWarnings.length > 0
-                ? "green"
-                : "#d9d9d9",
-          }}
-        >
-          <BellOutlined
-            style={{
-              fontSize: "18px",
-              verticalAlign: "middle",
-              marginRight: "10px",
-            }}
-          />
-        </Badge>
+            </button>
+          </Badge>
+        </span>
       </Popover>
 
       <Modal

@@ -36,6 +36,7 @@ const MBU = ({ editedRecord, handleChange, isEditing }) => {
               <R3MapAutoComplete
                 latitude={localRecord ? localRecord.lat : ""}
                 longitude={localRecord ? localRecord.long : ""}
+                legendLabel={localRecord?.project_title || "Project Title"}
               />
             </Col>
           </Row>

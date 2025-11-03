@@ -573,10 +573,12 @@ const Province = ({ theme, currentUser }) => {
         ? record[dataIndex].toString().toLowerCase().includes(lowerValue)
         : false;
     },
-    onFilterDropdownOpenChange: (visible) => {
-      if (visible) {
-        setTimeout(() => searchInput.current.select(), 100);
-      }
+    filterDropdownProps: {
+      onOpenChange: (open) => {
+        if (open) {
+          setTimeout(() => searchInput.current?.select(), 100);
+        }
+      },
     },
     render: (text) =>
       searchedColumn === dataIndex ? (
@@ -1910,6 +1912,7 @@ const Province = ({ theme, currentUser }) => {
             onClose={handleCloseModal}
             handleReload={handleReload}
             currentUser={currentUser}
+            theme={theme}
           />
         )}
       </Modal>

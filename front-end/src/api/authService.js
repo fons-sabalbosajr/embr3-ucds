@@ -1,12 +1,11 @@
 // src/api/authService.js
 import axios from "axios";
-
-const API_URL = "http://10.14.77.107:8081"; // Define your API base URL
+import { API_BASE_URL } from "../config/api";
 
 export const loginUser = async (username, password) => {
   try {
     const response = await axios.post(
-      `${API_URL}/login`,
+        `${API_BASE_URL}/login`,
       {
         username: username,
         password: password,

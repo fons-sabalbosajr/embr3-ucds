@@ -1038,7 +1038,9 @@ const RecordsConfig = ({ theme = "light" }) => {
   };
 
   const handleProvinceChange = (value) => {
-    setSelectedProvince(value);
+    // Normalize empty string to null to avoid Select null value warnings
+    const normalized = value === "" ? null : value;
+    setSelectedProvince(normalized);
     setSelectedRowKeys([]);
     setPagination((prev) => ({ ...prev, current: 1 }));
   };
@@ -1607,10 +1609,10 @@ const RecordsConfig = ({ theme = "light" }) => {
             placeholder="Filter by Province"
             style={{ width: 200 }}
             onChange={handleProvinceChange}
-            value={selectedProvince}
+            value={selectedProvince ?? ""}
             loading={loading} // Disable while data is loading
           >
-            <Select.Option value={null}>All Provinces</Select.Option>
+            <Select.Option value="">All Provinces</Select.Option>
             {allProvinces.map((provinceName) => (
               <Select.Option key={provinceName} value={provinceName}>
                 {provinceName}
@@ -1652,35 +1654,37 @@ const RecordsConfig = ({ theme = "light" }) => {
             />
           </Tooltip>
           <Tooltip title="Show/Hide Columns">
-            <Dropdown
-              overlay={
+            <Popover
+              content={
                 <CustomDropdownContentWrapper
                   menuComponent={columnVisibilityMenu}
                   onOkClick={() => setIsColumnVisibilityDropdownOpen(false)}
                   theme={theme}
                 />
               }
-              trigger={["click"]}
+              trigger="click"
               open={isColumnVisibilityDropdownOpen}
-              onVisibleChange={setIsColumnVisibilityDropdownOpen}
+              onOpenChange={setIsColumnVisibilityDropdownOpen}
+              placement="bottomRight"
             >
               <Button type="primary" icon={<TableOutlined />}>
                 <DownOutlined />
               </Button>
-            </Dropdown>
+            </Popover>
           </Tooltip>
           <Tooltip title="Freeze Columns">
-            <Dropdown
-              overlay={
+            <Popover
+              content={
                 <CustomDropdownContentWrapper
                   menuComponent={freezeMenu}
                   onOkClick={() => setIsFreezeDropdownOpen(false)}
                   theme={theme}
                 />
               }
-              trigger={["click"]}
-              visible={isFreezeDropdownOpen}
-              onVisibleChange={setIsFreezeDropdownOpen}
+              trigger="click"
+              open={isFreezeDropdownOpen}
+              onOpenChange={setIsFreezeDropdownOpen}
+              placement="bottomRight"
             >
               <Button
                 type="primary"
@@ -1690,7 +1694,7 @@ const RecordsConfig = ({ theme = "light" }) => {
               >
                 <DownOutlined />
               </Button>
-            </Dropdown>
+            </Popover>
           </Tooltip>
           <Tooltip title="Format Table">
             <Popover

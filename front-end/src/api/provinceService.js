@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const API_BASE_URL = "http://10.14.77.107:8081/api";
+import { API_BASE as API_BASE_URL } from "../config/api";
 
 /**
  * Fetches detailed information for a record by its sort_key.

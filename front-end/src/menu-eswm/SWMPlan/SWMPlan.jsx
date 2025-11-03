@@ -452,6 +452,7 @@ const DashboardTiles = ({
 };
 
 const SWMPlan = ({ theme = "light" }) => {
+  const [messageApi, contextHolder] = message.useMessage();
   const [data, setData] = useState([]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
   const [loading, setLoading] = useState(false);
@@ -501,7 +502,7 @@ const SWMPlan = ({ theme = "light" }) => {
       setPagination({ current: page, pageSize });
     } catch (err) {
       console.error("Failed to fetch SWM Plan data", err);
-      message.error("Failed to fetch SWM Plan data.");
+      messageApi.error("Failed to fetch SWM Plan data.");
     } finally {
       setLoading(false);
     }
@@ -813,21 +814,6 @@ const SWMPlan = ({ theme = "light" }) => {
           </div>
         ),
       },
-      {
-        title: "Coordinates",
-        dataIndex: "coordinates",
-        key: "coordinates",
-        width: 200,
-        dataType: "custom_coordinates",
-        onHeaderCell: () => ({ className: "table-header-center" }),
-        render: (_, record) => (
-          <div>
-            <div>Lat: {record.lat ?? "N/A"}</div>
-            <div>Long: {record.long ?? "N/A"}</div>
-          </div>
-        ),
-      },
-
       // Personnel & Tracking
       {
         title: "Target Month",
@@ -1597,7 +1583,8 @@ const SWMPlan = ({ theme = "light" }) => {
   };
 
   const handleProvinceChange = (value) => {
-    setSelectedProvince(value);
+    const normalized = value === "" ? null : value;
+    setSelectedProvince(normalized);
     setSelectedRowKeys([]);
     setPagination((prev) => ({ ...prev, current: 1 }));
   };
@@ -1636,7 +1623,7 @@ const SWMPlan = ({ theme = "light" }) => {
         // Assuming SWM Plans are identified by _id for updates
         const identifierForUrl = originalRecord._id;
         if (!identifierForUrl) {
-          message.warn(
+          messageApi.warn(
             `Cannot save record without a valid ID (key: ${rowKey}).`
           );
           continue;
@@ -1647,7 +1634,7 @@ const SWMPlan = ({ theme = "light" }) => {
     }
 
     if (updatesToApi.length === 0) {
-      message.info("No valid changes to save.");
+      messageApi.info("No valid changes to save.");
       setLoading(false);
       setEditingRowKeys([]);
       setEditedData({});
@@ -1673,10 +1660,10 @@ const SWMPlan = ({ theme = "light" }) => {
       );
       setEditingRowKeys([]);
       setEditedData({});
-      message.success("SWM Plan data saved successfully!");
+      messageApi.success("SWM Plan data saved successfully!");
     } catch (error) {
       console.error("Failed to save SWM Plan data", error);
-      message.error(
+      messageApi.error(
         `Failed to save SWM Plan data: ${
           error.response?.data?.error || error.message
         }`
@@ -2510,6 +2497,7 @@ const SWMPlan = ({ theme = "light" }) => {
         theme === "dark" ? "theme-dark" : "theme-light"
       }`}
     >
+      {contextHolder}
       <div>
         <h2 className="swmplan-page-title">
           10-Year Solid Waste Management Plan
@@ -2519,7 +2507,7 @@ const SWMPlan = ({ theme = "light" }) => {
       <Collapse
         defaultActiveKey={["1"]}
         className="dashboard-collapse"
-        expandIconPosition="left"
+        expandIconPosition="start"
       >
         <Panel
           header={
@@ -2604,10 +2592,10 @@ const SWMPlan = ({ theme = "light" }) => {
             placeholder="Filter by Province"
             style={{ width: 200, marginLeft: "8px" }}
             onChange={handleProvinceChange}
-            value={selectedProvince}
+            value={selectedProvince ?? ""}
             loading={loading}
           >
-            <Select.Option value={null}>All Provinces</Select.Option>
+            <Select.Option value="">All Provinces</Select.Option>
             {allProvinces.map((provinceName) => (
               <Select.Option key={provinceName} value={provinceName}>
                 {provinceName}

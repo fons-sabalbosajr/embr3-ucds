@@ -477,10 +477,12 @@ const Survey = ({ theme, currentUser }) => {
       if (recordValue === null || recordValue === undefined) return false;
       return recordValue.toString().toLowerCase().includes(searchTextValue);
     },
-    onFilterDropdownVisibleChange: (visible) => {
-      if (visible) {
-        setTimeout(() => searchInput?.select(), 100);
-      }
+    filterDropdownProps: {
+      onOpenChange: (open) => {
+        if (open) {
+          setTimeout(() => searchInput?.select(), 100);
+        }
+      },
     },
     render: (text) =>
       searchedColumn === dataIndex ? (
@@ -1361,22 +1363,8 @@ const Survey = ({ theme, currentUser }) => {
               onChange: (newSelectedRowKeys) => {
                 setSelectedRowKeys(newSelectedRowKeys);
               },
-              getCheckboxProps: (record) => ({
-                name: record.project_title,
-                checked: selectedRows[record.id_no],
-                onChange: (e) => {
-                  if (e.target.checked) {
-                    setSelectedRows((prev) => ({
-                      ...prev,
-                      [record.id_no]: true,
-                    }));
-                  } else {
-                    const newSelected = { ...selectedRows };
-                    delete newSelected[record.id_no];
-                    setSelectedRows(newSelected);
-                  }
-                },
-              }),
+              // Avoid setting checked/defaultChecked in getCheckboxProps per AntD v5 guidance
+              getCheckboxProps: () => ({}),
             }}
             size="small"
             scroll={{ y: `calc(100vh - 280px)` }}

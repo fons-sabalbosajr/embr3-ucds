@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const BASE_URL = "http://10.14.77.107:8081/api";
+import { API_BASE } from "../../config/api";
 
 /**
  * Fetches dashboard statistics for SWM Plans.
@@ -8,7 +7,7 @@ const BASE_URL = "http://10.14.77.107:8081/api";
  */
 export const fetchSWMPlanDashboardStats = async () => {
   try {
-    const response = await axios.get(`${BASE_URL}/swm-plan-stats`);
+  const response = await axios.get(`${API_BASE}/swm-plan-stats`);
     return response.data;
   } catch (error) {
     console.error("Error fetching SWM Plan dashboard stats:", error);
@@ -35,7 +34,7 @@ export const fetchSWMPlanData = async (
   columnFilters = {}
 ) => {
   try {
-    const res = await axios.get(`${BASE_URL}/swm-plan-data`, {
+  const res = await axios.get(`${API_BASE}/swm-plan-data`, {
       params: {
         page,
         pageSize,
@@ -64,7 +63,7 @@ export const fetchSWMPlanData = async (
  */
 export const updateSWMPlanRecord = async (identifier, payload) => {
   try {
-    const response = await axios.put(`${BASE_URL}/update-swm-plan-data/${identifier}`, payload);
+  const response = await axios.put(`${API_BASE}/update-swm-plan-data/${identifier}`, payload);
     return response.data;
   } catch (error) {
     console.error(`Failed to update SWM Plan record with ID ${identifier}:`, error);

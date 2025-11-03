@@ -248,9 +248,6 @@ const IndustryClass = ({ value, disabled, onChange, readOnly }) => {
             color: readOnly ? "#aaa" : "inherit",
           }}
           placeholder="Select industry classification"
-          placeholderStyle={{
-            fontSize: "9px",
-          }}
         />
       </AutoComplete>
     </ConfigProvider>

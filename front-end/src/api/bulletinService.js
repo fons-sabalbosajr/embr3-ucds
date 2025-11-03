@@ -1,6 +1,6 @@
 import axios from "axios";
-
-const API_URL = "http://10.14.77.107:8081/api/postings";
+import { API_BASE } from "../config/api";
+const API_URL = `${API_BASE}/postings`;
 
 /**
  * Fetches all postings, filters for active ones, and sorts them by creation date.

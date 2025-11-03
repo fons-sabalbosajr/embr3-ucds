@@ -25,7 +25,7 @@ import {
   fetchRecordByEccCnc,
 } from "../api/provinceService";
 
-const { TabPane } = Tabs;
+// AntD v5: prefer items API over TabPane
 const { Paragraph } = Typography;
 
 const ProvinceModal = ({
@@ -360,94 +360,102 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
     currentUser?.provinceStringPermissions?.[provinceKey] === "readWrite";
 
   return (
-    <div className={`modal-container ${theme}-theme`}>
+    <div>
       {!record || !record.sort_key || !editedRecord ? (
         <div style={{ textAlign: "center", padding: 40 }}>
-          <Spin size="large" tip="Loading record details..." />
+          <Spin size="large" tip="Loading record details...">
+            <div style={{ width: 1, height: 1 }} />
+          </Spin>
         </div>
       ) : (
         <>
-          <Tabs activeKey={activeTab} onChange={handleTabChange}>
-            <TabPane
-              tab={<span className="custom-tab">General Information</span>}
-              key="1"
-              className="tabpane-container"
-            >
-              <GenInfo
-                editedRecord={editedRecord}
-                setEditedRecord={setEditedRecord}
-                handleChange={handleChange}
-                isEditing={isEditing}
-                theme={theme}
-              />
-            </TabPane>
-            <TabPane
-              tab={
-                <span className="custom-tab">Concerned Unit/Focal Person</span>
-              }
-              key="2"
-              className="tabpane-container"
-            >
-              <FocalPerson
-                editedRecord={editedRecord}
-                handleChange={handleChange}
-                isEditing={isEditing}
-                currentUser={currentUser}
-                theme={theme}
-              />
-            </TabPane>
-            <TabPane
-              tab={<span className="custom-tab">Clearances and Permits</span>}
-              key="3"
-              className="tabpane-container"
-            >
-              <Permit
-                editedRecord={editedRecord}
-                handleChange={handleChange}
-                isEditing={isEditing}
-                onSaveChanges={(updatedRecord, showNotification) => {
-                  setEditedRecord(updatedRecord);
-                  handleSaveChanges(showNotification);
-                }}
-              />
-            </TabPane>
-            <TabPane
-              tab={<span className="custom-tab">Legal Services Unit</span>}
-              key="4"
-              className="tabpane-container"
-            >
-              <Legal
-                editedRecord={editedRecord}
-                handleChange={handleChange}
-                isEditing={isEditing}
-                theme={theme}
-              />
-            </TabPane>
-            <TabPane
-              tab={<span className="custom-tab">Manila Bay Unit</span>}
-              key="5"
-              className="tabpane-container"
-            >
-              <MBU
-                editedRecord={editedRecord}
-                handleChange={handleChange}
-                isEditing={isEditing}
-                theme={theme}
-              />
-            </TabPane>
-
-            <TabPane
-              tab={<span className="custom-tab-history">History</span>}
-              key="6"
-            >
-              <ProvTransactionLog
-                editedRecord={editedRecord}
-                currentUser={currentUser}
-                theme={theme}
-                reloadEditedRecord={reloadEditedRecord}
-              />
-            </TabPane>
-          </Tabs>
+          <Tabs
+            activeKey={activeTab}
+            onChange={handleTabChange}
+            items={[
+              {
+                key: "1",
+                label: <span className="custom-tab">General Information</span>,
+                children: (
+                  <GenInfo
+                    editedRecord={editedRecord}
+                    setEditedRecord={setEditedRecord}
+                    handleChange={handleChange}
+                    isEditing={isEditing}
+                    theme={theme}
+                  />
+                ),
+              },
+              {
+                key: "2",
+                label: (
+                  <span className="custom-tab">Concerned Unit/Focal Person</span>
+                ),
+                children: (
+                  <FocalPerson
+                    editedRecord={editedRecord}
+                    handleChange={handleChange}
+                    isEditing={isEditing}
+                    currentUser={currentUser}
+                    theme={theme}
+                  />
+                ),
+              },
+              {
+                key: "3",
+                label: (
+                  <span className="custom-tab">Clearances and Permits</span>
+                ),
+                children: (
+                  <Permit
+                    editedRecord={editedRecord}
+                    handleChange={handleChange}
+                    isEditing={isEditing}
+                    onSaveChanges={(updatedRecord, showNotification) => {
+                      setEditedRecord(updatedRecord);
+                      handleSaveChanges(showNotification);
+                    }}
+                  />
+                ),
+              },
+              {
+                key: "4",
+                label: <span className="custom-tab">Legal Services Unit</span>,
+                children: (
+                  <Legal
+                    editedRecord={editedRecord}
+                    handleChange={handleChange}
+                    isEditing={isEditing}
+                    theme={theme}
+                  />
+                ),
+              },
+              {
+                key: "5",
+                label: <span className="custom-tab">Manila Bay Unit</span>,
+                children: (
+                  <MBU
+                    editedRecord={editedRecord}
+                    handleChange={handleChange}
+                    isEditing={isEditing}
+                    theme={theme}
+                  />
+                ),
+              },
+              {
+                key: "6",
+                label: <span className="custom-tab-history">History</span>,
+                children: (
+                  <ProvTransactionLog
+                    editedRecord={editedRecord}
+                    currentUser={currentUser}
+                    theme={theme}
+                    reloadEditedRecord={reloadEditedRecord}
+                  />
+                ),
+              },
+            ]}
+          />
 
           <Modal
             title="Generate Report"
@@ -458,36 +466,39 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
             footer={null}
           >
             <div className="report-modal-container">
-              <Tabs defaultActiveKey="1" tabPosition="left" tabBarGutter={5}>
-                <TabPane
-                  tab={<span className="tabpane-title">Generate ICIR</span>}
-                  key="1"
-                >
-                  <ICIR
-                    editedRecord={editedRecord}
-                    onIncludeChange={() => {}}
-                    resetCheckboxesKey={resetCheckboxesKey}
-                  />
-                </TabPane>
-                <TabPane
-                  tab={<span className="tabpane-title">Generate CIC</span>}
-                  key="2"
-                >
-                  <IC />
-                </TabPane>
-                <TabPane
-                  tab={<span className="tabpane-title">Generate IC</span>}
-                  key="3"
-                >
-                  <CIC />
-                </TabPane>
-                <TabPane
-                  tab={<span className="tabpane-title">Reports Logs</span>}
-                  key="4"
-                >
-                  <Drafts />
-                </TabPane>
-              </Tabs>
+              <Tabs
+                defaultActiveKey="1"
+                tabPosition="left"
+                tabBarGutter={5}
+                items={[
+                  {
+                    key: "1",
+                    label: <span className="tabpane-title">Generate ICIR</span>,
+                    children: (
+                      <ICIR
+                        editedRecord={editedRecord}
+                        onIncludeChange={() => {}}
+                        resetCheckboxesKey={resetCheckboxesKey}
+                      />
+                    ),
+                  },
+                  {
+                    key: "2",
+                    label: <span className="tabpane-title">Generate CIC</span>,
+                    children: <IC />,
+                  },
+                  {
+                    key: "3",
+                    label: <span className="tabpane-title">Generate IC</span>,
+                    children: <CIC />,
+                  },
+                  {
+                    key: "4",
+                    label: <span className="tabpane-title">Reports Logs</span>,
+                    children: <Drafts />,
+                  },
+                ]}
+              />
             </div>
           </Modal>
 

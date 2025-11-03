@@ -66,7 +66,11 @@ const MBUnit = ({ editedRecord, handleChange, isEditing }) => {
           <Row gutter={[16, 16]}>
             <Col span={23}>
               {/* Embed Google Maps with the fetched coordinates */}
-              <R3MapAutoComplete latitude={lat} longitude={long} />
+              <R3MapAutoComplete
+                latitude={lat}
+                longitude={long}
+                legendLabel={editedRecord?.title || "Project Title"}
+              />
             </Col>
           </Row>
         </Col>

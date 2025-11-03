@@ -20,6 +20,7 @@ import {
   CaretLeftOutlined,
   CaretRightOutlined,
   FileProtectOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import { BsClipboardDataFill } from "react-icons/bs"; // Example icon, choose one you like
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -74,6 +75,7 @@ const rootSubmenuKeys = [
   "planning-unit",
   "reports",
   "admin",
+  "developer-settings",
   "legal",
   "electronic-records-management", // Added for the new ERMS submenu
   "eswm-database", // Added for the new submenu
@@ -151,6 +153,8 @@ const SideMenu = ({ theme, currentUser }) => {
       path.startsWith("/universe/records/activity") // Added this line
     ) {
       setOpenKeys(["admin"]);
+    } else if (path.startsWith("/universe/developer/")) {
+      setOpenKeys(["developer-settings"]);
     } else if (path.startsWith("/universe/erms/")) {
       setOpenKeys(["electronic-records-management"]); // Keep the ERMS submenu open
     } else {
@@ -511,11 +515,13 @@ const SideMenu = ({ theme, currentUser }) => {
   const renderAvatars = (viewers) =>
     canViewDataHistory && viewers.length > 0 ? (
       <Avatar.Group
-        max={{ count: 1 }}
-        maxStyle={{
-          color: "#f56a00",
-          backgroundColor: "#fde3cf",
-          fontSize: 11,
+        max={{
+          count: 1,
+          style: {
+            color: "#f56a00",
+            backgroundColor: "#fde3cf",
+            fontSize: 11,
+          },
         }}
         size={18}
         style={{
@@ -879,6 +885,45 @@ const SideMenu = ({ theme, currentUser }) => {
               label="Records Activity"
               viewers={chemicalsViewers}
             />
+          ),
+        },
+      ],
+    },
+    permissions[2] && {
+      key: "developer-settings",
+      icon: <ToolOutlined />,
+      label: <div className="menu-label-wrapper main">Developer Settings</div>,
+      children: [
+        {
+          key: "/universe/developer/field-management",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/developer/field-management">Field Management</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/developer/database-settings",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/developer/database-settings">Database Settings</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/developer/pdf-forms",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/developer/pdf-forms">PDF Forms</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/developer/activity-history",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/developer/activity-history">Activity History Configuration</Link>
+            </div>
           ),
         },
       ],

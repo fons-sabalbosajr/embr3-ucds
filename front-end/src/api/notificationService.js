@@ -1,7 +1,6 @@
 // src/api/ucdsService.js
 import axios from "axios";
-
-const API_BASE_URL = "http://10.14.77.107:8081/api"; // Base URL for user-related endpoints
+import { API_BASE as API_BASE_URL } from "../config/api"; // Base URL for user-related endpoints
 
 /**
  * Fetches a single UCDS record by its ID.

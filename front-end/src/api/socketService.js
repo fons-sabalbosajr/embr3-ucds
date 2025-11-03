@@ -1,7 +1,6 @@
 // src/api/socketService.js
 import { io } from "socket.io-client";
-
-const SOCKET_URL = "http://10.14.77.107:8081"; // Your socket server URL
+import { SOCKET_URL } from "../config/api";
 let socket = null;
 
 export const initializeSocket = (options = { withCredentials: true }) => {

@@ -4,10 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node ../scripts/sync-env.js && node ../scripts/check-client-env.js",
     "dev": "vite --host",
+    "prebuild": "node ../scripts/sync-env.js && node ../scripts/check-client-env.js",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "purge:report": "purgecss --config purgecss.report.config.cjs"
   },
   "dependencies": {
     "@ant-design/pro-components": "^2.8.7",
@@ -16,7 +19,7 @@
     "@tanstack/react-query": "^5.80.5",
     "antd": "^5.24.8",
     "avataaars": "^2.0.0",
-    "axios": "^1.6.8",
+    "axios": "^1.7.7",
     "crypto-js": "^4.2.0",
     "csvtojson": "^2.0.10",
     "date-fns": "^3.6.0",
@@ -57,6 +60,7 @@
     "tesseract.js": "^6.0.0"
   },
   "devDependencies": {
+    "@fullhuman/postcss-purgecss": "^6.0.0",
     "@types/lodash.debounce": "^4.0.9",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
@@ -65,6 +69,7 @@
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
+    "purgecss": "^6.0.0",
     "vite": "^6.2.5"
   }
 }

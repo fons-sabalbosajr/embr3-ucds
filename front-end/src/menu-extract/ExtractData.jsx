@@ -4,19 +4,20 @@ import {
   Select,
   Table,
   Button,
-  ConfigProvider,
   Spin,
   Tooltip,
   Input,
   Space,
+  message,
 } from "antd";
 import { ExportOutlined, SearchOutlined } from "@ant-design/icons";
-import { Highlighter } from "react-highlight-words";
+import Highlighter from "react-highlight-words";
+import axios from "axios";
+import { API_BASE } from "../config/api";
 import "./extractdata.css";
 
-const ExtractData = () => {
+const ExtractData = ({ theme }) => {
   const { RangePicker } = DatePicker;
-  const { Option } = Select;
 
   const provinces = [
     { value: "All", label: "All" },
@@ -37,27 +38,14 @@ const ExtractData = () => {
   const [searchText, setSearchText] = useState("");
   const [searchedColumn, setSearchedColumn] = useState("");
   const searchInput = useRef(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch(
-          "http://10.14.77.107:8081/api/extract-province-data",
-          {
-            method: "GET",
-            params: {
-              keyword: searchKeyword,
-            },
-          }
-        );
-        const data = await response.json();
-        setData(data);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-    fetchData();
-  }, [searchKeyword]);
+    // initial auto-load
+    handleGenerateClick();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleProvinceChange = (value) => {
     setSelectedProvince(value);
@@ -160,10 +148,10 @@ const ExtractData = () => {
     ),
     onFilter: (value, record) =>
       record[dataIndex]?.toString().toLowerCase().includes(value.toLowerCase()),
-    onFilterDropdownOpenChange: (visible) => {
-      if (visible) {
-        setTimeout(() => searchInput.current?.select(), 100);
-      }
+    filterDropdownProps: {
+      onOpenChange: (open) => {
+        if (open) setTimeout(() => searchInput.current?.select(), 100);
+      },
     },
     render: (text) =>
       searchedColumn === dataIndex ? (
@@ -231,49 +219,62 @@ const ExtractData = () => {
 
       if (selectedProvince !== "All") {
         queryParams.append("province", selectedProvince);
-      } else {
-        // Remove the province parameter if "All" is selected
-        delete queryParams.keyword;
       }
 
-      const response = await fetch(
-        `http://10.14.77.107:8081/api/extract-province-data?${queryParams.toString()}`,
-        {
-          method: "GET",
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error response:", errorData);
-        return;
-      }
-
-      const newData = await response.json();
+      const { data: newData } = await axios.get(`${API_BASE}/extract-province-data`, {
+        params: Object.fromEntries(queryParams),
+        withCredentials: true,
+      });
 
       if (Array.isArray(newData)) {
         setData(newData);
+        message.success(`Loaded ${newData.length} record(s)`);
       } else {
-        console.error("Invalid data format. Expected an array.");
+        message.error("Invalid data format. Expected an array.");
         setData([]);
       }
     } catch (error) {
       console.error(error);
+      message.error(error?.message || "Failed to load extract data");
       setData([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const exportCsv = () => {
+    if (!data?.length) return message.info("No data to export");
+    const keys = Array.from(
+      data.reduce((set, row) => {
+        Object.keys(row || {}).forEach((k) => set.add(k));
+        return set;
+      }, new Set(["id_no", "name", "title", "industry_type", "province"]))
+    );
+    const escape = (v) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const header = keys.join(",");
+    const lines = data.map((row) => keys.map((k) => escape(row[k])).join(","));
+    const csv = [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const prov = selectedProvince === "All" ? "ALL" : selectedProvince.replace(/\s+/g, "-");
+    const dateTag = dateRange?.length === 2 && dateRange[0] && dateRange[1]
+      ? `${dateRange[0].format("YYYYMMDD")}-${dateRange[1].format("YYYYMMDD")}`
+      : "all-dates";
+    a.href = url;
+    a.download = `extract-${prov}-${dateTag}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          fontSize: 10,
-        },
-      }}
-    >
-      <div className="container">
+      <div className={`container ${theme === 'dark' ? 'dark' : 'light'}`}>
         <div className="header">
           <h2 className="header-extract">Extract Data</h2>
           <div className="right-align">
@@ -290,21 +291,18 @@ const ExtractData = () => {
               placeholder="Select Province"
               value={selectedProvince}
               onChange={handleProvinceChange}
-              defaultValue="All"
-            >
-              {provinces.map((province) => (
-                <Option value={province.value}>{province.label}</Option>
-              ))}
-            </Select>
+              options={provinces}
+            />
             <Button
               type="primary"
               className="button-gen"
               onClick={handleGenerateClick}
+              disabled={loading}
             >
               Generate
             </Button>
             <Tooltip title="Export data">
-              <Button type="primary" className="button-export">
+              <Button type="primary" className="button-export" onClick={exportCsv} disabled={!data?.length}>
                 <ExportOutlined />
               </Button>
             </Tooltip>
@@ -315,6 +313,15 @@ const ExtractData = () => {
           dataSource={data}
           className="table"
           rowKey="id_no"
+          pagination={{
+            current: currentPage,
+            pageSize,
+            total: data.length,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+            onChange: (page, ps) => { setCurrentPage(page); setPageSize(ps); },
+            showTotal: (t, range) => `${range[0]}-${range[1]} of ${t}`,
+          }}
           loading={{
             spinning: loading,
             indicator: (
@@ -337,7 +344,6 @@ const ExtractData = () => {
           }}
         />
       </div>
-    </ConfigProvider>
   );
 };
 

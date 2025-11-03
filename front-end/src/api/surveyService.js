@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const API_BASE = "http://10.14.77.107:8081/api";
+import { API_BASE } from "../config/api";
 
 export const fetchSurveyData = async (year, signal) => {
   const response = await fetch(`${API_BASE}/surveys/${year}`, {

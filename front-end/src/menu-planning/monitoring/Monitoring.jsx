@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { API_BASE } from "../../config/api";
 import {
   Table,
   Input,
@@ -126,7 +127,7 @@ const DashboardTiles = ({
       setLoadingStats(true);
       try {
         const response = await axios.get(
-          "http://10.14.77.107:8081/api/ucds/dashboard-stats" // No params for initial full load
+          `${API_BASE}/ucds/dashboard-stats` // No params for initial full load
         );
         setStats(response.data);
         setInitialStats(response.data); // Save the full initial stats
@@ -160,12 +161,9 @@ const DashboardTiles = ({
           }));
         } else {
           // Fetch stats again, filtered by permitTypeKey
-          const response = await axios.get(
-            "http://10.14.77.107:8081/api/ucds/dashboard-stats",
-            {
-              params: { permitTypeFilterKey: selectedPermitTypeKey },
-            }
-          );
+          const response = await axios.get(`${API_BASE}/ucds/dashboard-stats`, {
+            params: { permitTypeFilterKey: selectedPermitTypeKey },
+          });
           if (response.data) {
             setStats((prevStats) => ({
               ...prevStats,

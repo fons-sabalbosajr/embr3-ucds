@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE } from "../config/api";
 
 export const fetchHealthcareData = async () => {
-  const response = await fetch("http://10.14.77.107:8081/api/healthcare", {
+  const response = await fetch(`${API_BASE}/healthcare`, {
     method: "GET",
     credentials: "include",
   });
