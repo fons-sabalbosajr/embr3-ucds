@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { List, Modal, Button, Row, Col } from "antd";
 import NiceAvatar from "react-nice-avatar";
 import "./userstatus.css";
+import { API_BASE_URL } from "../../config/api";
 import { getOnlineUsers } from "../../api/userService"; // Import the new service
 
 const UserStatus = ({ theme }) => {
@@ -145,7 +146,7 @@ const UserStatus = ({ theme }) => {
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
-                          src={`http://10.14.77.107:8081${user.avatar}`}
+                          src={`${API_BASE_URL}${user.avatar}`}
                           alt="Avatar"
                           className="user-status-item-avatar"
                         />
@@ -220,7 +221,7 @@ const UserStatus = ({ theme }) => {
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
-                          src={`http://10.14.77.107:8081${user.avatar}`}
+                          src={`${API_BASE_URL}${user.avatar}`}
                           alt="Avatar"
                           className="user-status-item-avatar" // modal-list will target this for size
                         />
@@ -265,7 +266,7 @@ const UserStatus = ({ theme }) => {
                     {user.avatar ? (
                       typeof user.avatar === "string" ? (
                         <img
-                          src={`http://10.14.77.107:8081${user.avatar}`}
+                          src={`${API_BASE_URL}${user.avatar}`}
                           alt="Avatar"
                           className="user-status-item-avatar" // modal-list will target this for size
                         />

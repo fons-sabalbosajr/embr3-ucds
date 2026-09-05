@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { AutoComplete, Spin, Input, ConfigProvider } from "antd";
 import "./autocompletestyles.css";
+import { API_BASE_URL } from "../../../config/api";
 
 const ProjectTitle = ({ isEditing }) => {
   const [options, setOptions] = useState([]);
@@ -11,7 +12,7 @@ const ProjectTitle = ({ isEditing }) => {
       setLoading(true);
       try {
         const response = await fetch(
-          `http://10.14.77.107:8081/api/ucds/search-title?query=${value}`
+          `${API_BASE_URL}/api/ucds/search-title?query=${value}`
         );
         const data = await response.json();
         const uniqueTitles = data

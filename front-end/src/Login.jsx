@@ -5,7 +5,8 @@ import { Link, useNavigate } from "react-router-dom";
 import CryptoJS from "crypto-js";
 import "./login.css";
 import { loginUser } from "./api/authService"; // Import the new service
-import homelogo from "./assets/UCDSInformation.png";
+import { ROUTES } from "./config/routes";
+import AuthBrand from "./components/AuthBrand";
 
 const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +29,9 @@ const Login = () => {
       if (responseData.status === "success") {
         // const { password, ...safeProfile } = responseData; // password is not in responseData if service handles it
         // No longer storing the full profile in localStorage
-        navigate("/universe");
+        // Login no longer lands in the application directly — a year container
+        // must be chosen first, and the server clears any previous selection.
+        navigate(ROUTES.selectYear);
       } else {
         setError("Login failed. Please check your credentials.");
       }
@@ -56,11 +59,7 @@ const Login = () => {
         <div className="login-form-wrapper"> {/* Renamed class */}
           <div className="login-card"> {/* Renamed class */}
             <div className="login-logo-container"> {/* New container for logo */}
-              <img
-                src={homelogo}
-                alt="UCDS Logo"
-                className="login-logo" /* Added class for styling, width/height in CSS */
-              />
+              <AuthBrand size="md" />
             </div>
             <div className="login-title-container"> {/* New container for titles */}
               <p className="login-title-main">
@@ -106,7 +105,7 @@ const Login = () => {
               {/* Use div for consistent spacing around the link buttons */}
 
               <div style={{ marginTop: "10px" }}>
-                <Link to="/register" style={{ display: 'block' }}> {/* Make Link block for Button to take full width */}
+                <Link to={ROUTES.register} style={{ display: 'block' }}> {/* Make Link block for Button to take full width */}
                   <Button block size="large">
                     Create Account
                   </Button>
@@ -114,7 +113,7 @@ const Login = () => {
               </div>
 
               <div style={{ marginBottom: 0, textAlign: 'center' }}> {/* Center link button, remove excess bottom margin */}
-                  <Link to="/forgot-password">
+                  <Link to={ROUTES.forgotPassword}>
                       <Button type="link">Forgot Password?</Button>
                   </Link>
               </div>

@@ -104,18 +104,36 @@ async function createUser(req, res) {
 
 const { ObjectId } = require('../config/db');
 
+// Fields a client may never write through a profile/user update. `password` is
+// the important one: clients receive user documents and send them back intact,
+// so echoing a stale hash here would silently revert a password reset. Password
+// changes go through the reset flow, which hashes properly.
+const PROTECTED_USER_FIELDS = ['_id', 'password', 'resetToken', 'resetTokenExpiration'];
+
+// Never send credential material to a client. Applied to every user read so a
+// hash cannot be round-tripped back into an update.
+const PUBLIC_USER_PROJECTION = { password: 0, resetToken: 0, resetTokenExpiration: 0 };
+
+function stripProtectedFields(payload) {
+  const clean = { ...payload };
+  for (const field of PROTECTED_USER_FIELDS) delete clean[field];
+  return clean;
+}
+
 // PUT /api/users/:id — admin update (including avatar URL if sent)
 async function updateUserById(req, res) {
   try {
     await connectToMongo();
     const { id } = req.params;
-    const updatedUser = req.body;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
-    const { avatar } = updatedUser;
-    delete updatedUser._id;
+    const { avatar } = req.body;
+    const updatedUser = stripProtectedFields(req.body);
     delete updatedUser.avatar;
     const updateOperation = { $set: updatedUser };
     if (avatar) updateOperation.$set.avatar = avatar;
+    if (Object.keys(updateOperation.$set).length === 0) {
+      return res.json({ message: 'Nothing to update' });
+    }
     const result = await collections.users.updateOne({ _id: new ObjectId(id) }, updateOperation);
     if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
     return res.json({ message: 'User updated successfully' });
@@ -130,8 +148,11 @@ async function updateProfile(req, res) {
   try {
     await connectToMongo();
     const { id } = req.params;
-    const updatedUser = req.body;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
+    const updatedUser = stripProtectedFields(req.body);
+    if (Object.keys(updatedUser).length === 0) {
+      return res.json({ message: 'Nothing to update' });
+    }
     const result = await collections.users.updateOne({ _id: new ObjectId(id) }, { $set: updatedUser });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
     return res.json({ message: 'User updated successfully' });
@@ -165,7 +186,7 @@ async function getUsers(req, res) {
     await connectToMongo();
     const { username } = req.query;
     const query = username ? { username } : {};
-    const users = await collections.users.find(query).toArray();
+    const users = await collections.users.find(query, { projection: PUBLIC_USER_PROJECTION }).toArray();
     if (username && users.length === 0) return res.status(404).json({ message: 'User  not found' });
     return res.json(users);
   } catch (error) {
@@ -179,7 +200,7 @@ async function getUserDetails(req, res) {
   if (!username) return res.status(400).json({ message: 'Username is required' });
   try {
     await connectToMongo();
-    const user = await collections.users.findOne({ username }, { projection: { password: 0 } });
+    const user = await collections.users.findOne({ username }, { projection: PUBLIC_USER_PROJECTION });
     if (!user) return res.status(404).json({ message: 'User not found' });
     return res.json(user);
   } catch (error) {

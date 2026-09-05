@@ -25,6 +25,7 @@ import Highlighter from "react-highlight-words";
 import "./tsdpermit.css";
 import Swal from "sweetalert2";
 import TSDModal from "./TSDModal"; 
+import { API_BASE_URL, SOCKET_URL } from "../config/api";
 import { io } from "socket.io-client"; // Added io
 
 const TSDPermits = ({ theme, currentUser, data }) => {
@@ -57,7 +58,7 @@ const TSDPermits = ({ theme, currentUser, data }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://10.14.77.107:8081/api/tsd", {
+        const response = await fetch(`${API_BASE_URL}/api/tsd`, {
           method: "GET",
           credentials: "include",
         });
@@ -95,7 +96,7 @@ const TSDPermits = ({ theme, currentUser, data }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", { withCredentials: true });
+      socketRef.current = io(SOCKET_URL, { withCredentials: true });
     }
     const socket = socketRef.current;
 
@@ -146,7 +147,7 @@ const TSDPermits = ({ theme, currentUser, data }) => {
   const handleReload = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://10.14.77.107:8081/api/tsd", {
+      const response = await fetch(`${API_BASE_URL}/api/tsd`, {
         method: "GET",
         credentials: "include",
       });

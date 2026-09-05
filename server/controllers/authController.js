@@ -4,6 +4,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { ObjectId } = require('../config/db');
 const { connectToMongo } = require('../config/db');
+const { allowedOrigins } = require('../config/cors');
+const { roleOf } = require('../services/authorization');
 
 function buildSessionPayload(user) {
   return {
@@ -12,6 +14,8 @@ function buildSessionPayload(user) {
     username: user.username,
     division: user.division,
     permission: user.permission,
+    role: roleOf(user),
+    assignedYears: Array.isArray(user.assignedYears) ? user.assignedYears.map(Number) : [],
     avatar: user.avatar,
     canGenerateData: user.canGenerateData || false,
     canManageData: user.canManageData || false,
@@ -58,6 +62,8 @@ async function login(req, res) {
     if (!passwordMatch) return res.status(401).json({ error: 'Invalid username or password.' });
 
     req.session.user = buildSessionPayload(user);
+    // A fresh sign-in always starts at the year container picker.
+    delete req.session.activeYear;
 
     await collections.loginStatus.updateOne(
       { userId: user._id },
@@ -96,7 +102,11 @@ async function requestPasswordReset(req, res) {
       { $set: { resetToken, resetTokenExpiration: Date.now() + 3600000 } }
     );
 
-    const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
+    // Point at whichever front-end origin this deployment serves. Falls back to
+    // the first allowed CORS origin so the link is never hardcoded to localhost.
+    const clientUrl = (process.env.CLIENT_URL || process.env.SERVER_URL || allowedOrigins[0] || 'http://localhost:5173')
+      .replace(/\/+$/, '');
+    const resetLink = `${clientUrl}/universe-central-database-system/reset-password?token=${resetToken}`;
 
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -198,6 +208,9 @@ function checkAuth(req, res) {
     username: u.username,
     division: u.division,
     permission: u.permission,
+    role: u.role || roleOf(u),
+    assignedYears: u.assignedYears || [],
+    activeYear: req.session.activeYear || null,
     avatar: u.avatar,
     canGenerateData: u.canGenerateData,
     canManageData: u.canManageData,

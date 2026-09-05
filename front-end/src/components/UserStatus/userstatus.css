@@ -223,7 +223,7 @@
 
 /* Scrollbar styles for modal list (can be same as user-status-list-container if desired) */
 .user-status-list-container {
-  //height: 180px;
+  /* height: 180px; */
   overflow-y: auto;
   scrollbar-width: none; /* For Firefox */
   -ms-overflow-style: none; /* For Internet Explorer and Edge */

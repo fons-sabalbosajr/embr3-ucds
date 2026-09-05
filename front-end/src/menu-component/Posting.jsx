@@ -26,6 +26,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import moment from "moment";
 import { CheckOutlined } from "@ant-design/icons";
+import { API_BASE_URL } from "../config/api";
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -50,7 +51,7 @@ const Posting = () => {
   useEffect(() => {
     // Fetch senders from user collection API
     const fetchSenders = async () => {
-      const response = await axios.get("http://10.14.77.107:8081/api/users"); // Replace with your API endpoint
+      const response = await axios.get(`${API_BASE_URL}/api/users`); // Replace with your API endpoint
       const sendersData = response.data;
       setSenders(sendersData);
     };
@@ -61,7 +62,7 @@ const Posting = () => {
 
   const fetchAnnouncements = async () => {
     try {
-      const response = await axios.get("http://10.14.77.107:8081/api/postings");
+      const response = await axios.get(`${API_BASE_URL}/api/postings`);
       const announcementsData = response.data;
       setAnnouncements(announcementsData);
     } catch (error) {
@@ -72,7 +73,7 @@ const Posting = () => {
   const handleStatusChange = async (id, status) => {
     console.log("Updating status for ID:", id); // Debugging log
     try {
-      const response = await fetch(`http://10.14.77.107:8081/api/postings/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/postings/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -137,7 +138,7 @@ const Posting = () => {
 
   const handleFormSubmit = async (values) => {
     try {
-      const response = await fetch("http://10.14.77.107:8081/api/posting", {
+      const response = await fetch(`${API_BASE_URL}/api/posting`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -194,7 +195,7 @@ const Posting = () => {
   const handleEditSubmit = async (values) => {
     try {
       const response = await fetch(
-        `http://10.14.77.107:8081/api/postings/${selectedPosting._id}`,
+        `${API_BASE_URL}/api/postings/${selectedPosting._id}`,
         {
           method: "PUT",
           headers: {
@@ -239,7 +240,7 @@ const Posting = () => {
 
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`http://10.14.77.107:8081/api/postings/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/postings/${id}`, {
         method: "DELETE",
         credentials: "include", // Include credentials
       });

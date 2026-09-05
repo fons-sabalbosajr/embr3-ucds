@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { AutoComplete, Spin, Input, ConfigProvider } from "antd";
 import "./autocompletestyles.css";
+import { API_BASE_URL } from "../../../config/api";
 
 const ProjectTitle = ({ isEditing }) => {
   const [options, setOptions] = useState([]);
@@ -12,7 +13,7 @@ const ProjectTitle = ({ isEditing }) => {
       try {
         const year = "2025"; // Always use year 2025 for search titles
         const response = await fetch(
-          `http://10.14.77.107:8081/api/surveys/search-title?query=${value}&year=${year}`
+          `${API_BASE_URL}/api/surveys/search-title?query=${value}&year=${year}`
         );
 
         const data = await response.json();

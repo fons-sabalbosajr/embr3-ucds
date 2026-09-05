@@ -18,6 +18,7 @@ import AvatarSelectionModal from "../components/AvatarSelectionModalProfile";
 import AvatarWithName from "../components/AvatarwithName";
 import NiceAvatar from "react-nice-avatar";
 import CryptoJS from "crypto-js";
+import { API_BASE_URL } from "../config/api";
 
 const { TabPane } = Tabs;
 
@@ -67,7 +68,7 @@ const UserAccountModal = ({ userHandle, user }) => {
       }
   
       const response = await axios.put(
-        `http://10.14.77.107:8081/api/users/${editableUser._id}`,
+        `${API_BASE_URL}/api/users/${editableUser._id}`,
         updatedUserData,
         {
           headers: {

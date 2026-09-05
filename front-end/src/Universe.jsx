@@ -55,6 +55,7 @@ import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
 import UserPopover from "./components/PopOverUser/PopOverUser";
 import Z_CustomSpinner from "./Z_CustomSpinner";
+import YearSwitcher from "./components/YearSwitcher";
 import { DataProvider } from "./menu-province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import moment from "moment";
@@ -69,6 +70,7 @@ import ERMSSettings from "./menu-ZERMS/menu-settings/ERMSSettings";
 import LegalDashboard from "./menu-legal/legal-dashboard/LegalDashboard"; // Assuming these are the correct paths
 import LegalDocket from "./menu-legal/docket/LegalDocket";
 import EnviLaws from "./menu-legal/envi-laws/EnviLaws";
+import { ROUTES } from "./config/routes";
 
 const { Header, Content } = Layout;
 
@@ -329,7 +331,7 @@ const Universe = () => {
         <Button onClick={handleRetry} loading={retrying}>
           Retry
         </Button>
-        <Navigate to="/login" />
+        <Navigate to={ROUTES.login} />
       </div>
     );
   }
@@ -444,6 +446,9 @@ const Universe = () => {
                     <span className="user-name" style={{ whiteSpace: "nowrap" }}>
                       {now.format("MMMM DD, YYYY hh:mm A")} | {name} | {division}
                     </span>
+
+                    {/* Which year container this session is operating in. */}
+                    <YearSwitcher theme={theme} />
 
                     <NotificationsPopover
                       theme={theme}

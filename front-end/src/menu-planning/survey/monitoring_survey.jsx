@@ -45,6 +45,8 @@ import {
 } from "@ant-design/icons";
 import axios from "axios";
 import dayjs from "dayjs";
+import { API_BASE_URL } from "../../config/api";
+import { getActiveYear } from "../../context/YearContext";
 import Breakdown from "../monitoring/Breakdown"; // Assuming Breakdown component might be reused or adapted
 import "./monitoring_survey.css"; // Use the new CSS file
 
@@ -70,7 +72,7 @@ const DashboardTiles = ({
       try {
         // Assuming survey data is for a specific year, e.g., 2025.
         // Adjust the endpoint year if needed.
-        const response = await axios.get("http://10.14.77.107:8081/api/survey-dashboard-stats/2025");
+        const response = await axios.get(`${API_BASE_URL}/api/survey-dashboard-stats/${getActiveYear()}`);
         setStats(response.data);
       } catch (error) {
         console.error("Error fetching survey dashboard stats:", error);
@@ -240,7 +242,7 @@ const MonitoringSurvey = ({ theme = "light" }) => {
       // Assuming survey data is for a specific year, e.g., 2025.
       // Adjust the endpoint and parameters as per your server.js implementation.
       const res = await axios.get(
-        `http://10.14.77.107:8081/api/surveys-monitoring-data/2025`,
+        `${API_BASE_URL}/api/surveys-monitoring-data/${getActiveYear()}`,
         {
           params: {
             page,
@@ -556,7 +558,7 @@ const MonitoringSurvey = ({ theme = "light" }) => {
       for (const update of updatesToApi) {
         // Adjust year or make it dynamic if necessary
         await axios.put(
-          `http://10.14.77.107:8081/api/surveys-monitoring-data/2025/${update.identifier}`,
+          `${API_BASE_URL}/api/surveys-monitoring-data/${getActiveYear()}/${update.identifier}`,
           update.payload
         );
       }
@@ -614,7 +616,7 @@ const MonitoringSurvey = ({ theme = "light" }) => {
       if (dataIndex === "industry_class" && value) {
         try {
           const response = await axios.get(
-            `http://10.14.77.107:8081/api/industry-details-by-class`,
+            `${API_BASE_URL}/api/industry-details-by-class`,
             { params: { className: value } }
           );
           const details = response.data;

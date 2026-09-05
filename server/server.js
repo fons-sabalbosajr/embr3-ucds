@@ -6,6 +6,10 @@ const session = require("express-session");
 const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv").config();
+
+// Must run before any DNS resolution (Mongo SRV lookup, mail, SMB).
+require("./config/dns").configureDns();
+
 const MongoStore = require("connect-mongo");
 const cron = require("node-cron");
 const { connectToMongo, collections, client } = require("./config/db");
@@ -24,6 +28,7 @@ const fileRoutes = require("./routes/fileRoutes");
 const ermsRoutes = require("./routes/ermsRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 const developerRoutes = require("./routes/developerRoutes");
+const yearRoutes = require("./routes/yearRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 8081;
@@ -60,10 +65,14 @@ app.use(
 );
 
 // Warm up a DB connection once at startup
-connectToMongo().catch((error) => {
-  console.error("Error during MongoDB connection:", error);
-  process.exit(1);
-});
+connectToMongo()
+  .then(() => require("./services/yearService").ensureSeeded())
+  .catch((error) => {
+    console.error("Error during MongoDB connection:", error);
+    process.exit(1);
+  });
+
+require("./middleware/auth").warnIfAuthBypassed();
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
@@ -85,6 +94,7 @@ app.use(fileRoutes);
 app.use(ermsRoutes);
 app.use(healthRoutes);
 app.use(developerRoutes);
+app.use(yearRoutes);
 
 // Helper function to calculate time since last activity
 function calculateTimeAgo(date) {

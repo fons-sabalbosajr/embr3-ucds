@@ -5,19 +5,26 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import emailjs from "emailjs-com";
-import homelogo from "./assets/UCDSInformation.png";
 import { LoadingOutlined } from "@ant-design/icons";
 import "./register.css";
+import { API_BASE_URL } from "./config/api";
+import { ROUTES } from "./config/routes";
+import AuthBrand from "./components/AuthBrand";
+import {
+  EMAILJS_SERVICE_ID,
+  EMAILJS_TEMPLATE_ID,
+  EMAILJS_PUBLIC_KEY,
+} from "./config/emailjs";
 
 const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const MySwal = withReactContent(Swal);
 
-  // Environment variables
-  const serviceId = "service_0etqm0f";
-  const templateId = "template_inuuzin";
-  const publicKey = "bgYF-06ZE7QHB5_lJ";
+  // Environment variables (see server/.env -> front-end/.env.local)
+  const serviceId = EMAILJS_SERVICE_ID;
+  const templateId = EMAILJS_TEMPLATE_ID;
+  const publicKey = EMAILJS_PUBLIC_KEY;
 
 
   // Function to send email using emailjs-com
@@ -50,7 +57,7 @@ const Register = () => {
 
     try {
       const response = await axios.post(
-        "http://10.14.77.107:8081/register",
+        `${API_BASE_URL}/register`,
         {
           name: values.name,
           division: values.division,
@@ -80,7 +87,7 @@ const Register = () => {
           title: "Registration submitted for approval",
           text: "Your account registration has been submitted for admin approval. You will receive further instructions via email once approved.",
         }).then(() => {
-          navigate("/login"); // Navigate to login page after registration submission
+          navigate(ROUTES.login); // Navigate to login page after registration submission
         });
       } else {
         MySwal.fire({
@@ -114,11 +121,7 @@ const Register = () => {
         <div className="login-form-wrapper"> {/* Use same class for centering */}
           <div className="login-card"> {/* Use same card styling */}
             <div className="login-logo-container">
-              <img
-                src={homelogo}
-                alt="UCDS Logo"
-                className="login-logo"
-              />
+              <AuthBrand size="md" />
             </div>
             <div className="login-title-container">
               <p className="login-title-main">
@@ -190,7 +193,7 @@ const Register = () => {
                 </Button>
               </Form.Item>
               <Form.Item style={{marginBottom: 0}}> {/* Ensure consistent spacing */}
-                <Link to="/login">
+                <Link to={ROUTES.login}>
                   <Button block size="large"> {/* This will get default button styling */}
                     Back to Log In
                   </Button>

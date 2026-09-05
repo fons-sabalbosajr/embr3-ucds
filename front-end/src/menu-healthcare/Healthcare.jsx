@@ -40,6 +40,7 @@ import HealthcareModal from "./HealthcareModal";
 import { io } from "socket.io-client"; // Added io
 import { fetchHealthcareData } from "../api/healthcareService";
 import AddHealthcareModal from "./actions/AddHealthcareModal";
+import { SOCKET_URL } from "../config/api";
 
 const Healthcare = ({ theme, currentUser, data }) => {
   const [loading, setLoading] = useState(false);
@@ -121,7 +122,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", {
+      socketRef.current = io(SOCKET_URL, {
         withCredentials: true,
       });
     }

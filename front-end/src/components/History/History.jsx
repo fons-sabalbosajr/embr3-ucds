@@ -4,6 +4,7 @@ import { InfoCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
 import { format } from "date-fns";
 import "./history.css";
+import { API_BASE_URL } from "../../config/api";
 
 const History = () => {
   const [ucdsLogs, setUcdsLogs] = useState([]);
@@ -16,7 +17,7 @@ const History = () => {
     const fetchUcdsLogs = async () => {
       try {
         const ucdsLogsResponse = await axios.get(
-          "http://10.14.77.107:8081/api/ucds-log"
+          `${API_BASE_URL}/api/ucds-log`
         );
         setUcdsLogs(ucdsLogsResponse.data);
       } catch (error) {
@@ -27,7 +28,7 @@ const History = () => {
     const fetchSurveyLogs = async () => {
       try {
         const surveyLogsResponse = await axios.get(
-          "http://10.14.77.107:8081/api/survey-log"
+          `${API_BASE_URL}/api/survey-log`
         );
         setSurveyLogs(surveyLogsResponse.data);
       } catch (error) {

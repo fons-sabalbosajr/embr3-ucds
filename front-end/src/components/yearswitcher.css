@@ -1,0 +1,74 @@
+.yearswitcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.yearswitcher:hover {
+  background: rgba(84, 133, 71, 0.1);
+  border-color: rgba(84, 133, 71, 0.35);
+}
+
+.yearswitcher:focus-visible {
+  outline: 2px solid #71ce58;
+  outline-offset: 1px;
+}
+
+.yearswitcher:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.yearswitcher-tag {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-size: 11.5px;
+}
+
+.yearswitcher-caret {
+  font-size: 10px;
+  color: #6b7a71;
+}
+
+.yearswitcher.dark:hover {
+  background: rgba(157, 223, 133, 0.14);
+  border-color: rgba(157, 223, 133, 0.4);
+}
+
+.yearswitcher.dark .yearswitcher-caret {
+  color: #a8b3ac;
+}
+
+/* Dropdown contents */
+
+.yearswitcher-heading {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8c9a92;
+}
+
+.yearswitcher-item {
+  font-weight: 500;
+}
+
+.yearswitcher-item.active {
+  font-weight: 700;
+}
+
+.yearswitcher-item-sub {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8c9a92;
+  margin-left: 2px;
+}

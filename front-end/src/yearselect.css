@@ -1,0 +1,222 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
+
+/* Year Container Selection — shown between login and the application. */
+
+.yearselect {
+  --brand: #548547;
+  --brand-bright: #71ce58;
+  --ink: #1f2a24;
+  --ink-soft: #5b6b62;
+  --line: #e3e9e5;
+
+  font-family: "Poppins", sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: linear-gradient(160deg, #f5f7fa 0%, #e8f0e5 100%);
+}
+
+.yearselect-panel {
+  width: 100%;
+  max-width: 720px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(31, 42, 36, 0.1);
+  padding: 44px 40px 28px;
+}
+
+/* ---------- Header ---------- */
+
+.yearselect-head {
+  text-align: center;
+  margin-bottom: 34px;
+}
+
+.yearselect-logo {
+  margin-bottom: 14px;
+}
+
+.yearselect-head h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0;
+}
+
+.yearselect-head h2 {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 2px 0 0;
+}
+
+.yearselect-instruction {
+  margin: 26px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.yearselect-instruction::after {
+  content: "";
+  display: block;
+  width: 46px;
+  height: 2px;
+  margin: 10px auto 0;
+  background: var(--brand-bright);
+  border-radius: 2px;
+}
+
+/* ---------- Cards ---------- */
+
+.yearselect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 18px;
+}
+
+.yearselect-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 30px 16px 24px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.yearselect-card:hover:not(:disabled) {
+  transform: translateY(-4px);
+  border-color: var(--brand);
+  box-shadow: 0 12px 26px rgba(84, 133, 71, 0.18);
+}
+
+.yearselect-card:focus-visible {
+  outline: 3px solid var(--brand-bright);
+  outline-offset: 2px;
+}
+
+.yearselect-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.yearselect-card-icon {
+  font-size: 22px;
+  color: var(--brand);
+  margin-bottom: 6px;
+}
+
+.yearselect-card-year {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.yearselect-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.yearselect-card-spin {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+/* ---------- States ---------- */
+
+.yearselect-state {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--ink-soft);
+}
+
+.yearselect-state p {
+  margin-top: 14px;
+  font-size: 13.5px;
+}
+
+.yearselect-empty-hint {
+  max-width: 40ch;
+  margin: 8px auto 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.yearselect-error {
+  margin-bottom: 18px;
+  padding: 11px 15px;
+  border-radius: 9px;
+  border: 1px solid #ffccc7;
+  background: #fff2f0;
+  color: #a8071a;
+  font-size: 13px;
+}
+
+/* ---------- Footer ---------- */
+
+.yearselect-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 30px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.yearselect-role {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+
+/* ---------- Dark ---------- */
+
+.dark-theme .yearselect,
+.yearselect.dark-theme {
+  --ink: #f0f0f0;
+  --ink-soft: #a8b3ac;
+  --line: #2c2c2c;
+  --brand: #9ddf85;
+  --brand-bright: #b6e8a2;
+  background: linear-gradient(160deg, #141414 0%, #1b241a 100%);
+}
+
+.dark-theme .yearselect-panel,
+.dark-theme .yearselect-card {
+  background: #1c1c1c;
+}
+
+@media (max-width: 560px) {
+  .yearselect-panel {
+    padding: 32px 20px 20px;
+  }
+
+  .yearselect-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 14px;
+  }
+}

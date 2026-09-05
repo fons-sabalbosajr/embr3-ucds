@@ -18,7 +18,7 @@
 }
 
 .button-generate-alpha {
-  //background-color: rgb(60, 133, 60);
+  /* background-color: rgb(60, 133, 60); */
 
   margin-right: 5px;
 }
@@ -118,7 +118,7 @@
   padding: 16px;
 }
 
-///////////THEMES///////////////////////
+/* THEMES */
 
 /* General styles for the modal */
 .modal-container.light-theme {

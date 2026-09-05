@@ -45,6 +45,9 @@ async function connectToMongo() {
   collections.fieldConfigs = db.collection('developer-field-configs');
   collections.pdfForms = db.collection('developer-pdf-forms');
 
+  // Year container registry (see services/yearService.js)
+  collections.yearContainers = db.collection('year-containers');
+
   return { db, client, collections };
 }
 

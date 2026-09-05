@@ -8,6 +8,7 @@ import FocalPerson from "./tabpanes/FocalPerson/FocalPerson";
 import Permits from "./tabpanes/Permits/Permits";
 import Legal from "./tabpanes/LegalUnit/Legal";
 import "./chemicalmodal.css";
+import { API_BASE_URL } from "../config/api";
 
 const { TabPane } = Tabs;
 
@@ -60,7 +61,7 @@ const ChemicalModal = ({
           };
 
           const response = await axios.put(
-            `http://10.14.77.107:8081/api/update-chemical/${record.id_no}`,
+            `${API_BASE_URL}/api/update-chemical/${record.id_no}`,
             updatedRecord
           );
 

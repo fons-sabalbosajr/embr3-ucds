@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Form, Input, Button, Typography, Alert, Spin } from "antd";
 import PDFViewer from "./PDFViewer";
+import { API_BASE_URL } from "../../config/api";
 
 // FileList is moved here or imported
 const FileList = ({ onFileSelect }) => {
@@ -9,7 +10,7 @@ const FileList = ({ onFileSelect }) => {
   const [error, setError] = useState(null);
 
   React.useEffect(() => {
-    fetch("http://10.14.77.107:8081/api/erms/files", {
+    fetch(`${API_BASE_URL}/api/erms/files`, {
       credentials: "include",
     })
       .then((res) => {
@@ -100,7 +101,7 @@ const ERMSStorageConfigModal = () => {
     console.log("➡️ Attempting login with payload:", payload);
 
     try {
-      const response = await fetch("http://10.14.77.107:8081/api/erms/login", {
+      const response = await fetch(`${API_BASE_URL}/api/erms/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

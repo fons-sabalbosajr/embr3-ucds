@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../config/api";
 
 export const DataContext = createContext();
 
@@ -38,7 +39,7 @@ export const DataProvider = ({ children }) => {
       }
 
       const response = await axios.get(
-        "http://10.14.77.107:8081/api/get-province-data",
+        `${API_BASE_URL}/api/get-province-data`,
         {
           params: { province, _nocache: Date.now() },
           headers: {

@@ -26,6 +26,7 @@ import AvatarWithName from "../components/AvatarwithName";
 import AccountPermission from "./AccountPermission";
 import { API_URLS } from "../constants/apiUrls";
 import "./useraccount.css";
+import { API_BASE_URL } from "../config/api";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -59,7 +60,7 @@ const UserAccounts = ({ theme = "dark" }) => {
   const fetchLoginStatuses = async () => {
     try {
       const response = await axios.get(
-        "http://10.14.77.107:8081/api/login-status"
+        `${API_BASE_URL}/api/login-status`
       );
       return response.data; // Assuming this returns an array of login status objects
     } catch (error) {
@@ -72,7 +73,7 @@ const UserAccounts = ({ theme = "dark" }) => {
     setLoading(true);
     try {
       const [usersResponse, loginStatuses] = await Promise.all([
-        axios.get("http://10.14.77.107:8081/api/users", {
+        axios.get(`${API_BASE_URL}/api/users`, {
           params: { page: pagination.current, pageSize: pagination.pageSize },
         }),
         fetchLoginStatuses(), // Fetch login statuses separately
@@ -120,7 +121,7 @@ const UserAccounts = ({ theme = "dark" }) => {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get("http://10.14.77.107:8081/api/users", {
+      const response = await axios.get(`${API_BASE_URL}/api/users`, {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -135,7 +136,7 @@ const UserAccounts = ({ theme = "dark" }) => {
 
   const fetchSignUpUsers = async () => {
     try {
-      const response = await axios.get(" http://10.14.77.107:8081/api/sign-up", {
+      const response = await axios.get(" ${API_BASE_URL}/api/sign-up", {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -151,7 +152,7 @@ const UserAccounts = ({ theme = "dark" }) => {
   const fetchLoginStatus = async () => {
     try {
       const response = await axios.get(
-        " http://10.14.77.107:8081/api/online_users"
+        " ${API_BASE_URL}/api/online_users"
       );
       const allStatuses = response.data.onlineUsers;
 
@@ -216,7 +217,7 @@ const UserAccounts = ({ theme = "dark" }) => {
     if (result.isConfirmed) {
       try {
         const response = await axios.delete(
-          `http://10.14.77.107:8081/api/remove-user/${record._id}`
+          `${API_BASE_URL}/api/remove-user/${record._id}`
         );
 
         if (response.data.message === "User removed successfully") {
@@ -634,7 +635,7 @@ const UserAccounts = ({ theme = "dark" }) => {
           if (result.isConfirmed) {
             try {
               const response = await axios.put(
-                ` http://10.14.77.107:8081/api/status/${record._id}`,
+                ` ${API_BASE_URL}/api/status/${record._id}`,
                 { status: value }
               );
               if (

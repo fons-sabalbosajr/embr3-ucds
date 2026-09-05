@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { AutoComplete, Spin, Input, ConfigProvider } from "antd";
 import "./autocompletestyles.css";
+import { API_BASE_URL } from "../../../config/api";
 
 const { TextArea } = Input;
 
@@ -15,7 +16,7 @@ const PTO = ({ isEditing }) => {
       setLoading(true);
       try {
         const response = await fetch(
-          `http://10.14.77.107:8081/api/ucds/search-pto-code?query=${lastQuery}`
+          `${API_BASE_URL}/api/ucds/search-pto-code?query=${lastQuery}`
         );
         const data = await response.json();
         const uniqueNames = data

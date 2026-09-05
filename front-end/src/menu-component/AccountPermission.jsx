@@ -24,6 +24,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import AvatarWithName from "../components/AvatarwithName";
 import "./accountpermission.css";
+import { API_BASE_URL } from "../config/api";
 
 const { TabPane } = Tabs;
 
@@ -130,7 +131,7 @@ const AccountPermission = ({
     const fetchUserAvatarAndAccess = async () => {
       try {
         const response = await axios.get(
-          `http://10.14.77.107:8081/api/users?username=${userData.username}`
+          `${API_BASE_URL}/api/users?username=${userData.username}`
         );
   
         const users = response.data;
@@ -288,13 +289,13 @@ const AccountPermission = ({
       try {
         // Send permissions to the main permissions endpoint
         await axios.patch(
-          `http://10.14.77.107:8081/api/users/${userData.email}/permissions`,
+          `${API_BASE_URL}/api/users/${userData.email}/permissions`,
           updatedPermissions
         );
 
         // Send province permissions to the province permissions endpoint
         await axios.patch(
-          `http://10.14.77.107:8081/api/users/${userData.email}/province-permissions`,
+          `${API_BASE_URL}/api/users/${userData.email}/province-permissions`,
           provincePermissionsPayload
         );
 

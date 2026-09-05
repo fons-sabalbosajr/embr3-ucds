@@ -1,4 +1,5 @@
 const { connectToMongo, collections, getDb } = require('../config/db');
+const { scopeOf } = require('../services/yearScope');
 
 async function updateColor(req, res) {
   const { id_no, color } = req.body;
@@ -9,7 +10,7 @@ async function updateColor(req, res) {
 
   try {
     await connectToMongo();
-    const result = await collections.survey2024.updateOne({ id_no }, { $set: { color } });
+    const result = await scopeOf('survey', req.activeYear).collection.updateOne({ id_no }, { $set: { color } });
 
     if (result.matchedCount === 0) {
       return res.status(404).send('Record not found.');
@@ -61,12 +62,8 @@ module.exports = { updateColor, updateColorUniverse };
 // New survey endpoints migrated from server.js
 async function getSurveysByYear(req, res) {
   try {
-    const { year } = req.params;
     await connectToMongo();
-    let collection;
-    if (year === '2024') collection = collections.survey2024;
-    else if (year === '2025') collection = collections.survey2025;
-    else return res.status(400).json({ error: 'Invalid survey year' });
+    const { collection } = scopeOf('survey', req.activeYear);
 
     const surveys = await collection.find({}).toArray();
     res.status(200).json(surveys);
@@ -78,12 +75,8 @@ async function getSurveysByYear(req, res) {
 
 async function getLastSurveyId(req, res) {
   try {
-    const { year } = req.params;
     await connectToMongo();
-    let collection;
-    if (year === '2024') collection = collections.survey2024;
-    else if (year === '2025') collection = collections.survey2025;
-    else return res.status(400).json({ error: 'Invalid survey year' });
+    const { collection } = scopeOf('survey', req.activeYear);
 
     const lastSurvey = await collection.find({}).sort({ id_no: -1 }).limit(1).toArray();
     if (lastSurvey.length === 0) return res.status(404).json({ error: 'No survey data found' });
@@ -96,13 +89,8 @@ async function getLastSurveyId(req, res) {
 
 async function getSurveyDashboardStats(req, res) {
   try {
-    const { year } = req.params;
     await connectToMongo();
-    const db = getDb();
-    let surveyMonitoringCollection;
-    if (year === '2024') surveyMonitoringCollection = db.collection('survey-data-2024');
-    else if (year === '2025') surveyMonitoringCollection = db.collection('survey-data-2025');
-    else return res.status(400).json({ error: 'Invalid survey year provided.' });
+    const { collection: surveyMonitoringCollection } = scopeOf('survey', req.activeYear);
 
     const totalSurveys = await surveyMonitoringCollection.countDocuments({});
     const projectTypeBreakdown = await surveyMonitoringCollection
@@ -141,17 +129,12 @@ async function getSurveyDashboardStats(req, res) {
 
 async function getSurveysMonitoringData(req, res) {
   try {
-    const { year } = req.params;
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 20;
     const skip = (page - 1) * pageSize;
 
     await connectToMongo();
-    const db = getDb();
-    let surveyMonitoringCollection;
-    if (year === '2024') surveyMonitoringCollection = db.collection('survey-data-2024');
-    else if (year === '2025') surveyMonitoringCollection = db.collection('survey-data-2025');
-    else return res.status(400).json({ error: 'Invalid survey year provided.' });
+    const { collection: surveyMonitoringCollection } = scopeOf('survey', req.activeYear);
 
     const mongoQuery = {};
     const queryConditions = [];
@@ -201,13 +184,13 @@ async function getSurveyDocketByIdNo(req, res) {
   try {
     await connectToMongo();
     const { id_no } = req.params;
-    const record = await collections.survey2024.findOne({ id_no });
+    const record = await scopeOf('survey', req.activeYear).collection.findOne({ id_no });
     if (record && record.docket_no) {
       return res.json({ docket_no: record.docket_no });
     }
     // Fallback after short delay (legacy behavior)
     setTimeout(async () => {
-      const again = await collections.survey2024.findOne({ id_no });
+      const again = await scopeOf('survey', req.activeYear).collection.findOne({ id_no });
       if (again && again.docket_no) {
         return res.json({ docket_no: again.docket_no });
       }
@@ -224,11 +207,10 @@ module.exports = { updateColor, updateColorUniverse, getSurveysByYear, getLastSu
 async function updateSurveyById(req, res) {
   const { id } = req.params;
   const update = req.body;
-  const year = req.body.year || '2025';
+  const year = req.activeYear;
   try {
     await connectToMongo();
-    const db = getDb();
-    const collection = db.collection(`survey-data-${year}`);
+        const { collection } = scopeOf('survey', year);
     let filter = [{ id_no: isNaN(id) ? id : parseInt(id, 10) }, { id_no: id }];
     let currentRecord = await collection.findOne(filter[0]);
     if (!currentRecord) currentRecord = await collection.findOne(filter[1]);
@@ -248,12 +230,20 @@ async function updateSurveyDataById(req, res) {
     const newData = req.body;
     const iisNo = req.body.iis_no;
     const updatedBy = req.body.updated_by;
-    const db = getDb();
     const match = iisNo && iisNo.match(/R3-(\d{4})-/);
-    const year = match ? match[1] : null;
-    if (!year) return res.status(400).json({ error: 'Invalid iis_no format.' });
+    if (!match) return res.status(400).json({ error: 'Invalid iis_no format.' });
+
+    // The year embedded in iis_no is client-supplied and must never choose the
+    // target collection; it may only be cross-checked against the active year.
+    const year = req.activeYear;
+    if (Number(match[1]) !== Number(year)) {
+      return res.status(403).json({
+        code: 'YEAR_MISMATCH',
+        error: `Record ${iisNo} does not belong to the ${year} data container.`,
+      });
+    }
+    const { collection } = scopeOf('survey', year);
     const collectionName = `survey-data-${year}`;
-    const collection = db.collection(collectionName);
     const recordId = isNaN(id) ? id.toString() : parseInt(id);
     const oldDocument = await collection.findOne({ id_no: recordId });
     if (!oldDocument) return res.status(404).json({ error: `Record not found in ${collectionName}.` });
@@ -282,7 +272,7 @@ async function getSurveyDataById(req, res) {
   try {
     await connectToMongo();
     const idNumber = parseInt(id, 10);
-    const data = await collections.survey2024.findOne({ id_no: idNumber });
+    const data = await scopeOf('survey', req.activeYear).collection.findOne({ id_no: idNumber });
     if (!data) return res.status(404).json({ error: 'Data not found' });
     return res.json(data);
   } catch (error) {
@@ -362,10 +352,7 @@ async function updateSurveyMonitoringData(req, res) {
     const db = getDb();
     if (!id) return res.status(400).json({ error: 'Invalid survey record ID format.' });
 
-    let surveyMonitoringCollection;
-    if (year === '2024') surveyMonitoringCollection = db.collection('survey-data-2024');
-    else if (year === '2025') surveyMonitoringCollection = db.collection('survey-data-2025');
-    else return res.status(400).json({ error: 'Invalid survey year provided.' });
+    const { collection: surveyMonitoringCollection } = scopeOf('survey', req.activeYear);
 
     const { _id, ...updatePayload } = newData || {};
     const { ObjectId } = require('../config/db');
@@ -387,9 +374,9 @@ async function patchSurveyColorById(req, res) {
     await connectToMongo();
     const filter = { id_no: isNaN(id) ? id : parseInt(id, 10) };
     const update = { $set: { color } };
-    const result = await collections.survey2024.updateOne(filter, update);
+    const result = await scopeOf('survey', req.activeYear).collection.updateOne(filter, update);
     if (result.matchedCount === 0) return res.status(404).json({ message: 'Survey not found' });
-    const survey = await collections.survey2024.findOne(filter);
+    const survey = await scopeOf('survey', req.activeYear).collection.findOne(filter);
     return res.json(survey);
   } catch (error) {
     console.error('Error updating row color:', error.message);

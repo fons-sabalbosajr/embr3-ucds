@@ -10,6 +10,7 @@ import {
   Button,
   Spin,
   Tooltip,
+  Tag,
   Dropdown,
   notification,
   Input,
@@ -44,6 +45,8 @@ import AddSurvey from "./actions/AddSurvey";
 import CryptoJS from "crypto-js";
 import { io } from "socket.io-client";
 import { useLocation } from "react-router-dom";
+import { SOCKET_URL } from "../config/api";
+import { getActiveYear } from "../context/YearContext";
 import {
   fetchSurveyData,
   updateSurveyRowColor,
@@ -73,7 +76,7 @@ const Survey = ({ theme, currentUser }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [viewedRecord, setViewedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedSurvey, setSelectedSurvey] = useState("Survey 2025");
+  const [selectedSurvey, setSelectedSurvey] = useState(`Survey ${getActiveYear() ?? ""}`.trim());
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [buttonColor, setButtonColor] = useState("primary");
   const [progress, setProgress] = useState(0);
@@ -107,7 +110,7 @@ const Survey = ({ theme, currentUser }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", {
+      socketRef.current = io(SOCKET_URL, {
         withCredentials: true,
       });
     }
@@ -1221,17 +1224,13 @@ const Survey = ({ theme, currentUser }) => {
         </div>
 
         <div className="header-action-buttons">
-          <Select
-            value={selectedSurvey}
-            onChange={(value) => {
-              setSelectedSurvey(value);
-              fetchData(value.replace("Survey ", ""));
-            }}
-            className="survey-year-dropdown"
-          >
-            <Select.Option value="Survey 2025">Survey 2025</Select.Option>
-            <Select.Option value="Survey 2024">Survey 2024</Select.Option>
-          </Select>
+          {/* The survey year is the active year container — switching years is
+              done once, in the header, rather than per page. */}
+          <Tooltip title="Change the year in the header to view another survey year">
+            <Tag color="green" className="survey-year-indicator">
+              {selectedSurvey}
+            </Tag>
+          </Tooltip>
           <Tooltip title="Reload Table">
             <Button
               type="primary"

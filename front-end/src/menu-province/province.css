@@ -85,7 +85,7 @@
   background-color: #40a9ff; /* Darker background color on hover */
 }
 
-///PAGINATION CONTROLS
+/* PAGINATION CONTROLS */
 
 .search-pagination-container {
   display: grid;
@@ -203,7 +203,7 @@
 
 
 
-////ROW COLOR MENU=============================================
+/* ROW COLOR MENU============================================= */
 .custom-span-cyan {
   background-color: #0b5f74;
   color: white;
@@ -425,7 +425,7 @@
 
 
 
-///ROW COLORS===================================================
+/* ROW COLORS=================================================== */
 :root {
   --color-e8dff5: #e8dff5;
   --color-fce1e4: #fce1e4;

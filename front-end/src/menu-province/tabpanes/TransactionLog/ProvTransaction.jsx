@@ -6,6 +6,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import CryptoJS from "crypto-js";
 import "./provtransaction.css";
+import { API_BASE_URL } from "../../../config/api";
 
 const ProvTransaction = ({
   editedRecord,
@@ -39,7 +40,7 @@ const ProvTransaction = ({
       }
       try {
         const response = await axios.get(
-          "http://10.14.77.107:8081/api/ucds-log",
+          `${API_BASE_URL}/api/ucds-log`,
           {
             params: { ecc_cnc: editedRecord.ecc_cnc },
           }
@@ -56,7 +57,7 @@ const ProvTransaction = ({
         // Fetch user data for all unique usernames
         const userFetches = uniqueUsernames.map((username) =>
           axios
-            .get("http://10.14.77.107:8081/api/users", { params: { username } })
+            .get(`${API_BASE_URL}/api/users`, { params: { username } })
             .then((res) => ({
               username,
               user: res.data && res.data.length > 0 ? res.data[0] : null,
@@ -138,7 +139,7 @@ const ProvTransaction = ({
     };
 
     try {
-      await axios.put(`http://10.14.77.107:8081/api/revert-by-ecc`, payload);
+      await axios.put(`${API_BASE_URL}/api/revert-by-ecc`, payload);
 
       Swal.fire({
         icon: "success",
@@ -166,7 +167,7 @@ const ProvTransaction = ({
   const handleDeleteTransaction = async (transactionID) => {
     try {
       const response = await fetch(
-        `http://10.14.77.107:8081/api/transaction/${transactionID}`, // Use transactionID instead of ID
+        `${API_BASE_URL}/api/transaction/${transactionID}`, // Use transactionID instead of ID
         {
           method: "DELETE",
           credentials: "include", // Include credentials if necessary

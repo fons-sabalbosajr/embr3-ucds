@@ -6,6 +6,12 @@ import "./signaccountmodal.css";
 import axios from "axios";
 import Swal from "sweetalert2";
 import emailjs from "emailjs-com";
+import { API_BASE_URL } from "../config/api";
+import {
+  EMAILJS_SERVICE_ID,
+  EMAILJS_CREDENTIALS_TEMPLATE_ID,
+  EMAILJS_PUBLIC_KEY,
+} from "../config/emailjs";
 
 const DEFAULT_AVATAR_URL =
   "https://ui-avatars.com/api/?name=A&background=random&color=fff&size=100";
@@ -35,7 +41,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
   const fetchPassword = async () => {
     try {
       const response = await axios.get(
-        "http://10.14.77.107:8081/api/generate-password"
+        `${API_BASE_URL}/api/generate-password`
       );
       const { password } = response.data;
       setGeneratePassword(password);
@@ -106,7 +112,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
   
         // Step 1: Add user to 'users' collection
         const userResponse = await axios.post(
-          "http://10.14.77.107:8081/api/newusers",
+          `${API_BASE_URL}/api/newusers`,
           formData,
           {
             headers: {
@@ -150,10 +156,10 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
 
 
   const sendCredentialsEmail = async (email, username, password) => {
-    // Environment variables
-    const serviceId = "service_0etqm0f";
-    const templateId = "template_b72q5bm";
-    const publicKey = "bgYF-06ZE7QHB5_lJ";
+    // Environment variables (see server/.env -> front-end/.env.local)
+    const serviceId = EMAILJS_SERVICE_ID;
+    const templateId = EMAILJS_CREDENTIALS_TEMPLATE_ID;
+    const publicKey = EMAILJS_PUBLIC_KEY;
 
     if (!serviceId || !templateId || !publicKey) {
       console.error("Missing EmailJS configuration");

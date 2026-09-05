@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Input, Button, Form, message, ConfigProvider } from 'antd';
-import homelogo from "./assets/UCDSInformation.png";
 import "./login.css";
+import { API_BASE_URL } from "./config/api";
+import { ROUTES } from "./config/routes";
+import AuthBrand from "./components/AuthBrand";
 
 const HomeResetPassword = () => {
     const location = useLocation();
@@ -32,14 +34,14 @@ const HomeResetPassword = () => {
 
     try {
       setLoading(true);
-      const response = await axios.post('http://10.14.77.107:8081/reset-password', {
+      const response = await axios.post(`${API_BASE_URL}/reset-password`, {
         token,
         newPassword
       });
 
       if (response.status === 200) {
         message.success('Password reset successful.');
-        navigate('/login'); // Redirect user to login after successful password reset
+        navigate(ROUTES.login); // Redirect user to login after successful password reset
       }
     } catch (error) {
       setLoading(false);
@@ -58,11 +60,7 @@ const HomeResetPassword = () => {
         <div className="login-form-wrapper">
           <div className="login-card">
             <div className="login-logo-container">
-              <img
-                src={homelogo}
-                alt="UCDS Logo"
-                className="login-logo"
-              />
+              <AuthBrand size="md" />
             </div>
             <div className="login-title-container">
               <p className="login-title-main">
@@ -119,7 +117,7 @@ const HomeResetPassword = () => {
               </Form.Item>
 
               <Form.Item style={{marginBottom: 0}}>
-                <Button block size="large" onClick={() => navigate('/login')}>
+                <Button block size="large" onClick={() => navigate(ROUTES.login)}>
                   Back to Login
                 </Button>
               </Form.Item>

@@ -6,6 +6,7 @@ import IndustryClass from "../../../components/Autocomplete/IndustryClass";
 import Provinces from "../../../components/Autocomplete/Province";
 import Municipalities from "../../../components/Autocomplete/Municipalities";
 import Barangays from "../../../components/Autocomplete/Barangay";
+import { API_BASE_URL } from "../../../config/api";
 import "./geninfo.css"; // Assuming styles are in this file
 
 const { Paragraph } = Typography;
@@ -31,7 +32,7 @@ const GenInfo = ({ record, isEditing, handleChange }) => {
       // Fetch project data based on the selected industry_class
       try {
         const response = await axios.get(
-          `http://10.14.77.107:8081/api/project_type?industry_class=${record.industry_class}`
+          `${API_BASE_URL}/api/project_type?industry_class=${record.industry_class}`
         );
         if (response.data) {
           const { psic_code, project_type, project_subtype } = response.data;

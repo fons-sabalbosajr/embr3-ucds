@@ -6,6 +6,7 @@ import GenInfo from "./tabpanes/survey_geninfo/Survey_AddGenInfo";
 import FocalPerson from "./tabpanes/survey_focalperson/Survey_AddFocalPerson";
 import LegalUnit from "./tabpanes/survey_legal/Survey_AddLegal";
 import "./addsurvey.css";
+import { API_BASE_URL } from "../../config/api";
 
 const { TabPane } = Tabs;
 
@@ -25,7 +26,7 @@ const AddSurvey = ({ currentUser, visible, onCancel, onCreate }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        "http://10.14.77.107:8081/api/surveys/last-id/2025"
+        `${API_BASE_URL}/api/surveys/last-id/${getActiveYear()}`
       );
       const data = await response.json();
       setNextIdNo(data.lastIdNo + 1);

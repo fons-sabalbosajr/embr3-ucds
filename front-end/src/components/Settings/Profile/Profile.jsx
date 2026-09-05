@@ -18,6 +18,7 @@ import {
 import CryptoJS from "crypto-js";
 import "./profile.css";
 import { fetchUserDetails, uploadUserPhoto } from "../../../api/userService";
+import { API_BASE_URL } from "../../../config/api";
 
 const { Paragraph } = Typography;
 
@@ -150,7 +151,7 @@ const Profile = ({ username }) => {
           <div className="avatar-container">
             <img
               src={
-                photo ? photo.url : `http://10.14.77.107:8081${userData.avatar}`
+                photo ? photo.url : `${API_BASE_URL}${userData.avatar}`
               }
               alt="Profile Avatar"
               className="profile-avatar"

@@ -1,4 +1,5 @@
-const API_URL = "http://10.14.77.107:8081/api/healthcare";
+import { API_BASE_URL } from "../../../config/api";
+const API_URL = `${API_BASE_URL}/api/healthcare`;
 
 export const fetchProponentNames = async (query) => {
   const response = await fetch(API_URL, {

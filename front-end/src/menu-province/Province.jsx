@@ -48,6 +48,7 @@ import AddProvinceModal from "./actions/AddProvinceModal";
 import moment from "moment"; // Import moment for date calculations
 import { io } from "socket.io-client";
 import "./province.css";
+import { API_BASE_URL, SOCKET_URL } from "../config/api";
 
 // Helper function to format province name for display (e.g., "Nueva_Ecija" to "Nueva Ecija")
 const formatProvinceNameForDisplay = (str) => {
@@ -378,7 +379,7 @@ const Province = ({ theme, currentUser }) => {
 
   useEffect(() => {
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", {
+      socketRef.current = io(SOCKET_URL, {
         withCredentials: true,
       });
     }
@@ -1826,7 +1827,7 @@ const Province = ({ theme, currentUser }) => {
                     <Avatar
                       src={
                         viewer.avatar
-                          ? `http://10.14.77.107:8081${viewer.avatar}`
+                          ? `${API_BASE_URL}${viewer.avatar}`
                           : undefined
                       }
                       style={{

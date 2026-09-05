@@ -3,7 +3,7 @@ services:
     name: react-vite-frontend
     env: static
     rootDir: front-end
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite
@@ -14,10 +14,15 @@ services:
     name: express-api-backend
     env: node
     rootDir: server
-    buildCommand: npm install
-    startCommand: node index.js
+    buildCommand: npm ci
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
-        value: development
+        value: production
+      # Set these in the Render dashboard; never commit their values.
       - key: MONGO_URI
-        value: your-mongodb-uri-here
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

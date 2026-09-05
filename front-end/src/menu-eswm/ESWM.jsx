@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Result, Avatar, Tooltip } from "antd";
 import { io } from "socket.io-client";
+import { SOCKET_URL } from "../config/api";
 
 const ESWM = ({ currentUser }) => {
   const [eswmViewers, setEswmViewers] = useState([]);
@@ -11,7 +12,7 @@ const ESWM = ({ currentUser }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", { withCredentials: true });
+      socketRef.current = io(SOCKET_URL, { withCredentials: true });
     }
     const socket = socketRef.current;
 

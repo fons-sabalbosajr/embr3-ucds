@@ -1,9 +1,10 @@
 import React from "react";
 import { Modal } from "antd";
+import { API_BASE_URL } from "../../config/api";
 
 const PDFViewer = ({ file, onClose }) => {
   // The new endpoint will rely on the server-side session cookie for auth
-  const url = `http://10.14.77.107:8081/api/erms/view-pdf?file=${encodeURIComponent(
+  const url = `${API_BASE_URL}/api/erms/view-pdf?file=${encodeURIComponent(
     file
   )}`;
 

@@ -8,6 +8,7 @@ import PermitsAdd from "./tabpanes/permits/PermitsAdd";
 import LegalUnitAdd from "./tabpanes/legalunit/LegalUnitAdd";
 import UploadModal from "./UploadDocumentModal";
 import "./addprovincemodal.css";
+import { API_BASE_URL } from "../../config/api";
 
 const { TabPane } = Tabs;
 
@@ -102,7 +103,7 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://10.14.77.107:8081/api/ucds/next-id?province=${province}`
+        `${API_BASE_URL}/api/ucds/next-id?province=${province}`
       );
       const data = await response.json();
       setNextIdNo(data.nextIdNo);
@@ -136,7 +137,7 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
 
     try {
       const response = await fetch(
-        "http://10.14.77.107:8081/api/ucds/add-establishment",
+        `${API_BASE_URL}/api/ucds/add-establishment`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

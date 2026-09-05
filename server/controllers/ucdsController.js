@@ -1,5 +1,26 @@
 const dayjs = require('dayjs');
 const { connectToMongo, collections, client, ObjectId } = require('../config/db');
+const { withYear, stampYear } = require('../services/yearScope');
+const { provinceScoped, requestAllowsProvince } = require('../services/provinces');
+
+// The establishment register, confined to the provinces this request may touch.
+const ucdsFor = (req) => provinceScoped(collections.ucds, req);
+
+// Wraps a log collection so inserts are stamped and reads/deletes are filtered
+// by the active year, without touching each call site individually.
+function yearBoundLogs(collection, year) {
+  return {
+    insertOne: (doc, ...rest) => collection.insertOne(stampYear('ucdsLog', year, doc), ...rest),
+    insertMany: (docs, ...rest) =>
+      collection.insertMany(docs.map((d) => stampYear('ucdsLog', year, d)), ...rest),
+    find: (filter = {}, ...rest) => collection.find(withYear('ucdsLog', year, filter), ...rest),
+    findOne: (filter = {}, ...rest) => collection.findOne(withYear('ucdsLog', year, filter), ...rest),
+    updateOne: (filter = {}, ...rest) => collection.updateOne(withYear('ucdsLog', year, filter), ...rest),
+    deleteOne: (filter = {}, ...rest) => collection.deleteOne(withYear('ucdsLog', year, filter), ...rest),
+    countDocuments: (filter = {}, ...rest) =>
+      collection.countDocuments(withYear('ucdsLog', year, filter), ...rest),
+  };
+}
 const { buildSortKeyQuery } = require('../utils/query');
 
 function isMissingOrPlaceholder(value) {
@@ -10,7 +31,7 @@ function isMissingOrPlaceholder(value) {
 async function checkData(req, res) {
   try {
     await connectToMongo();
-    const sampleData = await collections.ucds.find().toArray();
+    const sampleData = await ucdsFor(req).find().toArray();
 
     const issues = [];
     sampleData.forEach((record) => {
@@ -69,7 +90,7 @@ async function checkData(req, res) {
 async function getDuplicates(req, res) {
   try {
     await connectToMongo();
-    const duplicates = await collections.ucds.aggregate([
+    const duplicates = await ucdsFor(req).aggregate([
       { $match: { ecc_cnc: { $exists: true, $ne: null } } },
       { $group: { _id: '$ecc_cnc', idNos: { $push: '$sort_key' }, count: { $sum: 1 } } },
       { $match: { count: { $gt: 1 } } },
@@ -96,7 +117,7 @@ async function updateDuplicates(req, res) {
 
     if (updateOps.length === 0) return res.status(400).json({ error: 'No valid updates provided.' });
 
-    const result = await collections.ucds.bulkWrite(updateOps);
+    const result = await ucdsFor(req).bulkWrite(updateOps);
     return res.status(200).json({ message: 'Records updated successfully', result });
   } catch (error) {
     console.error('Error updating duplicates:', error);
@@ -113,13 +134,13 @@ async function archiveData(req, res) {
   const session = client.startSession();
   try {
     await session.withTransaction(async () => {
-      const record = await collections.ucds.findOne({ id_no: idNoNumber }, { session });
+      const record = await ucdsFor(req).findOne({ id_no: idNoNumber }, { session });
       if (!record) throw new Error(`Record with id_no: ${idNoNumber} not found in ucds-data.`);
 
       const archiveResult = await collections.archive.insertOne(record, { session });
       if (!archiveResult.acknowledged) throw new Error('Failed to archive the record.');
 
-      const deleteResult = await collections.ucds.deleteOne({ _id: record._id }, { session });
+      const deleteResult = await ucdsFor(req).deleteOne({ _id: record._id }, { session });
       if (deleteResult.deletedCount === 0) throw new Error('Failed to delete the record from ucds-data after archiving.');
     });
     res.status(201).json({ message: 'Record successfully transferred to archive-data.' });
@@ -136,7 +157,7 @@ async function getByIdentifier(req, res) {
   try {
     await connectToMongo();
     const query = buildSortKeyQuery(String(identifier).trim());
-    let record = await collections.ucds.findOne(query);
+    let record = await ucdsFor(req).findOne(query);
     if (!record) {
       record = await collections.archive.findOne(query);
       if (!record) return res.status(404).json({ message: `Record with identifier (sort_key): ${identifier} not found.` });
@@ -167,7 +188,7 @@ async function getDistinctValues(req, res) {
 
   try {
     await connectToMongo();
-    const distinctRawValues = await collections.ucds.distinct(field, { [field]: { $exists: true, $ne: null, $ne: '' } });
+    const distinctRawValues = await ucdsFor(req).distinct(field, { [field]: { $exists: true, $ne: null, $ne: '' } });
 
     let processedValues = [];
     if (monthTypeFilterFieldsForServer.includes(field)) {
@@ -205,7 +226,7 @@ async function bulkUpdateUcds(req, res) {
     const transactionDate = now.toLocaleString('en-US', { hour12: true });
     const updatedBy = req.session && req.session.user ? req.session.user.username : 'Unknown User';
 
-    const latestLog = await collections.ucdsLog.find({}).sort({ transactionID: -1 }).limit(1).toArray();
+    const latestLog = await collections.ucdsLog.find(withYear('ucdsLog', req.activeYear, {})).sort({ transactionID: -1 }).limit(1).toArray();
     let transactionCounter = 1;
     if (latestLog.length && latestLog[0].transactionID) {
       const lastTxnNum = parseInt(latestLog[0].transactionID.replace('TRXM-', ''), 10);
@@ -224,7 +245,7 @@ async function bulkUpdateUcds(req, res) {
       else if (id_no) filter = { id_no };
       else continue;
 
-      const oldDoc = await collections.ucds.findOne(filter);
+      const oldDoc = await ucdsFor(req).findOne(filter);
       if (!oldDoc) continue;
 
       const changeLogs = [];
@@ -255,8 +276,8 @@ async function bulkUpdateUcds(req, res) {
 
     if (bulkOps.length === 0) return res.status(400).json({ error: 'No valid update operations to perform.' });
 
-    const result = await collections.ucds.bulkWrite(bulkOps);
-    if (logsToInsert.length > 0) await collections.ucdsLog.insertMany(logsToInsert);
+    const result = await ucdsFor(req).bulkWrite(bulkOps);
+    if (logsToInsert.length > 0) await collections.ucdsLog.insertMany(logsToInsert.map((l) => stampYear('ucdsLog', req.activeYear, l)));
 
     return res.status(200).json({ message: `${result.modifiedCount} records updated successfully.`, result });
   } catch (error) {
@@ -271,7 +292,7 @@ async function getDistinctDropdownValues(req, res) {
     const fields = ['industry_type','industry_subtype','industry_class','psic_code','mbu_area','waterbody','emp_total','wwtf_type','cong_district','street','brgy','city','section_incharged','handler','monitoring_sched','insp_type','pismu_tracking','title_status','with_nov','pismu_count_month','permit_process','denr_pab_case_no','legal_officer','tc_commitment','province'];
     const distinctValues = {};
     for (const f of fields) {
-      distinctValues[f] = await collections.ucds.distinct(f, { [f]: { $exists: true, $ne: null, $ne: '' } });
+      distinctValues[f] = await ucdsFor(req).distinct(f, { [f]: { $exists: true, $ne: null, $ne: '' } });
     }
     res.status(200).json(distinctValues);
   } catch (error) {
@@ -362,7 +383,7 @@ const permitKeyToFieldMap = {
 async function getMonitoredDates(req, res) {
   try {
     await connectToMongo();
-    const monitoredDates = await collections.ucds
+    const monitoredDates = await ucdsFor(req)
       .find({ title: { $exists: true, $ne: '' }, date_monitored: { $exists: true, $ne: '' } })
       .project({ title: 1, date_monitored: 1 })
       .toArray();
@@ -376,7 +397,7 @@ async function getMonitoredDates(req, res) {
 async function getDailyNotices(req, res) {
   try {
     await connectToMongo();
-    const rawNotices = await collections.ucds
+    const rawNotices = await ucdsFor(req)
       .find({ date_monitored: { $exists: true, $ne: '' } })
       .toArray();
 
@@ -442,7 +463,7 @@ async function permitsSummary(req, res) {
       const searchRegex = { $regex: searchText, $options: 'i' };
       mongoQuery.$or = [{ sort_key: searchRegex }, { title: searchRegex }, { name: searchRegex }, { ecc_cnc: searchRegex }];
     }
-    const allMatchingRecords = await collections.ucds.find(mongoQuery, { projection: { sort_key: 1, title: 1, name: 1, ecc_cnc: 1, pto_issued: 1, pto_code: 1, wwdp_issued: 1, wwdp_code: 1, pco_validity: 1, pco_no: 1 } }).toArray();
+    const allMatchingRecords = await ucdsFor(req).find(mongoQuery, { projection: { sort_key: 1, title: 1, name: 1, ecc_cnc: 1, pto_issued: 1, pto_code: 1, wwdp_issued: 1, wwdp_code: 1, pco_validity: 1, pco_no: 1 } }).toArray();
     let processedRecords = allMatchingRecords.map((record) => {
       const permits = [];
       if (record.pto_issued) {
@@ -493,18 +514,18 @@ async function permitExpiryBreakdown(req, res) {
     await connectToMongo();
     const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
     const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-    const blankCount = await collections.ucds.countDocuments({ $or: [{ [permitConfig.queryField]: null }, { [permitConfig.queryField]: '' }] });
+    const blankCount = await ucdsFor(req).countDocuments({ $or: [{ [permitConfig.queryField]: null }, { [permitConfig.queryField]: '' }] });
     let ongoingProcessCount = 0;
     if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) {
-      ongoingProcessCount = await collections.ucds.countDocuments({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } });
+      ongoingProcessCount = await ucdsFor(req).countDocuments({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } });
     }
     let applicationCount = 0;
     let applicationStagesCount = 0;
     if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) {
-      applicationCount = await collections.ucds.countDocuments({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } });
+      applicationCount = await ucdsFor(req).countDocuments({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } });
       applicationStagesCount = ongoingProcessCount + applicationCount;
     }
-    const recordsWithPermitCode = await collections.ucds.find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: { _id: 1, [permitConfig.dateField]: 1, [permitConfig.queryField]: 1 } }).toArray();
+    const recordsWithPermitCode = await ucdsFor(req).find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: { _id: 1, [permitConfig.dateField]: 1, [permitConfig.queryField]: 1 } }).toArray();
     const recordsForExpiryCalculation = recordsWithPermitCode.filter((record) => {
       if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) {
         const codeVal = String(record[permitConfig.queryField] || '').trim();
@@ -538,7 +559,7 @@ async function listAllIndustries(req, res) {
   try {
     await connectToMongo();
     const projectionFields = { sort_key: 1, name: 1, title: 1, _id: 1, province: 1, city: 1, brgy: 1, ecc_cnc: 1 };
-    const allIndustries = await collections.ucds.find({}).project(projectionFields).sort({ sort_key: 1 }).toArray();
+    const allIndustries = await ucdsFor(req).find({}).project(projectionFields).sort({ sort_key: 1 }).toArray();
     return res.json(allIndustries);
   } catch (error) {
     console.error('Error fetching all industries:', error);
@@ -549,13 +570,13 @@ async function listAllIndustries(req, res) {
 async function eccCncSubtypesBreakdown(req, res) {
   try {
     await connectToMongo();
-    const eccManual = await collections.ucds.countDocuments({ permit_process: { $regex: /^ECC Manual$/i } });
-    const eccOnline = await collections.ucds.countDocuments({ permit_process: { $regex: /^ECC Online$/i } });
-    const eccCO = await collections.ucds.countDocuments({ permit_process: { $in: [/^ECC CO$/i, /^ECC \(EMB CO\)$/i] } });
-    const cncManual = await collections.ucds.countDocuments({ permit_process: { $regex: /^CNC Manual$/i } });
-    const cncOnline = await collections.ucds.countDocuments({ permit_process: { $regex: /^CNC Online$/i } });
-    const cncCO = await collections.ucds.countDocuments({ permit_process: { $regex: /^CNC CO$/i } });
-    const blankEccCnc = await collections.ucds.countDocuments({ $or: [{ ecc_cnc: null }, { ecc_cnc: '' }] });
+    const eccManual = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^ECC Manual$/i } });
+    const eccOnline = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^ECC Online$/i } });
+    const eccCO = await ucdsFor(req).countDocuments({ permit_process: { $in: [/^ECC CO$/i, /^ECC \(EMB CO\)$/i] } });
+    const cncManual = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^CNC Manual$/i } });
+    const cncOnline = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^CNC Online$/i } });
+    const cncCO = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^CNC CO$/i } });
+    const blankEccCnc = await ucdsFor(req).countDocuments({ $or: [{ ecc_cnc: null }, { ecc_cnc: '' }] });
     return res.json({ eccManual, eccOnline, eccCO, cncManual, cncOnline, cncCO, blankEccCnc });
   } catch (error) {
     console.error('Error fetching ECC/CNC subtypes breakdown:', error);
@@ -567,16 +588,16 @@ async function dashboardStats(req, res) {
   try {
     await connectToMongo();
     const { permitTypeFilterKey } = req.query;
-    const totalIndustries = await collections.ucds.countDocuments({});
+    const totalIndustries = await ucdsFor(req).countDocuments({});
     const [resolvedEccCount, resolvedPtoCount, resolvedWwdpCount, resolvedHwgCount, resolvedPcoCount] = await Promise.all([
-      collections.ucds.countDocuments({ ecc_cnc: { $exists: true, $ne: null, $ne: '' } }),
-      collections.ucds.countDocuments({ pto_code: { $exists: true, $ne: null, $ne: '' } }),
-      collections.ucds.countDocuments({ wwdp_code: { $exists: true, $ne: null, $ne: '' } }),
-      collections.ucds.countDocuments({ haz_id: { $exists: true, $ne: null, $ne: '' } }),
-      collections.ucds.countDocuments({ pco_no: { $exists: true, $ne: null, $ne: '' } }),
+      ucdsFor(req).countDocuments({ ecc_cnc: { $exists: true, $ne: null, $ne: '' } }),
+      ucdsFor(req).countDocuments({ pto_code: { $exists: true, $ne: null, $ne: '' } }),
+      ucdsFor(req).countDocuments({ wwdp_code: { $exists: true, $ne: null, $ne: '' } }),
+      ucdsFor(req).countDocuments({ haz_id: { $exists: true, $ne: null, $ne: '' } }),
+      ucdsFor(req).countDocuments({ pco_no: { $exists: true, $ne: null, $ne: '' } }),
     ]);
     const permitBreakdown = { ecc: resolvedEccCount, pto: resolvedPtoCount, wwdp: resolvedWwdpCount, hwg: resolvedHwgCount, pco: resolvedPcoCount };
-    const sectionBreakdownResults = await collections.ucds.aggregate([
+    const sectionBreakdownResults = await ucdsFor(req).aggregate([
       ...(permitTypeFilterKey && permitKeyToFieldMap[permitTypeFilterKey] ? [{ $match: { [permitKeyToFieldMap[permitTypeFilterKey].queryField]: { $exists: true, $ne: null, $ne: '' } } }] : []),
       { $match: { section_incharged: { $exists: true, $ne: null, $ne: '' } } },
       { $project: { sections: { $split: [{ $ifNull: ['$section_incharged', ''] }, ','] } } },
@@ -587,7 +608,7 @@ async function dashboardStats(req, res) {
       { $project: { _id: 0, section: '$_id', count: 1 } },
       { $sort: { count: -1 } },
     ]).toArray();
-    const projectStatusResults = await collections.ucds.aggregate([
+    const projectStatusResults = await ucdsFor(req).aggregate([
       ...(permitTypeFilterKey && permitKeyToFieldMap[permitTypeFilterKey] ? [{ $match: { [permitKeyToFieldMap[permitTypeFilterKey].queryField]: { $exists: true, $ne: null, $ne: '' } } }] : []),
       { $match: { title_status: { $exists: true, $ne: null, $ne: '' } } },
       { $project: { status: { $toUpper: { $trim: { input: { $ifNull: ['$title_status', ''] } } } } } },
@@ -601,7 +622,7 @@ async function dashboardStats(req, res) {
       else if (item._id === '') projectStatusBreakdown.notYetMonitored = item.count;
       else if (item._id && item._id !== 'N/A' && item._id !== 'NONE') projectStatusBreakdown.other += item.count;
     });
-    const industriesCursor = collections.ucds.find({}, { projection: { _id: 1, ecc_cnc: 1, pto_code: 1, wwdp_code: 1, haz_id: 1, pco_no: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1 } });
+    const industriesCursor = ucdsFor(req).find({}, { projection: { _id: 1, ecc_cnc: 1, pto_code: 1, wwdp_code: 1, haz_id: 1, pco_no: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1 } });
     const industriesWithAnyPermitSet = new Set();
     const industriesWithExpiredPermitSet = new Set();
     await industriesCursor.forEach((item) => {
@@ -631,8 +652,17 @@ async function getProvinceData(req, res) {
     const provinceQuery = req.query.province;
     if (!provinceQuery) return res.status(400).json({ error: 'Province parameter is required.' });
     const province = capitalizeFirstLetter(provinceQuery);
-    const query = { province: new RegExp(`^${province}$`, 'i') };
-    const provinceData = await collections.ucds.find(query).toArray();
+
+    // A province named in the query is a request, not an entitlement.
+    if (!requestAllowsProvince(req, province)) {
+      return res.status(403).json({
+        code: 'PROVINCE_FORBIDDEN',
+        error: `${province} is not available in the ${req.activeYear} data container for your account.`,
+      });
+    }
+
+    const query = withProvinceScope(req, { province: new RegExp(`^${province}$`, 'i') });
+    const provinceData = await ucdsFor(req).find(query).toArray();
     if (provinceData.length === 0) return res.status(404).json({ message: `No data found for ${province}.` });
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
     const formattedData = provinceData.map((doc) => ({
@@ -723,15 +753,21 @@ async function extractProvinceData(req, res) {
   try {
     await connectToMongo();
     const { province, keyword, startDate, endDate } = req.query;
-    await collections.ucds.createIndex({ description: 'text' });
+    await ucdsFor(req).createIndex({ description: 'text' });
     const query = {};
     if (keyword) query.$text = { $search: keyword };
     if (startDate && endDate) query.date_approved = { $gte: new Date(startDate), $lte: new Date(endDate) };
     if (province && province !== 'All') {
       const provinceCapitalized = capitalizeFirstLetter(province);
+      if (!requestAllowsProvince(req, provinceCapitalized)) {
+        return res.status(403).json({
+          code: 'PROVINCE_FORBIDDEN',
+          error: `${provinceCapitalized} is not available in the ${req.activeYear} data container for your account.`,
+        });
+      }
       query.province = new RegExp(`^${provinceCapitalized}$`, 'i');
     }
-    const provinceData = await collections.ucds.find(query).toArray();
+    const provinceData = await ucdsFor(req).find(query).toArray();
     if (provinceData.length === 0) return res.status(404).json({ message: `No data found for ${province}.` });
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
     const formattedData = provinceData.map((doc) => ({
@@ -830,7 +866,7 @@ async function listByEccCncSubtype(req, res) {
     if (subtypeLabel === 'Blank ECC/CNC') query.$or = [{ ecc_cnc: null }, { ecc_cnc: '' }];
     else query.permit_process = { $regex: `^${subtypeLabel}$`, $options: 'i' };
     const selectedFields = { sort_key: 1, name: 1, title: 1, ecc_cnc: 1, permit_process: 1, date_approved: 1, date_amended: 1, iis_no_2024: 1, iis_no_2025: 1, brgy: 1, city: 1, province: 1, _id: 1 };
-    const industries = await collections.ucds.find(query).project(selectedFields).sort({ sort_key: 1 }).toArray();
+    const industries = await ucdsFor(req).find(query).project(selectedFields).sort({ sort_key: 1 }).toArray();
     return res.json(industries);
   } catch (error) {
     console.error('Error fetching ECC/CNC subtype breakdown:', error);
@@ -855,21 +891,21 @@ async function listByPermitStatus(req, res) {
     const projectionFields = { ...baseProjection, ...permitSpecificProjection };
     let industriesToReturn = [];
     if (status === 'Blank') {
-      industriesToReturn = await collections.ucds.find({ $or: [{ [permitConfig.queryField]: null }, { [permitConfig.queryField]: '' }] }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
+      industriesToReturn = await ucdsFor(req).find({ $or: [{ [permitConfig.queryField]: null }, { [permitConfig.queryField]: '' }] }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
     } else if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && status === 'Ongoing Process') {
       const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-      industriesToReturn = await collections.ucds.find({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
+      industriesToReturn = await ucdsFor(req).find({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
     } else if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && status === 'Application') {
       const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-      industriesToReturn = await collections.ucds.find({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
+      industriesToReturn = await ucdsFor(req).find({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
     } else if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && status === 'Application Stages') {
       const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
       const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-      industriesToReturn = await collections.ucds.find({ $or: [ { [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } }, { [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } } ] }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
+      industriesToReturn = await ucdsFor(req).find({ $or: [ { [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } }, { [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } } ] }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
     } else if (status === 'All' && permitConfig.queryField) {
-      industriesToReturn = await collections.ucds.find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
+      industriesToReturn = await ucdsFor(req).find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
     } else {
-      const allRecordsWithPermit = await collections.ucds.find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: projectionFields }).toArray();
+      const allRecordsWithPermit = await ucdsFor(req).find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: projectionFields }).toArray();
       const now = new Date();
       const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
       const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
@@ -904,7 +940,7 @@ async function getBySortKey(req, res) {
   const { sort_key } = req.params;
   try {
     await connectToMongo();
-    let data = await collections.ucds.findOne({ sort_key: { $regex: `^${String(sort_key).trim()}$`, $options: 'i' } });
+    let data = await ucdsFor(req).findOne({ sort_key: { $regex: `^${String(sort_key).trim()}$`, $options: 'i' } });
     if (!data) {
       data = await collections.archive.findOne({ sort_key: { $regex: `^${String(sort_key).trim()}$`, $options: 'i' } });
       if (!data) return res.status(404).json({ message: `Data not found for sort_key: ${sort_key}` });
@@ -925,7 +961,7 @@ async function getNextId(req, res) {
     const provincePrefixes = { Aurora: 'AU-', Bataan: 'BA-', Bulacan: 'BU-', Nueva_Ecija: 'NE-', Pampanga: 'PA-', Tarlac: 'TA-', Zambales: 'ZA-' };
     const prefix = provincePrefixes[province];
     if (!prefix) return res.status(400).json({ error: 'Invalid province' });
-    const surveys = await collections.ucds.find({ province }).toArray();
+    const surveys = await ucdsFor(req).find({ province }).toArray();
     const maxIdNo = surveys.reduce((max, survey) => { const match = (survey.id_no || '').toString().match(/\d+$/); const idNo = match ? parseInt(match[0], 10) : 0; return idNo > max ? idNo : max; }, 0);
     const nextIdNo = maxIdNo + 1;
     const formattedId = `${prefix}${nextIdNo}`;
@@ -941,7 +977,7 @@ async function searchName(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ name: regex }).toArray();
+    const results = await ucdsFor(req).find({ name: regex }).toArray();
     const nameCounts = results.reduce((acc, item) => { const name = (item.name || '').toString(); acc[name] = (acc[name] || 0) + 1; return acc; }, {});
     const uniqueNames = Object.keys(nameCounts).map((key) => ({ keyword: key, count: nameCounts[key] }));
     return res.status(200).json(uniqueNames);
@@ -956,7 +992,7 @@ async function searchTitle(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ title: regex }).toArray();
+    const results = await ucdsFor(req).find({ title: regex }).toArray();
     const titleCounts = results.reduce((acc, item) => { const title = (item.title || '').toString(); acc[title] = (acc[title] || 0) + 1; return acc; }, {});
     const uniqueTitles = Object.keys(titleCounts).map((key) => ({ keyword: key, count: titleCounts[key] }));
     return res.status(200).json(uniqueTitles);
@@ -971,7 +1007,7 @@ async function searchIndustryClass(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ industry_class: regex }).toArray();
+    const results = await ucdsFor(req).find({ industry_class: regex }).toArray();
     const counts = results.reduce((acc, item) => { const key = (item.industry_class || '').toString(); acc[key] = (acc[key] || 0) + 1; return acc; }, {});
     const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
     return res.status(200).json(unique);
@@ -1105,7 +1141,7 @@ async function getUcdsData(req, res) {
     let total;
 
     if (filterExpired === 'true') {
-      const allMatchingRecords = await collections.ucds.find(mongoQuery).toArray();
+      const allMatchingRecords = await ucdsFor(req).find(mongoQuery).toArray();
       const recordsWithExpiredPermits = allMatchingRecords.filter((record) =>
         isPermitExpired(record.pto_expiration) || isPermitExpired(record.wwdp_expiration) || isPermitExpired(record.pco_validity)
       );
@@ -1125,7 +1161,7 @@ async function getUcdsData(req, res) {
       });
       surveys = recordsWithExpiredPermits.slice(skip, skip + pageSize);
     } else {
-      total = await collections.ucds.countDocuments(mongoQuery);
+      total = await ucdsFor(req).countDocuments(mongoQuery);
       const pipeline = [];
       if (Object.keys(mongoQuery).length > 0) pipeline.push({ $match: mongoQuery });
       pipeline.push(
@@ -1145,7 +1181,7 @@ async function getUcdsData(req, res) {
       pipeline.push({ $skip: skip });
       pipeline.push({ $limit: pageSize });
       pipeline.push({ $project: { _temp_sort_key: 0, _sort_key_parts: 0, _sort_key_prefix: 0, _sort_key_number_str: 0, _sort_key_number: 0 } });
-      surveys = await collections.ucds.aggregate(pipeline, { allowDiskUse: true }).toArray();
+      surveys = await ucdsFor(req).aggregate(pipeline, { allowDiskUse: true }).toArray();
     }
 
     return res.status(200).json({ data: surveys, total });
@@ -1173,7 +1209,7 @@ module.exports.searchIndustryClass = searchIndustryClass;
 async function firmCount(req, res) {
   try {
     await connectToMongo();
-    const count = await collections.ucds.countDocuments({});
+    const count = await ucdsFor(req).countDocuments({});
     return res.status(200).json({ count, updatedFirms: 0 });
   } catch (error) {
     console.error('Error retrieving firm count:', error);
@@ -1184,7 +1220,7 @@ async function firmCount(req, res) {
 async function getAllUcds(req, res) {
   try {
     await connectToMongo();
-    const surveys = await collections.ucds.find({}).toArray();
+    const surveys = await ucdsFor(req).find({}).toArray();
     res.status(200).json(surveys);
   } catch (error) {
     console.error('Error fetching UCDS data:', error);
@@ -1197,7 +1233,7 @@ async function searchEccCnc(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ ecc_cnc: regex }).toArray();
+    const results = await ucdsFor(req).find({ ecc_cnc: regex }).toArray();
     const counts = results.reduce((acc, item) => {
       const k = (item.ecc_cnc || '').toString();
       acc[k] = (acc[k] || 0) + 1;
@@ -1217,7 +1253,7 @@ async function checkDuplicate(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(`^${query}$`, 'i');
-    const duplicateEntry = await collections.ucds.findOne({ ecc_cnc: regex });
+    const duplicateEntry = await ucdsFor(req).findOne({ ecc_cnc: regex });
     if (duplicateEntry) {
       return res.status(200).json({
         duplicate: true,
@@ -1242,7 +1278,7 @@ async function searchPtoCode(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ pto_code: regex }).toArray();
+    const results = await ucdsFor(req).find({ pto_code: regex }).toArray();
     const counts = results.reduce((acc, item) => { const k = (item.pto_code || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
     return res.status(200).json(unique);
@@ -1257,7 +1293,7 @@ async function searchWwdpCode(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ wwdp_code: regex }).toArray();
+    const results = await ucdsFor(req).find({ wwdp_code: regex }).toArray();
     const counts = results.reduce((acc, item) => { const k = (item.wwdp_code || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
     return res.status(200).json(unique);
@@ -1272,7 +1308,7 @@ async function searchHazId(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ haz_id: regex }).toArray();
+    const results = await ucdsFor(req).find({ haz_id: regex }).toArray();
     const counts = results.reduce((acc, item) => { const k = (item.haz_id || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
     return res.status(200).json(unique);
@@ -1287,7 +1323,7 @@ async function searchPcoNo(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ pco_no: regex }).toArray();
+    const results = await ucdsFor(req).find({ pco_no: regex }).toArray();
     const counts = results.reduce((acc, item) => { const k = (item.pco_no || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
     return res.status(200).json(unique);
@@ -1302,7 +1338,7 @@ async function searchPcoName(req, res) {
   try {
     await connectToMongo();
     const regex = new RegExp(query, 'i');
-    const results = await collections.ucds.find({ pco_name: regex }).toArray();
+    const results = await ucdsFor(req).find({ pco_name: regex }).toArray();
     const counts = results.reduce((acc, item) => { const k = (item.pco_name || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
     return res.status(200).json(unique);
@@ -1326,7 +1362,7 @@ module.exports.searchPcoName = searchPcoName;
 async function getUcdsLocations(req, res) {
   try {
     await connectToMongo();
-    const data = await collections.ucds
+    const data = await ucdsFor(req)
       .find({}, { projection: { lat: 1, long: 1, name: 1, _id: 0 } })
       .toArray();
     return res.status(200).json(data);
@@ -1340,7 +1376,7 @@ async function getUcdsLocations(req, res) {
 async function getUcdsCount(req, res) {
   try {
     await connectToMongo();
-    const count = await collections.ucds.countDocuments();
+    const count = await ucdsFor(req).countDocuments();
     return res.status(200).json(count);
   } catch (error) {
     console.error('Error fetching UCDS count:', error);
@@ -1430,7 +1466,7 @@ async function addEstablishment(req, res) {
     } = req.body;
 
     if (!name || !title || !province || !ecc_cnc) return res.status(400).json({ message: 'Missing required fields' });
-    const existingRecord = await collections.ucds.findOne({ ecc_cnc });
+    const existingRecord = await ucdsFor(req).findOne({ ecc_cnc });
     if (existingRecord) return res.status(409).json({ message: 'Duplicate entry found', details: existingRecord });
 
     const newEntry = {
@@ -1508,7 +1544,7 @@ async function addEstablishment(req, res) {
       division,
       dateAdded: new Date(),
     };
-    const result = await collections.ucds.insertOne(newEntry);
+    const result = await ucdsFor(req).insertOne(newEntry);
     return res.status(201).json({ message: 'Establishment added successfully', id: result.insertedId });
   } catch (error) {
     console.error('Error adding establishment:', error);
@@ -1531,8 +1567,8 @@ async function updateData(req, res) {
     if (ObjectId.isValid(id)) filter = { _id: new ObjectId(id) };
     else filter = buildSortKeyQuery(id);
 
-    const collection = collections.ucds;
-    const logsCollection = collections.ucdsLog;
+    const collection = ucdsFor(req);
+    const logsCollection = yearBoundLogs(collections.ucdsLog, req.activeYear);
 
     const oldDocument = await collection.findOne(filter);
     if (!oldDocument) return res.status(404).json({ error: 'Data not found' });
@@ -1582,8 +1618,8 @@ async function revertByEcc(req, res) {
     const { ecc_cnc, field, oldValue, updated_by } = req.body;
     if (!ecc_cnc || !field || oldValue === undefined) return res.status(400).json({ error: 'Missing required fields: ecc_cnc, field, or oldValue.' });
 
-    const dataCollection = collections.ucds;
-    const logsCollection = collections.ucdsLog;
+    const dataCollection = ucdsFor(req);
+    const logsCollection = yearBoundLogs(collections.ucdsLog, req.activeYear);
 
     const filter = { ecc_cnc };
     const originalDoc = await dataCollection.findOne(filter);
@@ -1650,7 +1686,7 @@ async function updatePermitExpiry(req, res) {
       return res.status(400).json({ message: 'Invalid permitType.' });
     }
 
-    const result = await collections.ucds.updateOne({ sort_key }, { $set: fieldsToUpdate });
+    const result = await ucdsFor(req).updateOne({ sort_key }, { $set: fieldsToUpdate });
     if (result.matchedCount === 0) return res.status(404).json({ message: `Record with sort_key ${sort_key} not found.` });
     if (result.modifiedCount === 0) return res.status(200).json({ message: 'No changes made to the permit expiry.' });
     return res.status(200).json({ message: 'Permit expiry updated successfully.' });

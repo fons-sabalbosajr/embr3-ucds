@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { Form, Input, Button, message, ConfigProvider } from "antd";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import homelogo from "./assets/UCDSInformation.png";
 import "./login.css";
+import { API_BASE_URL } from "./config/api";
+import { ROUTES } from "./config/routes";
+import AuthBrand from "./components/AuthBrand";
 
 const HomeForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -11,7 +13,7 @@ const HomeForgotPassword = () => {
   const handleResetRequest = async (values) => {
     setIsLoading(true);
     try {
-      const response = await axios.post("http://10.14.77.107:8081/request-password-reset", {
+      const response = await axios.post(`${API_BASE_URL}/request-password-reset`, {
         email: values.email,  // Ensure you're sending the correct field
       });
   
@@ -40,11 +42,7 @@ const HomeForgotPassword = () => {
         <div className="login-form-wrapper">
           <div className="login-card">
             <div className="login-logo-container">
-              <img
-                src={homelogo}
-                alt="UCDS Logo"
-                className="login-logo"
-              />
+              <AuthBrand size="md" />
             </div>
             <div className="login-title-container">
               <p className="login-title-main">
@@ -83,7 +81,7 @@ const HomeForgotPassword = () => {
               </Form.Item>
 
               <Form.Item style={{marginBottom: 0}}>
-                <Link to="/login">
+                <Link to={ROUTES.login}>
                   <Button block size="large">Back to Login</Button>
                 </Link>
               </Form.Item>

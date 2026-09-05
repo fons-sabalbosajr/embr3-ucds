@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Avatar } from "antd";
 import NiceAvatar from "react-nice-avatar";
+import { API_BASE_URL } from "../config/api";
 
 const AvatarWithName = ({ userHandle, size = "30px" }) => {
     const [avatar, setAvatar] = useState(null);
@@ -12,7 +13,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         const fetchUserData = async () => {
             try {
                 const response = await fetch(
-                    `http://10.14.77.107:8081/api/users?username=${userHandle}`
+                    `${API_BASE_URL}/api/users?username=${userHandle}`
                 );
                 if (!response.ok) {
                     throw new Error("User not found");
@@ -61,7 +62,7 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         <div style={{ display: "flex", alignItems: "center" }}>
             {typeof avatar === 'string' ? (
                 <Avatar
-                    src={`http://10.14.77.107:8081${avatar}`}
+                    src={`${API_BASE_URL}${avatar}`}
                     alt="Profile Picture"
                     style={{ width: size, height: size }}
                 />

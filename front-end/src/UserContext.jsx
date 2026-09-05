@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "./config/api";
 
 const UserContext = createContext();
 
@@ -9,7 +10,7 @@ export const UserProvider = ({ children }) => {
 
   const fetchUserData = async (userHandle) => {
     try {
-      const response = await axios.get(`http://10.14.77.107:8081/api/users?username=${userHandle}`);
+      const response = await axios.get(`${API_BASE_URL}/api/users?username=${userHandle}`);
       if (response.data && response.data.length > 0) {
         setUserData(response.data[0]);
       }

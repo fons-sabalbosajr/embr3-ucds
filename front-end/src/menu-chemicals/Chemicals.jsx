@@ -35,6 +35,7 @@ import axios from "axios";
 import "./chemicals.css";
 import Swal from "sweetalert2";
 import ChemicalModal from "./ChemicalModal";
+import { API_BASE_URL, SOCKET_URL } from "../config/api";
 import { io } from "socket.io-client"; // Added io
 
 const sortByIdNo = (arr) => {
@@ -77,7 +78,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
     const fetchChemicalsData = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://10.14.77.107:8081/api/chemicals", {
+        const response = await fetch(`${API_BASE_URL}/api/chemicals`, {
           method: "GET",
           credentials: "include",
         });
@@ -110,7 +111,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
     if (!currentUser?.username) return;
 
     if (!socketRef.current) {
-      socketRef.current = io("http://10.14.77.107:8081", { withCredentials: true });
+      socketRef.current = io(SOCKET_URL, { withCredentials: true });
     }
     const socket = socketRef.current;
 
@@ -161,7 +162,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
   const handleReload = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://10.14.77.107:8081/api/chemicals", {
+      const response = await fetch(`${API_BASE_URL}/api/chemicals`, {
         method: "GET",
         credentials: "include",
       });

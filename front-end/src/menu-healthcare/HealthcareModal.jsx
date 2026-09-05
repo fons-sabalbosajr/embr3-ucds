@@ -8,6 +8,7 @@ import FocalPerson from "./tabpanes/focalperson/FocalPerson";
 import Permits from "./tabpanes/permits/Permits";
 import Legal from "./tabpanes/legal/Legal";
 import "./healthcaremodal.css";
+import { API_BASE_URL } from "../config/api";
 
 const { TabPane } = Tabs;
 
@@ -60,7 +61,7 @@ const HealthcareModal = ({
           };
 
           const response = await axios.put(
-            `http://10.14.77.107:8081/api/update-healthcare/${record.id_no}`,
+            `${API_BASE_URL}/api/update-healthcare/${record.id_no}`,
             updatedRecord
           );
 

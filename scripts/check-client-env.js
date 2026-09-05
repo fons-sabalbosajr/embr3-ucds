@@ -33,26 +33,41 @@ function parseEnvFile(content) {
     'VITE_CRYPTOJS_ENCRYPTION_KEY',
   ];
 
-  if (!fs.existsSync(serverEnvPath)) {
-    console.error('\u274c Missing server/.env. Please create it and include required public keys:');
-    console.error(REQUIRED_KEYS.map(k => `  - ${k}`).join('\n'));
-    process.exit(1);
-  }
+  // On CI/hosting (Render, Actions) there is no server/.env; the keys are
+  // injected as real environment variables instead. Accept either source.
+  const envMap = fs.existsSync(serverEnvPath)
+    ? parseEnvFile(fs.readFileSync(serverEnvPath, 'utf8'))
+    : new Map();
 
-  const envContent = fs.readFileSync(serverEnvPath, 'utf8');
-  const envMap = parseEnvFile(envContent);
+  const lookup = (key) => envMap.get(key) || process.env[key];
 
-  const missing = REQUIRED_KEYS.filter(k => !envMap.get(k));
+  const missing = REQUIRED_KEYS.filter(k => !lookup(k));
   if (missing.length) {
-    console.error('\u274c Missing required client env keys in server/.env:');
+    console.error('\u274c Missing required client env keys:');
     for (const k of missing) console.error('  - ' + k);
-    console.error('These are needed for the front-end build.');
+    console.error('Set them in server/.env for local development, or as environment variables in CI.');
     process.exit(1);
   }
 
   // Optional key: VITE_SOCKET_URL; if missing we will default to VITE_API_BASE_URL at runtime.
-  if (!envMap.get('VITE_SOCKET_URL')) {
+  if (!lookup('VITE_SOCKET_URL')) {
     console.warn('\u26A0\uFE0F  VITE_SOCKET_URL not set; front-end will default to VITE_API_BASE_URL.');
+  }
+
+  // Feature keys. The build still succeeds without them, but the feature that
+  // reads each one will fail at runtime, so surface it here instead.
+  const FEATURE_KEYS = {
+    VITE_GOOGLE_MAPS_API_KEY: 'map rendering and address lookup',
+    VITE_EMAILJS_SERVICE_ID: 'sign-up and credential emails',
+    VITE_EMAILJS_PUBLIC_KEY: 'sign-up and credential emails',
+    VITE_EMAILJS_TEMPLATE_ID: 'sign-up notification email',
+    VITE_EMAILJS_CREDENTIALS_TEMPLATE_ID: 'new-account credentials email',
+  };
+
+  for (const [key, feature] of Object.entries(FEATURE_KEYS)) {
+    if (!lookup(key)) {
+      console.warn(`\u26A0\uFE0F  ${key} not set; ${feature} will not work.`);
+    }
   }
 
   console.log('\u2705 Required client env keys present.');

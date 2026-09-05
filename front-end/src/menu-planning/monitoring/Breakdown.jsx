@@ -4,6 +4,7 @@ import { SearchOutlined, EyeOutlined } from "@ant-design/icons";
 import axios from "axios";
 import "./breakdown.css";
 import Swal from "sweetalert2";
+import { API_BASE_URL } from "../../config/api";
 
 const Breakdown = ({
   visible,
@@ -32,16 +33,16 @@ const Breakdown = ({
           let apiParams = {};
 
           if (criteria.type === "eccCncSubtype") {
-            apiUrl = "http://10.14.77.107:8081/api/ucds/list-by-ecc-cnc-subtype";
+            apiUrl = `${API_BASE_URL}/api/ucds/list-by-ecc-cnc-subtype`;
             apiParams = { subtypeLabel: criteria.label };
           } else if (criteria.type === "permitStatus") {
-            apiUrl = "http://10.14.77.107:8081/api/ucds/list-by-permit-status"; // New API
+            apiUrl = `${API_BASE_URL}/api/ucds/list-by-permit-status`; // New API
             apiParams = {
               permitKey: criteria.permitKey,
               status: criteria.status,
             };
           } else if (criteria.type === "allIndustries") {
-            apiUrl = "http://10.14.77.107:8081/api/ucds/list-all-industries";
+            apiUrl = `${API_BASE_URL}/api/ucds/list-all-industries`;
             apiParams = {}; // No specific parameters needed for fetching all
           } else {
             setLoading(false);

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import axios from "axios";
+import { API_BASE_URL } from "./config/api";
+import { ROUTES } from "./config/routes";
 
 const ProtectedRoute = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -9,7 +11,7 @@ const ProtectedRoute = () => {
     const checkAuth = async () => {
       try {
         const response = await axios.get(
-          "http://10.14.77.107:8081/auth-check", // Updated endpoint
+          `${API_BASE_URL}/auth-check`, // Updated endpoint
           { withCredentials: true }
         );
 
@@ -31,7 +33,7 @@ const ProtectedRoute = () => {
     return <div>Loading...</div>; // You can replace this with a loading spinner
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  return isAuthenticated ? <Outlet /> : <Navigate to={ROUTES.login} replace />;
 };
 
 export default ProtectedRoute;

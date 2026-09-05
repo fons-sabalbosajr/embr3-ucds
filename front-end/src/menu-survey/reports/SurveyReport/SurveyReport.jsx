@@ -12,6 +12,7 @@ import {
 import { InfoCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
 import "./surveyreport.css";
+import { API_BASE_URL } from "../../../config/api";
 
 const fieldTitles = {
   id_no: "Firm ID",
@@ -109,7 +110,7 @@ const SurveyReport = ({
 
   useEffect(() => {
     axios
-      .get(`http://10.14.77.107:8081/api/survey-data/${editedRecord.id_no}`)
+      .get(`${API_BASE_URL}/api/survey-data/${editedRecord.id_no}`)
       .then((response) => {
         setUcdsData(response.data);
       })
@@ -196,7 +197,7 @@ const SurveyReport = ({
 
       // Call the API to generate PDF
       const response = await axios.get(
-        `http://10.14.77.107:8081/generate-custom-survey-report/${editedRecord.id_no}`,
+        `${API_BASE_URL}/generate-custom-survey-report/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -250,7 +251,7 @@ const SurveyReport = ({
       setLoadingPDF(true);
       document.body.style.cursor = "wait";
 
-      const userResponse = await axios.get("http://10.14.77.107:8081/check-auth", {
+      const userResponse = await axios.get(`${API_BASE_URL}/check-auth`, {
         withCredentials: true,
         headers: {
           Accept: "application/json",
@@ -288,7 +289,7 @@ const SurveyReport = ({
         }, {});
 
       response = await axios.get(
-        `http://10.14.77.107:8081/generate-custom-survey-report/${editedRecord.id_no}`,
+        `${API_BASE_URL}/generate-custom-survey-report/${editedRecord.id_no}`,
         {
           params: selectedFields,
           responseType: "arraybuffer",
@@ -316,7 +317,7 @@ const SurveyReport = ({
       console.log([...formData.entries()]);
 
       await axios.post(
-        "http://10.14.77.107:8081/save-draft-report-survey",
+        `${API_BASE_URL}/save-draft-report-survey`,
         formData
       );
 

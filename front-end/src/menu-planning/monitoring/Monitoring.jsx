@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { API_BASE } from "../../config/api";
+import { API_BASE, API_BASE_URL } from "../../config/api";
 import {
   Table,
   Input,
@@ -208,7 +208,7 @@ const DashboardTiles = ({
         setSelectedPermitExpiryDetails(null);
         try {
           const response = await axios.get(
-            "http://10.14.77.107:8081/api/ucds/ecc-cnc-subtypes-breakdown"
+            `${API_BASE_URL}/api/ucds/ecc-cnc-subtypes-breakdown`
           );
           setDetailedEccCncSubtypeCounts(response.data);
         } catch (error) {
@@ -227,7 +227,7 @@ const DashboardTiles = ({
         setDetailedEccCncSubtypeCounts(null);
         try {
           const response = await axios.get(
-            `http://10.14.77.107:8081/api/ucds/permit-expiry-breakdown/${selectedPermitTypeKey}`
+            `${API_BASE_URL}/api/ucds/permit-expiry-breakdown/${selectedPermitTypeKey}`
           );
           setSelectedPermitExpiryDetails(response.data);
         } catch (error) {
@@ -1147,7 +1147,7 @@ const Monitoring = ({ theme = "light" }) => {
     setLoading(true);
     // console.log("Fetching data for page:", page, "pageSize:", pageSize, "search:", search);
     try {
-      const res = await axios.get("http://10.14.77.107:8081/api/ucds-data", {
+      const res = await axios.get(`${API_BASE_URL}/api/ucds-data`, {
         params: {
           page,
           pageSize,
@@ -2523,7 +2523,7 @@ const Monitoring = ({ theme = "light" }) => {
       for (const update of updatesToApi) {
         // Ensure this matches your server route. server.js has /api/update-data/:id
         await axios.put(
-          `http://10.14.77.107:8081/api/update-data/${update.identifier}`, // Use sort_key as identifier
+          `${API_BASE_URL}/api/update-data/${update.identifier}`, // Use sort_key as identifier
           update.payload // Send only the changes
         );
       }
@@ -2689,7 +2689,7 @@ const Monitoring = ({ theme = "light" }) => {
         if (value) {
           try {
             const response = await axios.get(
-              `http://10.14.77.107:8081/api/industry-details-by-class`,
+              `${API_BASE_URL}/api/industry-details-by-class`,
               { params: { className: value } }
             );
             const details = response.data;
