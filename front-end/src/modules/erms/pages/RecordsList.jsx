@@ -11,7 +11,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { LinkOutlined, WarningOutlined } from "@ant-design/icons";
+import { LinkOutlined, PlusOutlined, WarningOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -21,6 +21,7 @@ import {
   fetchFilterOptions,
   fetchRecords,
 } from "../api/ermsService";
+import RecordFormModal from "../components/RecordFormModal";
 
 const LINK_OPTIONS = [
   { value: "", label: "Any register status" },
@@ -53,6 +54,7 @@ const SORT_FIELD = {
 const RecordsList = () => {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [searchDraft, setSearchDraft] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const { data: options } = useQuery({
     queryKey: ["erms", "filter-options"],
@@ -182,9 +184,18 @@ const RecordsList = () => {
     <Card
       title="Records"
       extra={
-        <Typography.Text type="secondary">
-          {data ? `${new Intl.NumberFormat().format(data.total)} records` : ""}
-        </Typography.Text>
+        <Space size={12}>
+          <Typography.Text type="secondary">
+            {data ? `${new Intl.NumberFormat().format(data.total)} records` : ""}
+          </Typography.Text>
+          {/* Offered only where the account may actually write. */}
+          {(options?.writableProvinces === null ||
+            (options?.writableProvinces || []).length > 0) && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+              New record
+            </Button>
+          )}
+        </Space>
       }
     >
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -276,6 +287,13 @@ const RecordsList = () => {
           }}
         />
       </Space>
+
+      <RecordFormModal
+        open={creating}
+        record={null}
+        writableProvinces={options?.writableProvinces}
+        onClose={() => setCreating(false)}
+      />
     </Card>
   );
 };

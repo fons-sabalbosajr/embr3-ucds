@@ -1,4 +1,6 @@
 const recordService = require('./services/recordService');
+const trackingService = require('./services/trackingService');
+const archiveService = require('./services/archiveService');
 
 // ---------------------------------------------------------------------------
 // The ERMS module's public face.
@@ -10,8 +12,15 @@ const recordService = require('./services/recordService');
 
 const isEnabled = () => process.env.ERMS_MODULE_ENABLED === 'true';
 
+/** Indexes for the collections this module owns. Called once at startup. */
+async function ensureIndexes() {
+  await trackingService.ensureIndexes();
+  await archiveService.ensureIndexes();
+}
+
 module.exports = {
   isEnabled,
+  ensureIndexes,
   routes: require('./routes'),
   read: {
     countForFirm: recordService.countForFirm,

@@ -13,6 +13,44 @@ export const fetchRecords = async (params) =>
 export const fetchRecord = async (serialNo) =>
   (await client.get(`/records/${encodeURIComponent(serialNo)}`)).data;
 
+export const createRecord = async (payload) => (await client.post("/records", payload)).data.record;
+
+export const updateRecord = async ({ serialNo, ...changes }) =>
+  (await client.patch(`/records/${encodeURIComponent(serialNo)}`, changes)).data.record;
+
+// --- tracking ---------------------------------------------------------------
+
+export const addTracking = async ({ serialNo, ...entry }) =>
+  (await client.post(`/records/${encodeURIComponent(serialNo)}/tracking`, entry)).data.entry;
+
+export const fetchOverdue = async () => (await client.get("/tracking/overdue")).data.overdue;
+
+// --- archive ----------------------------------------------------------------
+
+export const fetchBoxes = async (params) =>
+  (await client.get("/boxes", { params: pruned(params) })).data.boxes;
+
+export const createBox = async (payload) => (await client.post("/boxes", payload)).data.box;
+
+export const updateBox = async ({ code, ...changes }) =>
+  (await client.patch(`/boxes/${encodeURIComponent(code)}`, changes)).data.box;
+
+export const fetchBoxContents = async (code) =>
+  (await client.get(`/boxes/${encodeURIComponent(code)}`)).data.contents;
+
+export const assignToBox = async ({ serialNo, boxCode }) =>
+  (await client.put(`/records/${encodeURIComponent(serialNo)}/box`, { boxCode })).data;
+
+export const fetchDisposalDue = async () => (await client.get("/disposal-due")).data.boxes;
+
+// --- reports ----------------------------------------------------------------
+
+export const runReport = async ({ key, limit = 500 }) =>
+  (await client.get(`/reports/${key}`, { params: { limit } })).data;
+
+/** The CSV endpoint is a normal authenticated GET; the browser saves it. */
+export const reportCsvUrl = (key) => `${API_BASE}/erms/reports/${key}?format=csv`;
+
 /** Drop empty values so they do not reach the API as blank query strings. */
 function pruned(params = {}) {
   return Object.fromEntries(

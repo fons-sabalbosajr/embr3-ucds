@@ -989,6 +989,22 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
+        {
+          key: "/universe/erms/archive",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/archive">Archive</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/reports",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/reports">Reports</Link>
+            </div>
+          ),
+        },
       ],
     },
     (hasAdmin || hasErms) && canViewAdminPanel && {

@@ -77,6 +77,8 @@ import OrgUnits from "./modules/admin/OrgUnits";
 import ErmsDashboard from "./modules/erms/pages/ErmsDashboard";
 import RecordsList from "./modules/erms/pages/RecordsList";
 import RecordDetail from "./modules/erms/pages/RecordDetail";
+import ArchiveBoxes from "./modules/erms/pages/ArchiveBoxes";
+import ErmsReports from "./modules/erms/pages/ErmsReports";
 
 const { Header, Content } = Layout;
 
@@ -737,9 +739,25 @@ const Universe = () => {
                       </DomainGuard>
                     }
                   />
+                  <Route
+                    path="erms/archive"
+                    element={
+                      <DomainGuard domain="erms" user={currentUser}>
+                        <ArchiveBoxes />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="erms/reports"
+                    element={
+                      <DomainGuard domain="erms" user={currentUser}>
+                        <ErmsReports />
+                      </DomainGuard>
+                    }
+                  />
                   <Route path="erms" element={<Navigate to="/universe/erms/dashboard" replace />} />
-                  {/* Documents, tracking, archive and reports are still to come.
-                      The guard is already here so the boundary holds. */}
+                  {/* Anything else under erms/ is not built. The guard stays so
+                      the domain boundary holds regardless. */}
                   <Route
                     path="erms/*"
                     element={

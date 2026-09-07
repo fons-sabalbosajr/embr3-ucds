@@ -93,6 +93,10 @@ const limiter = ({ windowMs, max, message }) =>
     max,
     standardHeaders: true,
     legacyHeaders: false,
+    // The integration suites sign in many times against one in-process app, so
+    // a shared IP budget would throttle the tests rather than an attacker.
+    // Limited to NODE_ENV=test so a deployed environment is never exempt.
+    skip: () => process.env.NODE_ENV === 'test',
     // Behind Render's proxy the client IP arrives in X-Forwarded-For; the app
     // sets `trust proxy`, so express-rate-limit reads req.ip correctly.
     handler: (req, res) => res.status(429).json({ message }),

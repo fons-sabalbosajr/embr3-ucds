@@ -537,11 +537,45 @@ Behind `ERMS_MODULE_ENABLED`. Read-only surfaces before write surfaces.
 - [x] Records register — list, search, filter, sort, paginate, detail (read-only)
 - [x] ERMS dashboard
 - [x] Cross-domain read API (`countForFirm`, `listForFirm`)
+- [x] Records create and update (first write path)
+- [x] Tracking & routing — append-only custody history
+- [x] Archiving & retention — boxes, sealing, disposal recording
+- [x] ERMS reports — four reports with CSV export
 - [ ] Document access via NAS — **blocked**, see below
-- [ ] Records CRUD (first write path — legacy desktop app goes read-only here)
-- [ ] Tracking & routing
-- [ ] Archiving & retention
-- [ ] ERMS reports
+
+#### Write path
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/erms/records` | Serial allocated atomically from `erms-sequences` |
+| `PATCH /api/erms/records/:serialNo` | Nested objects merge, they do not replace |
+| `POST /api/erms/records/:serialNo/tracking` | Append-only — no PATCH, no DELETE |
+| `PUT /api/erms/records/:serialNo/box` | File into or remove from a box |
+| `POST/PATCH /api/erms/boxes[/:code]` | Create, seal, record a disposal |
+| `GET /api/erms/reports/:key` | `?format=csv` for the full set |
+
+**Write authorization is two-layered.** `canManageData` — the capability that already means "may modify data", reused rather than inventing an ERMS-only flag — plus a per-province check against the record's own province using `userWritableProvinceKeys`. A `view` grant reads a province; only `readWrite` changes it. On update, **both** the current and the target province are checked, so a record cannot be moved out of the user's reach.
+
+**Disposal is recorded, never performed.** Marking a box disposed requires naming the approving authority, and the records stay in the database. The paper goes; the trail does not.
+
+**Tracking is append-only by design.** A custody trail that can be edited is not a custody trail. A mistake is corrected by recording a correction, and a test asserts no edit or delete route exists.
+
+#### 🐛 Two bugs found during this phase
+
+1. **Serial allocation returned `FSN-undefined`.** The counter document had a field named `value`, which collides with the driver's legacy `{ value: doc }` result wrapper — `result.value.value` was `undefined`. The field is now `seq`, both driver result shapes are handled, and a non-numeric sequence throws instead of inserting. One malformed record reached production and was removed.
+2. **The Phase 2 rate limiter throttled the test suite** (20 logins / 15 min). Now skipped when `NODE_ENV=test` only, and the suites reuse one session per user instead of signing in per test.
+
+#### ⚠️ Incident during cleanup
+
+While removing the malformed record I used the filter `/^FSN-\d+$/`, which does not match the legitimate attachment serials (`FSN-0000206 Att-00012`). **37 valid records were deleted.** They were restored immediately by re-running `stage.js --apply --db=universe-db` and `reconcile.js --write-refs`; the count returned to 18,067 with 10/10 gates and all 37 attachments present.
+
+The recovery worked because the import is idempotent and upserts on `serialNo` — the property built in Phase 6 precisely so a re-run corrects rather than duplicates. The lesson is narrower: an ad-hoc cleanup should target the exact known-bad key, not a pattern.
+
+**UI** — `RecordFormModal` (create and edit share one form), `TrackingPanel` (timeline plus a movement dialog), `BoxAssignment`, `ArchiveBoxes`, `ErmsReports`. Actions appear only where `writableProvinces` says the API would accept them.
+
+**Tests:** 33 new (160 total). They cover the capability and province refusals, serial uniqueness under concurrency, permit-number conflict, nested-merge on update, the raw-date clearing when a flagged value is corrected, custody calculation, overdue loans clearing on return, sealed boxes refusing records, disposal requiring an authority, and CSV export.
+
+**Gate:** ⚠️ built and tested; **acceptance by Records personnel still outstanding**.
 
 **Production import.** Staging reconciled 10/10, so the same pipeline was run against `universe-db`: 18,067 records, 11,465 linked, 36 flagged. Additive only — `erms-records` and `erms-id-map` are new collections; nothing existing was touched. `universe-db` went 27 → 30 collections (`org-units` + the two `erms-*`).
 

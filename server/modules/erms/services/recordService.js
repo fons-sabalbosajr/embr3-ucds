@@ -1,4 +1,5 @@
-const { connectToMongo, getDb, ObjectId } = require('../../../config/db');
+const { connectToMongo, getDb } = require('../../../config/db');
+const { badRequest, conflict, forbidden, notFoundError } = require('../../../shared/middleware/errorHandler');
 
 // ---------------------------------------------------------------------------
 // The ERMS records register.
@@ -14,8 +15,10 @@ const { connectToMongo, getDb, ObjectId } = require('../../../config/db');
 // ---------------------------------------------------------------------------
 
 const RECORDS = 'erms-records';
+const SEQUENCES = 'erms-sequences';
 
 const collection = () => getDb().collection(RECORDS);
+const sequences = () => getDb().collection(SEQUENCES);
 
 const PERMIT_TYPES = [
   { code: 'ecc-original', label: 'ECC (Original)' },
@@ -172,6 +175,235 @@ async function filterOptions(allowedProvinces) {
 }
 
 // ---------------------------------------------------------------------------
+// Writes.
+//
+// Province scope is applied again here, on the record's own province, using
+// the caller's *writable* provinces. A user granted 'view' on a province can
+// read its records and cannot change them.
+// ---------------------------------------------------------------------------
+
+/**
+ * The next serial in the FSN sequence.
+ *
+ * Uses an atomic $inc on a counter document rather than max()+1, which would
+ * hand the same number to two concurrent creates. Seeded from the highest
+ * serial already present, so it continues the desktop application's numbering
+ * instead of restarting it.
+ */
+async function nextSerialNo() {
+  await connectToMongo();
+
+  // The counter field is `seq`, not `value`: the driver's legacy result shape
+  // is { value: doc }, so a field called `value` makes unwrapping ambiguous —
+  // doc.value is both "the document" and "the number", and the wrong one wins.
+  const existing = await sequences().findOne({ _id: 'serialNo' });
+  if (!existing || typeof existing.seq !== 'number') {
+    const [highest] = await collection()
+      .find({ serialNo: /^FSN-\d+$/ })
+      .sort({ serialNo: -1 })
+      .limit(1)
+      .toArray();
+    const seed = highest ? Number(String(highest.serialNo).replace(/\D/g, '')) : 0;
+    // upsert rather than insert: a concurrent create may have seeded it first.
+    await sequences().updateOne(
+      { _id: 'serialNo' },
+      { $set: { seq: seed } },
+      { upsert: true }
+    );
+  }
+
+  const result = await sequences().findOneAndUpdate(
+    { _id: 'serialNo' },
+    { $inc: { seq: 1 } },
+    { returnDocument: 'after', includeResultMetadata: false }
+  );
+
+  // Tolerate both driver result shapes rather than assuming one.
+  const doc = result && typeof result.seq === 'number' ? result : result?.value;
+  const seq = doc?.seq;
+  if (typeof seq !== 'number' || !Number.isFinite(seq)) {
+    throw new Error('Could not allocate a serial number.');
+  }
+  return `FSN-${String(seq).padStart(7, '0')}`;
+}
+
+function assertWritable(province, writableProvinces) {
+  if (!Array.isArray(writableProvinces)) return; // unrestricted
+  if (!province || !writableProvinces.includes(province)) {
+    throw forbidden(
+      `You do not have write access to records in ${province || 'that province'}.`,
+      'PROVINCE_FORBIDDEN'
+    );
+  }
+}
+
+async function createRecord(input, { username, writableProvinces }) {
+  await connectToMongo();
+  assertWritable(input.location?.province, writableProvinces);
+
+  if (input.permit?.number) {
+    const clash = await collection().findOne({ 'permit.number': input.permit.number });
+    if (clash) {
+      throw conflict(
+        `Permit number ${input.permit.number} is already on record ${clash.serialNo}.`,
+        'PERMIT_NUMBER_EXISTS'
+      );
+    }
+  }
+
+  let parent = null;
+  if (input.parentSerialNo) {
+    parent = await collection().findOne({ serialNo: input.parentSerialNo });
+    if (!parent) throw badRequest('The parent record does not exist.', 'PARENT_NOT_FOUND');
+  }
+
+  const serialNo = await nextSerialNo();
+  const doc = {
+    serialNo,
+    parentSerialNo: input.parentSerialNo || null,
+    attachmentNo: input.parentSerialNo ? `Att-${serialNo.slice(-5)}` : null,
+    isAttachment: Boolean(input.parentSerialNo),
+
+    proponentName: input.proponentName,
+    projectTitle: input.projectTitle,
+    remarks: input.remarks || null,
+
+    permit: {
+      type: input.permit.type,
+      label: (PERMIT_TYPES.find((t) => t.code === input.permit.type) || {}).label || null,
+      typeRaw: null,
+      number: input.permit.number || null,
+      processSource: input.permit.processSource || null,
+      dateApproved: input.permit.dateApproved ? new Date(input.permit.dateApproved) : null,
+      dateApprovedRaw: null,
+      dateAmended: input.permit.dateAmended ? new Date(input.permit.dateAmended) : null,
+      dateAmendedRaw: null,
+    },
+
+    project: { type: input.project?.type || null, otherType: input.project?.otherType || null },
+
+    location: {
+      province: input.location.province,
+      provinceLabel: input.location.provinceLabel || null,
+      city: input.location.city || null,
+      barangay: input.location.barangay || null,
+      street: input.location.street || null,
+      lat: input.location.lat ?? null,
+      long: input.location.long ?? null,
+    },
+
+    document: {
+      fileName: input.document?.fileName || null,
+      filePath: input.document?.filePath || null,
+      sharePath: input.document?.sharePath || null,
+      fileClass: input.document?.fileClass || 'Public',
+      uploadedAt: new Date(),
+      uploadedBy: username,
+    },
+
+    ucdsRef: null,
+
+    // Provenance. A record created here has no legacy id; the field exists so
+    // migrated and native records have the same shape.
+    legacyId: null,
+    legacyLogId: null,
+    legacySource: 'ucds-erms',
+    sourceRow: null,
+    migratedAt: null,
+
+    createdAt: new Date(),
+    createdBy: username,
+    updatedAt: null,
+    updatedBy: null,
+
+    dataQuality: { clean: true, issues: [] },
+  };
+
+  await collection().insertOne(doc);
+  return doc;
+}
+
+/** Fields a user may change. Identity and provenance are not among them. */
+const MUTABLE = [
+  'proponentName',
+  'projectTitle',
+  'remarks',
+  'permit',
+  'project',
+  'location',
+  'document',
+];
+
+async function updateRecord(serialNo, changes, { username, writableProvinces }) {
+  await connectToMongo();
+
+  const before = await collection().findOne({ serialNo });
+  if (!before) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+
+  // Writable in the province it is in now, and in the one it would move to.
+  assertWritable(before.location?.province, writableProvinces);
+  if (changes.location?.province) assertWritable(changes.location.province, writableProvinces);
+
+  if (changes.permit?.number && changes.permit.number !== before.permit?.number) {
+    const clash = await collection().findOne({
+      'permit.number': changes.permit.number,
+      serialNo: { $ne: serialNo },
+    });
+    if (clash) {
+      throw conflict(
+        `Permit number ${changes.permit.number} is already on record ${clash.serialNo}.`,
+        'PERMIT_NUMBER_EXISTS'
+      );
+    }
+  }
+
+  const set = { updatedAt: new Date(), updatedBy: username };
+  for (const key of MUTABLE) {
+    if (changes[key] === undefined) continue;
+    if (key === 'permit') {
+      set.permit = {
+        ...before.permit,
+        ...changes.permit,
+        label:
+          (PERMIT_TYPES.find((t) => t.code === (changes.permit.type || before.permit?.type)) || {})
+            .label || before.permit?.label || null,
+        dateApproved:
+          changes.permit.dateApproved !== undefined
+            ? changes.permit.dateApproved
+              ? new Date(changes.permit.dateApproved)
+              : null
+            : before.permit?.dateApproved ?? null,
+        dateAmended:
+          changes.permit.dateAmended !== undefined
+            ? changes.permit.dateAmended
+              ? new Date(changes.permit.dateAmended)
+              : null
+            : before.permit?.dateAmended ?? null,
+      };
+      // Correcting a date clears the preserved raw value it replaces.
+      if (changes.permit.dateApproved) set.permit.dateApprovedRaw = null;
+      if (changes.permit.dateAmended) set.permit.dateAmendedRaw = null;
+    } else if (typeof changes[key] === 'object' && changes[key] !== null) {
+      set[key] = { ...before[key], ...changes[key] };
+    } else {
+      set[key] = changes[key];
+    }
+  }
+
+  // A record whose flagged values have all been resolved is clean again.
+  if (set.permit && !set.permit.dateApprovedRaw && !set.permit.dateAmendedRaw) {
+    const remaining = (before.dataQuality?.issues || []).filter(
+      (i) => !['Date_Approved', 'Date_Amended'].includes(i.field)
+    );
+    set.dataQuality = { clean: remaining.length === 0, issues: remaining };
+  }
+
+  await collection().updateOne({ serialNo }, { $set: set });
+  const after = await collection().findOne({ serialNo });
+  return { before, after };
+}
+
+// ---------------------------------------------------------------------------
 // The read API other domains may call. UCDS uses this instead of querying
 // erms-* directly; see docs/UNIFICATION-PLAN.md.
 // ---------------------------------------------------------------------------
@@ -196,6 +428,7 @@ async function listForFirm(sortKey, limit = 20) {
 
 module.exports = {
   RECORDS,
+  SEQUENCES,
   PERMIT_TYPES,
   buildFilter,
   listRecords,
@@ -203,6 +436,10 @@ module.exports = {
   listAttachments,
   dashboardStats,
   filterOptions,
+  // writes
+  nextSerialNo,
+  createRecord,
+  updateRecord,
   // cross-domain read API
   countForFirm,
   listForFirm,

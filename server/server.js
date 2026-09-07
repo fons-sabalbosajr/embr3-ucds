@@ -14,6 +14,10 @@ const PORT = process.env.PORT || 8081;
 connectToMongo()
   .then(() => require("./services/yearService").ensureSeeded())
   .then(() => require("./shared/services/orgUnits").ensureIndexes())
+  .then(() => {
+    const erms = require("./modules/erms");
+    return erms.isEnabled() ? erms.ensureIndexes() : null;
+  })
   .catch((error) => {
     console.error("Error during MongoDB connection:", error);
     process.exit(1);

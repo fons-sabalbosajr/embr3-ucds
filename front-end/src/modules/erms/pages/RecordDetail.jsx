@@ -12,15 +12,25 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { ArrowLeftOutlined, FilePdfOutlined, LinkOutlined } from "@ant-design/icons";
+import { useState } from "react";
+import {
+  ArrowLeftOutlined,
+  EditOutlined,
+  FilePdfOutlined,
+  LinkOutlined,
+} from "@ant-design/icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   PERMIT_TYPE_COLOR,
   PROVINCE_LABEL,
   describeApiError,
+  fetchFilterOptions,
   fetchRecord,
 } from "../api/ermsService";
+import TrackingPanel from "../components/TrackingPanel";
+import RecordFormModal from "../components/RecordFormModal";
+import BoxAssignment from "../components/BoxAssignment";
 
 const date = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 const dateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
@@ -43,10 +53,18 @@ const RecordDetail = () => {
   const { serialNo } = useParams();
   const navigate = useNavigate();
 
+  const [editing, setEditing] = useState(false);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["erms", "record", serialNo],
     queryFn: () => fetchRecord(serialNo),
     retry: false,
+  });
+
+  const { data: options } = useQuery({
+    queryKey: ["erms", "filter-options"],
+    queryFn: fetchFilterOptions,
+    staleTime: 5 * 60 * 1000,
   });
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 12 }} />;
@@ -77,8 +95,13 @@ const RecordDetail = () => {
     );
   }
 
-  const { record, attachments } = data;
+  const { record, attachments, tracking, custody } = data;
   const { permit, project, location, document: doc, ucdsRef, dataQuality } = record;
+
+  // The API is the authority; this only avoids offering an action it refuses.
+  // A null writable list means unrestricted.
+  const writable = options?.writableProvinces;
+  const canWrite = writable === null || (writable || []).includes(location?.province);
 
   const attachmentColumns = [
     {
@@ -106,6 +129,11 @@ const RecordDetail = () => {
           <Link to={`/universe/erms/records/${encodeURIComponent(record.parentSerialNo)}`}>
             This is an attachment of {record.parentSerialNo}
           </Link>
+        )}
+        {canWrite && (
+          <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
+            Edit record
+          </Button>
         )}
       </Space>
 
@@ -232,6 +260,23 @@ const RecordDetail = () => {
           }
         />
       </Card>
+
+      <BoxAssignment record={record} canWrite={canWrite} />
+
+      <TrackingPanel
+        serialNo={record.serialNo}
+        tracking={tracking}
+        custody={custody}
+        actions={options?.trackingActions || []}
+        canWrite={canWrite}
+      />
+
+      <RecordFormModal
+        open={editing}
+        record={record}
+        writableProvinces={writable}
+        onClose={() => setEditing(false)}
+      />
 
       {attachments?.length > 0 && (
         <Card title={`Attachments (${attachments.length})`} size="small">
