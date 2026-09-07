@@ -21,7 +21,7 @@ require('../config/dns').configureDns();
 
 const { connectToMongo, collections, client, getDb } = require('../config/db');
 const { FIELD_SCOPED_DATASETS, scopeOf, YEAR_FIELD } = require('../services/yearScope');
-const { roleOf, ROLES } = require('../services/authorization');
+const { roleOf, canAccessAllYears } = require('../services/authorization');
 
 const APPLY = process.argv.includes('--apply');
 const BASELINE_YEAR = 2025;
@@ -98,7 +98,10 @@ async function grantBaselineYearToUsers() {
 
   for (const u of users) {
     const role = roleOf(u);
-    if (role !== ROLES.GUEST) {
+    // Developers and Admins reach every active container regardless of
+    // assignment. This used to be spelled `role !== ROLES.GUEST`, which meant
+    // the same thing before the role vocabulary gained records/planning.
+    if (canAccessAllYears(u)) {
       log(`  ${pad(u.username, 20)}${pad(role, 11)}all years (no assignment needed)`);
       continue;
     }

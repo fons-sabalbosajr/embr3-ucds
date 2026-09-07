@@ -72,7 +72,7 @@ const Chemicals = ({ theme, currentUser, data }) => {
   const [chemicalsViewers, setChemicalsViewers] = useState([]); // Added state for viewers
   const socketRef = useRef(null); // Added socket ref
 
-  const canViewDataHistory = currentUser?.permissions?.[3]; // For Avatar.Group visibility
+  const canViewDataHistory = currentUser?.capabilities?.canViewDataHistory === true; // For Avatar.Group visibility
 
   useEffect(() => {
     const fetchChemicalsData = async () => {

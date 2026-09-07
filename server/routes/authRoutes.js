@@ -15,6 +15,9 @@ router.post('/login', loginLimiter, ctrl.login);
 router.post('/request-password-reset', passwordResetLimiter, ctrl.requestPasswordReset);
 router.post('/reset-password', passwordResetLimiter, ctrl.resetPassword);
 router.get('/auth-check', ctrl.authCheck);
+
+// The single source of truth for what the signed-in user may do.
+router.get('/api/auth/me', authenticateSession, ctrl.me);
 router.post('/logout', ctrl.logout);
 router.get('/api/current-user/avatar', authenticateSession, ctrl.currentUserAvatar);
 router.get('/protected-route', authenticateSession, ctrl.protectedSample);

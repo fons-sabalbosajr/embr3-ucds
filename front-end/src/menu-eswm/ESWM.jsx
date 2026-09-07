@@ -6,7 +6,7 @@ import { SOCKET_URL } from "../config/api";
 const ESWM = ({ currentUser }) => {
   const [eswmViewers, setEswmViewers] = useState([]);
   const socketRef = useRef(null);
-  const canViewDataHistory = currentUser?.permissions?.[3];
+  const canViewDataHistory = currentUser?.capabilities?.canViewDataHistory === true;
 
   useEffect(() => {
     if (!currentUser?.username) return;

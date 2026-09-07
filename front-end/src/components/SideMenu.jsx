@@ -77,18 +77,22 @@ const rootSubmenuKeys = [
   "admin",
   "developer-settings",
   "legal",
-  "electronic-records-management", // Added for the new ERMS submenu
+  "nas-storage",
   "eswm-database", // Added for the new submenu
 ];
 
-const visibleProvincesList = [
-  "Aurora",
-  "Bataan",
-  "Bulacan",
-  "Nueva_Ecija",
-  "Pampanga",
-  "Tarlac",
-  "Zambales",
+// `key` matches the per-province grant on the user account; `value` is the
+// province as written in the register and in the route. These were previously
+// two parallel lists kept in sync by array position, so that the sidebar could
+// read permissions[i + 5] to decide whether to show province i.
+const PROVINCE_MENU = [
+  { key: "aurora", value: "Aurora" },
+  { key: "bataan", value: "Bataan" },
+  { key: "bulacan", value: "Bulacan" },
+  { key: "nuevaEcija", value: "Nueva_Ecija" },
+  { key: "pampanga", value: "Pampanga" },
+  { key: "tarlac", value: "Tarlac" },
+  { key: "zambales", value: "Zambales" },
 ];
 
 const SideMenu = ({ theme, currentUser }) => {
@@ -113,11 +117,15 @@ const SideMenu = ({ theme, currentUser }) => {
   const navigate = useNavigate();
   const { setCurrentProvince } = useContext(DataContext);
   const prevLocationPathnameRef = useRef(location.pathname); // To track previous path
-  const permissions = currentUser?.permissions || [];
-  const canViewDataHistory = permissions[3];
-  const visibleProvinces = visibleProvincesList.filter(
-    (_, i) => permissions[i + 5]
-  );
+  // Named entitlement from GET /api/auth/me. Hiding a menu item is a courtesy,
+  // not a control: every route behind these links is checked again server-side.
+  const capabilities = currentUser?.capabilities || {};
+  const grantedProvinces = currentUser?.provinces || [];
+  const canViewAdminPanel = capabilities.canViewAdminPanel === true;
+  const canViewDataHistory = capabilities.canViewDataHistory === true;
+  const visibleProvinces = PROVINCE_MENU.filter((p) =>
+    grantedProvinces.includes(p.key)
+  ).map((p) => p.value);
 
   useEffect(() => {
     const path = location.pathname;
@@ -646,7 +654,7 @@ const SideMenu = ({ theme, currentUser }) => {
         </div>
       ),
     },
-    permissions[2] && {
+    canViewAdminPanel && {
       key: "eswm-database",
       icon: <DatabaseFilled />,
       label: <div className="menu-label-wrapper main">ESWM Database</div>,
@@ -723,7 +731,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    permissions[2] && {
+    canViewAdminPanel && {
       key: "legal",
       icon: <FileProtectOutlined />,
       label: <div className="menu-label-wrapper main">Legal Services Unit</div>,
@@ -754,7 +762,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    permissions[2] && {
+    canViewAdminPanel && {
       key: "planning-unit",
       icon: <BsClipboardDataFill />,
       label: <div className="menu-label-wrapper main">Planning Unit</div>,
@@ -842,7 +850,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    permissions[2] && {
+    canViewAdminPanel && {
       key: "admin",
       icon: <SettingFilled />,
       label: <div className="menu-label-wrapper main">Admin</div>,
@@ -889,7 +897,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    permissions[2] && {
+    canViewAdminPanel && {
       key: "developer-settings",
       icon: <ToolOutlined />,
       label: <div className="menu-label-wrapper main">Developer Settings</div>,
@@ -928,7 +936,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    permissions[2] && {
+    canViewAdminPanel && {
       key: "nas-storage",
       icon: <ContainerFilled />,
       label: <div className="menu-label-wrapper main nas">NAS Storage</div>,
@@ -970,7 +978,7 @@ const SideMenu = ({ theme, currentUser }) => {
       ],
     },
 
-    // permissions[2] && {
+    // canViewAdminPanel && {
     //   key: "/universe/mbu",
     //   icon: <EnvironmentFilled />,
     //   label: (

@@ -24,12 +24,12 @@ const ProvTransaction = ({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [revertRecord, setRevertRecord] = useState(null);
 
-  // Extract permissions from currentUser
-  const permissions = currentUser?.permissions || [];
-  const canGenerateData = permissions[0];
-  const canManageData = permissions[1];
-  const canViewAdminPanel = permissions[2];
-  const canViewDataHistory = permissions[3];
+  // Named capability flags from GET /api/auth/me
+  const capabilities = currentUser?.capabilities || {};
+  const canGenerateData = capabilities.canGenerateData === true;
+  const canManageData = capabilities.canManageData === true;
+  const canViewAdminPanel = capabilities.canViewAdminPanel === true;
+  const canViewDataHistory = capabilities.canViewDataHistory === true;
 
   useEffect(() => {
     const fetchTransactions = async () => {

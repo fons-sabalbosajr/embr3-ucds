@@ -32,10 +32,57 @@ function normalizeKeys(keys) {
   return [...new Set(keys.map(String).filter(isProvinceKey))];
 }
 
-/** Province keys a user is permitted to see, from the existing booleans. */
-function userProvinceKeys(user) {
-  return PROVINCE_KEYS.filter((k) => user && user[k] === true);
+// ---------------------------------------------------------------------------
+// Per-province grants are stored two different ways on user documents:
+//
+//   boolean   true / false
+//   string    'readWrite' / 'view' / 'none'
+//
+// The account screen writes strings; an older path wrote booleans. Both are
+// live in the collection today.
+//
+// This previously tested `user[k] === true`, so every string-valued account
+// resolved to *no* province keys — and because an empty key list produced a
+// null filter, which means "unrestricted", those users could read all seven
+// provinces instead of their assigned ones. Both halves of that are fixed:
+// here, by understanding strings, and in provinceFilter, by failing closed.
+// ---------------------------------------------------------------------------
+
+const ACCESS = { NONE: 'none', VIEW: 'view', READ_WRITE: 'readWrite' };
+
+/** Normalise either representation to 'none' | 'view' | 'readWrite'. */
+function accessLevel(value) {
+  if (value === true) return ACCESS.READ_WRITE;
+  if (value === false || value === null || value === undefined) return ACCESS.NONE;
+
+  const raw = String(value).trim().toLowerCase();
+  if (raw === 'readwrite') return ACCESS.READ_WRITE;
+  if (raw === 'view') return ACCESS.VIEW;
+  if (raw === 'true') return ACCESS.READ_WRITE;
+  return ACCESS.NONE;
 }
+
+/** Every province's access level for this user, as a complete object. */
+function userProvinceAccess(user) {
+  return PROVINCE_KEYS.reduce((acc, k) => {
+    acc[k] = accessLevel(user && user[k]);
+    return acc;
+  }, {});
+}
+
+/** Province keys a user may read — anything above 'none'. */
+function userProvinceKeys(user) {
+  return PROVINCE_KEYS.filter((k) => accessLevel(user && user[k]) !== ACCESS.NONE);
+}
+
+/** Province keys a user may modify. */
+function userWritableProvinceKeys(user) {
+  return PROVINCE_KEYS.filter((k) => accessLevel(user && user[k]) === ACCESS.READ_WRITE);
+}
+
+// A filter that matches no document. Used when a user has no province grant at
+// all, so "no scope" denies rather than permits.
+const DENY_ALL = Object.freeze({ province: { $in: [] } });
 
 /**
  * A Mongo filter matching the given province keys, tolerant of the casing and
@@ -43,7 +90,11 @@ function userProvinceKeys(user) {
  */
 function provinceFilter(keys) {
   const list = normalizeKeys(keys);
-  if (!list.length) return null;
+
+  // No province granted means no register access. This used to return null,
+  // which callers read as "unrestricted" — the opposite of what an empty grant
+  // should mean.
+  if (!list.length) return DENY_ALL;
 
   // Covering all seven provinces is no restriction at all. Returning null keeps
   // records with a missing or malformed province visible to those users —
@@ -139,5 +190,10 @@ module.exports = {
   isProvinceKey,
   normalizeKeys,
   userProvinceKeys,
+  userWritableProvinceKeys,
+  userProvinceAccess,
+  accessLevel,
+  ACCESS,
+  DENY_ALL,
   provinceFilter,
 };

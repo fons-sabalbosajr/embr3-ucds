@@ -5,6 +5,8 @@ const {
   canAccessYear,
   canManageYears,
   authorizedProvinces,
+  hasDomain,
+  domainsOf,
 } = require('../services/authorization');
 const { provinceFilter } = require('../services/provinces');
 const yearService = require('../services/yearService');
@@ -50,6 +52,28 @@ function requireYearManager(req, res, next) {
     return res.status(403).json({ message: 'Administrator access required' });
   }
   next();
+}
+
+/**
+ * Gate a route on a business domain.
+ *
+ * This is the boundary between UCDS and ERMS, and it is enforced here rather
+ * than by which menu items the client renders. A Planning user who types an
+ * ERMS URL, or calls the endpoint directly, gets 403 whether or not the link
+ * was ever shown to them.
+ */
+function requireDomain(domain) {
+  return (req, res, next) => {
+    const user = principalOf(req);
+    if (!user) return res.status(401).json({ message: 'User not authenticated' });
+    if (!hasDomain(user, domain)) {
+      return res.status(403).json({
+        code: 'DOMAIN_FORBIDDEN',
+        message: `You do not have access to the ${domain.toUpperCase()} module.`,
+      });
+    }
+    next();
+  };
 }
 
 function requireRole(...allowed) {
@@ -157,6 +181,7 @@ module.exports = {
   authenticateSession,
   requireDeveloper,
   requireYearManager,
+  requireDomain,
   requireRole,
   resolveYearContext,
   rejectYearOverride,

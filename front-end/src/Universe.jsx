@@ -12,7 +12,7 @@ import {
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import {
-  checkUserAuth,
+  fetchCurrentUser,
   fetchDataValidationIssues,
   fetchDuplicateDataIssues,
   logoutUserService,
@@ -82,7 +82,13 @@ const Universe = () => {
   const [division, setDivision] = useState("");
   const [theme, setTheme] = useState("dark");
   const [collapsed, setCollapsed] = useState(false);
-  const [permissions, setPermissions] = useState([]);
+  // Named capability flags, replacing the positional boolean array this used to
+  // build (permissions[2] meant "admin panel", permissions[i+5] meant
+  // "province i"). Everything here is advisory — the API re-checks the same
+  // entitlement on every request.
+  const [capabilities, setCapabilities] = useState({});
+  const [domains, setDomains] = useState([]);
+  const [provinces, setProvinces] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -110,59 +116,38 @@ const Universe = () => {
 
   const checkAuth = async () => {
     try {
-      const data = await checkUserAuth(); // Use service
-      // The service now ensures data.status is "Success" or throws
-      setName(data.name);
+      // One request, one authoritative answer. The server resolves the role,
+      // domains, capabilities and province scope; the client no longer derives
+      // any of them from loose fields.
+      const data = await fetchCurrentUser();
+
+      setName(data.user?.name);
       setAvatar(
-        data.avatar
-          ? `${backendUrl}${data.avatar}`
+        data.user?.avatar
+          ? `${backendUrl}${data.user.avatar}`
           : "path/to/default-avatar.png"
       );
 
-      // Process base permissions (ensure they are boolean)
-      const basePermissions = [
-        !!data.canGenerateData,
-        !!data.canManageData,
-        !!data.canViewAdminPanel,
-        !!data.canViewDataHistory,
-        !!data.canAccessRangePicker,
-      ];
+      setCapabilities(data.capabilities || {});
+      setDomains(data.domains || []);
+      setProvinces(data.provinces || []);
+      setUserRole(data.role || "viewer");
+      setUserHandle(data.user?.username);
+      setDivision(data.user?.division || "");
 
-      // Process province permissions (convert "view"/"readWrite" to true, "none" or others to false)
-      const provinceKeys = [
-        "aurora",
-        "bataan",
-        "bulacan",
-        "nuevaEcija",
-        "pampanga",
-        "tarlac",
-        "zambales",
-      ];
-      const provincePermissionsAsBooleans = provinceKeys.map((key) => {
-        const permissionString = data[key];
-        return permissionString === "view" || permissionString === "readWrite";
-      });
+      // 'none' | 'view' | 'readWrite' per province, straight from the server.
+      const access = data.provinceAccess || {};
+      setUserProvinceStringPermissions(access);
 
-      const newProvinceStringPermissions = {};
-      provinceKeys.forEach((key) => {
-        newProvinceStringPermissions[key] = data[key] || "none"; // Store "view", "readWrite", or "none"
-      });
-      setUserProvinceStringPermissions(newProvinceStringPermissions);
-
-      setUserRole(data.permission || "viewer"); // Store the user's role, default to 'viewer'
-      setPermissions([...basePermissions, ...provincePermissionsAsBooleans]);
-
-      setUserHandle(data.username);
-      setDivision(data.division || "");
-
-      // Set provinceAccess state for components like Dashboard
-      const newProvinceAccessState = {};
-      provinceKeys.forEach((key) => {
-        const permissionString = data[key];
-        newProvinceAccessState[key] =
-          permissionString === "view" || permissionString === "readWrite";
-      });
-      setProvinceAccess(newProvinceAccessState);
+      // Boolean view of the same thing, for components that only ask "may I
+      // see this province at all?"
+      const grantedKeys = data.provinces || [];
+      setProvinceAccess(
+        Object.keys(access).reduce((acc, key) => {
+          acc[key] = grantedKeys.includes(key);
+          return acc;
+        }, {})
+      );
 
       setAuth(true);
       setErrorMessage("");
@@ -398,29 +383,16 @@ const Universe = () => {
     },
   };
 
-  const provinceKeysForCurrentUser = [
-    "aurora",
-    "bataan",
-    "bulacan",
-    "nuevaEcija",
-    "pampanga",
-    "tarlac",
-    "zambales",
-  ];
-
-  const provinceStringPermissions = {};
-  provinceKeysForCurrentUser.forEach((key) => {
-    provinceStringPermissions[key] = permissions;
-  });
-
   const currentUser = {
     name,
     username: userHandle,
     avatar,
     division,
-    permissions,
-    role: userRole, // Add the user's role string
-    provinceStringPermissions: userProvinceStringPermissions, // Add this line
+    role: userRole,
+    capabilities,
+    domains,
+    provinces,
+    provinceStringPermissions: userProvinceStringPermissions,
   };
 
   return (
@@ -432,7 +404,6 @@ const Universe = () => {
               theme={theme}
               collapsed={collapsed}
               setCollapsed={setCollapsed}
-              permissions={permissions}
               currentUser={currentUser}
               provinceAccess={provinceAccess}
             />

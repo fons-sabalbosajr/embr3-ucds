@@ -202,9 +202,9 @@ const FocalPerson = ({
     handleChange("iis_no_2025", iis_no_2025 ? iis_no_2025.trim() : "");
   };
 
-  // Extract permissions from currentUser
-  const permissions = currentUser?.permissions || [];
-  const canManageData = permissions[1];
+  // Named capability flags from GET /api/auth/me
+  const capabilities = currentUser?.capabilities || {};
+  const canManageData = capabilities.canManageData === true;
   const isCardDisabled = !canManageData;
   const isPismuTracked = !!editedRecord?.pismu_tracking;
 

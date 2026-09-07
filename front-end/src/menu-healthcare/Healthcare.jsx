@@ -65,7 +65,7 @@ const Healthcare = ({ theme, currentUser, data }) => {
   const [healthcareViewers, setHealthcareViewers] = useState([]); // Added state for viewers
   const socketRef = useRef(null); // Added socket ref
   const [addModalVisible, setAddModalVisible] = useState(false);
-  const canViewDataHistory = currentUser?.permissions?.[3]; // For Avatar.Group visibility
+  const canViewDataHistory = currentUser?.capabilities?.canViewDataHistory === true; // For Avatar.Group visibility
 
   useEffect(() => {
     if (filteredData.length > 0) {

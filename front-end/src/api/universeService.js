@@ -3,23 +3,26 @@ import axios from "axios";
 import { API_BASE_URL, API_BASE } from "../config/api";
 
 /**
- * Checks the user's authentication status.
- * @returns {Promise<object>} The user's auth data if successful.
- * @throws Will throw an error if authentication fails or status is not "Success".
+ * The signed-in user's identity and full entitlement in one call:
+ * { user, role, permission, domains, capabilities, provinceAccess, provinces,
+ *   assignedYears, authorizedYears, activeYear }.
+ *
+ * Replaces deriving capabilities and province access from the loose fields on
+ * /check-auth. The server is the only thing that decides any of it; the API
+ * re-checks the same rules on every subsequent request.
+ *
+ * @returns {Promise<object>}
  */
-export const checkUserAuth = async () => {
+export const fetchCurrentUser = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/check-auth`, {
+    const response = await axios.get(`${API_BASE}/auth/me`, {
       withCredentials: true,
     });
     if (response.data && response.data.status === "Success") {
       return response.data;
-    } else {
-      // Throw the response data or a specific error message
-      throw response.data || new Error("Authentication check failed: Status not Success or no data received.");
     }
+    throw response.data || new Error("Could not resolve the current user.");
   } catch (error) {
-    // If the error object from axios has response.data, throw that, otherwise throw the original error
     if (error.response && error.response.data) {
       throw error.response.data;
     }

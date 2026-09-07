@@ -291,16 +291,65 @@ Optional: `SESSION_COOKIE_SAMESITE`, `SESSION_COOKIE_SECURE`.
 **Gate:** ✅ no plaintext credentials at rest; no auth bypass reachable in production; no traversal out of the NAS share.
 **Rollback:** revert the commit. No schema or data changes were made, so nothing to restore.
 
-### Phase 3 — Authorization unification
+### Phase 3 — Authorization unification ✅ DONE
 
-- [ ] `services/authorization.js`: add `DOMAINS`, `domainsOf()`, `capabilitiesOf()`, `requireDomain()`
-- [ ] `GET /api/auth/me` → `{ user, role, domains, capabilities, provinces, assignedYears, activeYear }`
-- [ ] Backfill all 7 users → `domains: ['ucds']` + named `capabilities`
-- [ ] Rewrite `SideMenu.jsx` off the positional `permissions[]` array
-- [ ] Apply `requireDomain('ucds')` to existing UCDS routes (no-op, proves the mechanism)
-- [ ] Tests: 403 on missing domain, 401 unauthenticated, developer passes all, backfill is behaviour-neutral
+- [x] `services/authorization.js`: `ROLES` (developer/admin/records/planning/viewer), `DOMAINS`, `domainsOf()`, `hasDomain()`, `capabilitiesOf()`, `CAPABILITY_KEYS`
+- [x] `requireDomain()` middleware in `middleware/auth.js`, alongside `requireDeveloper` / `requireYearManager`
+- [x] `GET /api/auth/me` → `{ user, role, permission, domains, capabilities, provinceAccess, provinces, assignedYears, authorizedYears, activeYear }`
+- [x] Backfill all 7 accounts (`scripts/migrate-authorization.js`, dry-run by default, idempotent)
+- [x] Positional `permissions[]` array removed from **all 12** consumers, not just `SideMenu`
+- [x] `requireDomain('ucds')` applied to ucds, survey, swm, sector, posting and draft-report routers
+- [x] Integration tests: 28/28
 
-**Gate:** every existing user's access unchanged; positional array gone from the codebase.
+#### 🔴 Security bug found and fixed: province scope was inverted
+
+Per-province grants are stored two ways — `true`/`false` on some accounts, `'readWrite'`/`'view'`/`'none'` on others. `userProvinceKeys()` tested `user[k] === true`, so **every string-valued account resolved to zero province keys**. And `provinceFilter([])` returned `null`, which `provinceScoped()` reads as *unrestricted*.
+
+Net effect: three viewers scoped to one or three provinces were reading the **entire 17,751-document register**.
+
+Two independent fixes, either of which would have been enough:
+
+1. `accessLevel()` normalises both representations, so string grants resolve correctly.
+2. `provinceFilter([])` now returns a deny-all filter. An empty grant denies instead of permitting.
+
+Verified end to end: a Bataan-only viewer now returns **1,510 of 17,751** documents.
+
+#### 🔴 Unauthenticated endpoints closed
+
+`swmRoutes` had **no auth middleware at all**, and several sector/draft-report routes were open:
+
+| Endpoint | Was | Now |
+|---|---|---|
+| `GET /api/swm-plan-data` | open to anyone | 401 / 403 |
+| `GET /api/swm-plan-stats` | open to anyone | 401 / 403 |
+| `GET /api/healthcare` | open to anyone | 401 / 403 |
+| `GET /api/chemicals` | open to anyone | 401 / 403 |
+| `GET /api/tsd` | open to anyone | 401 / 403 |
+| `PUT /api/update-swm-plan-data/:id` | protected only by `logActivity` returning 401 | 401 / 403 |
+| `POST /save-draft-report(-survey)` | ditto, and only *after* multer buffered the upload | 401 / 403 |
+
+#### Effective access changes
+
+| Account | Role | Before | After |
+|---|---|---|---|
+| `asabalbosa` | developer | all | all (unchanged) |
+| `merlinda` | admin | all | all (unchanged) |
+| `gcabalar` | viewer | bataan | bataan (unchanged) |
+| `mjulluice`, `aypatdu` | viewer | all | all (they hold all 7 — unchanged) |
+| **`pemu_pampanga`** | viewer | **all 7 (bug)** | **aurora, bulacan, pampanga** |
+| **`pemu_tarlac`** | viewer | **all 7 (bug)** | **aurora, pampanga, tarlac** |
+
+Two accounts are genuinely restricted — to what their own permission record always said. Everything else is unchanged, so the gate holds for every account whose access was correct to begin with.
+
+**Verification**
+
+- 28/28 integration tests against a live server, using throwaway accounts that are deleted afterwards
+- Province scope: 1,510 of 17,751 documents for a Bataan-only viewer
+- Backfill idempotent (second run reports 0 of 7)
+- `vite build` passes; 39 server modules load
+
+**Gate:** ✅ positional array gone; domain boundary enforced server-side; access unchanged except where it was wrong.
+**Rollback:** revert the commit and restore `backups/mongo/2026-09-07/users.pre-phase3.json`. Note this restores the province bug.
 
 ### Phase 4 — Shared platform
 

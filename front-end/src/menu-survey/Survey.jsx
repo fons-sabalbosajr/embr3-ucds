@@ -87,7 +87,7 @@ const Survey = ({ theme, currentUser }) => {
   const socketRef = useRef(null);
   const location = useLocation();
 
-  const canViewDataHistory = currentUser?.permissions?.[3];
+  const canViewDataHistory = currentUser?.capabilities?.canViewDataHistory === true;
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
   const [tableHeight, setTableHeight] = useState(window.innerHeight - 250); // Adjust the 250px based on your layout

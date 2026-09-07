@@ -108,13 +108,13 @@ const Province = ({ theme, currentUser }) => {
   const [provinceViewers, setProvinceViewers] = useState({});
   const socketRef = useRef(null);
 
-  // Extract permissions from currentUser
-  const permissions = currentUser?.permissions || [];
-  const canGenerateData = permissions[0];
-  const canManageData = permissions[1];
-  const canViewAdminPanel = permissions[2];
-  const canViewDataHistory = permissions[3];
-  const canAccessRangePicker = permissions[4];
+  // Named capability flags from GET /api/auth/me
+  const capabilities = currentUser?.capabilities || {};
+  const canGenerateData = capabilities.canGenerateData === true;
+  const canManageData = capabilities.canManageData === true;
+  const canViewAdminPanel = capabilities.canViewAdminPanel === true;
+  const canViewDataHistory = capabilities.canViewDataHistory === true;
+  const canAccessRangePicker = capabilities.canAccessRangePicker === true;
 
   useEffect(() => {
     if (provinceName) {

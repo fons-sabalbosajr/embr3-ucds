@@ -1,6 +1,7 @@
 const express = require('express');
 const { updateColor, updateColorUniverse, getSurveysByYear, getLastSurveyId, getSurveyDashboardStats, getSurveysMonitoringData, getSurveyDocketByIdNo, updateSurveyById, updateSurveyDataById, getSurveyDataById, getSurveyLog, getLatestTransactionId, getProjectType, getIndustryDetailsByClass, updateSurveyMonitoringData, patchSurveyColorById } = require('../controllers/surveyController');
-const { authenticateSession, resolveYearContext, rejectYearOverride } = require('../middleware/auth');
+const { authenticateSession, resolveYearContext, rejectYearOverride, requireDomain } = require('../middleware/auth');
+const { DOMAINS } = require('../services/authorization');
 const { logActivity } = require('../middleware/activityLog');
 
 const router = express.Router();
@@ -9,7 +10,12 @@ const router = express.Router();
 // session (never the URL) and re-checks authorization; `rejectYearOverride`
 // then refuses any request whose :year disagrees with it, so rewriting the URL
 // to another container fails instead of silently switching datasets.
-const yearScoped = [authenticateSession, resolveYearContext, rejectYearOverride];
+const yearScoped = [
+  authenticateSession,
+  requireDomain(DOMAINS.UCDS),
+  resolveYearContext,
+  rejectYearOverride,
+];
 
 // Legacy endpoints preserved
 router.post('/api/update-color', logActivity, ...yearScoped, updateColor);

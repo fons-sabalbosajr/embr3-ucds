@@ -5,9 +5,27 @@ const crypto = require('crypto');
 const { ObjectId } = require('../config/db');
 const { connectToMongo } = require('../config/db');
 const { allowedOrigins } = require('../config/cors');
-const { roleOf } = require('../services/authorization');
+const {
+  roleOf,
+  domainsOf,
+  capabilitiesOf,
+  authorizedYears,
+} = require('../services/authorization');
+const { userProvinceAccess, userProvinceKeys } = require('../services/provinces');
 
+/**
+ * The session principal.
+ *
+ * Carries the resolved entitlement rather than the raw document, so every
+ * downstream check reads the same answer. The per-province values are stored
+ * normalised ('none' | 'view' | 'readWrite') because the collection holds a
+ * mix of booleans and strings, and authorizedProvinces() reads them straight
+ * off this object.
+ */
 function buildSessionPayload(user) {
+  const capabilities = capabilitiesOf(user);
+  const provinceAccess = userProvinceAccess(user);
+
   return {
     userId: user._id.toString(),
     name: user.name,
@@ -15,20 +33,17 @@ function buildSessionPayload(user) {
     division: user.division,
     permission: user.permission,
     role: roleOf(user),
+    domains: domainsOf(user),
+    capabilities,
+    provinceAccess,
     assignedYears: Array.isArray(user.assignedYears) ? user.assignedYears.map(Number) : [],
     avatar: user.avatar,
-    canGenerateData: user.canGenerateData || false,
-    canManageData: user.canManageData || false,
-    canViewAdminPanel: user.canViewAdminPanel || false,
-    canViewDataHistory: user.canViewDataHistory || false,
-    canAccessRangePicker: user.canAccessRangePicker || false,
-    aurora: user.aurora || false,
-    bataan: user.bataan || false,
-    bulacan: user.bulacan || false,
-    nuevaEcija: user.nuevaEcija || false,
-    pampanga: user.pampanga || false,
-    tarlac: user.tarlac || false,
-    zambales: user.zambales || false,
+
+    // Legacy flat fields. Existing consumers (checkAuth, authorizedProvinces)
+    // still read these; they are kept in step with the structured values above
+    // rather than duplicated by hand.
+    ...capabilities,
+    ...provinceAccess,
   };
 }
 
@@ -227,6 +242,47 @@ function checkAuth(req, res) {
   });
 }
 
+/**
+ * The one place a client learns what it may do.
+ *
+ * Replaces the positional boolean array the sidebar used to build by hand,
+ * where permissions[2] meant "admin panel" and permissions[i+5] meant
+ * "province i". Everything here is advisory: the API enforces the same rules
+ * again on every request.
+ */
+async function me(req, res) {
+  if (!(req.session && req.session.user)) {
+    return res.status(401).json({ message: 'User not authenticated' });
+  }
+
+  const u = req.session.user;
+  try {
+    return res.status(200).json({
+      status: 'Success',
+      user: {
+        userId: u.userId,
+        name: u.name,
+        username: u.username,
+        email: u.email,
+        division: u.division,
+        avatar: u.avatar,
+      },
+      role: u.role || roleOf(u),
+      permission: u.permission,
+      domains: domainsOf(u),
+      capabilities: capabilitiesOf(u),
+      provinceAccess: userProvinceAccess(u),
+      provinces: userProvinceKeys(u),
+      assignedYears: u.assignedYears || [],
+      authorizedYears: await authorizedYears(u),
+      activeYear: req.session.activeYear || null,
+    });
+  } catch (error) {
+    console.error('Error building /api/auth/me:', error);
+    return res.status(500).json({ message: 'Failed to resolve current user' });
+  }
+}
+
 async function logout(req, res) {
   if (!req.session.user) return res.status(401).json({ message: 'You are not logged in' });
   const userId = req.session.user.userId;
@@ -273,6 +329,7 @@ module.exports = {
   resetPassword,
   authCheck,
   checkAuth,
+  me,
   logout,
   currentUserAvatar,
   protectedSample,
