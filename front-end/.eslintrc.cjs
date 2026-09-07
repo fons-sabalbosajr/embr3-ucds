@@ -39,7 +39,15 @@ module.exports = {
     // importing its components. See docs/UNIFICATION-PLAN.md.
     // ---------------------------------------------------------------------
     {
-      files: ['src/shared/**/*.{js,jsx}', 'src/auth/**/*.{js,jsx}'],
+      // src/components/ is shared layout that has not moved into src/shared/
+      // yet (Phase 5 deferred it — 103 inbound references). The rule applies to
+      // it anyway, so the two existing couplings stay visible as suppressions
+      // and no new ones can appear.
+      files: [
+        'src/shared/**/*.{js,jsx}',
+        'src/auth/**/*.{js,jsx}',
+        'src/components/**/*.{js,jsx}',
+      ],
       rules: {
         'no-restricted-imports': [
           'error',

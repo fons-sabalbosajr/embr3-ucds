@@ -18,7 +18,10 @@ import {
   LoadingOutlined,
 } from "@ant-design/icons";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
-import ProvinceModal from "../../menu-province/ProvinceModal";
+// Known boundary debt: a shared notification popover opens a UCDS screen.
+// Tracked in docs/UNIFICATION-PLAN.md.
+// eslint-disable-next-line no-restricted-imports
+import ProvinceModal from "../../modules/ucds/province/ProvinceModal";
 import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import "./popovernotification.css";
 

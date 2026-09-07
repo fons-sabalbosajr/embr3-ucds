@@ -24,7 +24,12 @@ import {
 } from "@ant-design/icons";
 import { BsClipboardDataFill } from "react-icons/bs"; // Example icon, choose one you like
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { DataContext } from "./../menu-province/DataContext";
+// Known boundary debt: the shared layout drives province selection, but the
+// province state lives in a UCDS-owned context that also fetches the register.
+// The fix is to lift "currently selected province" into shared navigation state
+// and leave the data fetching in UCDS. Tracked in docs/UNIFICATION-PLAN.md.
+// eslint-disable-next-line no-restricted-imports
+import { DataContext } from "../modules/ucds/province/DataContext";
 import {
   initializeSocket,
   emitJoinProvince,

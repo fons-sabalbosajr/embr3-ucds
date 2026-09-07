@@ -20,56 +20,56 @@ import {
 import { API_BASE_URL as backendUrl } from "./config/api";
 import "./index.css";
 import CryptoJS from "crypto-js";
-import Dashboard from "./menu-component/Dashboard";
-import Province from "./menu-province/Province";
-import Survey from "./menu-survey/Survey";
-import Healthcare from "./menu-healthcare/Healthcare";
-import Chemicals from "./menu-chemicals/Chemicals";
-import TSD from "./menu-tsd/TSDPermits";
-import TRC from "./menu-trc/TRCPermits";
-import MBU from "./menu-mbu/MBU";
-import Admin from "./menu-component/Admin";
-import Accounts from "./menu-component/UserAccounts";
-import Extract from "./menu-extract/ExtractData";
-import Report from "./menu-component/Admin";
-import Posting from "./menu-component/Posting";
-import ESWM from "./menu-eswm/ESWM";
-import SWMPlan from "./menu-eswm/SWMPlan/SWMPlan"; // Added
-import MRF from "./menu-eswm/MRF/MRF"; // Added
-import SLF from "./menu-eswm/SLF/SLF"; // Added
-import ODS from "./menu-eswm/ODS/ODS"; // Added
-import Equipments from "./menu-eswm/Equipments/Equipments"; // Added
+import Dashboard from "./modules/ucds/dashboard/Dashboard";
+import Province from "./modules/ucds/province/Province";
+import Survey from "./modules/ucds/survey/Survey";
+import Healthcare from "./modules/ucds/healthcare/Healthcare";
+import Chemicals from "./modules/ucds/chemicals/Chemicals";
+import TSD from "./modules/ucds/tsd/TSDPermits";
+import TRC from "./modules/ucds/trc/TRCPermits";
+import MBU from "./modules/ucds/mbu/MBU";
+import Admin from "./modules/admin/Admin";
+import Accounts from "./modules/admin/users/UserAccounts";
+import Extract from "./modules/ucds/extract/ExtractData";
+import Report from "./modules/admin/Admin";
+import Posting from "./modules/admin/posting/Posting";
+import ESWM from "./modules/ucds/eswm/ESWM";
+import SWMPlan from "./modules/ucds/eswm/SWMPlan/SWMPlan"; // Added
+import MRF from "./modules/ucds/eswm/MRF/MRF"; // Added
+import SLF from "./modules/ucds/eswm/SLF/SLF"; // Added
+import ODS from "./modules/ucds/eswm/ODS/ODS"; // Added
+import Equipments from "./modules/ucds/eswm/Equipments/Equipments"; // Added
 import ActivityLog from "./components/ActivityLog/ActivityLog";
-import Duplicates from "./menu-duplicates/DuplicatesData";
-import Monitoring from "./menu-planning/monitoring/Monitoring";
-import MonitoringSurvey from "./menu-planning/survey/monitoring_survey";
-import Validations from "./menu-planning/validations/Validations";
-import RegisterConfig from "./menu-register-config/RegisterConfig";
-import RegisterActivity from "./menu-register-config/RegisterActivity";
-import FieldManagement from "./menu-developer/FieldManagement";
-import DatabaseSettings from "./menu-developer/DatabaseSettings";
-import PdfForms from "./menu-developer/PdfForms";
-import ActivityHistoryConfig from "./menu-developer/ActivityHistoryConfig";
+import Duplicates from "./modules/ucds/duplicates/DuplicatesData";
+import Monitoring from "./modules/ucds/planning/monitoring/Monitoring";
+import MonitoringSurvey from "./modules/ucds/planning/survey/monitoring_survey";
+import Validations from "./modules/ucds/planning/validations/Validations";
+import RegisterConfig from "./modules/ucds/register-config/RegisterConfig";
+import RegisterActivity from "./modules/ucds/register-config/RegisterActivity";
+import FieldManagement from "./modules/admin/developer/FieldManagement";
+import DatabaseSettings from "./modules/admin/developer/DatabaseSettings";
+import PdfForms from "./modules/admin/developer/PdfForms";
+import ActivityHistoryConfig from "./modules/admin/developer/ActivityHistoryConfig";
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
 import UserPopover from "./components/PopOverUser/PopOverUser";
 import Z_CustomSpinner from "./Z_CustomSpinner";
 import YearSwitcher from "./components/YearSwitcher";
-import { DataProvider } from "./menu-province/DataContext";
+import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import moment from "moment";
 
 // ERMS Components
-import NasDashboard from "./menu-nas/dashboard/NasDashboard";
-import NasBrowser from "./menu-nas/browser/NasBrowser";
-import NasStorageConfig from "./menu-nas/storage/NasStorageConfig";
-import NasSettings from "./menu-nas/settings/NasSettings";
+import NasDashboard from "./shared/nas-browser/dashboard/NasDashboard";
+import NasBrowser from "./shared/nas-browser/browser/NasBrowser";
+import NasStorageConfig from "./shared/nas-browser/storage/NasStorageConfig";
+import NasSettings from "./shared/nas-browser/settings/NasSettings";
 
 // Legal Services Unit Components
-import LegalDashboard from "./menu-legal/legal-dashboard/LegalDashboard"; // Assuming these are the correct paths
-import LegalDocket from "./menu-legal/docket/LegalDocket";
-import EnviLaws from "./menu-legal/envi-laws/EnviLaws";
+import LegalDashboard from "./modules/ucds/legal/legal-dashboard/LegalDashboard"; // Assuming these are the correct paths
+import LegalDocket from "./modules/ucds/legal/docket/LegalDocket";
+import EnviLaws from "./modules/ucds/legal/envi-laws/EnviLaws";
 import { ROUTES } from "./config/routes";
 import DomainGuard from "./auth/DomainGuard";
 import Forbidden from "./shared/components/Forbidden";

@@ -1,0 +1,763 @@
+import React, { useState } from "react";
+import {
+  Input,
+  Row,
+  Col,
+  Checkbox,
+  Typography,
+  Card,
+  Button,
+  DatePicker,
+  ConfigProvider,
+} from "antd";
+import TextArea from "antd/es/input/TextArea";
+import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import { NumericFormat } from "react-number-format";
+import "./legalunit.css";
+import LegalOfficers from "../../../../../components/Autocomplete/LegalOfficers";
+
+dayjs.extend(isSameOrBefore);
+const { Paragraph } = Typography;
+
+const LegalUnit = ({ editedRecord, handleChange, isEditing }) => {
+  const handleDateChange = (dateString) => {
+    //console.log("handleDateChange called with:", dateString);
+    if (dateString) {
+      handleChange("tc_date_sched", dateString);
+    } else {
+      handleChange("tc_date_sched", null);
+    }
+  };
+
+  const convertToMMDDYYYY = (dateString) => {
+    if (typeof dateString === "number") {
+      // Handle Excel date numeric value
+      const date = new Date(Math.round((dateString - 25569) * 86400 * 1000));
+      return `${padZero(date.getMonth() + 1)}/${padZero(
+        date.getDate()
+      )}/${date.getFullYear()}`;
+    } else {
+      // Handle string date formats
+      const date = dayjs(
+        dateString,
+        [
+          "MM/DD/YYYY",
+          "M/D/YYYY",
+          "YYYY-MM-DD",
+          "YYYY/MM/DD",
+          "@",
+          "MMM D, YYYY",
+          "MMMM DD, YYYY",
+        ],
+        true
+      );
+      return date.isValid() ? date.format("MM/DD/YYYY") : null;
+    }
+  };
+
+  const padZero = (num) => {
+    return (num < 10 ? "0" : "") + num;
+  };
+
+  const countWorkingDays = (start, end) => {
+    // Parse dates using dayjs
+    let startDate = dayjs(start, "MM/DD/YYYY");
+    let endDate = dayjs(end, "MM/DD/YYYY");
+    if (!startDate.isValid() || !endDate.isValid()) return "";
+
+    // Ensure startDate is before or equal to endDate
+    if (endDate.isBefore(startDate)) return "";
+
+    let count = 0;
+    let current = startDate.clone();
+    while (current.isSameOrBefore(endDate, "day")) {
+      const day = current.day();
+      if (day !== 0 && day !== 6) {
+        // 0 = Sunday, 6 = Saturday
+        count++;
+      }
+      current = current.add(1, "day");
+    }
+    return count;
+  };
+
+  // Convert the date before loading it into the DatePicker
+  const formattedDate = convertToMMDDYYYY(editedRecord.tc_date_sched);
+  const formattedDateTCAcual = convertToMMDDYYYY(editedRecord.tc_date_actual);
+  const formattedDateNOVRelease = convertToMMDDYYYY(editedRecord.nov_released);
+  const formattedDateLegalForwarded = convertToMMDDYYYY(
+    editedRecord.date_forwarded
+  );
+  const formattedDateLegalApproved = convertToMMDDYYYY(
+    editedRecord.date_approved_clegal
+  );
+  const formattedDatePenalty = convertToMMDDYYYY(editedRecord.penalty);
+  const [fields, setFields] = useState([
+    { id: 1, penalty: "", amount: "", or_number: "" },
+  ]);
+
+  const workingDaysDFDA =
+    formattedDateLegalForwarded && formattedDateLegalApproved
+      ? countWorkingDays(
+          formattedDateLegalForwarded,
+          formattedDateLegalApproved
+        )
+      : "";
+
+  const addFieldSet = () => {
+    setFields([
+      ...fields,
+      { id: Date.now(), penalty: "", amount: "", or_number: "" },
+    ]);
+  };
+
+  const removeFieldSet = () => {
+    if (fields.length > 1) {
+      setFields(fields.slice(0, -1));
+    }
+  };
+
+  return (
+    <div>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+          <Card className="legalunit-card" size="small">
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>Docket No.</strong>
+                  <Input
+                    value={editedRecord ? editedRecord.docket_no : ""}
+                    onChange={(e) => handleChange("docket_no", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={1}
+                  />
+                </Paragraph>
+              </Col>
+
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>DENR PAB Case No.</strong>
+                  <Input
+                    value={editedRecord ? editedRecord.denr_pab_case_no : ""}
+                    onChange={(e) =>
+                      handleChange("denr_pab_case_no", e.target.value)
+                    }
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={1}
+                  />
+                </Paragraph>
+              </Col>
+
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>Date Forwarded to Legal Staff</strong>
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
+                    }}
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateLegalForwarded
+                          ? dayjs(formattedDateLegalForwarded, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("date_forwarded", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <span className="label_container_legal">
+                    <strong className="label_title_legal">
+                      Total No. of Days:
+                    </strong>
+                    <p className="label_legal">
+                      (Date Forwarded to staff vs. Date Approved)
+                    </p>
+                  </span>
+                  <Input
+                    value={
+                      workingDaysDFDA !== ""
+                        ? `${workingDaysDFDA} day${
+                            workingDaysDFDA === 1 ? "" : "s"
+                          }`
+                        : ""
+                    }
+                    readOnly={true}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                  />
+                </Paragraph>
+              </Col>
+            </Row>
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>Date Approved by Chief Legal</strong>
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
+                    }}
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateLegalApproved
+                          ? dayjs(formattedDateLegalApproved, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("date_approved_clegal", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={12} lg={12}></Col>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>NOV Date Released</strong>
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
+                    }}
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateNOVRelease
+                          ? dayjs(formattedDateNOVRelease, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        handleChange("nov_released", newDate);
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      placeholder="MM/DD/YYYY"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>Service Mode</strong>
+                  <Input
+                    value={editedRecord ? editedRecord.service_mode : ""}
+                    onChange={(e) =>
+                      handleChange("service_mode", e.target.value)
+                    }
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                  />
+                </Paragraph>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card className="legalunit-card" size="small" title="VIOLATION/S">
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>PD1586:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.v_pd1586 : ""}
+                    onChange={(e) => handleChange("v_pd1586", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={3}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>RA9275:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.v_ra9275 : ""}
+                    onChange={(e) => handleChange("v_ra9275", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={3}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>RA8749:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.v_ra8749 : ""}
+                    onChange={(e) => handleChange("v_ra8749", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={3}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>HAZWASTE:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.v_haz : ""}
+                    onChange={(e) => handleChange("v_haz", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={3}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>TOXIC CHEM:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.v_tchem : ""}
+                    onChange={(e) => handleChange("v_tchem", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={3}
+                  />
+                </Paragraph>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+
+        <Col xs={24} sm={24} md={12} lg={12} className="modalcol">
+          <Card
+            className="legalunit-card"
+            size="small"
+            title="Technical Conference"
+          >
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>TC Date Scheduled:</strong>
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
+                    }}
+                  >
+                    <DatePicker
+                      value={
+                        formattedDate
+                          ? dayjs(formattedDate, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date, dateString) => {
+                        const parsedDate = dayjs(
+                          dateString,
+                          "MM/DD/YYYY",
+                          false
+                        );
+                        if (parsedDate.isValid()) {
+                          handleDateChange(parsedDate.format("MM/DD/YYYY"));
+                        } else {
+                          handleDateChange(null);
+                        }
+                      }}
+                      disabled={!isEditing}
+                      format="MM/DD/YYYY"
+                      //maxDate={dayjs()} // Set the maximum date to today
+                      //disabledDate={(current) => current > dayjs()} // Disable dates after today
+                      placeholder="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong>TC Date (Actual):</strong>
+                  <ConfigProvider
+                    theme={{
+                      components: {
+                        DatePicker: {
+                          fontSize: "11px",
+                          height: "29px",
+                          padding: "4px 8px",
+                        },
+                      },
+                    }}
+                  >
+                    <DatePicker
+                      value={
+                        formattedDateTCAcual
+                          ? dayjs(formattedDateTCAcual, "MM/DD/YYYY")
+                          : null
+                      }
+                      onChange={(date) => {
+                        const newDate = date ? date.format("MM/DD/YYYY") : "";
+                        console.log(`New date selected: ${newDate}`);
+                        handleChange("tc_date_actual", newDate);
+                      }}
+                      disabled={!isEditing}
+                      placeholder="MM/DD/YYYY"
+                      format="MM/DD/YYYY"
+                      className="text-area-legal custom-date-picker"
+                      style={{ width: "100%" }}
+                    />
+                  </ConfigProvider>
+                </Paragraph>
+              </Col>
+
+              <Col xs={24} sm={24} md={12} lg={12}>
+                <Paragraph className="paragraph-container">
+                  <strong className="label_title">Legal Officer:</strong>
+
+                  <LegalOfficers
+                    value={editedRecord ? editedRecord.legal_officer : ""}
+                    onChange={(value) => handleChange("legal_officer", value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24} className="col-format-tc">
+                <Paragraph className="paragraph-container">
+                  <strong>TC Commitment/Deadline of Compliance</strong>
+                  <span>
+                    <i> &nbsp; (Paste Link Here)</i>
+                  </span>
+                  <TextArea
+                    value={editedRecord ? editedRecord.tc_commitment : ""}
+                    onChange={(e) =>
+                      handleChange("tc_commitment", e.target.value)
+                    }
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={2}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24} className="col-format-tc">
+                <Paragraph className="paragraph-container">
+                  <strong>Position Paper</strong>
+                  <span>
+                    <i> &nbsp; (Paste Link Here)</i>
+                  </span>
+                  <TextArea
+                    value={editedRecord ? editedRecord.pos_paper : ""}
+                    onChange={(e) => handleChange("pos_paper", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={2}
+                  />
+                </Paragraph>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card
+            className="legalunit-card"
+            size="small"
+            title="For Order/Resolution"
+          >
+            <Row gutter={[16, 16]}>
+              <Row gutter={[16, 16]} className="row-penalty-label">
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph className="paragraph-container-legal">
+                    <strong className="textl-legal-container">
+                      Date Payment of Penalty:
+                    </strong>
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph className="paragraph-container-legal">
+                    <strong className="textl-legal-container">Amount:</strong>
+                  </Paragraph>
+                </Col>
+                <Col xs={24} sm={24} md={8} lg={8}>
+                  <Paragraph className="paragraph-container-legal">
+                    <strong className="textl-legal-container">
+                      (OR) Number:
+                    </strong>
+                  </Paragraph>
+                </Col>
+              </Row>
+              {fields.map((field) => (
+                <Row key={field.id} gutter={[16, 16]} className="row-penalty">
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <ConfigProvider
+                      theme={{
+                        components: {
+                          DatePicker: {
+                            fontSize: "11px",
+                            height: "29px",
+                            padding: "4px 8px",
+                          },
+                        },
+                      }}
+                    >
+                      <DatePicker
+                        value={
+                          field.penalty
+                            ? dayjs(field.penalty, "MM/DD/YYYY")
+                            : null
+                        }
+                        onChange={(date) => {
+                          const newDate = date ? date.format("MM/DD/YYYY") : "";
+                          handleChange("penalty", newDate);
+                          setFields(
+                            fields.map((f) =>
+                              f.id === field.id ? { ...f, penalty: newDate } : f
+                            )
+                          );
+                        }}
+                        readOnly ={!isEditing}
+                        format="MM/DD/YYYY"
+                        placeholder="MM/DD/YYYY"
+                        className="text-penalty"
+                        style={{ width: "100%" }}
+                      />
+                    </ConfigProvider>
+                  </Col>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <NumericFormat
+                      prefix="₱"
+                      value={field.amount}
+                      thousandSeparator
+                      decimalScale={2}
+                      fixedDecimalScale
+                      allowNegative={false}
+                      placeholder="0.00"
+                      className="text-penalty ant-input"
+                      customInput={Input}
+                      onValueChange={(values) => {
+                        const { value } = values; // raw numeric value (e.g. "1000.00")
+                        setFields(
+                          fields.map((f) =>
+                            f.id === field.id ? { ...f, amount: value } : f
+                          )
+                        );
+                      }}
+                      readOnly={!isEditing}
+                    />
+                  </Col>
+                  <Col xs={24} sm={24} md={8} lg={8}>
+                    <Input
+                      prefix={<span>#</span>}
+                      value={field.or_number}
+                      onChange={(e) => {
+                        setFields(
+                          fields.map((f) =>
+                            f.id === field.id
+                              ? { ...f, or_number: e.target.value }
+                              : f
+                          )
+                        );
+                        handleChange("or_number", e.target.value);
+                      }}
+                      readOnly={!isEditing}
+                      placeholder="No data"
+                      className="text-penalty"
+                    />
+                  </Col>
+                </Row>
+              ))}
+              <Row style={{ marginTop: "-10px" }}>
+                <Col span={24} style={{ textAlign: "right" }}>
+                  <Button
+                    type="primary"
+                    onClick={addFieldSet}
+                    size="small"
+                    disabled={!isEditing}
+                  >
+                    Add
+                  </Button>
+                  {fields.length > 1 && (
+                    <Button
+                      danger
+                      type="primary"
+                      onClick={removeFieldSet}
+                      style={{ marginLeft: "10px" }}
+                      size="small"
+                      disabled={!isEditing}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </Col>
+              </Row>
+
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph>
+                  <Checkbox
+                    checked={editedRecord?.tc_order_compliance === "✔"}
+                    disabled={!isEditing}
+                    onChange={(e) =>
+                      handleChange(
+                        "tc_order_compliance",
+                        e.target.checked ? "✔" : ""
+                      )
+                    }
+                    style={{ fontSize: "15px" }}
+                  >
+                    {editedRecord?.tc_order_compliance === "✔" ? "" : ""}
+                  </Checkbox>
+                  <strong>Compliance with TC Commitment/Order</strong> <br />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>Remarks:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.remarks : ""}
+                    onChange={(e) => handleChange("remarks", e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={2}
+                  />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24} className="col-format">
+                <Paragraph className="paragraph-container">
+                  <Checkbox
+                    checked={editedRecord?.resolution === "✔"}
+                    disabled={!isEditing}
+                    onChange={(e) =>
+                      handleChange("resolution", e.target.checked ? "✔" : "")
+                    }
+                    style={{ fontSize: "15px" }}
+                  >
+                    {editedRecord?.resolution === "✔" ? "" : ""}
+                  </Checkbox>
+                  <strong>Issued Resolution</strong> <br />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <Checkbox
+                    checked={editedRecord?.order === "✔"}
+                    disabled={!isEditing}
+                    onChange={(e) =>
+                      handleChange("order", e.target.checked ? "✔" : "")
+                    }
+                    style={{ fontSize: "15px" }}
+                  >
+                    {editedRecord?.order === "✔" ? "" : ""}
+                  </Checkbox>
+                  <strong>Issued Order</strong> <br />
+                </Paragraph>
+              </Col>
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Paragraph className="paragraph-container">
+                  <strong>Order Status:</strong>
+                  <TextArea
+                    value={editedRecord ? editedRecord.order_status : ""}
+                    onChange={(e) =>
+                      handleChange("order_status", e.target.value)
+                    }
+                    readOnly={!isEditing}
+                    placeholder="no data"
+                    style={{
+                      cursor: isEditing ? "text" : "not-allowed",
+                      color: isEditing ? "" : "#aaa",
+                    }}
+                    rows={2}
+                  />
+                </Paragraph>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+};
+
+export default LegalUnit;
