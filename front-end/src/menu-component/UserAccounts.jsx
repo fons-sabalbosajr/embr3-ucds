@@ -807,7 +807,10 @@ const UserAccounts = ({ theme = "dark" }) => {
         destroyOnClose
         width={800}
       >
-        <UserProfileModal user={selectedUser} />
+        <UserProfileModal
+          user={selectedUser}
+          onClose={() => setEditProfileModalOpen(false)}
+        />
       </Modal>
 
       <Modal

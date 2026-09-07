@@ -477,6 +477,8 @@ const SWMPlan = ({ theme = "light" }) => {
   const [columnFilters, setColumnFilters] = useState({});
   const [showWasteDetailsModal, setShowWasteDetailsModal] = useState(false);
   const [selectedWasteRecord, setSelectedWasteRecord] = useState(null);
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [breakdownCriteria, setBreakdownCriteria] = useState(null);
 
   const fetchData = async (
     page = 1,

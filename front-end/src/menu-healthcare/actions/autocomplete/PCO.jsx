@@ -27,7 +27,7 @@ const PCO = ({ isEditing }) => {
             value: item.pco_no,
             label: (
               <div className="autocomplete-option">
-                <span className="autocomplete-keyword" style={{ whiteSpace: "normal", fontSize: "10px", width }}>{item.pco_no}</span>
+                <span className="autocomplete-keyword" style={{ whiteSpace: "normal", fontSize: "10px" }}>{item.pco_no}</span>
               </div>
             ),
           }));

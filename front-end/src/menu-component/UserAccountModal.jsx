@@ -8,6 +8,7 @@ import {
   Table,
   Progress,
   ConfigProvider,
+  message,
 } from "antd";
 import "./useraccountmodal.css";
 import { UserOutlined, CameraOutlined } from "@ant-design/icons";
@@ -22,7 +23,7 @@ import { API_BASE_URL } from "../config/api";
 
 const { TabPane } = Tabs;
 
-const UserAccountModal = ({ userHandle, user }) => {
+const UserAccountModal = ({ userHandle, user, onClose }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editableUser, setEditableUser] = useState(
     user ? { ...user, avatar: user.avatar || null } : null
@@ -33,6 +34,22 @@ const UserAccountModal = ({ userHandle, user }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [newAvatarUrl, setNewAvatarUrl] = useState(null); // To store new avatar URL
   const [loading, setLoading] = useState(false);
+
+  const fetchUserData = async (username = editableUser?.username) => {
+    if (!username) return null;
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/users?username=${username}`
+      );
+      if (response.data && response.data.length > 0) {
+        return response.data[0];
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      return null;
+    }
+  };
 
   // Handler for uploading avatar
   const handleAvatarChange = (info) => {
@@ -95,7 +112,8 @@ const UserAccountModal = ({ userHandle, user }) => {
           icon: "error",
           confirmButtonText: "OK",
         });
-        await fetchUserData();
+        const refreshed = await fetchUserData();
+        if (refreshed) setEditableUser(refreshed);
       }
     } catch (error) {
       Swal.close(); // Close loading if error occurs
@@ -135,7 +153,7 @@ const UserAccountModal = ({ userHandle, user }) => {
         }
       });
     } else {
-      onCancel();
+      onClose?.();
     }
   };
 

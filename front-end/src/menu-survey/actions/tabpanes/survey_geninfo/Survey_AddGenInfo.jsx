@@ -14,7 +14,7 @@ import TextArea from "antd/es/input/TextArea";
 import "./addgeninfo.css";
 import axios from "axios";
 
-const { Paragraph } = Typography;
+const { Paragraph, Text } = Typography;
 
 const Survey_AddGenInfo = ({ isEditing, handleInputChange }) => {
   const [selectedIndustryClass, setSelectedIndustryClass] = useState("");

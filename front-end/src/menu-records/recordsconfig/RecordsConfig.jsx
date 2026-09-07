@@ -84,6 +84,7 @@ const RecordsConfig = ({ theme = "light" }) => {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [tableScrollY, setTableScrollY] = useState(0);
+  const [selectedProjectStatus, setSelectedProjectStatus] = useState(null);
   const [frozenColumnKeys, setFrozenColumnKeys] = useState([
     "sort_key",
     "name",

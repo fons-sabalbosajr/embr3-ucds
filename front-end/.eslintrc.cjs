@@ -18,4 +18,11 @@ module.exports = {
       { allowConstantExport: true },
     ],
   },
+  overrides: [
+    {
+      // Build/config files run in Node, not the browser.
+      files: ['vite.config.js', 'postcss.config.js', '*.config.js', '*.config.cjs'],
+      env: { node: true },
+    },
+  ],
 }

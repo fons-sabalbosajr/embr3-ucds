@@ -525,11 +525,11 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       </Menu.Item>
       <Menu.Item
         key="inspection"
-        onClick={() => handleSaveDraft("For Inspection")}
+        onClick={() => confirmGenerateDraft("For Inspection")}
       >
         For Inspection
       </Menu.Item>
-      <Menu.Item key="nov" onClick={() => handleSaveDraft("For NOV")}>
+      <Menu.Item key="nov" onClick={() => confirmGenerateDraft("For NOV")}>
         For NOV
       </Menu.Item>
     </Menu>

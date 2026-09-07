@@ -250,7 +250,6 @@ const TSDPermits = ({ theme, currentUser, data }) => {
     setFilteredCount(
       filtered.length > 0 ? filtered.length : filteredData.length
     ); // Update count
-    clearFilters();
   };
 
   const getColumnSearchProps = (dataIndex) => ({

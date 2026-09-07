@@ -262,7 +262,6 @@ const Healthcare = ({ theme, currentUser, data }) => {
       filtered.length > 0 ? sortByIdNo(filtered) : sortByIdNo(filteredData);
     setFilteredData(sortedFiltered);
     setFilteredCount(sortedFiltered.length);
-    clearFilters();
   };
 
   const getColumnSearchProps = (dataIndex) => ({
