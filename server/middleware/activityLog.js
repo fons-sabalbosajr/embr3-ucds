@@ -1,4 +1,18 @@
 const { connectToMongo, collections, ObjectId } = require('../config/db');
+const { DOMAINS } = require('../services/authorization');
+
+/** Which domain a request belongs to, for the shared audit trail. */
+function domainOfPath(path) {
+  if (path.startsWith('/api/erms/')) return DOMAINS.ERMS;
+  if (
+    path.startsWith('/api/users') ||
+    path.startsWith('/api/org-units') ||
+    path.startsWith('/api/admin/')
+  ) {
+    return DOMAINS.ADMIN;
+  }
+  return DOMAINS.UCDS;
+}
 
 async function logActivity(req, res, next) {
   const { method, path, body } = req;
@@ -78,6 +92,9 @@ async function logActivity(req, res, next) {
   const activityLog = {
     userId,
     username,
+    // One audit trail across both domains, with a discriminator so ERMS and
+    // UCDS activity can be told apart without parsing paths after the fact.
+    domain: domainOfPath(path),
     method,
     path,
     actionType,

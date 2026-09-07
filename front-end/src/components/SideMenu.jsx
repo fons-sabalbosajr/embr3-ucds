@@ -77,6 +77,7 @@ const rootSubmenuKeys = [
   "admin",
   "developer-settings",
   "legal",
+  "erms",
   "nas-storage",
   "eswm-database", // Added for the new submenu
 ];
@@ -123,6 +124,15 @@ const SideMenu = ({ theme, currentUser }) => {
   const grantedProvinces = currentUser?.provinces || [];
   const canViewAdminPanel = capabilities.canViewAdminPanel === true;
   const canViewDataHistory = capabilities.canViewDataHistory === true;
+
+  // Domain entitlement decides which business modules appear at all, so a
+  // Records user is not shown the planning register and vice versa. The API
+  // enforces the same boundary with requireDomain(); this only keeps the
+  // sidebar honest about what the account can actually reach.
+  const domains = currentUser?.domains || [];
+  const hasUcds = domains.includes("ucds");
+  const hasErms = domains.includes("erms");
+  const hasAdmin = domains.includes("admin");
   const visibleProvinces = PROVINCE_MENU.filter((p) =>
     grantedProvinces.includes(p.key)
   ).map((p) => p.value);
@@ -163,6 +173,8 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["admin"]);
     } else if (path.startsWith("/universe/developer/")) {
       setOpenKeys(["developer-settings"]);
+    } else if (path.startsWith("/universe/erms/")) {
+      setOpenKeys(["erms"]);
     } else if (path.startsWith("/universe/nas/")) {
       setOpenKeys(["nas-storage"]); // Keep the NAS submenu open
     } else {
@@ -582,7 +594,7 @@ const SideMenu = ({ theme, currentUser }) => {
         </div>
       ),
     },
-    {
+    hasUcds && {
       key: "r3-monitoring",
       icon: <CheckCircleFilled />,
       label: <div className="menu-label-wrapper main">Monitoring Plan</div>,
@@ -597,7 +609,7 @@ const SideMenu = ({ theme, currentUser }) => {
         ),
       })),
     },
-    {
+    hasUcds && {
       key: "healthcare",
       icon: <MedicineBoxFilled />,
       label: <div className="menu-label-wrapper main">Healthcare</div>,
@@ -644,7 +656,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    {
+    hasUcds && {
       key: "/universe/survey",
       icon: <ReconciliationFilled />,
       label: (
@@ -654,7 +666,7 @@ const SideMenu = ({ theme, currentUser }) => {
         </div>
       ),
     },
-    canViewAdminPanel && {
+    hasUcds && canViewAdminPanel && {
       key: "eswm-database",
       icon: <DatabaseFilled />,
       label: <div className="menu-label-wrapper main">ESWM Database</div>,
@@ -731,7 +743,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    canViewAdminPanel && {
+    hasUcds && canViewAdminPanel && {
       key: "legal",
       icon: <FileProtectOutlined />,
       label: <div className="menu-label-wrapper main">Legal Services Unit</div>,
@@ -762,7 +774,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    canViewAdminPanel && {
+    hasUcds && canViewAdminPanel && {
       key: "planning-unit",
       icon: <BsClipboardDataFill />,
       label: <div className="menu-label-wrapper main">Planning Unit</div>,
@@ -827,7 +839,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    {
+    hasUcds && {
       key: "reports",
       icon: <PushpinFilled />,
       label: <div className="menu-label-wrapper main">Reports</div>,
@@ -850,7 +862,7 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    canViewAdminPanel && {
+    hasAdmin && canViewAdminPanel && {
       key: "admin",
       icon: <SettingFilled />,
       label: <div className="menu-label-wrapper main">Admin</div>,
@@ -895,9 +907,17 @@ const SideMenu = ({ theme, currentUser }) => {
             />
           ),
         },
+        {
+          key: "/universe/admin/org-units",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/org-units">Organisational Units</Link>
+            </div>
+          ),
+        },
       ],
     },
-    canViewAdminPanel && {
+    hasAdmin && canViewAdminPanel && {
       key: "developer-settings",
       icon: <ToolOutlined />,
       label: <div className="menu-label-wrapper main">Developer Settings</div>,
@@ -936,7 +956,57 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    canViewAdminPanel && {
+    // Records module. Visible to anyone holding the ERMS domain, independent
+    // of the UCDS capability flags — a Records clerk has no reason to hold
+    // canViewAdminPanel.
+    hasErms && {
+      key: "erms",
+      icon: <FileProtectOutlined />,
+      label: <div className="menu-label-wrapper main">Records (ERMS)</div>,
+      children: [
+        {
+          key: "/universe/erms/records",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/records">Records</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/documents",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/documents">Documents</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/tracking",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/tracking">Tracking</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/archive",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/archive">Archive</Link>
+            </div>
+          ),
+        },
+        {
+          key: "/universe/erms/reports",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/reports">Reports</Link>
+            </div>
+          ),
+        },
+      ],
+    },
+    (hasAdmin || hasErms) && canViewAdminPanel && {
       key: "nas-storage",
       icon: <ContainerFilled />,
       label: <div className="menu-label-wrapper main nas">NAS Storage</div>,

@@ -29,6 +29,9 @@ axios.interceptors.response.use(
     if ((code === 'NO_ACTIVE_YEAR' || code === 'YEAR_FORBIDDEN') && !onPicker) {
       window.location.assign(ROUTES.selectYear);
     }
+    // DOMAIN_FORBIDDEN is deliberately not redirected. The screen that made
+    // the call renders its own explanation, and bouncing the user elsewhere
+    // would hide which module they were refused.
     return Promise.reject(error);
   }
 );

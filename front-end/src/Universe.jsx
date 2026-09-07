@@ -71,6 +71,9 @@ import LegalDashboard from "./menu-legal/legal-dashboard/LegalDashboard"; // Ass
 import LegalDocket from "./menu-legal/docket/LegalDocket";
 import EnviLaws from "./menu-legal/envi-laws/EnviLaws";
 import { ROUTES } from "./config/routes";
+import DomainGuard from "./auth/DomainGuard";
+import Forbidden from "./shared/components/Forbidden";
+import OrgUnits from "./modules/admin/OrgUnits";
 
 const { Header, Content } = Layout;
 
@@ -624,6 +627,32 @@ const Universe = () => {
                     element={<ActivityHistoryConfig />}
                   />
                   <Route path="admin" element={<Admin theme={theme} />} />
+
+                  {/* Shared master data. Administrators only — the API applies
+                      requireDomain('admin') to the write endpoints. */}
+                  <Route
+                    path="admin/org-units"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <OrgUnits />
+                      </DomainGuard>
+                    }
+                  />
+
+                  {/* ERMS records module lands here in Phase 7. The guard and
+                      the route tree exist now so the boundary is real from the
+                      first screen rather than retrofitted. */}
+                  <Route
+                    path="erms/*"
+                    element={
+                      <DomainGuard domain="erms" user={currentUser}>
+                        <Forbidden
+                          module="ERMS"
+                          detail="The Records module is not built yet. It arrives in Phase 7."
+                        />
+                      </DomainGuard>
+                    }
+                  />
 
                   {/* NAS storage routes (shared infrastructure).
                       Renamed from erms/* so the ERMS records module can own

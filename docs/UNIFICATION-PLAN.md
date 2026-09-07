@@ -351,16 +351,61 @@ Two accounts are genuinely restricted — to what their own permission record al
 **Gate:** ✅ positional array gone; domain boundary enforced server-side; access unchanged except where it was wrong.
 **Rollback:** revert the commit and restore `backups/mongo/2026-09-07/users.pre-phase3.json`. Note this restores the province bug.
 
-### Phase 4 — Shared platform
+### Phase 4 — Shared platform ✅ DONE
 
-- [ ] Central Express error handler
-- [ ] Zod validation helper at the route boundary
-- [ ] `domain` discriminator on `app-logs`
-- [ ] `org-units` promoted to shared master data
-- [ ] Vitest + Supertest covering the auth/authz layer
-- [ ] `modules/` + `shared/` skeleton + ESLint import-boundary rule
+**Backend**
 
-**Gate:** auth has test coverage; boundary violations fail lint.
+- [x] `shared/middleware/errorHandler.js` — `AppError`, typed helpers, JSON 404 for unmatched `/api` paths, terminal handler that never leaks a stack trace or an internal message
+- [x] `shared/middleware/validate.js` — Zod at the route boundary, returning per-field errors
+- [x] `shared/services/orgUnits.js` — shared master data with alias resolution
+- [x] `domain` discriminator on `app-logs`
+- [x] `server/app.js` split from `server.js` so the app can be driven without a listener, cron job or Socket.IO
+- [x] Vitest + Supertest — **67 tests, all passing**
+
+**Frontend (Ant Design 5 + Pro Components + react-query — no new UI dependencies)**
+
+- [x] `auth/DomainGuard.jsx` — renders a domain's screens or an explanation
+- [x] `shared/components/Forbidden.jsx` — AntD `Result` 403
+- [x] `modules/admin/OrgUnits.jsx` — full CRUD, react-query, AntD `Table`/`Modal`/`Form`/`Tag`, alias management, per-field API errors surfaced as messages
+- [x] `api/orgUnitService.js` with `describeApiError()` flattening the Zod error shape
+- [x] Domain-aware sidebar: UCDS sections gated on the `ucds` domain, a **Records (ERMS)** section on `erms`, admin sections on `admin`
+- [x] `/universe/admin/org-units` and the `/universe/erms/*` subtree wired behind `DomainGuard`
+- [x] `modules/` + `shared/` skeleton with `modules/README.md` stating the rules
+
+**ESLint import-boundary rule** — verified by probe files that were made to fail, then removed:
+
+| Rule | Enforced |
+|---|---|
+| `shared/` and `auth/` must not import from `modules/` | ✅ |
+| `modules/ucds/` must not import from `modules/erms/` | ✅ |
+| `modules/erms/` must not import from `modules/ucds/` | ✅ |
+
+`no-restricted-imports` matches the **literal import string**, not the resolved path, so each rule lists the relative forms (`../ucds/**`, `../../ucds/**`) as well as `**/modules/ucds/**`. Without those the rule silently passes on exactly the import a sibling module would write.
+
+**Org-units migration** — `scripts/migrate-org-units.js`, applied and idempotent. 5 distinct division strings → 6 units, hierarchy inferred:
+
+```
+ORD                  office     (implied parent)
+ORD-PEMU             division   (implied parent)
+ORD-PEMU-BATAAN      section
+ORD-PEMU-PAMPANGA    section
+ORD-PEMU-TARLAC      section
+ORD-PISMU            division   alias: "ORD - PISMU"
+```
+
+The `division` field on user documents is deliberately untouched; aliases make the old spellings resolve.
+
+**Test coverage** (`npm test` in `server/`)
+
+| Suite | Tests | Covers |
+|---|---:|---|
+| `authorization.test.js` | 16 | roles, domain defaults, explicit narrowing, unknown-domain rejection, capability precedence, container intersection |
+| `provinces.test.js` | 16 | both grant representations, deny-all on empty, `provinceScoped` merge and aggregation behaviour — the Phase 3 escalation, asserted |
+| `nas-path.test.js` | 8 | traversal, absolute/UNC/drive paths, null bytes, real record paths, org-code normalisation |
+| `domain-boundary.test.js` | 27 | HTTP: unauthenticated access, entitlement payload, province restriction, cross-domain 403, JSON 404 |
+
+**Gate:** ✅ auth and the domain boundary have real coverage; boundary violations fail lint.
+**Rollback:** revert the commit; drop the `org-units` collection. No existing collection was modified.
 
 ### Phase 5 — UCDS stabilisation
 

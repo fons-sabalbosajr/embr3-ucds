@@ -1,0 +1,8 @@
+// Loaded before any test file. config/db.js throws at module load without
+// MONGO_URI, so the environment has to exist before the first import.
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(here, '..', '.env') });
