@@ -40,12 +40,12 @@ import SLF from "./menu-eswm/SLF/SLF"; // Added
 import ODS from "./menu-eswm/ODS/ODS"; // Added
 import Equipments from "./menu-eswm/Equipments/Equipments"; // Added
 import ActivityLog from "./components/ActivityLog/ActivityLog";
-import Duplicates from "./menu-archive/ArchiveData";
+import Duplicates from "./menu-duplicates/DuplicatesData";
 import Monitoring from "./menu-planning/monitoring/Monitoring";
 import MonitoringSurvey from "./menu-planning/survey/monitoring_survey";
 import Validations from "./menu-planning/validations/Validations";
-import RecordsConfig from "./menu-records/recordsconfig/RecordsConfig";
-import RecordsActivity from "./menu-records/recordsactivity/RecordsActivity";
+import RegisterConfig from "./menu-register-config/RegisterConfig";
+import RegisterActivity from "./menu-register-config/RegisterActivity";
 import FieldManagement from "./menu-developer/FieldManagement";
 import DatabaseSettings from "./menu-developer/DatabaseSettings";
 import PdfForms from "./menu-developer/PdfForms";
@@ -61,10 +61,10 @@ import EnvStatus from "./components/EnvStatus";
 import moment from "moment";
 
 // ERMS Components
-import ERMSDashboard from "./menu-ZERMS/menu-dashboard/ERMSDashboard";
-import ERMSUniverse from "./menu-ZERMS/menu-universe/ERMSUniverse";
-import ERMSStorageConfig from "./menu-ZERMS/menu-storageconfig/ERMSStorageConfig";
-import ERMSSettings from "./menu-ZERMS/menu-settings/ERMSSettings";
+import NasDashboard from "./menu-nas/dashboard/NasDashboard";
+import NasBrowser from "./menu-nas/browser/NasBrowser";
+import NasStorageConfig from "./menu-nas/storage/NasStorageConfig";
+import NasSettings from "./menu-nas/settings/NasSettings";
 
 // Legal Services Unit Components
 import LegalDashboard from "./menu-legal/legal-dashboard/LegalDashboard"; // Assuming these are the correct paths
@@ -622,12 +622,21 @@ const Universe = () => {
                     element={<Validations theme={theme} />}
                   />
                   <Route
+                    path="register/config"
+                    element={<RegisterConfig theme={theme} />}
+                  />
+                  <Route
+                    path="register/activity"
+                    element={<RegisterActivity theme={theme} />}
+                  />
+                  {/* Legacy paths — kept so existing bookmarks keep working */}
+                  <Route
                     path="records/config"
-                    element={<RecordsConfig theme={theme} />}
+                    element={<Navigate to="/universe/register/config" replace />}
                   />
                   <Route
                     path="records/activity"
-                    element={<RecordsActivity theme={theme} />}
+                    element={<Navigate to="/universe/register/activity" replace />}
                   />
                   {/* Developer Settings */}
                   <Route
@@ -645,22 +654,41 @@ const Universe = () => {
                   />
                   <Route path="admin" element={<Admin theme={theme} />} />
 
-                  {/* ERMS Routes */}
+                  {/* NAS storage routes (shared infrastructure).
+                      Renamed from erms/* so the ERMS records module can own
+                      that namespace — see docs/UNIFICATION-PLAN.md, Phase 1. */}
+                  <Route
+                    path="nas/dashboard"
+                    element={<NasDashboard theme={theme} />}
+                  />
+                  <Route
+                    path="nas/browser"
+                    element={<NasBrowser theme={theme} />}
+                  />
+                  <Route
+                    path="nas/storage-config"
+                    element={<NasStorageConfig theme={theme} />}
+                  />
+                  <Route
+                    path="nas/settings"
+                    element={<NasSettings theme={theme} />}
+                  />
+                  {/* Legacy paths — kept so existing bookmarks keep working */}
                   <Route
                     path="erms/dashboard"
-                    element={<ERMSDashboard theme={theme} />}
+                    element={<Navigate to="/universe/nas/dashboard" replace />}
                   />
                   <Route
                     path="erms/universe"
-                    element={<ERMSUniverse theme={theme} />}
+                    element={<Navigate to="/universe/nas/browser" replace />}
                   />
                   <Route
                     path="erms/storage-config"
-                    element={<ERMSStorageConfig theme={theme} />}
+                    element={<Navigate to="/universe/nas/storage-config" replace />}
                   />
                   <Route
                     path="erms/settings"
-                    element={<ERMSSettings theme={theme} />}
+                    element={<Navigate to="/universe/nas/settings" replace />}
                   />
 
                   {/* Legal Services Unit Routes */}

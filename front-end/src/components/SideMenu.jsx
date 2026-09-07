@@ -149,14 +149,14 @@ const SideMenu = ({ theme, currentUser }) => {
       path.startsWith("/universe/accounts") ||
       path.startsWith("/universe/posting") ||
       path.startsWith("/universe/activitylog") ||
-      path.startsWith("/universe/records/config") || // Added this line
-      path.startsWith("/universe/records/activity") // Added this line
+      path.startsWith("/universe/register/config") ||
+      path.startsWith("/universe/register/activity")
     ) {
       setOpenKeys(["admin"]);
     } else if (path.startsWith("/universe/developer/")) {
       setOpenKeys(["developer-settings"]);
-    } else if (path.startsWith("/universe/erms/")) {
-      setOpenKeys(["electronic-records-management"]); // Keep the ERMS submenu open
+    } else if (path.startsWith("/universe/nas/")) {
+      setOpenKeys(["nas-storage"]); // Keep the NAS submenu open
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
@@ -868,21 +868,21 @@ const SideMenu = ({ theme, currentUser }) => {
           ),
         },
         {
-          key: "/universe/records/config",
+          key: "/universe/register/config",
           label: (
             <LabelWithAvatars
-              to="/universe/records/config"
+              to="/universe/register/config"
               label="Monitoring Config"
               viewers={chemicalsViewers}
             />
           ),
         },
         {
-          key: "/universe/records/activity",
+          key: "/universe/register/activity",
           label: (
             <LabelWithAvatars
-              to="/universe/records/activity"
-              label="Records Activity"
+              to="/universe/register/activity"
+              label="Register Activity"
               viewers={chemicalsViewers}
             />
           ),
@@ -929,45 +929,41 @@ const SideMenu = ({ theme, currentUser }) => {
       ],
     },
     permissions[2] && {
-      key: "electronic-records-management",
+      key: "nas-storage",
       icon: <ContainerFilled />,
-      label: (
-        <div className="menu-label-wrapper main erms">
-          Electronic Records <br /> Management System
-        </div>
-      ),
+      label: <div className="menu-label-wrapper main nas">NAS Storage</div>,
       children: [
         {
-          key: "/universe/erms/dashboard",
+          key: "/universe/nas/dashboard",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/dashboard">Dashboard</Link>
+              <Link to="/universe/nas/dashboard">Dashboard</Link>
             </div>
           ),
         },
         {
-          key: "/universe/erms/universe",
+          key: "/universe/nas/browser",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/universe">Universe</Link>
+              <Link to="/universe/nas/browser">Browser</Link>
             </div>
           ),
         },
         {
-          key: "/universe/erms/storage-config",
+          key: "/universe/nas/storage-config",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/storage-config">
+              <Link to="/universe/nas/storage-config">
                 Storage Configuration
               </Link>
             </div>
           ),
         },
         {
-          key: "/universe/erms/settings",
+          key: "/universe/nas/settings",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/settings">Settings</Link>
+              <Link to="/universe/nas/settings">Settings</Link>
             </div>
           ),
         },

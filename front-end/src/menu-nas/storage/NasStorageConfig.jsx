@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Button, Modal } from "antd";
-import ERMSStorageConfigModal from "./ERMSStorageConfigModal";
+import NasStorageBrowser from "./NasStorageBrowser";
 
-const ERMSStorageConfig = () => {
+const NasStorageConfig = () => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -11,18 +11,18 @@ const ERMSStorageConfig = () => {
         Open Storage Explorer
       </Button>
       <Modal
-        title="ERMS Storage Explorer"
+        title="NAS Storage Explorer"
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
         width={800}
         destroyOnClose
       >
-        {/* The modal now handles its own content, including the login form */}
-        <ERMSStorageConfigModal />
+        {/* The browser handles its own content, including the login form */}
+        <NasStorageBrowser />
       </Modal>
     </div>
   );
 };
 
-export default ERMSStorageConfig;
+export default NasStorageConfig;

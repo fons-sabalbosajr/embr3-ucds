@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Form, Input, Button, Typography, Alert, Spin } from "antd";
-import PDFViewer from "./PDFViewer";
+import NasPdfViewer from "./NasPdfViewer";
 import { API_BASE_URL } from "../../config/api";
 
 // FileList is moved here or imported
@@ -10,7 +10,7 @@ const FileList = ({ onFileSelect }) => {
   const [error, setError] = useState(null);
 
   React.useEffect(() => {
-    fetch(`${API_BASE_URL}/api/erms/files`, {
+    fetch(`${API_BASE_URL}/api/nas/files`, {
       credentials: "include",
     })
       .then((res) => {
@@ -69,7 +69,7 @@ const FileList = ({ onFileSelect }) => {
 
 const { Title } = Typography;
 
-const ERMSStorageConfigModal = () => {
+const NasStorageBrowser = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -98,10 +98,8 @@ const ERMSStorageConfigModal = () => {
       domain,
     };
 
-    console.log("➡️ Attempting login with payload:", payload);
-
     try {
-      const response = await fetch(`${API_BASE_URL}/api/erms/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/nas/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -133,7 +131,7 @@ const ERMSStorageConfigModal = () => {
       <>
         <FileList onFileSelect={setSelectedPDF} />
         {selectedPDF && (
-          <PDFViewer file={selectedPDF} onClose={() => setSelectedPDF(null)} />
+          <NasPdfViewer file={selectedPDF} onClose={() => setSelectedPDF(null)} />
         )}
       </>
     );
@@ -194,4 +192,4 @@ const ERMSStorageConfigModal = () => {
   );
 };
 
-export default ERMSStorageConfigModal;
+export default NasStorageBrowser;

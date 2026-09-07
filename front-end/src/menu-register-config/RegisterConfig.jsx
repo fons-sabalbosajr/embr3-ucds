@@ -24,7 +24,7 @@ import {
   EditOutlined, // Added for Edit button
 } from "@ant-design/icons";
 import axios from "axios";
-import { API_BASE_URL } from "../../config/api";
+import { API_BASE_URL } from "../config/api";
 import dayjs from "dayjs"; // Added missing import for dayjs
 
 const getMonth = (dateStr) => {
@@ -78,7 +78,7 @@ const sectionBackgroundColor = (section) => {
   }
 };
 
-const RecordsConfig = ({ theme = "light" }) => {
+const RegisterConfig = ({ theme = "light" }) => {
   const [data, setData] = useState([]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
   const [loading, setLoading] = useState(false);
@@ -1756,4 +1756,4 @@ const RecordsConfig = ({ theme = "light" }) => {
   );
 };
 
-export default RecordsConfig;
+export default RegisterConfig;

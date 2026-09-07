@@ -7,7 +7,7 @@ const DatabaseSettings = () => {
 
   useEffect(() => {
     // Optional: show ERMS NAS env connection status here as well
-    fetch("/api/erms/env-status", { credentials: "include" })
+    fetch("/api/nas/env-status", { credentials: "include" })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         setEnvStatus({ ok: res.ok, ...data });

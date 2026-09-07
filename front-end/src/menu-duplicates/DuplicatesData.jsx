@@ -1,10 +1,8 @@
-import React from "react";
-import { Button, Result } from "antd";
+import { Result } from "antd";
 
-const ArchiveData = () => {
+const DuplicatesData = () => {
   return (
     <div>
-      {" "}
       <Result
         status="404"
         title="404"
@@ -14,4 +12,4 @@ const ArchiveData = () => {
   );
 };
 
-export default ArchiveData;
+export default DuplicatesData;

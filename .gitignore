@@ -1,0 +1,12 @@
+# Local database exports taken before destructive migration steps.
+# May contain production data — never commit.
+backups/
+
+# ERMS source extract (~18k records with proponent names and addresses).
+# Kept local so the data does not enter git history. Remove this line if the
+# team decides the extract should be versioned with the migration scripts.
+data/tb_maindata_erms.csv
+
+node_modules/
+.env
+.env.local

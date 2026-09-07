@@ -1,10 +1,9 @@
-import React from "react";
 import { Modal } from "antd";
 import { API_BASE_URL } from "../../config/api";
 
-const PDFViewer = ({ file, onClose }) => {
-  // The new endpoint will rely on the server-side session cookie for auth
-  const url = `${API_BASE_URL}/api/erms/view-pdf?file=${encodeURIComponent(
+const NasPdfViewer = ({ file, onClose }) => {
+  // The endpoint relies on the server-side session cookie for auth
+  const url = `${API_BASE_URL}/api/nas/view-pdf?file=${encodeURIComponent(
     file
   )}`;
 
@@ -30,4 +29,4 @@ const PDFViewer = ({ file, onClose }) => {
   );
 };
 
-export default PDFViewer;
+export default NasPdfViewer;
