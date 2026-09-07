@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { Typography, Card, Alert, Space } from "antd";
+import { API_BASE_URL } from "../config/api";
 
 const DatabaseSettings = () => {
   const [envStatus, setEnvStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Optional: show ERMS NAS env connection status here as well
-    fetch("/api/nas/env-status", { credentials: "include" })
+    // Absolute URL: the SPA and the API are separate services on different
+    // hosts in a deployed environment, so a relative path would resolve
+    // against the static site and never reach the API.
+    fetch(`${API_BASE_URL}/api/nas/env-status`, { credentials: "include" })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         setEnvStatus({ ok: res.ok, ...data });
@@ -27,7 +30,7 @@ const DatabaseSettings = () => {
         </Typography.Paragraph>
       </Card>
 
-      <Card title="ERMS NAS Connection (ENV)">
+      <Card title="NAS Connection (ENV)">
         {loading ? (
           <Typography.Text>Checking NAS status…</Typography.Text>
         ) : envStatus?.ok ? (

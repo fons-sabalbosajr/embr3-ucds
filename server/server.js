@@ -33,8 +33,19 @@ const yearRoutes = require("./routes/yearRoutes");
 const app = express();
 const PORT = process.env.PORT || 8081;
 
-
 const { allowedOrigins, corsOptions } = require('./config/cors');
+const {
+  sessionCookieOptions,
+  assertSessionSecret,
+  securityHeaders,
+} = require('./config/security');
+
+// Must be set before the session middleware: it is what lets Express see
+// Render's TLS termination and therefore issue a Secure cookie.
+app.set("trust proxy", 1);
+app.use(securityHeaders());
+
+assertSessionSecret();
 
 // MongoDB connection string (kept for other consumers if needed)
 const mongoUri = process.env.MONGO_URI;
@@ -54,12 +65,7 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: {
-      secure: false,
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24,
-      sameSite: "Lax",
-    },
+    cookie: sessionCookieOptions(),
     store: sessionStore,
   })
 );
@@ -72,13 +78,12 @@ connectToMongo()
     process.exit(1);
   });
 
-require("./middleware/auth").warnIfAuthBypassed();
+require("./middleware/auth").assertAuthNotBypassed();
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
-app.set("trust proxy", 1);
 
 app.use(authRoutes);
 app.use(postingRoutes);

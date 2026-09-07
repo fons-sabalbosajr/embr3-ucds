@@ -9,7 +9,10 @@ const {
 const { provinceFilter } = require('../services/provinces');
 const yearService = require('../services/yearService');
 
-const bypassEnabled = () => process.env.BYPASS_AUTH === 'true';
+// BYPASS_AUTH is honoured outside production only. Even if the startup guard
+// below were somehow skipped, a production process still enforces every check.
+const bypassEnabled = () =>
+  process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV !== 'production';
 
 // BYPASS_AUTH is a local development escape hatch. It already grants access to
 // every authenticated route, so it also stands in as a Developer principal for
@@ -125,13 +128,29 @@ function rejectYearOverride(req, res, next) {
   next();
 }
 
-function warnIfAuthBypassed() {
-  if (bypassEnabled()) {
-    console.warn(
-      'WARNING: BYPASS_AUTH=true — authentication, role and year checks are disabled.\n' +
-        '         This must never be set in a deployed environment.'
+/**
+ * Refuse to start a production process that has the bypass switch set.
+ *
+ * Previously this only logged a warning, which meant a stray BYPASS_AUTH in a
+ * deployment's environment would serve every route unauthenticated and the
+ * only trace would be one line in the startup log.
+ */
+function assertAuthNotBypassed() {
+  if (process.env.BYPASS_AUTH !== 'true') return;
+
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      'FATAL: BYPASS_AUTH=true with NODE_ENV=production.\n' +
+        '       This would disable authentication, role and year checks for every\n' +
+        '       request. Refusing to start. Remove BYPASS_AUTH from the environment.'
     );
+    process.exit(1);
   }
+
+  console.warn(
+    'WARNING: BYPASS_AUTH=true — authentication, role and year checks are disabled.\n' +
+      '         This must never be set in a deployed environment.'
+  );
 }
 
 module.exports = {
@@ -142,6 +161,6 @@ module.exports = {
   resolveYearContext,
   rejectYearOverride,
   principalOf,
-  warnIfAuthBypassed,
+  assertAuthNotBypassed,
   yearService,
 };

@@ -250,16 +250,46 @@ Replaces **three** overlapping models with one.
 **Gate:** ✅ UCDS behaves identically; the `erms` namespace is free.
 **Rollback:** revert the commit; restore collections from `backups/mongo/2026-09-07/`.
 
-### Phase 2 — Security fixes
+### Phase 2 — Security fixes ✅ DONE
 
-- [ ] Move NAS credentials out of the session into server-side env config (`NAS_*` / legacy `ERMS_NAS_*`, already read by `envStatus`)
-- [ ] Purge existing `sessions` documents containing `erms_credentials` / `nas_credentials`
-- [ ] `cookie.secure: true` when `NODE_ENV === 'production'`
-- [ ] Hard-fail on `BYPASS_AUTH` when `NODE_ENV === 'production'`
-- [ ] **Path traversal in `nasController.viewPdf`** — `req.query.file` goes straight to `smb2.readFile()` with no normalisation, so `../` escapes the share root. Constrain to the share and reject any path that normalises outside it. *(Found in Phase 1; deliberately left alone there to keep that phase rename-only and cleanly revertable.)*
-- [ ] Add `helmet` and rate limiting on auth endpoints
+- [x] NAS credentials moved out of the session into a server-side service account (`NAS_*`, legacy `ERMS_NAS_*` still accepted). The SMB login form and `POST /api/nas/login` are **removed** — users never handle SMB credentials.
+- [x] Purge `sessions` documents holding `erms_credentials` / `nas_credentials` (found 0; script is re-runnable)
+- [x] `cookie.secure` + `SameSite` derived from `NODE_ENV`, both env-overridable
+- [x] Hard-fail on `BYPASS_AUTH` in production (`warnIfAuthBypassed` → `assertAuthNotBypassed`); `bypassEnabled()` also returns false in production as defence in depth
+- [x] Path traversal in `nasController.viewPdf` fixed via `safeSharePath()`
+- [x] `helmet` + `express-rate-limit` added; all four unauthenticated auth endpoints limited
+- [x] `/api/nas/*` now requires an authenticated session — including `env-status`, which was previously open and probed the share for anonymous callers
+- [x] `server/.env.example` documenting every key
 
-**Gate:** no plaintext credentials at rest; no auth bypass reachable in production; no traversal out of the NAS share.
+**New env keys** — set these or `/api/nas/*` returns 503:
+`NAS_SHARE`, `NAS_USERNAME`, `NAS_PASSWORD`, `NAS_DOMAIN`.
+Optional: `SESSION_COOKIE_SAMESITE`, `SESSION_COOKIE_SECURE`.
+
+**Session cookie behaviour**
+
+| `NODE_ENV` | `secure` | `sameSite` |
+|---|---|---|
+| production | `true` | `none` |
+| otherwise | `false` | `lax` |
+
+`SameSite=None; Secure` is required because the static SPA and the API are separate Render services on different hosts, so the cookie travels cross-site. `app.set('trust proxy', 1)` was moved **above** the session middleware — without it Express cannot see Render's TLS termination and refuses to set a Secure cookie. Override both vars if you ever deploy SPA and API on one origin.
+
+**Helmet configuration.** CSP, frameguard and COEP/COOP are deliberately off, and CORP is `cross-origin`. This process serves PDFs that the SPA embeds in an iframe from another origin; `X-Frame-Options: SAMEORIGIN` or a default CSP would block that. Framing a JSON API is not a clickjacking vector — there is no UI to click through. HSTS, `nosniff`, `Referrer-Policy` and `X-Powered-By` removal all apply.
+
+**Bug fixed in passing:** `DatabaseSettings.jsx` fetched `/api/nas/env-status` as a **relative** URL, which in a deployed environment resolves against the static site and never reaches the API. Now uses `API_BASE_URL`.
+
+**Verification**
+
+- Path traversal: 14 malicious inputs rejected (`../`, `..\`, absolute, UNC, drive-qualified, null byte), 4 legitimate paths accepted
+- Rate limiting: 20× `401` then `429` with `RateLimit-*` and `Retry-After` headers
+- `BYPASS_AUTH=true` + `NODE_ENV=production` → exits 1
+- Unauthenticated `/api/nas/files`, `/view-pdf`, `/env-status` → `401`
+- Deprecated `/api/erms/*` aliases still route and carry `Deprecation` + `Link`
+- `POST /api/erms/login` → `404` (endpoint removed)
+- Helmet headers present on live responses; `vite build` passes; 29 server modules load
+
+**Gate:** ✅ no plaintext credentials at rest; no auth bypass reachable in production; no traversal out of the NAS share.
+**Rollback:** revert the commit. No schema or data changes were made, so nothing to restore.
 
 ### Phase 3 — Authorization unification
 
