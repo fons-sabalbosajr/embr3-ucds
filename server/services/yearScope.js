@@ -39,6 +39,12 @@ const DATASETS = {
   equipment: { strategy: STRATEGY.SHARED, collection: 'equipment' },
   ods: { strategy: STRATEGY.SHARED, collection: 'ods' },
 
+  // ERMS records are SHARED on purpose. Year containers model an annual cycle;
+  // a record has its own creation and retention dates and is retrieved across
+  // years, so scoping it to a container would make "find this document" depend
+  // on guessing the right year first.
+  ermsRecords: { strategy: STRATEGY.SHARED, collection: 'ermsRecords' },
+
   // --- Year-scoped activity ------------------------------------------------
   // Survey was already split physically by the existing codebase; keep that
   // rather than merging 3,500 rows into one collection during a migration.

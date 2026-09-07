@@ -5,7 +5,7 @@ import matcher from '../scripts/migrate-erms/lib/match.js';
 
 const { clean, parseDate, parseNumber, correctMonth } = source;
 const { permitTypeOf, splitSerial, sharePathOf, transformRow } = transform;
-const { buildIndex, findMatch, tokensOf } = matcher;
+const { buildIndex, findMatch, tokensOf, hwKey } = matcher;
 
 describe('clean', () => {
   it('treats the extract\u2019s placeholders as absent', () => {
@@ -242,6 +242,42 @@ describe('register index and matching', () => {
   it('will not match on a short digit run', () => {
     const shortIdx = buildIndex([{ sort_key: 'Y-1', name: 'Short', ecc_cnc: 'AB-123' }]);
     expect(findMatch(shortIdx, '123')).toBeNull();
+  });
+});
+
+describe('hwKey — Hazardous Waste Generator ids', () => {
+  it('treats the separator and padding variants as one id', () => {
+    // All of these are the same registration written five ways.
+    const keys = [
+      'GR-R3-08-00017',
+      'GR3-08-00017',
+      'GR R3-08-00017',
+      'GR-03-08-0017',
+      'OL-GR-R3-08-00017',
+    ].map(hwKey);
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).not.toBeNull();
+  });
+
+  it('keeps the M marker, which denotes a manually generated id', () => {
+    expect(hwKey('M-GR-R3-08-00017')).not.toBe(hwKey('GR-R3-08-00017'));
+  });
+
+  it('keeps the series segment, which is part of the id', () => {
+    expect(hwKey('GR-R3-08-00017')).not.toBe(hwKey('GR-R3-77-00017'));
+  });
+
+  it('returns null for the placeholder text the register contains', () => {
+    for (const v of ['In-process', 'NODATA', 'App.No:123', "The project didn't exist.", '']) {
+      expect(hwKey(v)).toBeNull();
+    }
+  });
+
+  it('is used for matching, and reports itself as the strategy', () => {
+    const index = buildIndex([{ sort_key: 'HW-1', name: 'Generator', haz_id: 'GR3-08-00011' }]);
+    const hit = findMatch(index, 'GR-R3-08-00011');
+    expect(hit.row.sort_key).toBe('HW-1');
+    expect(hit.strategy).toBe('hw');
   });
 });
 

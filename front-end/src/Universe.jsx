@@ -74,6 +74,9 @@ import { ROUTES } from "./config/routes";
 import DomainGuard from "./auth/DomainGuard";
 import Forbidden from "./shared/components/Forbidden";
 import OrgUnits from "./modules/admin/OrgUnits";
+import ErmsDashboard from "./modules/erms/pages/ErmsDashboard";
+import RecordsList from "./modules/erms/pages/RecordsList";
+import RecordDetail from "./modules/erms/pages/RecordDetail";
 
 const { Header, Content } = Layout;
 
@@ -711,12 +714,39 @@ const Universe = () => {
                       the route tree exist now so the boundary is real from the
                       first screen rather than retrofitted. */}
                   <Route
+                    path="erms/dashboard"
+                    element={
+                      <DomainGuard domain="erms" user={currentUser}>
+                        <ErmsDashboard />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="erms/records"
+                    element={
+                      <DomainGuard domain="erms" user={currentUser}>
+                        <RecordsList />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="erms/records/:serialNo"
+                    element={
+                      <DomainGuard domain="erms" user={currentUser}>
+                        <RecordDetail />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route path="erms" element={<Navigate to="/universe/erms/dashboard" replace />} />
+                  {/* Documents, tracking, archive and reports are still to come.
+                      The guard is already here so the boundary holds. */}
+                  <Route
                     path="erms/*"
                     element={
                       <DomainGuard domain="erms" user={currentUser}>
                         <Forbidden
                           module="ERMS"
-                          detail="The Records module is not built yet. It arrives in Phase 7."
+                          detail="This part of the Records module is not built yet."
                         />
                       </DomainGuard>
                     }

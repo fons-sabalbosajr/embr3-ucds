@@ -48,6 +48,13 @@ async function connectToMongo() {
   // Year container registry (see services/yearService.js)
   collections.yearContainers = db.collection('year-containers');
 
+  // Shared platform master data
+  collections.orgUnits = db.collection('org-units');
+
+  // ERMS domain. Only modules/erms writes these.
+  collections.ermsRecords = db.collection('erms-records');
+  collections.ermsIdMap = db.collection('erms-id-map');
+
   return { db, client, collections };
 }
 

@@ -529,19 +529,61 @@ Matching is layered exact → punctuation-insensitive → digits-only (≥8 digi
 **Gate:** ✅ all reconciliation checks pass against staging.
 **Rollback:** drop `universe-db-staging`. Production was never written to.
 
-### Phase 7 — ERMS module build
+### Phase 7 — ERMS module build 🟡 IN PROGRESS (read-only surfaces done)
 
 Behind `ERMS_MODULE_ENABLED`. Read-only surfaces before write surfaces.
 
-- [ ] Reference data (permit types, file classes)
-- [ ] Records register — list, search, filter, detail (read-only)
-- [ ] Document access via NAS (view / download)
+- [x] Reference data (permit types, provinces, uploaders) — `GET /api/erms/filter-options`
+- [x] Records register — list, search, filter, sort, paginate, detail (read-only)
+- [x] ERMS dashboard
+- [x] Cross-domain read API (`countForFirm`, `listForFirm`)
+- [ ] Document access via NAS — **blocked**, see below
 - [ ] Records CRUD (first write path — legacy desktop app goes read-only here)
 - [ ] Tracking & routing
 - [ ] Archiving & retention
-- [ ] ERMS dashboard & reports
+- [ ] ERMS reports
 
-**Gate:** each module accepted by Records personnel before the next begins.
+**Production import.** Staging reconciled 10/10, so the same pipeline was run against `universe-db`: 18,067 records, 11,465 linked, 36 flagged. Additive only — `erms-records` and `erms-id-map` are new collections; nothing existing was touched. `universe-db` went 27 → 30 collections (`org-units` + the two `erms-*`).
+
+**Backend** — `server/modules/erms/`
+
+```
+modules/erms/
+├── index.js                      isEnabled(), routes, and the read API
+├── routes.js                     every route: authenticateSession → requireDomain('erms')
+├── controllers/recordController.js
+└── services/recordService.js     the ONLY writer of erms-*
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/erms/dashboard` | totals, link rate, breakdowns, recent uploads |
+| `GET /api/erms/filter-options` | permit types, provinces, uploaders — scoped |
+| `GET /api/erms/records` | list with search, filters, sort, pagination |
+| `GET /api/erms/records/:serialNo` | one record plus its attachments |
+
+`ERMS_MODULE_ENABLED=false` means the routes are **not registered at all** — that is the rollback for the whole module, and it needs no code change.
+
+**Province scope for Records personnel.** ERMS routes never call `resolveYearContext` (records are not year-scoped), so `req.provinceKeys` is never set. The scope is derived from the account directly using the same helpers UCDS uses, with the same fail-closed rule: **an account with no province granted sees nothing**, not everything. A filter can narrow within the grant but never widen it — asking for a province outside the grant falls back to the grant. An out-of-scope record answers **404, not 403**, so the API does not confirm that a record exists to someone who may not see it.
+
+**Frontend** — `front-end/src/modules/erms/`, on Ant Design 5 + react-query. No new UI dependencies.
+
+| Screen | Notes |
+|---|---|
+| Dashboard | Four stat cards, permit-type and province distributions as proportion bars, recent uploads. Tooltips explain what "not linked" and "needs review" actually mean. |
+| Records list | Server-side pagination and sorting, search across serial / permit number / proponent / project, filters for permit type, province, uploader, register-link status and review-needed. |
+| Record detail | Full record, the register link with how it was matched, attachments, and any unparseable value shown **as the original text** rather than hidden. |
+
+Sidebar lists only Dashboard and Records — linking to unbuilt screens would just lead to a "not built yet" page.
+
+#### 🚧 Blocked: opening documents
+
+The stored paths are `Z:\RECORDS\Database\Records Database\…` — a **drive letter mapped on each workstation**, which means nothing to the server. The share root is deferred by the team, so the detail screen shows the file name, classification, uploader and share-relative path, with a disabled **Open document** button and a plain explanation. Everything else works without it.
+
+**Tests:** 22 new (127 total), covering the domain refusal, the fail-closed province scope, the filter-cannot-widen rule, 404-not-403 for out-of-scope records, validation rejections, and that the module exposes **no write API** to other domains. The suite skips itself with a warning if the flag is off, rather than reporting misleading 404s.
+
+**Gate:** ⚠️ read-only surfaces built and tested; **acceptance by Records personnel still outstanding**.
+**Rollback:** `ERMS_MODULE_ENABLED=false`. To also remove the data, drop `erms-records` and `erms-id-map`; no UCDS collection was modified.
 
 ### Phase 8 — Cross-domain integration
 
@@ -599,8 +641,8 @@ Behind `ERMS_MODULE_ENABLED`. Read-only surfaces before write surfaces.
 | 1 | Confirm drop list for the four orphan collections | Phase 1 |
 | 2 | Are Records personnel already UCDS account holders, or a new user population? | Phase 3 backfill |
 | 3 | Is the `Z:\` NAS path reachable from the Render-hosted server, or only from the office LAN? | Phase 7 document access |
-| 3b | **Where exactly is the share root?** Every path is `Z:\RECORDS\Database\Records Database\…` (2 are `N:\`). The drive letter is stripped to `RECORDS\Database\Records Database\…`, but whether `NAS_SHARE` points at the drive root, at `RECORDS`, or at `Records Database` is not determinable from the extract — and the documents cannot be opened until it is known. | Phase 7 document access |
-| 3c | ERMS hazardous-waste IDs are a `GR-03-08-…` / `GR-R3-08-…` series; the register's `haz_id` is `GR-R3-77-…`. Are these the same registry under different conventions, or genuinely different series? Answering it could lift the hw-generator match rate well above 21%. | Phase 8 integration |
+| 3b | **Where exactly is the share root?** Every path is `Z:\RECORDS\Database\Records Database\…` (2 are `N:\`) — a drive letter mapped per workstation. ⏸️ **Deferred by the team.** Everything except opening a document works without it; the detail screen shows the path and a disabled Open button. | Phase 7 document access |
+| ~~3c~~ | ~~Are the hazardous-waste series the same registry?~~ ✅ **Answered:** one series; an `M` in the `GR` marks a manually generated HWG id. Implemented as a structural `hwKey()` layer in the matcher — hw-generator went 21.2% → **26.4%**. The remaining gap is coverage, not the rule: ~825 of 1,125 ERMS HWG ids have no `haz_id` counterpart at all, and 1,310 of the register's 4,807 `haz_id` values are placeholders (`In-process`, `NODATA`, `App.No:…`, and one reading "The project didn't exist. No development was done."). Worth a Planning data-quality pass. | — |
 | 4 | Official records classification / retention schedule (NAP or agency-issued)? | Phase 7 archiving |
 | 5 | Is there a cutover deadline tied to a budget cycle? | Phase 10 sequencing |
 

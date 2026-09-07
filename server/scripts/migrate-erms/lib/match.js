@@ -25,6 +25,29 @@ const loosen = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 const digitsOf = (s) => String(s || '').replace(/\D/g, '');
 
+// ---------------------------------------------------------------------------
+// Hazardous Waste Generator ids.
+//
+// Both systems use one series, written many ways:
+//
+//   GR-R3-08-00017   GR3-08-00011   GR R3-08-00042   GR-03-08-0105
+//   OL-GR-R3-77-002894      OL- marks an online-process registration
+//   M-GR-R3-69-00123        M- marks a manually generated id
+//
+// The M is a real distinction and stays in the key. The OL prefix, the
+// separator style and the zero padding are all noise and do not.
+// ---------------------------------------------------------------------------
+const HW_RE =
+  /^(?:OL[\s\-‐]*)?(M[\s\-‐]*)?G[\s\-‐]*R?[\s\-‐]*(?:R[\s\-‐]*)?0?3[\s\-‐]*(\d+)[\s\-‐]*(\d+)\s*$/i;
+
+function hwKey(raw) {
+  const s = String(raw || '').trim().replace(/‐/g, '-');
+  const m = HW_RE.exec(s);
+  if (!m) return null;
+  const [, manual, series, serial] = m;
+  return `${manual ? 'M' : ''}|${Number(series)}|${Number(serial)}`;
+}
+
 /** Individual permit numbers inside one register cell. */
 function tokensOf(cell) {
   return String(cell || '')
@@ -40,7 +63,7 @@ function tokensOf(cell) {
  * not be used for matching.
  */
 function buildIndex(registerRows) {
-  const layers = { exact: new Map(), loose: new Map(), digits: new Map() };
+  const layers = { exact: new Map(), loose: new Map(), hw: new Map(), digits: new Map() };
 
   const add = (layer, key, row) => {
     if (!key) return;
@@ -57,6 +80,7 @@ function buildIndex(registerRows) {
       for (const token of tokensOf(row[field])) {
         add(layers.exact, normalise(token), row);
         add(layers.loose, loosen(token), row);
+        add(layers.hw, hwKey(token), row);
         const d = digitsOf(token);
         // Short digit runs collide across unrelated permits.
         if (d.length >= 8) add(layers.digits, d, row);
@@ -74,6 +98,9 @@ function findMatch(index, permitNumber) {
   const attempts = [
     ['exact', normalise(permitNumber)],
     ['loose', loosen(permitNumber)],
+    // Structural: precise about the M marker and the series segment, so it is
+    // tried before the blunt digits-only fallback.
+    ['hw', hwKey(permitNumber)],
     ['digits', digitsOf(permitNumber)],
   ];
 
@@ -86,4 +113,4 @@ function findMatch(index, permitNumber) {
   return null;
 }
 
-module.exports = { buildIndex, findMatch, tokensOf, normalise, loosen, digitsOf };
+module.exports = { buildIndex, findMatch, tokensOf, normalise, loosen, digitsOf, hwKey };

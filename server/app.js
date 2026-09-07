@@ -98,6 +98,15 @@ app.use(developerRoutes);
 app.use(yearRoutes);
 app.use(orgUnitRoutes);
 
+// The ERMS records module. Registered last so it cannot shadow an existing
+// UCDS path, and only when enabled — turning the flag off removes the routes
+// entirely, which is the rollback for the whole module.
+const erms = require("./modules/erms");
+if (erms.isEnabled()) {
+  app.use(erms.routes);
+  console.log("ERMS module enabled");
+}
+
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);

@@ -969,44 +969,23 @@ const SideMenu = ({ theme, currentUser }) => {
       key: "erms",
       icon: <FileProtectOutlined />,
       label: <div className="menu-label-wrapper main">Records (ERMS)</div>,
+      // Only the screens that exist are listed. Documents, tracking, archiving
+      // and reports arrive later; linking to them now would just lead to a
+      // "not built yet" page.
       children: [
+        {
+          key: "/universe/erms/dashboard",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/erms/dashboard">Dashboard</Link>
+            </div>
+          ),
+        },
         {
           key: "/universe/erms/records",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
               <Link to="/universe/erms/records">Records</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/documents",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/documents">Documents</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/tracking",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/tracking">Tracking</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/archive",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/archive">Archive</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/reports",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/reports">Reports</Link>
             </div>
           ),
         },
