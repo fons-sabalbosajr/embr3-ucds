@@ -2,6 +2,10 @@
 # May contain production data — never commit.
 backups/
 
+# Migration findings exported for Planning and Records. Contain proponent
+# names and project titles, so they stay local like the extract itself.
+reports/
+
 # ERMS source extract (~18k records with proponent names and addresses).
 # Kept local so the data does not enter git history. Remove this line if the
 # team decides the extract should be versioned with the migration scripts.

@@ -463,15 +463,71 @@ Verified with `explain('executionStats')`:
 
 **Rollback:** revert the two commits. Indexes can be dropped without data loss; no document was modified.
 
-### Phase 6 — ERMS data migration
+### Phase 6 — ERMS data migration ✅ DONE (staging)
 
-- [ ] Profile the CSV (uniqueness, value distributions, date-format variants, path validity)
-- [ ] Build `server/scripts/migrate-erms/` — profile → stage → transform → import → reconcile
-- [ ] Import into `universe-db-staging` first; **production untouched**
-- [ ] Reconcile: counts match, `serialNo` unique, dates parsed, provinces mapped
-- [ ] Match `permit.number` → `ucds-data.ecc_cnc`; report unmatched to Planning
+**Pipeline** — `server/scripts/migrate-erms/`
 
-**Gate:** all reconciliation checks pass against staging.
+| Script | Does |
+|---|---|
+| `profile.js` | Measures the extract. Reads and writes nothing. |
+| `stage.js` | Transforms and upserts into `universe-db-staging`. `--apply` to write, `--db=` to target. |
+| `reconcile.js` | 10 gates + the UCDS link. `--write-refs`, `--report`. Exits non-zero on failure. |
+| `lib/{source,transform,match}.js` | Parsing, row→document, register matching. |
+
+**The extract:** 19,022 physical lines → **18,067 records** (954 lines absorbed into quoted fields — it cannot be split on newlines). `Serial_No` is 100% present and 100% unique. 37 rows are `FSN-####### Att-#####`, i.e. a second document filed against an existing record, not a record of their own.
+
+**Reconciliation — 10/10 gates pass**
+
+| Gate | Result |
+|---|---|
+| source count = staged count | 18,067 = 18,067 |
+| `serialNo` unique | 18,067 distinct |
+| id-map has one row per record | 18,067 |
+| legacy id preserved | 0 missing |
+| every province mapped | 0 unmapped |
+| every permit type recognised | 0 unrecognised |
+| every document has a share-relative path | 0 missing |
+| every attachment resolves to a parent | 36/36 |
+
+**Data quality: 36 records (0.2%) flagged**, all unparseable dates. Month misspellings (`Arpil`, `Ocotber`, `Ocotober`) are corrected automatically by edit-distance match, capped at distance 2 and refused when ambiguous. What remains is **deliberately not guessed**:
+
+```
+"Poultry Farm"              a project type in the date column
+"R03-1308-0330"             a permit number in the date column
+"16 December 20211"         2011 or 2021 — not ours to decide
+"30 June 201130 June 2011"  duplicated value
+```
+
+Raw values are preserved on the document and exported to `reports/erms-data-quality.csv` for Records personnel.
+
+#### The cross-domain link — 63.1%
+
+This is the finding that matters, because it is the justification for unifying at all.
+
+| Permit type | Matched | Rate |
+|---|---|---|
+| ecc-original | 8,190 / 9,090 | **90.1%** |
+| ecc-amended | 2,233 / 2,630 | **84.9%** |
+| cnc | 745 / 5,222 | 14.3% |
+| hw-generator | 238 / 1,125 | 21.2% |
+| **total** | **11,406 / 18,067** | **63.1%** |
+
+A naive `ecc_cnc` equality join gave 57.8%. Three structural facts raised it to 63.1%:
+
+1. **A register cell can hold several permit numbers** — `"03BU-0403-07-203-120A, CNC-OL-R03-2017-10-01090"`. Each is now indexed separately.
+2. **Hazardous-waste registrations are not in `ecc_cnc` at all** — they are in `haz_id`. Indexing it took hw-generator from 0.2% to 21.2%.
+3. **Prefix conventions differ** — ERMS writes `R03-2017-0370`, the register writes `ECC-OL-R03-2017-0370`.
+
+Matching is layered exact → punctuation-insensitive → digits-only (≥8 digits), and **every layer refuses an ambiguous key** — one resolving to more than one establishment — so a looser rule can never invent a link. 92% of matches are exact; only 6.8% rely on the digits fallback.
+
+**The remaining 37% is a business finding, not a migration defect.** ERMS holds 5,222 CNC records while only ~1,135 register entries mention a CNC number at all. The two systems were maintained independently and the register simply does not cover everything ERMS has. Exported to `reports/erms-unmatched-permits.csv` for Planning.
+
+**Tests:** 33 new (100 total). They cover the ambiguity guard, the refusal to guess at bad dates, multi-value cell splitting, and the three permit-type misspellings.
+
+**Verification:** production has **no `erms-*` collections** — everything lives in `universe-db-staging`.
+
+**Gate:** ✅ all reconciliation checks pass against staging.
+**Rollback:** drop `universe-db-staging`. Production was never written to.
 
 ### Phase 7 — ERMS module build
 
@@ -543,6 +599,8 @@ Behind `ERMS_MODULE_ENABLED`. Read-only surfaces before write surfaces.
 | 1 | Confirm drop list for the four orphan collections | Phase 1 |
 | 2 | Are Records personnel already UCDS account holders, or a new user population? | Phase 3 backfill |
 | 3 | Is the `Z:\` NAS path reachable from the Render-hosted server, or only from the office LAN? | Phase 7 document access |
+| 3b | **Where exactly is the share root?** Every path is `Z:\RECORDS\Database\Records Database\…` (2 are `N:\`). The drive letter is stripped to `RECORDS\Database\Records Database\…`, but whether `NAS_SHARE` points at the drive root, at `RECORDS`, or at `Records Database` is not determinable from the extract — and the documents cannot be opened until it is known. | Phase 7 document access |
+| 3c | ERMS hazardous-waste IDs are a `GR-03-08-…` / `GR-R3-08-…` series; the register's `haz_id` is `GR-R3-77-…`. Are these the same registry under different conventions, or genuinely different series? Answering it could lift the hw-generator match rate well above 21%. | Phase 8 integration |
 | 4 | Official records classification / retention schedule (NAP or agency-issued)? | Phase 7 archiving |
 | 5 | Is there a cutover deadline tied to a budget cycle? | Phase 10 sequencing |
 
