@@ -407,14 +407,61 @@ The `division` field on user documents is deliberately untouched; aliases make t
 **Gate:** ✅ auth and the domain boundary have real coverage; boundary violations fail lint.
 **Rollback:** revert the commit; drop the `org-units` collection. No existing collection was modified.
 
-### Phase 5 — UCDS stabilisation
+### Phase 5 — UCDS stabilisation ✅ DONE (pending human regression pass)
 
-- [ ] Move `menu-*` folders into `modules/ucds/` (rename-only commits)
-- [ ] Add missing indexes on hot query paths
-- [ ] Consolidate admin routes under `/universe/admin/*`
-- [ ] Full UCDS regression pass
+**5a — structural move** (commit `c78ee53`, rename-only: 225 renames, 4 edits)
 
-**Gate:** signed off by Planning personnel before ERMS work begins.
+| From | To |
+|---|---|
+| `menu-{province,survey,healthcare,chemicals,tsd,trc,mbu,eswm,planning,legal,extract,register-config,duplicates}` | `modules/ucds/*` |
+| `menu-developer` | `modules/admin/developer` |
+| `menu-component/Dashboard` | `modules/ucds/dashboard` |
+| `menu-component/{Admin,UserAccounts,AccountPermission,UserAccountModal,SignAccountModal,Posting}` | `modules/admin/*` |
+| `menu-nas` | `shared/nas-browser` |
+
+Done with a codemod that resolves each relative specifier against the file's old directory and recomputes it from the new one — so extensionless imports, directory imports resolving to `index.*`, CSS, and the paths reaching outside `src` into `data/utils` all stayed correct. 212 specifiers rewritten; the build passed first time.
+
+**`src/components/` deliberately not moved.** 103 inbound references against no domain-boundary benefit — it is already shared by everything. The lint rule was extended to cover it anyway, which surfaced two real couplings:
+
+| File | Imports | Why it is debt |
+|---|---|---|
+| `components/SideMenu.jsx` | `modules/ucds/province/DataContext` | The shared layout drives province selection, but that state lives in a UCDS context that also fetches the register. Fix: lift "selected province" into shared navigation state, leave the fetching in UCDS. |
+| `components/AiNotification/PopOverNotification.jsx` | `modules/ucds/province/ProvinceModal` | A shared popover opens a UCDS screen. |
+
+Both are `eslint-disable`d with a comment naming the fix, so they stay visible and **no new coupling can appear**.
+
+**5b — indexes** (`scripts/migrate-indexes.js`, dry-run by default, idempotent)
+
+`universe-db` had exactly **one** index beyond the automatic `_id`: a text index on `ucds-data.description`, created lazily by a controller. Every other query was a collection scan — including the province filter applied to all 17,751 register documents on every scoped read, and the username lookup on every login.
+
+**34 indexes created**, every key taken from a filter or sort that appears in the code. Unique indexes are checked for existing duplicates first and skipped with a report rather than failing halfway; none were blocked.
+
+Verified with `explain('executionStats')`:
+
+| Query | Plan | Docs examined |
+|---|---|---:|
+| province scope filter | `IXSCAN` | 1,510 (was a 17,751 scan) |
+| `sort_key` lookup | `IXSCAN` | 0 |
+| `ecc_cnc` lookup (the ERMS join key) | `IXSCAN` | 1 |
+| `username` login lookup | `IXSCAN` | 1 |
+
+`users.username` and `users.email` are now **unique**, which is correctness, not just speed — nothing previously stopped a duplicate account being created.
+
+**5b — admin route consolidation**, all behind `DomainGuard('admin')`, with legacy paths redirecting:
+
+| Legacy | Now |
+|---|---|
+| `/universe/accounts` | `/universe/admin/users` |
+| `/universe/activity-log` | `/universe/admin/audit` |
+| `/universe/posting` | `/universe/admin/posting` |
+| `/universe/developer/*` | `/universe/admin/developer/*` |
+| — | `/universe/admin/org-units` |
+
+**Verification:** `vite build` passes, 0 boundary violations, 67/67 server tests pass, no stale links to the old admin paths.
+
+**Gate:** ⚠️ Automated checks pass. A **human click-through by Planning personnel is still outstanding** — the build proves imports resolve, not that screens behave. See below.
+
+**Rollback:** revert the two commits. Indexes can be dropped without data loss; no document was modified.
 
 ### Phase 6 — ERMS data migration
 

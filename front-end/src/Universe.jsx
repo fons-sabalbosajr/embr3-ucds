@@ -577,11 +577,42 @@ const Universe = () => {
                     path="eswm-database/equipments"
                     element={<Equipments theme={theme} />}
                   />
-                  <Route path="accounts" element={<Accounts theme={theme} />} />
                   <Route path="extract" element={<Extract theme={theme} />} />
+
+                  {/* Platform administration, consolidated under /admin.
+                      Legacy paths below redirect, so existing bookmarks and
+                      any link still pointing at the old URL keep working. */}
+                  <Route
+                    path="admin/users"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <Accounts theme={theme} />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="admin/audit"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <ActivityLog theme={theme} />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="admin/posting"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <Posting theme={theme} />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="accounts"
+                    element={<Navigate to="/universe/admin/users" replace />}
+                  />
                   <Route
                     path="activity-log"
-                    element={<ActivityLog theme={theme} />}
+                    element={<Navigate to="/universe/admin/audit" replace />}
                   />
                   <Route
                     path="planning-unit/monitoring"
@@ -612,20 +643,57 @@ const Universe = () => {
                     path="records/activity"
                     element={<Navigate to="/universe/register/activity" replace />}
                   />
-                  {/* Developer Settings */}
+                  {/* Developer settings, also under /admin. */}
+                  <Route
+                    path="admin/developer/field-management"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <FieldManagement />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="admin/developer/database-settings"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <DatabaseSettings />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="admin/developer/pdf-forms"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <PdfForms />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
+                    path="admin/developer/activity-history"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <ActivityHistoryConfig />
+                      </DomainGuard>
+                    }
+                  />
+                  {/* Legacy developer paths */}
                   <Route
                     path="developer/field-management"
-                    element={<FieldManagement />}
+                    element={<Navigate to="/universe/admin/developer/field-management" replace />}
                   />
                   <Route
                     path="developer/database-settings"
-                    element={<DatabaseSettings />}
+                    element={<Navigate to="/universe/admin/developer/database-settings" replace />}
                   />
-                  <Route path="developer/pdf-forms" element={<PdfForms />} />
+                  <Route
+                    path="developer/pdf-forms"
+                    element={<Navigate to="/universe/admin/developer/pdf-forms" replace />}
+                  />
                   <Route
                     path="developer/activity-history"
-                    element={<ActivityHistoryConfig />}
+                    element={<Navigate to="/universe/admin/developer/activity-history" replace />}
                   />
+
                   <Route path="admin" element={<Admin theme={theme} />} />
 
                   {/* Shared master data. Administrators only — the API applies
@@ -711,7 +779,10 @@ const Universe = () => {
                   />
 
                   <Route path="report" element={<Report theme={theme} />} />
-                  <Route path="posting" element={<Posting theme={theme} />} />
+                  <Route
+                    path="posting"
+                    element={<Navigate to="/universe/admin/posting" replace />}
+                  />
                   <Route
                     path="duplicates"
                     element={<Duplicates theme={theme} />}

@@ -169,14 +169,15 @@ const SideMenu = ({ theme, currentUser }) => {
     ) {
       setOpenKeys(["reports"]);
     } else if (
-      path.startsWith("/universe/accounts") ||
-      path.startsWith("/universe/posting") ||
-      path.startsWith("/universe/activitylog") ||
+      path.startsWith("/universe/admin/users") ||
+      path.startsWith("/universe/admin/posting") ||
+      path.startsWith("/universe/admin/audit") ||
+      path.startsWith("/universe/admin/org-units") ||
       path.startsWith("/universe/register/config") ||
       path.startsWith("/universe/register/activity")
     ) {
       setOpenKeys(["admin"]);
-    } else if (path.startsWith("/universe/developer/")) {
+    } else if (path.startsWith("/universe/admin/developer/")) {
       setOpenKeys(["developer-settings"]);
     } else if (path.startsWith("/universe/erms/")) {
       setOpenKeys(["erms"]);
@@ -873,20 +874,20 @@ const SideMenu = ({ theme, currentUser }) => {
       label: <div className="menu-label-wrapper main">Admin</div>,
       children: [
         {
-          key: "/universe/accounts",
+          key: "/universe/admin/users",
           label: (
             <LabelWithAvatars
-              to="/universe/accounts"
+              to="/universe/admin/users"
               label="User Accounts"
               viewers={chemicalsViewers}
             />
           ),
         },
         {
-          key: "/universe/posting",
+          key: "/universe/admin/posting",
           label: (
             <LabelWithAvatars
-              to="/universe/posting"
+              to="/universe/admin/posting"
               label="Post to Bulletin"
               viewers={chemicalsViewers}
             />
@@ -928,34 +929,34 @@ const SideMenu = ({ theme, currentUser }) => {
       label: <div className="menu-label-wrapper main">Developer Settings</div>,
       children: [
         {
-          key: "/universe/developer/field-management",
+          key: "/universe/admin/developer/field-management",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/developer/field-management">Field Management</Link>
+              <Link to="/universe/admin/developer/field-management">Field Management</Link>
             </div>
           ),
         },
         {
-          key: "/universe/developer/database-settings",
+          key: "/universe/admin/developer/database-settings",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/developer/database-settings">Database Settings</Link>
+              <Link to="/universe/admin/developer/database-settings">Database Settings</Link>
             </div>
           ),
         },
         {
-          key: "/universe/developer/pdf-forms",
+          key: "/universe/admin/developer/pdf-forms",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/developer/pdf-forms">PDF Forms</Link>
+              <Link to="/universe/admin/developer/pdf-forms">PDF Forms</Link>
             </div>
           ),
         },
         {
-          key: "/universe/developer/activity-history",
+          key: "/universe/admin/developer/activity-history",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/developer/activity-history">Activity History Configuration</Link>
+              <Link to="/universe/admin/developer/activity-history">Activity History Configuration</Link>
             </div>
           ),
         },
