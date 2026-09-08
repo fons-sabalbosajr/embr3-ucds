@@ -24,6 +24,10 @@ const PASSWORD = 'Walkthrough!x9';
 const log = (...a) => console.log(...a);
 const pad = (s, n) => String(s === undefined ? '' : s).padEnd(n);
 
+// Sent as-is; stored normalised. Both forms are removed afterwards.
+const PROBE_CODE = '__WT_PROBE';
+const { normalizeCode } = require('../shared/services/orgUnits');
+
 const PROVINCES = {
   aurora: 'none', bataan: 'readWrite', bulacan: 'none', nuevaEcija: 'none',
   pampanga: 'view', tarlac: 'none', zambales: 'none',
@@ -75,7 +79,11 @@ const CHECKS = [
   { label: 'run an ERMS report', method: 'GET', path: '/api/erms/reports/inventory?limit=1' },
   { label: 'search the register from ERMS', method: 'GET', path: '/api/erms/register/search?q=inc' },
   { label: 'read shared org units', method: 'GET', path: '/api/org-units' },
-  { label: 'create an org unit (admin)', method: 'POST', path: '/api/org-units', body: { code: '__WT_PROBE' } },
+  // The service normalises a code before storing it, so the probe is written as
+  // WT-PROBE rather than what is sent. Cleaning up by the raw value therefore
+  // left it behind, and the next run reported 409 instead of 201 — the endpoint
+  // was fine, the script was not.
+  { label: 'create an org unit (admin)', method: 'POST', path: '/api/org-units', body: { code: PROBE_CODE } },
   { label: 'read developer settings', method: 'GET', path: '/api/dev/field-configs' },
 ];
 
@@ -117,6 +125,11 @@ async function main() {
     console.error(`Cannot reach ${BASE} — is the server running?\n  ${e.message}`);
     process.exit(2);
   }
+
+  // Clear any residue from a run that did not reach its cleanup.
+  await db
+    .collection('org-units')
+    .deleteMany({ code: { $in: [PROBE_CODE, normalizeCode(PROBE_CODE)] } });
 
   const password = await bcrypt.hash(PASSWORD, 10);
   await users.deleteMany({ username: { $in: names } });
@@ -165,7 +178,9 @@ async function main() {
   } finally {
     await users.deleteMany({ username: { $in: names } });
     await db.collection('login-status').deleteMany({ username: { $in: names } });
-    await db.collection('org-units').deleteMany({ code: '__WT_PROBE' });
+    await db
+      .collection('org-units')
+      .deleteMany({ code: { $in: [PROBE_CODE, normalizeCode(PROBE_CODE)] } });
     await db.collection('app-logs').deleteMany({ username: { $in: names } });
     log('\nthrowaway accounts removed');
     await client.close();
