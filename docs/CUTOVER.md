@@ -23,12 +23,40 @@ These are not optional, and none of them is a code change.
 - [ ] **Planning has seen the 6,602 unmatched permits**, or has explicitly
       accepted 63.5% as the working match rate —
       `reports/erms-unmatched-permits.csv`.
-- [ ] **The NAS share root is known**, if opening a scanned document is part of
-      daily work. It is not today, and the web module cannot open documents
-      without it. If a clerk cannot retrieve a scan, the web version is not yet
-      a replacement no matter how good the rest is.
+- [ ] **A decision on document access.** ⏸️ Deliberately on hold — see
+      "Documents" below. This is not a configuration gap; the desktop app's
+      approach does not carry over to a web application, and the replacement
+      flow has to be designed. Until it is, the web module holds record
+      *metadata* and the desktop app remains the way to open a scan.
 - [ ] **The server has a stable address** — see `DEPLOYMENT.md`. A DHCP lease
       that moves during the parallel period will look exactly like an outage.
+
+---
+
+## Documents — why this is a design question, not a setting
+
+The WinForms ERMS reached the scans through **`Z:\`, a drive mapped on each
+workstation**. That works because the application and the person run on the same
+machine: the app opens a path the user's own session can already see.
+
+A web application cannot do that, and the stored paths show why —
+`Z:\RECORDS\Database\Records Database\…` means nothing to a server, and a
+browser cannot read a local drive letter either. There are three plausible
+replacements, and they differ in more than configuration:
+
+| Approach | What changes |
+|---|---|
+| **Server reaches the share over SMB** | The server needs a service account and the UNC root behind `Z:`. Closest to today's behaviour; the `nas` routes and `safeSharePath` already exist for it. Requires the server to sit where it can see the share. |
+| **Browser uploads to the server** | Files stop living on the share. Storage moves to GridFS or disk, and the existing 18,067 paths become historical references. A bigger change, but it removes the mapped-drive dependency entirely. |
+| **Hybrid** | Existing scans stay on the share and are opened as today; new uploads go to the server. Two retrieval paths to maintain. |
+
+The migration deliberately **stored the paths rather than moving the files**, so
+none of these is foreclosed. `document.filePath` keeps the original value and
+`document.sharePath` the drive-letter-stripped remainder.
+
+Until this is decided, the **Open document** button in the record detail stays
+disabled and says why. Everything else — search, filtering, the register link,
+tracking, archiving, reports — works without it.
 
 ---
 
