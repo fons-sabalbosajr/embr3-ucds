@@ -34,6 +34,8 @@ const {
   sessionCookieOptions,
   assertSessionSecret,
   securityHeaders,
+  warnAboutCookieConfig,
+  warnAboutEnvFormatting,
 } = require("./config/security");
 const { notFound, errorHandler } = require("./shared/middleware/errorHandler");
 
@@ -53,6 +55,8 @@ app.set("trust proxy", 1);
 app.use(securityHeaders());
 
 assertSessionSecret();
+warnAboutEnvFormatting();
+warnAboutCookieConfig();
 
 // Use the shared Mongo client for the session store to avoid a second pool.
 const sessionStore = MongoStore.create({

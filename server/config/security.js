@@ -1,30 +1,60 @@
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+// The live getter, not the snapshot cors.js computes at module load: the
+// snapshot cannot reflect an environment set after this file is first required,
+// which makes the cookie decision untestable and dependent on import order.
+const { getAllowedOrigins } = require('./cors');
 
 const isProduction = () => process.env.NODE_ENV === 'production';
+
+/**
+ * Whether every configured origin is served over HTTPS.
+ *
+ * This decides the cookie flags, because NODE_ENV cannot: "production" says
+ * nothing about the transport. A browser silently discards a Secure cookie
+ * sent over plain HTTP, so deriving `secure` from NODE_ENV alone locks every
+ * user out of a LAN deployment — the failure looks like "login does nothing".
+ */
+function originsAreHttps() {
+  const list = (getAllowedOrigins() || []).filter(Boolean);
+  if (!list.length) return false;
+  return list.every((o) => String(o).trim().startsWith('https://'));
+}
 
 // ---------------------------------------------------------------------------
 // Session cookie
 //
-// The front-end is a static site and the API is a separate service, so in a
-// deployed environment they sit on different hosts and the session cookie is
-// sent cross-site. Browsers only accept a cross-site cookie when it is marked
-// SameSite=None *and* Secure, so those two travel together.
+// The flags follow the transport, not NODE_ENV:
 //
-// `app.set('trust proxy', 1)` must be in place before the session middleware
-// runs, otherwise Express does not see Render's TLS termination and refuses to
-// set a Secure cookie.
+//   origins all https + production   SameSite=None; Secure   (cross-site, e.g.
+//                                    a static SPA on one host, API on another)
+//   anything else                    SameSite=Lax; not Secure
 //
-// Both values can be overridden for a deployment where the SPA and the API
-// share an origin, which can then use the stricter SameSite=Lax.
+// This matters because "production" says nothing about whether the application
+// is served over TLS. Serving a Secure cookie over plain http — a LAN
+// deployment, say — makes the browser discard it: sign-in appears to succeed
+// and every request afterwards is unauthenticated, with nothing in the log to
+// explain it.
+//
+// SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SECURE override both.
+//
+// Behind a TLS-terminating proxy, `app.set('trust proxy', 1)` must be in place
+// before the session middleware runs or Express will not issue a Secure cookie.
 // ---------------------------------------------------------------------------
 function sessionCookieOptions() {
-  const sameSite =
-    process.env.SESSION_COOKIE_SAMESITE || (isProduction() ? 'none' : 'lax');
+  const https = originsAreHttps();
 
-  const secure = process.env.SESSION_COOKIE_SECURE
-    ? process.env.SESSION_COOKIE_SECURE === 'true'
-    : isProduction() || sameSite === 'none';
+  // SameSite=None is only needed when the cookie travels cross-site, and
+  // browsers only accept it together with Secure — so it is offered only when
+  // the origins are actually HTTPS. Everything else gets Lax, which is the
+  // stricter option and works over plain HTTP.
+  const sameSite =
+    process.env.SESSION_COOKIE_SAMESITE || (isProduction() && https ? 'none' : 'lax');
+
+  const secure =
+    process.env.SESSION_COOKIE_SECURE !== undefined
+      ? process.env.SESSION_COOKIE_SECURE === 'true'
+      : sameSite === 'none' || (isProduction() && https);
 
   return {
     httpOnly: true,
@@ -32,6 +62,65 @@ function sessionCookieOptions() {
     sameSite,
     maxAge: 1000 * 60 * 60 * 24,
   };
+}
+
+/**
+ * Report a configuration that will not work, loudly, at startup.
+ *
+ * A Secure cookie over HTTP is the one that costs an afternoon: the browser
+ * accepts the login response and drops the cookie, so every request after it
+ * is unauthenticated and nothing in the log says why.
+ */
+function warnAboutCookieConfig() {
+  const { secure, sameSite } = sessionCookieOptions();
+  const https = originsAreHttps();
+
+  if (secure && !https) {
+    console.warn(
+      'WARNING: the session cookie is marked Secure, but ALLOWED_ORIGINS is not\n' +
+        '         all https. Browsers discard a Secure cookie sent over http, so\n' +
+        '         sign-in will appear to succeed and then every request will be\n' +
+        '         unauthenticated. Set SESSION_COOKIE_SECURE=false for a plain-http\n' +
+        '         deployment, or serve the application over https.'
+    );
+  }
+
+  if (sameSite === 'none' && !secure) {
+    console.warn(
+      'WARNING: SameSite=None requires Secure. Browsers will reject this cookie.'
+    );
+  }
+
+  if (isProduction() && !https) {
+    console.warn(
+      `NOTE: running with NODE_ENV=production over non-https origins ` +
+        `(${(getAllowedOrigins() || []).join(", ") || "none configured"}).\n` +
+        `      The session cookie is ${secure ? 'Secure' : 'not Secure'}, SameSite=${sameSite}.`
+    );
+  }
+}
+
+/**
+ * dotenv keeps a trailing semicolon as part of the value, so BYPASS_AUTH=true;
+ * reads as the string "true;" — which is not "true", so the bypass is off by
+ * accident rather than by intent. Tidying the file would then silently turn it
+ * on. Say so rather than leaving it to be discovered.
+ */
+function warnAboutEnvFormatting() {
+  const suspect = Object.entries(process.env)
+    .filter(([k, v]) => typeof v === 'string' && /;\s*$/.test(v))
+    .filter(([k]) => !k.startsWith('npm_') && k !== 'PATH' && k !== 'PATHEXT')
+    .map(([k]) => k);
+
+  if (suspect.length) {
+    console.warn(
+      `WARNING: these environment values end with a semicolon, which becomes\n` +
+        `         part of the value: ${suspect.join(', ')}\n` +
+        `         A flag like BYPASS_AUTH=true; is read as "true;" and is therefore\n` +
+        `         off — removing the semicolon would turn it on. Remove them and set\n` +
+        `         each flag explicitly.`
+    );
+  }
 }
 
 /** Fail fast rather than starting with a weak or missing session secret. */
@@ -122,7 +211,10 @@ const registerLimiter = limiter({
 
 module.exports = {
   isProduction,
+  originsAreHttps,
   sessionCookieOptions,
+  warnAboutCookieConfig,
+  warnAboutEnvFormatting,
   assertSessionSecret,
   securityHeaders,
   loginLimiter,
