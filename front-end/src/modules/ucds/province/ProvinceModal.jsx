@@ -16,6 +16,7 @@ import ICIR from "./reports/icir/ICIR";
 import IC from "./reports/ic/formIC";
 import CIC from "./reports/cic/formCIC";
 import Drafts from "./reports/drafts/ReportDrafts";
+import EstablishmentRecordsPanel from "../components/EstablishmentRecordsPanel";
 import {
   fetchRecordDetailsBySortKey,
   checkExistingLogsByEccCnc,
@@ -452,6 +453,16 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                     theme={theme}
                     reloadEditedRecord={reloadEditedRecord}
                   />
+                ),
+              },
+              // Documents filed against this establishment in ERMS. The panel
+              // renders nothing when the records module is unavailable to the
+              // viewer, so this tab is simply empty rather than broken.
+              {
+                key: "7",
+                label: <span className="custom-tab">Records</span>,
+                children: (
+                  <EstablishmentRecordsPanel sortKey={editedRecord.sort_key} />
                 ),
               },
             ]}

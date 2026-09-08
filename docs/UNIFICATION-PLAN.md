@@ -619,13 +619,54 @@ The stored paths are `Z:\RECORDS\Database\Records Database\…` — a **drive le
 **Gate:** ⚠️ read-only surfaces built and tested; **acceptance by Records personnel still outstanding**.
 **Rollback:** `ERMS_MODULE_ENABLED=false`. To also remove the data, drop `erms-records` and `erms-id-map`; no UCDS collection was modified.
 
-### Phase 8 — Cross-domain integration
+### Phase 8 — Cross-domain integration ✅ DONE
 
-- [ ] ERMS record → UCDS establishment link (read-only, via `registryService`)
-- [ ] UCDS establishment → ERMS record count panel (read-only, degrades silently)
-- [ ] Backfill `ucdsRef` on migrated records
+- [x] ERMS record → UCDS establishment link, read-only via `registryService`
+- [x] UCDS establishment → ERMS records panel, read-only, degrades silently
+- [x] Backfill `ucdsRef` on migrated records *(done in Phase 6)*
 
-**Gate:** match rate agreed acceptable; unmatched set triaged.
+**One matcher, two access patterns.** `scripts/migrate-erms/lib/match.js` moved to `modules/ucds/services/permitMatch.js`. The migration and the runtime now share it, so a link made when a clerk saves a record agrees with one made during the import **by construction** rather than by two implementations happening to behave alike. A test asserts the agreement, including the matched strategy.
+
+#### 🐌 A performance problem, and why the obvious fix was wrong
+
+The first implementation built the permit index over the whole register per request. It timed out at 30s. Measuring rather than assuming:
+
+| Step | Time |
+|---|---|
+| Mongo server-side execution | **12 ms** |
+| Transferring 16,193 rows to the client | **38,000 ms** |
+| `buildIndex` over them | 83 ms |
+| 1,000 lookups against the index | 2 ms |
+
+The query was never slow — **transferring the register was**. Caching would have hidden it behind a 40-second first request and a stale window. Instead a lookup now fetches *candidates* first: a tolerant regex on the permit number's digit groups, returning a handful of rows in ~100 ms, and the same matcher decides among them.
+
+Verified against 8 migrated records: **8/8 agreement** on both establishment and strategy, ~70 ms each. A test asserts the candidate set stays under 50 rows and under 1% of the register, so the full-scan cannot creep back.
+
+#### Integration points
+
+| | UCDS → ERMS | ERMS → UCDS |
+|---|---|---|
+| **Endpoint** | `GET /api/ucds/establishments/:sortKey/records` | `GET /api/erms/register/{search,resolve}` |
+| **Requires** | `ucds` domain | `erms` domain |
+| **Direction** | read-only | read-only |
+| **Trigger** | Records tab on the establishment modal | as the clerk types a permit number |
+| **On failure** | `{ available: false }` and **200** | no match shown as information, not an error |
+
+**Degradation is deliberate.** A user without the `erms` domain, or a deployment with the module off, gets `available: false` and a 200 — a planning screen must never break because the records module is unavailable to that person. The panel then renders nothing at all. A genuine 5xx inside the records module is caught and degraded the same way.
+
+**Neither domain gained a write path into the other.** `ucds.read` exposes `resolveByPermitNumber`, `findBySortKey`, `search`. `erms.read` exposes `countForFirm`, `listForFirm`. Tests assert both surfaces are exactly that.
+
+**Linking on save.** A new or corrected permit number resolves its establishment at write time. If the register is momentarily unavailable the record still saves, unlinked — a clerk filing a document is not blocked by a lookup.
+
+#### UI
+
+- **Records tab** on the UCDS establishment modal, linking through to the records list filtered by `?linkedTo=<sortKey>` (a real filter, not a text search).
+- **Live register feedback** in the ERMS record form: as a permit number is typed it says which establishment it will link to, or states plainly that none carries it — *"That is common — the register does not cover every record"*, so nobody "fixes" a permit number that was correct.
+
+**Tests:** 18 new (178 total) — degradation for a user without the domain, 403 for the wrong domain, 404 for an unknown establishment, resolver agreement with the migration, candidate bounding, and both read-only surfaces.
+
+**Gate:** ✅ integration live; match rate measured at 63.5% and the unmatched set exported for Planning.
+**Rollback:** revert the commit. `ERMS_MODULE_ENABLED=false` also disables the panel, which then renders nothing.
 
 ### Phase 9 — Validation
 

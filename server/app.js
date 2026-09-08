@@ -98,6 +98,11 @@ app.use(developerRoutes);
 app.use(yearRoutes);
 app.use(orgUnitRoutes);
 
+// Cross-domain routes. The establishment→records panel lives here rather than
+// in the ERMS module because it hangs off a UCDS screen and must keep working
+// when ERMS is switched off.
+app.use(require("./modules/ucds").routes);
+
 // The ERMS records module. Registered last so it cannot shadow an existing
 // UCDS path, and only when enabled — turning the flag off removes the routes
 // entirely, which is the rollback for the whole module.

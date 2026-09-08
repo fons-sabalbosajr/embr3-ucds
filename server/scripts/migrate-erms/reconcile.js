@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const { MongoClient } = require('mongodb');
 const { readRows, sourcePath } = require('./lib/source');
-const { buildIndex, findMatch } = require('./lib/match');
+const { buildIndex, findMatch } = require('../../modules/ucds/services/permitMatch');
 
 const dbFlag = process.argv.find((a) => a.startsWith('--db='));
 const DB_NAME = dbFlag ? dbFlag.slice('--db='.length) : 'universe-db-staging';

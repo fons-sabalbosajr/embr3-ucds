@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import source from '../scripts/migrate-erms/lib/source.js';
 import transform from '../scripts/migrate-erms/lib/transform.js';
-import matcher from '../scripts/migrate-erms/lib/match.js';
+import matcher from '../modules/ucds/services/permitMatch.js';
 
 const { clean, parseDate, parseNumber, correctMonth } = source;
 const { permitTypeOf, splitSerial, sharePathOf, transformRow } = transform;

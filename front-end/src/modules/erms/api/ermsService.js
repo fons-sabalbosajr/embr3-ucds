@@ -18,6 +18,16 @@ export const createRecord = async (payload) => (await client.post("/records", pa
 export const updateRecord = async ({ serialNo, ...changes }) =>
   (await client.patch(`/records/${encodeURIComponent(serialNo)}`, changes)).data.record;
 
+// --- the UCDS register ------------------------------------------------------
+// Read-only. ERMS never writes to the establishment register: a records clerk
+// who finds a firm missing raises it with Planning.
+
+export const searchRegister = async (q) =>
+  (await client.get("/register/search", { params: { q } })).data.establishments;
+
+export const resolvePermit = async (number) =>
+  (await client.get("/register/resolve", { params: { number } })).data.match;
+
 // --- tracking ---------------------------------------------------------------
 
 export const addTracking = async ({ serialNo, ...entry }) =>

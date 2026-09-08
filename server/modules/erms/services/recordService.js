@@ -55,8 +55,15 @@ const LIST_PROJECTION = {
  * A caller's province choice is intersected with the province scope their
  * account allows, so a filter can narrow the result but never widen it.
  */
-function buildFilter({ search, permitType, province, linked, flagged, uploadedBy }, allowedProvinces) {
+function buildFilter(
+  { search, permitType, province, linked, flagged, uploadedBy, linkedTo },
+  allowedProvinces
+) {
   const filter = {};
+
+  // Records filed against one establishment. Used by the panel on the UCDS
+  // establishment page, which links here rather than duplicating the list.
+  if (linkedTo) filter['ucdsRef.sortKey'] = linkedTo;
 
   if (search) {
     // Text index covers projectTitle + proponentName; serial and permit number
@@ -227,6 +234,37 @@ async function nextSerialNo() {
   return `FSN-${String(seq).padStart(7, '0')}`;
 }
 
+/**
+ * Resolve a permit number to an establishment and build the stored reference.
+ *
+ * Reads UCDS through its exported service, never by querying ucds-data. The
+ * snapshot is the point: if the register is later edited or the establishment
+ * removed, the record still renders with a stale label rather than breaking.
+ *
+ * A failure here is not a failure of the write — a records clerk filing a
+ * document should not be blocked because the register is momentarily
+ * unavailable, so the record is saved unlinked and can be relinked later.
+ */
+async function resolveUcdsRef(permitNumber, provinceKey) {
+  if (!permitNumber) return null;
+  try {
+    const ucds = require('../../ucds');
+    const hit = await ucds.read.resolveByPermitNumber(permitNumber);
+    if (!hit) return null;
+    return {
+      sortKey: hit.sortKey,
+      nameSnapshot: hit.name,
+      provinceKey: provinceKey || null,
+      matchedOn: hit.matchedOn,
+      capturedAt: new Date(),
+      unmatched: false,
+    };
+  } catch (error) {
+    console.error('Could not resolve the register link:', error.message);
+    return null;
+  }
+}
+
 function assertWritable(province, writableProvinces) {
   if (!Array.isArray(writableProvinces)) return; // unrestricted
   if (!province || !writableProvinces.includes(province)) {
@@ -301,7 +339,7 @@ async function createRecord(input, { username, writableProvinces }) {
       uploadedBy: username,
     },
 
-    ucdsRef: null,
+    ucdsRef: await resolveUcdsRef(input.permit.number, input.location.province),
 
     // Provenance. A record created here has no legacy id; the field exists so
     // migrated and native records have the same shape.
@@ -390,6 +428,15 @@ async function updateRecord(serialNo, changes, { username, writableProvinces }) 
     }
   }
 
+  // A changed permit number points at a different establishment, so the link
+  // is recomputed rather than left stale.
+  if (changes.permit?.number !== undefined && changes.permit.number !== before.permit?.number) {
+    set.ucdsRef = await resolveUcdsRef(
+      changes.permit.number,
+      set.location?.province || before.location?.province
+    );
+  }
+
   // A record whose flagged values have all been resolved is clean again.
   if (set.permit && !set.permit.dateApprovedRaw && !set.permit.dateAmendedRaw) {
     const remaining = (before.dataQuality?.issues || []).filter(
@@ -440,6 +487,7 @@ module.exports = {
   nextSerialNo,
   createRecord,
   updateRecord,
+  resolveUcdsRef,
   // cross-domain read API
   countForFirm,
   listForFirm,

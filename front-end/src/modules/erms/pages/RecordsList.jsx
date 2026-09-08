@@ -12,7 +12,7 @@ import {
   Typography,
 } from "antd";
 import { LinkOutlined, PlusOutlined, WarningOutlined } from "@ant-design/icons";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   PERMIT_TYPE_COLOR,
@@ -52,7 +52,12 @@ const SORT_FIELD = {
 };
 
 const RecordsList = () => {
-  const [query, setQuery] = useState(DEFAULT_QUERY);
+  // The establishment panel on the UCDS side links here with ?linkedTo=<key>,
+  // so the list opens already filtered to that establishment's records.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedTo = searchParams.get("linkedTo") || undefined;
+
+  const [query, setQuery] = useState({ ...DEFAULT_QUERY, linkedTo });
   const [searchDraft, setSearchDraft] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -252,12 +257,31 @@ const RecordsList = () => {
           <Button
             onClick={() => {
               setSearchDraft("");
+              setSearchParams({});
               setQuery(DEFAULT_QUERY);
             }}
           >
             Reset
           </Button>
         </Space>
+
+        {query.linkedTo && (
+          <Alert
+            type="info"
+            showIcon
+            message={
+              <Space size={8}>
+                <span>Showing records filed against establishment</span>
+                <Tag color="green">{query.linkedTo}</Tag>
+              </Space>
+            }
+            closable
+            onClose={() => {
+              setSearchParams({});
+              setQuery((q) => ({ ...q, linkedTo: undefined, page: 1 }));
+            }}
+          />
+        )}
 
         {error && (
           <Alert

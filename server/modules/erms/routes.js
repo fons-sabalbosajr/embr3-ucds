@@ -113,6 +113,7 @@ const listQuery = z.object({
   province: z.string().trim().max(40).optional(),
   uploadedBy: z.string().trim().max(120).optional(),
   linked: z.enum(['linked', 'unlinked']).optional(),
+  linkedTo: z.string().trim().max(60).optional(),
   flagged: z.coerce.boolean().optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),

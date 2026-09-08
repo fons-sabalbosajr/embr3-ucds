@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { App as AntdApp, DatePicker, Form, Input, Modal, Select, Typography } from "antd";
+import RegisterLookup from "./RegisterLookup";
 import dayjs from "dayjs";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,9 +26,12 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const isEdit = Boolean(record);
+  // Watched so the register lookup can react as the number is typed.
+  const [permitNumber, setPermitNumber] = useState("");
 
   useEffect(() => {
     if (!open) return;
+    setPermitNumber(record?.permit?.number || "");
     form.setFieldsValue(
       record
         ? {
@@ -151,9 +155,14 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
           name="permitNumber"
           label="Permit number"
           extra="Used to link this record to an establishment in the UCDS register."
+          style={{ marginBottom: 8 }}
         >
-          <Input placeholder="ECC-OL-R03-2019-0573" />
+          <Input
+            placeholder="ECC-OL-R03-2019-0573"
+            onChange={(e) => setPermitNumber(e.target.value)}
+          />
         </Form.Item>
+        <RegisterLookup permitNumber={permitNumber} />
         <Form.Item name="processSource" label="Process">
           <Select
             allowClear
