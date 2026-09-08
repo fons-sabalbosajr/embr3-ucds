@@ -11,7 +11,11 @@
     "start": "node server.js",
     "dev": "nodemon --watch ./ server.js",
     "test:watch": "vitest",
-    "test:unit": "vitest run tests/authorization.test.js tests/provinces.test.js tests/nas-path.test.js"
+    "test:unit": "vitest run tests/authorization.test.js tests/provinces.test.js tests/nas-path.test.js",
+    "audit:routes": "node scripts/audit-routes.js",
+    "audit:routes:unprotected": "node scripts/audit-routes.js --unprotected",
+    "walkthrough": "node scripts/walkthrough.js",
+    "reconcile": "node scripts/migrate-erms/reconcile.js --db=universe-db"
   },
   "keywords": [],
   "author": "",

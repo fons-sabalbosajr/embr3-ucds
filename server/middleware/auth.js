@@ -63,7 +63,11 @@ function requireYearManager(req, res, next) {
  * was ever shown to them.
  */
 function requireDomain(domain) {
-  return (req, res, next) => {
+  // Named, not anonymous: the route audit identifies guards by function name,
+  // and an anonymous closure is invisible to it — a route would look
+  // session-only when it is in fact domain-gated. It also makes stack traces
+  // say which middleware rejected a request.
+  return function requireDomain(req, res, next) {
     const user = principalOf(req);
     if (!user) return res.status(401).json({ message: 'User not authenticated' });
     if (!hasDomain(user, domain)) {
@@ -78,7 +82,7 @@ function requireDomain(domain) {
 
 function requireRole(...allowed) {
   const permitted = allowed.map((r) => String(r).toLowerCase());
-  return (req, res, next) => {
+  return function requireRole(req, res, next) {
     const user = principalOf(req);
     if (!user) return res.status(401).json({ message: 'User not authenticated' });
     if (!permitted.includes(roleOf(user))) {

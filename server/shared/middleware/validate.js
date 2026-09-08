@@ -16,7 +16,8 @@ const { z } = require('zod');
  * @param {'body'|'query'|'params'} source
  */
 function validate(schema, source = 'body') {
-  return (req, res, next) => {
+  // Named so the route audit can see it; see middleware/auth.js requireDomain.
+  return function validate(req, res, next) {
     const result = schema.safeParse(req[source]);
 
     if (!result.success) {

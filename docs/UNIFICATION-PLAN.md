@@ -668,14 +668,77 @@ Verified against 8 migrated records: **8/8 agreement** on both establishment and
 **Gate:** ✅ integration live; match rate measured at 63.5% and the unmatched set exported for Planning.
 **Rollback:** revert the commit. `ERMS_MODULE_ENABLED=false` also disables the panel, which then renders nothing.
 
-### Phase 9 — Validation
+### Phase 9 — Validation 🟡 automated parts done; human pass outstanding
 
-- [ ] Functional walkthrough per role
-- [ ] Data reconciliation re-run against production
-- [ ] **Security test: every ERMS endpoint called as a Planning user must return 403**
-- [ ] UI review, both themes, real devices
+- [x] Security sweep over **every** route, not just ERMS
+- [x] Data reconciliation re-run against production — **10/10 gates**
+- [x] Per-role functional walkthrough (`npm run walkthrough`)
+- [ ] UI review, both themes, real devices — **requires a person**
+- [ ] Functional walkthrough of the screens — **requires a person**
 
-**Gate:** zero endpoints answer without a domain check.
+#### 🔴 The sweep found 20 unprotected routes
+
+Rather than hand-checking ERMS endpoints, `shared/routeInventory.js` walks the **live Express router** and describes every route with its guards. Reading route files by hand is exactly what let these sit open:
+
+| Routes | Was | Exposure |
+|---|---|---|
+| `/api/dev/*` — **14 endpoints** | no auth middleware at all | `GET /api/dev/activity-logs` returned the **audit trail** — usernames, paths, request bodies — to anonymous callers. `GET /api/dev/introspect/ucds-data/fields` returned **sampled register values including firm names and addresses**. `DELETE /api/dev/activity-logs/:id` let anyone **remove audit entries**; `POST/DELETE /api/dev/pdf-forms` let anyone upload or delete form templates. |
+| `/generate-icir/:id` and 3 more | no auth | Report generation for any guessable record id. |
+| `GET /api/files/:filename` | no auth | Any GridFS file by name. |
+
+All confirmed by calling them against a running server — they answered **200**. Now `401`. `/healthz` and `/readyz` are on an explicit public allowlist, which a new public route must be added to consciously.
+
+#### 🐛 The inspector found a flaw in itself
+
+The first sweep reported ERMS routes as session-only. `requireDomain()` returns an **anonymous** closure, so it was invisible to a name-based inspector — a domain-gated route looked unguarded. Naming the factory-produced middleware (`requireDomain`, `requireRole`, `validate`) fixed the audit and made stack traces name the middleware that rejected a request.
+
+Worth noting: the sweep's *first* result was wrong in the safe direction — it under-reported protection. A name-based inspector could equally miss a *missing* guard, which is why the test also calls every route rather than only reading the stack.
+
+#### The `/api/erms/*` NAS aliases are gone
+
+Phase 1 kept them for one release. The sweep found they answered a **Planning user** — they sit under the ERMS namespace but are NAS routes, so they bypassed the domain boundary. Removed; the front end has called `/api/nas/*` since Phase 1, and nothing referenced them.
+
+#### Route inventory — 174 routes
+
+| Protection | Count |
+|---|---:|
+| domain-gated | 108 |
+| session only | 40 |
+| role-gated (developer / year-manager) | 17 |
+| public by declaration | 9 |
+| **unprotected** | **0** |
+
+Full listing: `reports/route-audit.txt` (`npm run audit:routes`).
+
+#### Per-role walkthrough
+
+| | Planning | Records | Read-only | Admin |
+|---|---|---|---|---|
+| establishment register | allowed | **refused** | allowed | allowed |
+| healthcare data | allowed | **refused** | allowed | allowed |
+| ERMS dashboard / records / boxes / reports | **refused** | allowed | **refused** | allowed |
+| search register from ERMS | **refused** | allowed | **refused** | allowed |
+| shared org units (read) | allowed | allowed | allowed | allowed |
+| create an org unit | refused | refused | refused | **allowed** |
+| developer settings | refused | refused | refused | refused |
+
+An Administrator is refused Developer Settings **by design** — the plan's role table gives Administrators user, role, audit and year management, and explicitly no developer functions.
+
+#### Tooling added
+
+| Command | Does |
+|---|---|
+| `npm run audit:routes` | Full route/guard listing; exits non-zero on an unprotected route |
+| `npm run audit:routes:unprotected` | Just the problems — suitable for CI |
+| `npm run walkthrough` | Per-role capability matrix against a running server |
+| `npm run reconcile` | Re-runs the 10 data gates against production |
+
+`tests/route-protection.test.js` makes the sweep permanent: it calls **every** route unauthenticated, every ERMS route as a Planning user, every UCDS domain route as a Records user, and every developer route as a Planning user. A route added with its guard missing fails the suite.
+
+**Tests:** 7 new (185 total).
+
+**Gate:** ✅ zero endpoints answer without a domain check — now enforced, not asserted.
+⚠️ The human passes remain outstanding: screens rendering, both themes, and a real filing end to end.
 
 ### Phase 10 — Parallel operation & cutover
 
