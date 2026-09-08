@@ -15,7 +15,8 @@
     "audit:routes": "node scripts/audit-routes.js",
     "audit:routes:unprotected": "node scripts/audit-routes.js --unprotected",
     "walkthrough": "node scripts/walkthrough.js",
-    "reconcile": "node scripts/migrate-erms/reconcile.js --db=universe-db"
+    "reconcile": "node scripts/migrate-erms/reconcile.js --db=universe-db",
+    "divergence": "node scripts/migrate-erms/divergence.js"
   },
   "keywords": [],
   "author": "",

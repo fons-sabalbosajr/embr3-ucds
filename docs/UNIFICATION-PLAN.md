@@ -740,12 +740,41 @@ An Administrator is refused Developer Settings **by design** — the plan's role
 **Gate:** ✅ zero endpoints answer without a domain check — now enforced, not asserted.
 ⚠️ The human passes remain outstanding: screens rendering, both themes, and a real filing end to end.
 
-### Phase 10 — Parallel operation & cutover
+### Phase 10 — Parallel operation & cutover 🟡 tooling ready; the phase is a procedure
 
-- [ ] Desktop ERMS set to read-only
+**Full runbook: [`CUTOVER.md`](CUTOVER.md).**
+
+- [x] Divergence checker built and proven to detect drift
+- [ ] Desktop ERMS set to read-only — **the irreversible step**
 - [ ] 2–4 weeks parallel with daily delta checks
 - [ ] Remove feature flag
 - [ ] User training
+
+**`npm run divergence -- --file=<export>.csv`** compares a fresh desktop export
+against `erms-records`, reusing the Phase 6 transform so the two sides are
+compared like for like. Three findings:
+
+| Finding | Means |
+|---|---|
+| **web-only** | created in the web module — expected |
+| **source-only** | in one side only. The export is stale, or the desktop app was written to after the freeze. |
+| **conflicting** | same serial, different values. Both systems were edited; a person decides which is right. |
+
+Exits non-zero on anything but web-only, so it can run unattended. Baseline
+against the current export: **no divergence, 18,067 = 18,067**.
+
+A clean result proves nothing by itself — a checker that always said "clean"
+would look identical. The classification is extracted into `lib/compare.js` and
+**12 tests show it detecting** each kind of drift: a record missing from either
+side, the same record edited differently, dates compared by value rather than
+object identity, and the web-owned fields (`ucdsRef`, `archive`, `dataQuality`,
+timestamps) correctly ignored so they do not flag every record.
+
+**This phase cannot start yet**, and not for a technical reason:
+`ERMS_MODULE_ENABLED=false`, so there is no ERMS running to be parallel with.
+The order that unblocks it is in `CUTOVER.md` — the UCDS click-through, then
+Records personnel using the module while the desktop app still works, and only
+then the freeze.
 
 ### Phase 11 — Legacy retirement
 
