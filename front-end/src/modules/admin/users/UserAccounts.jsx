@@ -136,7 +136,12 @@ const UserAccounts = ({ theme = "dark" }) => {
 
   const fetchSignUpUsers = async () => {
     try {
-      const response = await axios.get(" ${API_BASE_URL}/api/sign-up", {
+      // Double quotes rather than backticks: this asked for the literal path
+      // " ${API_BASE_URL}/api/sign-up" against the SPA's own origin, which the
+      // history fallback answers with index.html and a 200. response.data was
+      // therefore an HTML string, and <Table dataSource> threw
+      // "rawData.some is not a function", taking the whole page down.
+      const response = await axios.get(`${API_BASE_URL}/api/sign-up`, {
         params: {
           page: pagination.current,
           pageSize: pagination.pageSize,
@@ -151,9 +156,8 @@ const UserAccounts = ({ theme = "dark" }) => {
 
   const fetchLoginStatus = async () => {
     try {
-      const response = await axios.get(
-        " ${API_BASE_URL}/api/online_users"
-      );
+      // Same mistake as fetchSignUpUsers above.
+      const response = await axios.get(`${API_BASE_URL}/api/online_users`);
       const allStatuses = response.data.onlineUsers;
 
       // Extract the latest status for each user based on the name

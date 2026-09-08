@@ -16,7 +16,8 @@
     "audit:routes:unprotected": "node scripts/audit-routes.js --unprotected",
     "walkthrough": "node scripts/walkthrough.js",
     "reconcile": "node scripts/migrate-erms/reconcile.js --db=universe-db",
-    "divergence": "node scripts/migrate-erms/divergence.js"
+    "divergence": "node scripts/migrate-erms/divergence.js",
+    "smoke": "node scripts/smoke.mjs"
   },
   "keywords": [],
   "author": "",
@@ -46,6 +47,7 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "nodemon": "^3.1.14",
+    "playwright": "^1.63.0",
     "supertest": "^7.2.2",
     "vitest": "^5.0.0"
   },

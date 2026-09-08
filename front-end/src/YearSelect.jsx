@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Empty, Result, Spin } from "antd";
 import { DatabaseOutlined, LogoutOutlined } from "@ant-design/icons";
@@ -14,6 +14,18 @@ const YearSelect = () => {
   const [entering, setEntering] = useState(null);
   const [failed, setFailed] = useState(null);
   const navigate = useNavigate();
+
+  // YearProvider wraps the router, so it mounts once and fetches the list
+  // immediately — which on the login page is before there is a session, and
+  // answers 401 with an empty list. Login then navigates here client-side, so
+  // nothing remounts and nothing refetches, and a user signing in from a fresh
+  // browser is told they have no year containers at all.
+  //
+  // The picker is what needs current data, so it asks for it whenever it is
+  // shown rather than trusting whatever the provider happened to load first.
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const handleSelect = async (year) => {
     setEntering(year);
