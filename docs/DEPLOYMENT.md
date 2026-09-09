@@ -79,7 +79,13 @@ cd server && npm run walkthrough                 # per-role capability matrix
 ```bash
 cd front-end && npx vite build && npx vite preview --host --port 5173
 cd server     && npm run smoke -- --base=http://10.14.76.250:5173
+cd server     && npm run smoke -- --base=http://10.14.76.250:5173 --themes
 ```
+
+`--themes` adds a second pass over four representative screens in **both
+themes** at desktop, tablet and phone widths, failing on anything that overflows
+without a way to scroll to it. It is slower, so it is a flag rather than the
+default — run it after any change to layout or CSS.
 
 `smoke` drives a real browser through every screen as each role and writes
 screenshots to `reports/screenshots/`. **Run it against a production build, not
