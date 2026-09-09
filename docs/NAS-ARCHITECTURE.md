@@ -166,21 +166,21 @@ the record.
    and are read by the connection test; the SMB session itself is established
    by Windows.
 
-### The read-only account — not yet provisioned
+### The account: the existing NAS credentials, unchanged
 
-Nothing in E-Universe writes to the share: it opens files for reading and lists
-the root. The account it uses should therefore be **read-only**, so that a flaw
-anywhere in this path cannot alter or delete a scanned record.
+**E-Universe does not require a new NAS account.** The existing credentials —
+the ones a Records user already types when Windows asks them to map the drive —
+are what the server uses, stored once with `cmdkey` instead of once per
+workstation.
 
-**This has to be created on the Synology** — it cannot be done from this
-codebase. On the NAS:
+This corrects an earlier note here that treated provisioning a dedicated
+read-only Synology account as a prerequisite. It never was one. The desktop
+ERMS did not need a separate account and neither does this: the change is
+*where* the credential lives, not *which* credential it is.
 
-1. Create a user, e.g. `euniverse_ro`.
-2. Grant it **Read only** on `IDMS_Records_Database`, and no other share.
-3. Deny it DSM sign-in; it needs SMB only.
-4. Put it in `NAS_USERNAME` / `NAS_PASSWORD`, store the credential with
-   `cmdkey`, restart the server, and confirm with **Test connection** on NAS
-   Settings.
-
-Until then the deployment uses the existing account, which has more rights than
-this needs.
+A read-only account would still be a sensible hardening step, because nothing
+in E-Universe writes to the share — it opens files and lists the root. But that
+is **NAS administration, not application work**, and it is not a blocker for
+anything in this repository. If someone does provision one later, the only
+change is `NAS_USERNAME` / `NAS_PASSWORD` and a new `cmdkey` entry; no code
+moves.

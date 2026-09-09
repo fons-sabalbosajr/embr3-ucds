@@ -49,8 +49,8 @@ const MODULES = [
   },
   {
     icon: <CloudServerOutlined />,
-    title: "Records & ERMS",
-    body: "Archive documents and configure storage so records stay traceable to their source firm.",
+    title: "Records & Documents",
+    body: "File, track and open scanned records, each traceable to the firm it belongs to.",
   },
 ];
 

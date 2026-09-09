@@ -972,7 +972,11 @@ const SideMenu = ({ theme, currentUser }) => {
     hasErms && {
       key: "erms",
       icon: <FileProtectOutlined />,
-      label: <div className="menu-label-wrapper main">Records (ERMS)</div>,
+      // "Records", not "Records (ERMS)". ERMS is the system this replaced, not
+      // a section of E-Universe — naming it in the sidebar tells a clerk they
+      // are in a second application bolted onto the first. The route keys and
+      // API namespace stay `erms`, which nobody outside the code sees.
+      label: <div className="menu-label-wrapper main">Records</div>,
       // Only the screens that exist are listed. Documents, tracking, archiving
       // and reports arrive later; linking to them now would just lead to a
       // "not built yet" page.

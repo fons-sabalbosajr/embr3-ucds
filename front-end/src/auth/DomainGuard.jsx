@@ -17,6 +17,20 @@ import Forbidden from "../shared/components/Forbidden";
  *                            …
  *                          </Route>
  */
+/**
+ * What a domain is called on screen.
+ *
+ * The codes are internal — they name API namespaces and route groups. Showing
+ * "UCDS" or "ERMS" to a user contradicts the point of the unification: they
+ * are in one application, and a refusal should name the part of it they cannot
+ * reach, not the system it used to be.
+ */
+const DOMAIN_LABELS = {
+  ucds: "Planning",
+  erms: "Records",
+  admin: "Administration",
+};
+
 const DomainGuard = ({ domain, user, children }) => {
   const domains = user?.domains;
 
@@ -25,7 +39,7 @@ const DomainGuard = ({ domain, user, children }) => {
   if (!Array.isArray(domains)) return null;
 
   if (!domains.includes(domain)) {
-    return <Forbidden module={domain.toUpperCase()} />;
+    return <Forbidden module={DOMAIN_LABELS[domain] || domain} />;
   }
 
   // No children means it is being used as a layout route, so the matched child

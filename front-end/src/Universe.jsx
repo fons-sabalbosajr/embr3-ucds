@@ -815,7 +815,7 @@ const Universe = () => {
                     element={
                       <DomainGuard domain="erms" user={currentUser}>
                         <Forbidden
-                          module="ERMS"
+                          module="Records"
                           detail="This part of the Records module is not built yet."
                         />
                       </DomainGuard>

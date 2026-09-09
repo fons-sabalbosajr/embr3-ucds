@@ -195,7 +195,7 @@ const RecordDetail = () => {
         </Descriptions>
       </Card>
 
-      <Card title="Establishment in the UCDS register" size="small">
+      <Card title="Establishment in the Universe register" size="small">
         {ucdsRef?.sortKey ? (
           <Descriptions column={{ xs: 1, md: 2 }} size="small">
             <Descriptions.Item label="Register key">

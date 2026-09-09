@@ -33,10 +33,10 @@ Then the list below. None of them is a code change.
       `reports/erms-unmatched-permits.csv`.
 - [x] **Document access.** ✅ Decided and built — the server reaches the share
       over SMB. See "Documents" below and `NAS-ARCHITECTURE.md`.
-- [ ] **The read-only NAS account exists on the Synology.** Provisioned on the
-      appliance, not from this repo — `NAS-ARCHITECTURE.md` has the steps.
-      Until it does, the deployment uses an account with more rights than it
-      needs.
+- [x] **NAS credentials stored on the server.** The existing account, stored
+      once with `cmdkey`, replacing a per-workstation drive mapping. **No new
+      NAS account is required** — a dedicated read-only one is optional
+      hardening for whoever administers the Synology, not a gate on E-Universe.
 - [ ] **`nas-coverage` still reports ~98%.** Run it the morning of the freeze.
       A drop means the server has lost the share, and a parallel period where
       nobody can open a document proves nothing.

@@ -154,7 +154,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
         <Form.Item
           name="permitNumber"
           label="Permit number"
-          extra="Used to link this record to an establishment in the UCDS register."
+          extra="Used to link this record to an establishment in the Universe register."
           style={{ marginBottom: 8 }}
         >
           <Input

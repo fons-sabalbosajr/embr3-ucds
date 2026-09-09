@@ -171,7 +171,7 @@ function checkBaseline() {
 const HUMAN_GATES = [
   'A Records clerk has filed a record end to end, while the desktop app still works',
   'Planning personnel have clicked through the UCDS screens',
-  'The read-only NAS account exists on the Synology and is in .env',
+  'The NAS credential is stored on the server account the API runs as (cmdkey)',
   'The server has a stable address (static IP or DNS name), not a DHCP lease',
   'Someone has agreed to run the daily check for the whole parallel period',
 ];

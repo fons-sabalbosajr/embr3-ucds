@@ -116,7 +116,7 @@ const ErmsDashboard = () => {
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Tooltip title="Records whose permit number resolves to an establishment in the UCDS register">
+            <Tooltip title="Records whose permit number resolves to an establishment in the Universe register">
               <Statistic
                 title="Linked to the register"
                 value={data.linked}

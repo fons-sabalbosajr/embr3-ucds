@@ -831,7 +831,7 @@ smoke test proves a screen renders; it cannot tell you the workflow makes sense.
 - [x] Daily check reduced to one command, keeping a dated trail — `npm run daily-check`
 - [x] Readiness gate — `npm run cutover:check`, one command, exits non-zero
 - [x] Training material written — [`RECORDS-USER-GUIDE.md`](RECORDS-USER-GUIDE.md)
-- [ ] Read-only NAS account provisioned on the Synology — **on the appliance, not in this repo**
+- [x] NAS credentials on the server — the **existing** account, stored once with `cmdkey`. A dedicated read-only account was noted here as a prerequisite; it is not one, and the desktop ERMS never needed one either. Optional Synology hardening, not application work.
 - [ ] Desktop ERMS set to read-only — **the irreversible step**
 - [ ] 2–4 weeks parallel with daily delta checks
 - [ ] Remove feature flag
