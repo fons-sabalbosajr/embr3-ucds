@@ -737,8 +737,38 @@ An Administrator is refused Developer Settings **by design** — the plan's role
 
 **Tests:** 7 new (185 total).
 
-**Gate:** ✅ zero endpoints answer without a domain check — now enforced, not asserted.
-⚠️ The human passes remain outstanding: screens rendering, both themes, and a real filing end to end.
+#### UI validation — `npm run smoke`
+
+The gap outstanding since Phase 5a is now largely closed by machine.
+`scripts/smoke.mjs` drives a real browser: it signs in as a throwaway account
+per role, visits every screen that role should reach, and fails on a blank page,
+an error boundary or an uncaught exception. Screenshots land in
+`reports/screenshots/`.
+
+**26/26 screens render.** The Phase 5a restructure did not break them.
+
+Run it against a **production build** (`vite build` + `vite preview`), not the
+dev server — two of the four bugs below exist only in a built bundle.
+
+It found four real bugs, none introduced by this project:
+
+| Bug | Effect |
+|---|---|
+| `YearProvider` fetches once at mount, on the login page, and 401s | First sign-in from a fresh browser showed **"No year containers assigned"**. Login navigates client-side, so nothing refetched. Only looked fine in development because a hard refresh remounts the provider. |
+| `axios.get(" ${API_BASE_URL}/api/sign-up")` — double quotes, not backticks | **User Accounts crashed outright** with `rawData.some is not a function`: the literal path hit the SPA's history fallback, so `dataSource` got an HTML string. |
+| Bare `fetch()` without `credentials: "include"` | `axios.defaults.withCredentials` does not apply to `fetch`, which defaults to `same-origin` — and the SPA and API are different origins. The header showed **"Error: User not found"** on every screen, for every user. |
+| PurgeCSS extractor did not treat `$`/`{` as separators | `` `logo-icon-img${…}` `` extracted as one token, so `.logo-icon-img` was **deleted from the production bundle**. The logo rendered at intrinsic size over the menu. Production-only; PurgeCSS does not run in development. |
+
+Also closed: the UCDS routes had no client-side `DomainGuard`, so a Records user
+typing a UCDS URL saw a shell with failing requests instead of a refusal. They
+are now wrapped as three layout-route groups, and `/universe` redirects by
+domain so a Records clerk lands on their own dashboard.
+
+**Gate:** ✅ zero endpoints answer without a domain check — enforced, not asserted.
+✅ every screen renders for the roles that should reach it.
+⚠️ Still outstanding, and still human: **both themes on real devices**, and **a
+Records clerk completing a real filing end to end**. The smoke test proves a
+screen renders; it cannot tell you the workflow makes sense.
 
 ### Phase 10 — Parallel operation & cutover 🟡 tooling ready; the phase is a procedure
 

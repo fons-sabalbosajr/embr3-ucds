@@ -71,7 +71,20 @@ curl http://10.14.76.250:8081/readyz             # {"db":"ok"}
 curl -o /dev/null -w "%{http_code}\n" \
      http://10.14.76.250:8081/api/ucds/count     # 401 — auth is live
 cd server && npm run audit:routes                # 0 unprotected routes
+cd server && npm run walkthrough                 # per-role capability matrix
 ```
+
+### Check the screens too
+
+```bash
+cd front-end && npx vite build && npx vite preview --host --port 5173
+cd server     && npm run smoke -- --base=http://10.14.76.250:5173
+```
+
+`smoke` drives a real browser through every screen as each role and writes
+screenshots to `reports/screenshots/`. **Run it against a production build, not
+the dev server** — PurgeCSS and minification only apply to a build, and two of
+the bugs this has caught existed solely there.
 
 Startup should print **no warnings**. If it does, read them — each one describes
 a configuration that will fail in a way that is hard to diagnose from the
