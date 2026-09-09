@@ -30,20 +30,10 @@ import TRC from "./modules/ucds/trc/TRCPermits";
 import MBU from "./modules/ucds/mbu/MBU";
 import Admin from "./modules/admin/Admin";
 import Accounts from "./modules/admin/users/UserAccounts";
-import Extract from "./modules/ucds/extract/ExtractData";
 import Report from "./modules/admin/Admin";
 import Posting from "./modules/admin/posting/Posting";
-import ESWM from "./modules/ucds/eswm/ESWM";
-import SWMPlan from "./modules/ucds/eswm/SWMPlan/SWMPlan"; // Added
-import MRF from "./modules/ucds/eswm/MRF/MRF"; // Added
-import SLF from "./modules/ucds/eswm/SLF/SLF"; // Added
-import ODS from "./modules/ucds/eswm/ODS/ODS"; // Added
-import Equipments from "./modules/ucds/eswm/Equipments/Equipments"; // Added
 import ActivityLog from "./components/ActivityLog/ActivityLog";
 import Duplicates from "./modules/ucds/duplicates/DuplicatesData";
-import Monitoring from "./modules/ucds/planning/monitoring/Monitoring";
-import MonitoringSurvey from "./modules/ucds/planning/survey/monitoring_survey";
-import Validations from "./modules/ucds/planning/validations/Validations";
 import RegisterConfig from "./modules/ucds/register-config/RegisterConfig";
 import RegisterActivity from "./modules/ucds/register-config/RegisterActivity";
 import FieldManagement from "./modules/admin/developer/FieldManagement";
@@ -60,16 +50,8 @@ import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import moment from "moment";
 
-// ERMS Components
-import NasDashboard from "./shared/nas-browser/dashboard/NasDashboard";
-import NasBrowser from "./shared/nas-browser/browser/NasBrowser";
-import NasStorageConfig from "./shared/nas-browser/storage/NasStorageConfig";
-import NasSettings from "./shared/nas-browser/settings/NasSettings";
+import StorageConfig from "./modules/admin/developer/StorageConfig";
 
-// Legal Services Unit Components
-import LegalDashboard from "./modules/ucds/legal/legal-dashboard/LegalDashboard";
-import LegalDocket from "./modules/ucds/legal/docket/LegalDocket";
-import EnviLaws from "./modules/ucds/legal/envi-laws/EnviLaws";
 import { ROUTES } from "./config/routes";
 import DomainGuard from "./auth/DomainGuard";
 import RoleGuard from "./auth/RoleGuard";
@@ -604,32 +586,6 @@ const Universe = () => {
                   <Route path="tsd" element={<TSD theme={theme} />} />
                   <Route path="trc" element={<TRC theme={theme} />} />
                   <Route path="mbu" element={<MBU theme={theme} />} />
-                  {/* ESWM Database Parent Route - can render a default page or redirect */}
-                  <Route
-                    path="eswm-database"
-                    element={<Navigate to="swm-plan" replace />}
-                  />
-                  <Route
-                    path="eswm-database/swm-plan"
-                    element={<SWMPlan theme={theme} />}
-                  />
-                  <Route
-                    path="eswm-database/mrf"
-                    element={<MRF theme={theme} />}
-                  />
-                  <Route
-                    path="eswm-database/slf"
-                    element={<SLF theme={theme} />}
-                  />
-                  <Route
-                    path="eswm-database/ods"
-                    element={<ODS theme={theme} />}
-                  />
-                  <Route
-                    path="eswm-database/equipments"
-                    element={<Equipments theme={theme} />}
-                  />
-                  <Route path="extract" element={<Extract theme={theme} />} />
                   </Route>
 
                   {/* Platform administration, consolidated under /admin.
@@ -667,20 +623,8 @@ const Universe = () => {
                     path="activity-log"
                     element={<Navigate to="/universe/admin/audit" replace />}
                   />
-                  {/* Planning unit and register configuration — UCDS. */}
+                  {/* Register configuration — UCDS. */}
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
-                  <Route
-                    path="planning-unit/monitoring"
-                    element={<Monitoring theme={theme} />}
-                  />
-                  <Route
-                    path="planning-unit/survey-activities" // Path updated to match SideMenu
-                    element={<MonitoringSurvey theme={theme} />}
-                  />
-                  <Route
-                    path="planning-unit/validations"
-                    element={<Validations theme={theme} />}
-                  />
                   <Route
                     path="register/config"
                     element={<RegisterConfig theme={theme} />}
@@ -822,71 +766,48 @@ const Universe = () => {
                     }
                   />
 
-                  {/* NAS storage routes (shared infrastructure).
-                      Renamed from erms/* so the ERMS records module can own
-                      that namespace — see docs/UNIFICATION-PLAN.md, Phase 1.
+                  {/* The records share, now a Developer Settings screen.
+                      It had four routes — a dashboard, a browser, a storage
+                      config and a settings page — that between them showed one
+                      configuration. One setting, one route.
 
-                      Developer-only since Phase 7. These sat outside every
-                      guard, so any signed-in user — Planning, Viewer, anyone —
-                      reached the share configuration screens. The server now
-                      refuses them too; this stops rendering a page that would
-                      only fail. */}
+                      Developer-only. These sat outside every guard until Phase
+                      7, so any signed-in user reached the share configuration;
+                      the server refuses them too, and this stops rendering a
+                      page that would only fail. */}
                   <Route element={<RoleGuard roles={["developer"]} user={currentUser} />}>
                     <Route
-                      path="nas/dashboard"
-                      element={<NasDashboard theme={theme} />}
-                    />
-                    <Route
-                      path="nas/browser"
-                      element={<NasBrowser theme={theme} />}
-                    />
-                    <Route
-                      path="nas/storage-config"
-                      element={<NasStorageConfig theme={theme} />}
-                    />
-                    <Route
-                      path="nas/settings"
-                      element={<NasSettings theme={theme} />}
+                      path="admin/developer/storage-config"
+                      element={<StorageConfig theme={theme} />}
                     />
                   </Route>
-                  {/* Legacy paths — kept so existing bookmarks keep working */}
-                  <Route
-                    path="erms/dashboard"
-                    element={<Navigate to="/universe/nas/dashboard" replace />}
-                  />
-                  <Route
-                    path="erms/universe"
-                    element={<Navigate to="/universe/nas/browser" replace />}
-                  />
-                  <Route
-                    path="erms/storage-config"
-                    element={<Navigate to="/universe/nas/storage-config" replace />}
-                  />
-                  <Route
-                    path="erms/settings"
-                    element={<Navigate to="/universe/nas/settings" replace />}
-                  />
 
-                  {/* Legal Services Unit and the remaining UCDS screens. */}
+                  {/* Old locations. Kept as redirects rather than deleted: the
+                      standalone NAS section was reachable for several releases,
+                      so these are in browser history and bookmarks. They point
+                      at the canonical Developer Settings route, so there is one
+                      page, not several URLs serving the same thing. */}
+                  {[
+                    "nas",
+                    "nas/dashboard",
+                    "nas/browser",
+                    "nas/storage-config",
+                    "nas/settings",
+                    "erms/storage-config",
+                    "erms/settings",
+                    "erms/universe",
+                  ].map((from) => (
+                    <Route
+                      key={from}
+                      path={from}
+                      element={
+                        <Navigate to="/universe/admin/developer/storage-config" replace />
+                      }
+                    />
+                  ))}
+
+                  {/* The remaining UCDS screens. */}
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
-                  <Route
-                    path="legal/dashboard"
-                    element={<LegalDashboard theme={theme} />}
-                  />
-                  <Route
-                    path="legal/docket"
-                    element={<LegalDocket theme={theme} />}
-                  />
-                  <Route
-                    path="legal/envi-laws"
-                    element={<EnviLaws theme={theme} />}
-                  />
-                  {/* Add a default route for /legal if needed, e.g., redirect to dashboard */}
-                  <Route
-                    path="legal"
-                    element={<Navigate to="legal/dashboard" replace />}
-                  />
-
                   <Route path="report" element={<Report theme={theme} />} />
                   <Route
                     path="posting"

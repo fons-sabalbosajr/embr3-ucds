@@ -36,11 +36,6 @@ async function connectToMongo() {
   collections.chemicals = db.collection('ucds-data-chemicals');
   collections.tsd = db.collection('ucds-data-tsd');
   collections.trc = db.collection('ucds-data-trc');
-  collections.swmplan = db.collection('ucds-eswm-ten_swm_plan');
-  collections.mrf = db.collection('ucds-eswm-mrf');
-  collections.slf = db.collection('ucds-eswm-slf');
-  collections.equipment = db.collection('ucds-eswm-equipment');
-  collections.ods = db.collection('ucds-eswm-ods');
   // Developer settings collections
   collections.fieldConfigs = db.collection('developer-field-configs');
   collections.pdfForms = db.collection('developer-pdf-forms');

@@ -25,12 +25,7 @@ const {
   bulkUpdateUcds,
   getDistinctDropdownValues,
   permitsSummary,
-  permitExpiryBreakdown,
-  listAllIndustries,
-  eccCncSubtypesBreakdown,
   dashboardStats,
-  listByEccCncSubtype,
-  listByPermitStatus,
   getBySortKey,
   getNextId,
   searchName,
@@ -78,15 +73,7 @@ router.get('/api/ucds-data/distinct-dropdown-values', ucdsAccess, getDistinctDro
 
 // Additional GET routes migrated from server.js
 router.get('/api/permits-summary', ucdsAccess, permitsSummary);
-router.get('/ucds/permit-expiry-breakdown/:permitKey', ucdsAccess, permitExpiryBreakdown);
-router.get('/api/ucds/permit-expiry-breakdown/:permitKey', ucdsAccess, permitExpiryBreakdown);
-router.get('/ucds/list-all-industries', ucdsAccess, listAllIndustries);
-router.get('/api/ucds/list-all-industries', ucdsAccess, listAllIndustries);
-router.get('/ucds/ecc-cnc-subtypes-breakdown', ucdsAccess, eccCncSubtypesBreakdown);
-router.get('/api/ucds/ecc-cnc-subtypes-breakdown', ucdsAccess, eccCncSubtypesBreakdown);
 router.get('/api/ucds/dashboard-stats', ucdsAccess, dashboardStats);
-router.get('/api/ucds/list-by-ecc-cnc-subtype', ucdsAccess, listByEccCncSubtype);
-router.get('/api/ucds/list-by-permit-status', ucdsAccess, listByPermitStatus);
 router.get('/api/ucds-data/by-sort-key/:sort_key', ucdsAccess, getBySortKey);
 router.get('/api/ucds/next-id', ucdsAccess, getNextId);
 router.get('/api/ucds/search-name', ucdsAccess, searchName);

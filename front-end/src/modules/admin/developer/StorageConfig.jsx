@@ -47,7 +47,7 @@ const jsonPost = (path, body) =>
     body: JSON.stringify(body ?? {}),
   });
 
-const NasSettings = () => {
+const StorageConfig = () => {
   const [elevated, setElevated] = useState(null); // null = still checking
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -325,4 +325,4 @@ const NasSettings = () => {
   );
 };
 
-export default NasSettings;
+export default StorageConfig;

@@ -58,16 +58,6 @@ export const emitLeaveSurvey = () => emitEvent("leaveSurvey"); // Assuming you m
 export const emitJoinMbu = (user) => emitEvent("joinMbu", { user }); // Removed path, MBU is a single route
 export const emitLeaveMbu = () => emitEvent("leaveMbu"); // Removed path
 // Added Planning Unit specific events
-export const emitJoinPlanningUnitMonitoring = (user) => emitEvent("joinPlanningUnitMonitoring", { user });
-export const emitLeavePlanningUnitMonitoring = () => emitEvent("leavePlanningUnitMonitoring");
-export const emitJoinPlanningUnitSurveyActivities = (user) => emitEvent("joinPlanningUnitSurveyActivities", { user });
-export const emitLeavePlanningUnitSurveyActivities = () => emitEvent("leavePlanningUnitSurveyActivities");
-export const emitJoinPlanningUnitValidations = (user) => emitEvent("joinPlanningUnitValidations", { user }); // Added
-export const emitLeavePlanningUnitValidations = () => emitEvent("leavePlanningUnitValidations"); // Added
-export const emitJoinPlanningUnitGeneratedReports = (user) => emitEvent("joinPlanningUnitGeneratedReports", { user }); // Added
-export const emitLeavePlanningUnitGeneratedReports = () => emitEvent("leavePlanningUnitGeneratedReports"); // Added
-export const emitJoinEswm = (user, path) => emitEvent("joinEswm", { user, path }); // Modified to accept path
-export const emitLeaveEswm = (path) => emitEvent("leaveEswm", { path }); // Modified to accept path
 export const emitJoinHealthcare = (user) => emitEvent("joinHealthcare", { user });
 export const emitLeaveHealthcare = () => emitEvent("leaveHealthcare");
 export const emitJoinChemicals = (user) => emitEvent("joinChemicals", { user });
@@ -100,12 +90,7 @@ const setupListener = (eventName, callback) => {
 export const onProvinceViewersUpdate = (callback) => setupListener("provinceViewers", callback);
 export const onSurveyViewersUpdate = (callback) => setupListener("surveyViewers", callback);
 export const onMbuViewersUpdate = (callback) => setupListener("mbuViewers", callback);
-export const onEswmViewersUpdate = (callback) => setupListener("eswmViewers", callback);
 // Added Planning Unit specific listeners
-export const onPlanningUnitMonitoringViewersUpdate = (callback) => setupListener("planningUnitMonitoringViewers", callback);
-export const onPlanningUnitSurveyActivitiesViewersUpdate = (callback) => setupListener("planningUnitSurveyActivitiesViewers", callback);
-export const onPlanningUnitValidationsViewersUpdate = (callback) => setupListener("planningUnitValidationsViewers", callback);
-export const onPlanningUnitGeneratedReportsViewersUpdate = (callback) => setupListener("planningUnitGeneratedReportsViewers", callback); // Added this line
 export const onHealthcareViewersUpdate = (callback) => setupListener("healthcareViewers", callback);
 export const onChemicalsViewersUpdate = (callback) => setupListener("chemicalsViewers", callback);
 export const onTsdViewersUpdate = (callback) => setupListener("tsdViewers", callback);

@@ -11,18 +11,14 @@ import {
 import {
   DashboardFilled,
   CheckCircleFilled,
-  PushpinFilled,
   SettingFilled,
   MedicineBoxFilled,
   ReconciliationFilled,
-  DatabaseFilled,
-  ContainerFilled,
   CaretLeftOutlined,
   CaretRightOutlined,
   FileProtectOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
-import { BsClipboardDataFill } from "react-icons/bs"; // Example icon, choose one you like
 import { Link, useNavigate, useLocation } from "react-router-dom";
 // Known boundary debt: the shared layout drives province selection, but the
 // province state lives in a UCDS-owned context that also fetches the register.
@@ -36,16 +32,6 @@ import {
   emitLeaveProvince,
   emitJoinSurvey,
   emitLeaveSurvey, // Corrected typo here
-  emitJoinEswm,
-  emitJoinPlanningUnitMonitoring,
-  emitLeavePlanningUnitMonitoring,
-  emitJoinPlanningUnitSurveyActivities,
-  emitLeavePlanningUnitSurveyActivities,
-  emitJoinPlanningUnitValidations,
-  emitLeavePlanningUnitValidations,
-  emitJoinPlanningUnitGeneratedReports,
-  emitLeavePlanningUnitGeneratedReports,
-  emitLeaveEswm,
   emitJoinHealthcare,
   emitLeaveHealthcare,
   emitJoinChemicals,
@@ -57,11 +43,6 @@ import {
   onProvinceViewersUpdate, // Corrected typo here
   onSurveyViewersUpdate, // Corrected typo here
   onMbuViewersUpdate, // Corrected typo here
-  onPlanningUnitMonitoringViewersUpdate, // Corrected typo here
-  onPlanningUnitSurveyActivitiesViewersUpdate, // Corrected typo here
-  onPlanningUnitValidationsViewersUpdate, // Corrected typo here
-  onPlanningUnitGeneratedReportsViewersUpdate, // Corrected typo here
-  onEswmViewersUpdate, // Corrected typo here
   onHealthcareViewersUpdate, // Corrected typo here
   onChemicalsViewersUpdate, // Corrected typo here
   onTsdViewersUpdate,
@@ -77,14 +58,9 @@ const { Sider } = Layout;
 const rootSubmenuKeys = [
   "r3-monitoring",
   "healthcare",
-  "planning-unit",
-  "reports",
   "admin",
   "developer-settings",
-  "legal",
   "erms",
-  "nas-storage",
-  "eswm-database", // Added for the new submenu
 ];
 
 // `key` matches the per-province grant on the user account; `value` is the
@@ -108,11 +84,6 @@ const SideMenu = ({ theme, currentUser }) => {
   const [provinceViewers, setProvinceViewers] = useState({});
   const [surveyViewers, setSurveyViewers] = useState([]);
   const [mbuViewers, setMbuViewers] = useState([]);
-  const [eswmViewers, setEswmViewers] = useState([]);
-  const [monitoringViewers, setMonitoringViewers] = useState([]);
-  const [surveyActivitiesViewers, setSurveyActivitiesViewers] = useState([]);
-  const [validationsViewers, setValidationsViewers] = useState([]);
-  const [generatedReportsViewers, setGeneratedReportsViewers] = useState([]);
   const [healthcareViewers, setHealthcareViewers] = useState([]);
   const [chemicalsViewers, setChemicalsViewers] = useState([]);
   const [tsdViewers, setTsdViewers] = useState([]);
@@ -163,15 +134,6 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys([]);
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
-    } else if (path.startsWith("/universe/eswm-database")) {
-      setOpenKeys(["eswm-database"]); // Keep the 'eswm-database' submenu open
-    } else if (path.startsWith("/universe/planning-unit/")) {
-      setOpenKeys(["planning-unit"]);
-    } else if (
-      path.startsWith("/universe/extract") ||
-      path.startsWith("/universe/deleted_firms")
-    ) {
-      setOpenKeys(["reports"]);
     } else if (
       path.startsWith("/universe/admin/users") ||
       path.startsWith("/universe/admin/posting") ||
@@ -185,8 +147,6 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["developer-settings"]);
     } else if (path.startsWith("/universe/erms/")) {
       setOpenKeys(["erms"]);
-    } else if (path.startsWith("/universe/nas/")) {
-      setOpenKeys(["nas-storage"]); // Keep the NAS submenu open
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
@@ -213,11 +173,6 @@ const SideMenu = ({ theme, currentUser }) => {
       onProvinceViewersUpdate(setProvinceViewers),
       onSurveyViewersUpdate(setSurveyViewers),
       onMbuViewersUpdate(setMbuViewers),
-      onEswmViewersUpdate(setEswmViewers),
-      onPlanningUnitMonitoringViewersUpdate(setMonitoringViewers), // New listener
-      onPlanningUnitSurveyActivitiesViewersUpdate(setSurveyActivitiesViewers), // New listener
-      onPlanningUnitValidationsViewersUpdate(setValidationsViewers), // New listener
-      onPlanningUnitGeneratedReportsViewersUpdate(setGeneratedReportsViewers), // New listener
       onHealthcareViewersUpdate(setHealthcareViewers),
       onChemicalsViewersUpdate(setChemicalsViewers),
       onTsdViewersUpdate(setTsdViewers),
@@ -244,22 +199,6 @@ const SideMenu = ({ theme, currentUser }) => {
       // if (location.pathname === "/universe/mbu") {
       //   emitJoinMbu(userPayload);
       // }
-      if (location.pathname === "/universe/planning-unit/monitoring") {
-        emitJoinPlanningUnitMonitoring(userPayload);
-      }
-      if (location.pathname === "/universe/planning-unit/survey-activities") {
-        emitJoinPlanningUnitSurveyActivities(userPayload);
-      }
-      if (location.pathname === "/universe/planning-unit/validations") {
-        emitJoinPlanningUnitValidations(userPayload);
-      }
-      if (location.pathname === "/universe/planning-unit/generated-reports") {
-        emitJoinPlanningUnitGeneratedReports(userPayload);
-      }
-      if (location.pathname.startsWith("/universe/eswm-database")) {
-        emitJoinEswm(userPayload);
-      }
-
       if (location.pathname === "/universe/chemicals") {
         emitJoinChemicals(userPayload);
       }
@@ -355,82 +294,6 @@ const SideMenu = ({ theme, currentUser }) => {
   //     }
   //   };
   // }, [currentUser, location.pathname]);
-
-  // ESWM join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      // Removed canViewDataHistory check
-      return;
-    }
-
-    let didJoinEswmThisEffect = false;
-    const eswmPath = location.pathname;
-
-    if (eswmPath.startsWith("/universe/eswm-database")) {
-      // Updated to cover sub-routes
-      // Updated to cover sub-routes
-      emitJoinEswm(
-        {
-          // Corrected payload
-          username: currentUser.username,
-          avatar: currentUser.avatar || currentUser.avatarUrl,
-          name: currentUser.name,
-        },
-        eswmPath
-      );
-      didJoinEswmThisEffect = true;
-    }
-    return () => {
-      if (didJoinEswmThisEffect && currentUser?.username) {
-        emitLeaveEswm(eswmPath);
-      }
-    };
-  }, [currentUser, location.pathname]);
-
-  // Planning Unit join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      return;
-    }
-
-    const path = location.pathname;
-    const userPayload = {
-      // Define userPayload once
-      username: currentUser.username,
-      avatar: currentUser.avatar || currentUser.avatarUrl,
-      name: currentUser.name,
-    };
-    let didJoinMonitoring = false;
-    let didJoinSurveyActivities = false;
-    let didJoinValidations = false;
-    let didJoinGeneratedReports = false;
-    // No specific route for Generated Reports yet, assuming it might be static or covered by another room
-
-    if (path === "/universe/planning-unit/monitoring") {
-      emitJoinPlanningUnitMonitoring(userPayload);
-      didJoinMonitoring = true;
-    } else if (path === "/universe/planning-unit/survey-activities") {
-      emitJoinPlanningUnitSurveyActivities(userPayload);
-      didJoinSurveyActivities = true;
-    } else if (path === "/universe/planning-unit/validations") {
-      emitJoinPlanningUnitValidations(userPayload);
-      didJoinValidations = true;
-    } else if (path === "/universe/planning-unit/generated-reports") {
-      emitJoinPlanningUnitGeneratedReports(userPayload);
-      didJoinGeneratedReports = true;
-    }
-
-    return () => {
-      if (didJoinMonitoring && currentUser?.username)
-        emitLeavePlanningUnitMonitoring();
-      if (didJoinSurveyActivities && currentUser?.username)
-        emitLeavePlanningUnitSurveyActivities();
-      if (didJoinValidations && currentUser?.username)
-        emitLeavePlanningUnitValidations();
-      if (didJoinGeneratedReports && currentUser?.username)
-        emitLeavePlanningUnitGeneratedReports();
-    };
-  }, [currentUser, location.pathname]);
 
   // Healthcare join/leave logic
   useEffect(() => {
@@ -676,202 +539,6 @@ const SideMenu = ({ theme, currentUser }) => {
         </div>
       ),
     },
-    hasUcds && canViewAdminPanel && {
-      key: "eswm-database",
-      icon: <DatabaseFilled />,
-      label: <div className="menu-label-wrapper main">ESWM Database</div>,
-      children: [
-        {
-          key: "/universe/eswm-database/swm-plan",
-          label: (
-            <LabelWithAvatars
-              to="/universe/eswm-database/swm-plan"
-              label="10 Year SWM Plan"
-              viewers={
-                location.pathname === "/universe/eswm-database/swm-plan"
-                  ? eswmViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/eswm-database/mrf",
-          label: (
-            <LabelWithAvatars
-              to="/universe/eswm-database/mrf"
-              label="Material Recovery Facility (MRF)"
-              viewers={
-                location.pathname === "/universe/eswm-database/mrf"
-                  ? eswmViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/eswm-database/slf",
-          label: (
-            <LabelWithAvatars
-              to="/universe/eswm-database/slf"
-              label="Sanitary Landfill (SLF)"
-              viewers={
-                location.pathname === "/universe/eswm-database/slf"
-                  ? eswmViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/eswm-database/ods",
-          label: (
-            <LabelWithAvatars
-              to="/universe/eswm-database/ods"
-              label="Open Dump Sites (ODS)"
-              viewers={
-                location.pathname === "/universe/eswm-database/ods"
-                  ? eswmViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/eswm-database/equipments",
-          label: (
-            <LabelWithAvatars
-              to="/universe/eswm-database/equipments"
-              label="Equipments"
-              viewers={
-                location.pathname === "/universe/eswm-database/equipments"
-                  ? eswmViewers
-                  : []
-              }
-            />
-          ),
-        },
-      ],
-    },
-    hasUcds && canViewAdminPanel && {
-      key: "legal",
-      icon: <FileProtectOutlined />,
-      label: <div className="menu-label-wrapper main">Legal Services Unit</div>,
-      children: [
-        {
-          key: "/universe/legal/dashboard",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/legal/dashboard">Legal Dashboard</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/legal/docket",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/legal/docket">Legal Docket</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/legal/envi-laws",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/legal/envi-laws">Environmental Laws</Link>
-            </div>
-          ),
-        },
-      ],
-    },
-    hasUcds && canViewAdminPanel && {
-      key: "planning-unit",
-      icon: <BsClipboardDataFill />,
-      label: <div className="menu-label-wrapper main">Planning Unit</div>,
-      children: [
-        {
-          key: "/universe/planning-unit/monitoring",
-          label: (
-            <LabelWithAvatars
-              to="/universe/planning-unit/monitoring"
-              label="Monitoring"
-              viewers={
-                location.pathname === "/universe/planning-unit/monitoring"
-                  ? monitoringViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/planning-unit/survey-activities",
-          label: (
-            <LabelWithAvatars
-              to="/universe/planning-unit/survey-activities"
-              label="Survey Activities"
-              viewers={
-                location.pathname ===
-                "/universe/planning-unit/survey-activities"
-                  ? surveyActivitiesViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/planning-unit/validations",
-          label: (
-            <LabelWithAvatars
-              to="/universe/planning-unit/validations"
-              label="Validations"
-              viewers={
-                location.pathname === "/universe/planning-unit/validations"
-                  ? validationsViewers
-                  : []
-              }
-            />
-          ),
-        },
-        {
-          key: "/universe/planning-unit/generated-reports",
-          label: (
-            <LabelWithAvatars
-              to="/universe/planning-unit/generated-reports"
-              label="Generated Reports"
-              viewers={
-                location.pathname ===
-                "/universe/planning-unit/generated-reports"
-                  ? generatedReportsViewers
-                  : []
-              }
-            />
-          ),
-        },
-      ],
-    },
-    hasUcds && {
-      key: "reports",
-      icon: <PushpinFilled />,
-      label: <div className="menu-label-wrapper main">Reports</div>,
-      children: [
-        {
-          key: "/universe/extract",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/extract">Extract Data</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/deleted_firms",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/deleted_firms">Deleted Industries</Link>
-            </div>
-          ),
-        },
-      ],
-    },
     hasAdmin && canViewAdminPanel && {
       key: "admin",
       icon: <SettingFilled />,
@@ -964,7 +631,25 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
-      ],
+        // The records share. It sat in its own top-level "NAS Storage" section
+        // with four entries, three of which were a dashboard, a browser and a
+        // settings page that all showed the same configuration. It is one
+        // developer setting, so it is one entry here.
+        //
+        // Guarded twice on purpose: the section already requires the admin
+        // domain, and this entry additionally requires the developer role,
+        // because an Admin is not a developer.
+        isDeveloper && {
+          key: "/universe/admin/developer/storage-config",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/developer/storage-config">
+                Storage Configuration
+              </Link>
+            </div>
+          ),
+        },
+      ].filter(Boolean),
     },
     // Records module. Visible to anyone holding the ERMS domain, independent
     // of the UCDS capability flags — a Records clerk has no reason to hold
@@ -1015,52 +700,6 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    // Was (hasAdmin || hasErms) && canViewAdminPanel, which offered the share
-    // configuration to every Records and Admin user. The routes behind it are
-    // developer-only, so the menu was advertising four screens that now refuse
-    // them.
-    isDeveloper && {
-      key: "nas-storage",
-      icon: <ContainerFilled />,
-      label: <div className="menu-label-wrapper main nas">NAS Storage</div>,
-      children: [
-        {
-          key: "/universe/nas/dashboard",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/nas/dashboard">Dashboard</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/nas/browser",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/nas/browser">Browser</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/nas/storage-config",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/nas/storage-config">
-                Storage Configuration
-              </Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/nas/settings",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/nas/settings">Settings</Link>
-            </div>
-          ),
-        },
-      ],
-    },
-
     // canViewAdminPanel && {
     //   key: "/universe/mbu",
     //   icon: <EnvironmentFilled />,

@@ -6,7 +6,6 @@ const MODULE_OPTIONS = [
   { value: "monitoring", label: "Monitoring Plan" },
   { value: "survey", label: "Survey" },
   { value: "healthcare", label: "Healthcare" },
-  { value: "eswm", label: "ESWM Database" },
 ];
 
 const FieldManagement = () => {

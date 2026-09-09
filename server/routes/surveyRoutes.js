@@ -1,5 +1,5 @@
 const express = require('express');
-const { updateColor, updateColorUniverse, getSurveysByYear, getLastSurveyId, getSurveyDashboardStats, getSurveysMonitoringData, getSurveyDocketByIdNo, updateSurveyById, updateSurveyDataById, getSurveyDataById, getSurveyLog, getLatestTransactionId, getProjectType, getIndustryDetailsByClass, updateSurveyMonitoringData, patchSurveyColorById } = require('../controllers/surveyController');
+const { updateColor, updateColorUniverse, getSurveysByYear, getLastSurveyId, getSurveyDashboardStats, getSurveysMonitoringData, getSurveyDocketByIdNo, updateSurveyById, updateSurveyDataById, getSurveyDataById, getSurveyLog, getLatestTransactionId, getProjectType, updateSurveyMonitoringData, patchSurveyColorById } = require('../controllers/surveyController');
 const { authenticateSession, resolveYearContext, rejectYearOverride, requireDomain } = require('../middleware/auth');
 const { DOMAINS } = require('../services/authorization');
 const { logActivity } = require('../middleware/activityLog');
@@ -39,6 +39,5 @@ router.get('/api/get-latest-transaction-id', ...yearScoped, getLatestTransaction
 
 // project_type and industry lookups are shared reference data, not year-scoped.
 router.get('/api/project_type', authenticateSession, getProjectType);
-router.get('/api/industry-details-by-class', authenticateSession, getIndustryDetailsByClass);
 
 module.exports = router;

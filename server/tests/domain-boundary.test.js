@@ -74,8 +74,6 @@ describe('unauthenticated access', () => {
     '/api/healthcare',
     '/api/chemicals',
     '/api/tsd',
-    '/api/swm-plan-data',
-    '/api/swm-plan-stats',
     '/api/draft-report',
     '/api/org-units',
   ])('%s requires a session', async (path) => {
@@ -149,7 +147,6 @@ describe('a user without the ucds domain', () => {
     '/api/ucds/count',
     '/api/healthcare',
     '/api/postings',
-    '/api/swm-plan-data',
     '/api/draft-report',
   ])('is refused %s', async (path) => {
     const agent = await signIn(RECORDS);
@@ -174,6 +171,34 @@ describe('a user without the ucds domain', () => {
     const res = await agent.get('/api/org-units');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.orgUnits)).toBe(true);
+  });
+});
+
+describe('removed modules', () => {
+  // ESWM Database, Legal Services Unit, Planning Unit and Reports were removed
+  // from the navigation. Their exclusive endpoints went with them, so these
+  // assert the API surface is actually gone rather than merely unlinked — an
+  // endpoint nothing links to is still an endpoint.
+  it.each([
+    '/api/swm-plan-data',
+    '/api/swm-plan-stats',
+    '/api/ucds/list-all-industries',
+    '/api/ucds/ecc-cnc-subtypes-breakdown',
+    '/api/ucds/list-by-ecc-cnc-subtype',
+    '/api/ucds/list-by-permit-status',
+    '/api/industry-details-by-class',
+  ])('%s no longer exists', async (path) => {
+    const res = await request(app).get(path);
+    expect(res.status).toBe(404);
+  });
+
+  it('left the shared UCDS endpoints alone', async () => {
+    // The removed screens called these too, but so does everything else. A
+    // 401 proves the route still exists and is still guarded.
+    for (const path of ['/api/ucds/count', '/api/healthcare', '/api/survey-log']) {
+      const res = await request(app).get(path);
+      expect(res.status).not.toBe(404);
+    }
   });
 });
 

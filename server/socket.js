@@ -4,7 +4,6 @@ const { Server } = require('socket.io');
 let provinceViewers = {}; // Changed to let if you plan to reassign; if not, const is fine.
 const surveyViewers = [];
 const mbuViewers = [];
-const eswmViewers = [];
 const healthcareViewers = [];
 const chemicalsViewers = [];
 const tsdViewers = [];
@@ -57,7 +56,6 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
 
   const surveyManager = createViewerManager(surveyViewers, "surveyViewers", "surveyUser", "Survey");
   const mbuManager = createViewerManager(mbuViewers, "mbuViewers", "mbuUser", "MBU");
-  const eswmManager = createViewerManager(eswmViewers, "eswmViewers", "eswmUser", "ESWM");
   const healthcareManager = createViewerManager(healthcareViewers, "healthcareViewers", "healthcareUser", "Healthcare");
   const chemicalsManager = createViewerManager(chemicalsViewers, "chemicalsViewers", "chemicalsUser", "Chemicals");
   const tsdManager = createViewerManager(tsdViewers, "tsdViewers", "tsdUser", "TSD");
@@ -89,7 +87,6 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
 
     socket.on("joinSurvey", (payload) => surveyManager.join(socket, io, payload));
     socket.on("joinMbu", (payload) => mbuManager.join(socket, io, payload));
-    socket.on("joinEswm", (payload) => eswmManager.join(socket, io, payload));
     socket.on("joinHealthcare", (payload) => healthcareManager.join(socket, io, payload));
     socket.on("joinChemicals", (payload) => chemicalsManager.join(socket, io, payload));
     socket.on("joinTsd", (payload) => tsdManager.join(socket, io, payload));
@@ -123,7 +120,6 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
     socket.on("leaveProvince", () => leaveProvince("event"));
     socket.on("leaveSurvey", () => surveyManager.leave(socket, io, "event"));
     socket.on("leaveMbu", () => mbuManager.leave(socket, io, "event"));
-    socket.on("leaveEswm", () => eswmManager.leave(socket, io, "event"));
     socket.on("leaveHealthcare", () => healthcareManager.leave(socket, io, "event"));
     socket.on("leaveChemicals", () => chemicalsManager.leave(socket, io, "event"));
     socket.on("leaveTsd", () => tsdManager.leave(socket, io, "event"));
@@ -134,7 +130,6 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
       leaveProvince("disconnect");
       surveyManager.leave(socket, io, "disconnect");
       mbuManager.leave(socket, io, "disconnect");
-      eswmManager.leave(socket, io, "disconnect");
       healthcareManager.leave(socket, io, "disconnect");
       chemicalsManager.leave(socket, io, "disconnect");
       tsdManager.leave(socket, io, "disconnect");

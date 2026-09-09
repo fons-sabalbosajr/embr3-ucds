@@ -21,7 +21,12 @@ const RoleGuard = ({ roles, user, children }) => {
   if (!role) return null;
 
   if (!roles.includes(role)) {
-    return <Forbidden module="NAS Storage" detail="This area is limited to developers." />;
+    return (
+      <Forbidden
+        module="Developer Settings"
+        detail="This area is limited to developers."
+      />
+    );
   }
 
   return children ?? <Outlet />;

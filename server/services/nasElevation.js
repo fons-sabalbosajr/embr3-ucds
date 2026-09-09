@@ -44,6 +44,35 @@ function transporter() {
 
 const mailConfigured = () => Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
+/**
+ * The address registered on the account, read from the database.
+ *
+ * Deliberately not taken from the session. buildSessionPayload() does not
+ * carry `email` — the session holds identity and entitlement, not contact
+ * details — so reading `user.email` here reported "this account has no email
+ * address" for every account, including the developer, whose record has one.
+ *
+ * Looking it up is also the more correct behaviour for a one-time code: it
+ * uses the address on the account *now*, so correcting a wrong address takes
+ * effect immediately instead of after the user signs out and back in.
+ */
+async function registeredEmailFor(user) {
+  if (!user?.userId) return null;
+  try {
+    const { connectToMongo, collections, ObjectId } = require('../config/db');
+    await connectToMongo();
+    const record = await collections.users.findOne(
+      { _id: new ObjectId(String(user.userId)) },
+      { projection: { email: 1 } }
+    );
+    const email = String(record?.email || '').trim();
+    return email || null;
+  } catch (err) {
+    console.error('NAS elevation: could not read the account email:', err.message);
+    return null;
+  }
+}
+
 /** Show enough of an address to recognise it, not enough to learn it. */
 function maskEmail(email) {
   const [user, domain] = String(email || '').split('@');
@@ -60,14 +89,15 @@ function maskEmail(email) {
  * challenge to an address they control.
  */
 async function requestCode(req, user) {
-  if (!user?.email) {
+  const email = await registeredEmailFor(user);
+  if (!email) {
     return {
       ok: false,
       status: 409,
       code: 'NO_EMAIL_ON_ACCOUNT',
       message:
-        'This account has no email address, so a verification code cannot be sent. ' +
-        'Add one under Admin > User Accounts, then try again.',
+        'This account has no email address on record, so a verification code ' +
+        'cannot be sent. Add one under Admin > User Accounts, then try again.',
     };
   }
   if (!mailConfigured()) {
@@ -91,7 +121,7 @@ async function requestCode(req, user) {
   try {
     await transporter().sendMail({
       from: process.env.EMAIL_USER,
-      to: user.email,
+      to: email,
       subject: 'E-Universe — NAS configuration verification code',
       text:
         `Your verification code is ${code}\n\n` +
@@ -127,7 +157,7 @@ async function requestCode(req, user) {
 
   return {
     ok: true,
-    sentTo: maskEmail(user.email),
+    sentTo: maskEmail(email),
     expiresInSeconds: Math.floor(CODE_TTL_MS / 1000),
   };
 }

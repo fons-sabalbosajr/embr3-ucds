@@ -70,12 +70,6 @@ const ACCOUNTS = [
       ['chemicals', '/universe/chemicals'],
       ['tsd', '/universe/tsd'],
       ['trc', '/universe/trc'],
-      ['eswm', '/universe/eswm-database'],
-      ['eswm-swmplan', '/universe/eswm-database/swm-plan'],
-      ['planning-monitoring', '/universe/planning-unit/monitoring'],
-      ['planning-validations', '/universe/planning-unit/validations'],
-      ['extract', '/universe/extract'],
-      ['legal-dashboard', '/universe/legal/dashboard'],
       ['register-config', '/universe/register/config'],
       ['admin-users', '/universe/admin/users'],
       ['admin-org-units', '/universe/admin/org-units'],
@@ -87,7 +81,7 @@ const ACCOUNTS = [
       ['erms-reports', '/universe/erms/reports'],
       // An admin is not a developer, so the share configuration must refuse
       // them — the screens sat outside every guard until Phase 7.
-      ['nas-settings-denied', '/universe/nas/settings', { expectForbidden: true }],
+      ['storage-config-denied', '/universe/admin/developer/storage-config', { expectForbidden: true }],
     ],
   },
   {
@@ -95,11 +89,9 @@ const ACCOUNTS = [
     label: 'Developer',
     doc: { permission: 'developer', domains: ['ucds', 'erms', 'admin'], capabilities: caps() },
     screens: [
-      ['nas-dashboard', '/universe/nas/dashboard'],
       // Reaches the screen, and must land on the "verify by email" prompt
       // rather than on the configuration itself.
-      ['nas-settings', '/universe/nas/settings'],
-      ['nas-browser', '/universe/nas/browser'],
+      ['storage-config', '/universe/admin/developer/storage-config'],
     ],
   },
   {
@@ -115,7 +107,7 @@ const ACCOUNTS = [
       ['records-record-detail', `/universe/erms/records/${SAMPLE_SERIAL}`],
       // Must be refused, and refused *gracefully* — an explanation, not a crash.
       ['records-denied-province', '/universe/province/Bataan', { expectForbidden: true }],
-      ['records-nas-denied', '/universe/nas/settings', { expectForbidden: true }],
+      ['records-storage-denied', '/universe/admin/developer/storage-config', { expectForbidden: true }],
     ],
   },
 ];
