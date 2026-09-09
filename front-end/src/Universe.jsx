@@ -28,13 +28,8 @@ import Accounts from "./modules/admin/users/UserAccounts";
 import Report from "./modules/admin/Admin";
 import Posting from "./modules/admin/posting/Posting";
 import ActivityLog from "./components/ActivityLog/ActivityLog";
-import Duplicates from "./modules/ucds/duplicates/DuplicatesData";
-import RegisterConfig from "./modules/ucds/register-config/RegisterConfig";
-import RegisterActivity from "./modules/ucds/register-config/RegisterActivity";
-import FieldManagement from "./modules/admin/developer/FieldManagement";
-import DatabaseSettings from "./modules/admin/developer/DatabaseSettings";
-import PdfForms from "./modules/admin/developer/PdfForms";
-import ActivityHistoryConfig from "./modules/admin/developer/ActivityHistoryConfig";
+import RegisterSettings from "./modules/admin/RegisterSettings";
+import SystemSettings from "./modules/admin/SystemSettings";
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
@@ -599,77 +594,52 @@ const Universe = () => {
                     path="activity-log"
                     element={<Navigate to="/universe/admin/audit" replace />}
                   />
-                  {/* Register configuration — UCDS. */}
+                  {/* The register behind Monitoring Plan: configuration, its
+                      activity trail, and duplicate reconciliation. Three
+                      screens about one subject, so one screen with tabs. */}
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
-                  <Route
-                    path="register/config"
-                    element={<RegisterConfig theme={theme} />}
-                  />
-                  <Route
-                    path="register/activity"
-                    element={<RegisterActivity theme={theme} />}
-                  />
-                  {/* Legacy paths — kept so existing bookmarks keep working */}
-                  <Route
-                    path="records/config"
-                    element={<Navigate to="/universe/register/config" replace />}
-                  />
-                  <Route
-                    path="records/activity"
-                    element={<Navigate to="/universe/register/activity" replace />}
-                  />
+                    <Route
+                      path="admin/register"
+                      element={<RegisterSettings theme={theme} />}
+                    />
                   </Route>
 
-                  {/* Developer settings, also under /admin. */}
+                  {/* How the platform behaves: its database, and what it
+                      records. */}
                   <Route
-                    path="admin/developer/field-management"
+                    path="admin/system"
                     element={
                       <DomainGuard domain="admin" user={currentUser}>
-                        <FieldManagement />
+                        <SystemSettings theme={theme} />
                       </DomainGuard>
                     }
                   />
-                  <Route
-                    path="admin/developer/database-settings"
-                    element={
-                      <DomainGuard domain="admin" user={currentUser}>
-                        <DatabaseSettings />
-                      </DomainGuard>
-                    }
-                  />
-                  <Route
-                    path="admin/developer/pdf-forms"
-                    element={
-                      <DomainGuard domain="admin" user={currentUser}>
-                        <PdfForms />
-                      </DomainGuard>
-                    }
-                  />
-                  <Route
-                    path="admin/developer/activity-history"
-                    element={
-                      <DomainGuard domain="admin" user={currentUser}>
-                        <ActivityHistoryConfig />
-                      </DomainGuard>
-                    }
-                  />
-                  {/* Legacy developer paths */}
-                  <Route
-                    path="developer/field-management"
-                    element={<Navigate to="/universe/admin/developer/field-management" replace />}
-                  />
-                  <Route
-                    path="developer/database-settings"
-                    element={<Navigate to="/universe/admin/developer/database-settings" replace />}
-                  />
-                  <Route
-                    path="developer/pdf-forms"
-                    element={<Navigate to="/universe/admin/developer/pdf-forms" replace />}
-                  />
-                  <Route
-                    path="developer/activity-history"
-                    element={<Navigate to="/universe/admin/developer/activity-history" replace />}
-                  />
+
+                  {/* Old locations. Each points at the tab that replaced it, so
+                      a bookmark lands where the screen actually is rather than
+                      at the top of a merged page. */}
+                  {[
+                    ["register/config", "/universe/admin/register?tab=config"],
+                    ["records/config", "/universe/admin/register?tab=config"],
+                    ["register/activity", "/universe/admin/register?tab=activity"],
+                    ["records/activity", "/universe/admin/register?tab=activity"],
+                    ["admin/duplicates", "/universe/admin/register?tab=duplicates"],
+                    ["duplicates", "/universe/admin/register?tab=duplicates"],
+                    ["admin/developer/database-settings", "/universe/admin/system?tab=database"],
+                    ["developer/database-settings", "/universe/admin/system?tab=database"],
+                    ["admin/developer/activity-history", "/universe/admin/system?tab=audit"],
+                    ["developer/activity-history", "/universe/admin/system?tab=audit"],
+                    // Field Management and PDF Forms were removed. Their URLs
+                    // point at the screen that absorbed the rest of that
+                    // section rather than 404ing on a bookmark.
+                    ["admin/developer/field-management", "/universe/admin/system"],
+                    ["developer/field-management", "/universe/admin/system"],
+                    ["admin/developer/pdf-forms", "/universe/admin/system"],
+                    ["developer/pdf-forms", "/universe/admin/system"],
+                  ].map(([from, to]) => (
+                    <Route key={from} path={from} element={<Navigate to={to} replace />} />
+                  ))}
+
 
                   <Route path="admin" element={<Admin theme={theme} />} />
 
@@ -684,19 +654,9 @@ const Universe = () => {
                     }
                   />
 
-                  {/* Duplicate data. A Settings screen rather than an Admin
-                      Settings one: reconciling two records of the same firm is
-                      operational work, not system configuration. It reads the
-                      register, so it needs the UCDS domain, and it neither
-                      merges nor deletes anything. */}
-                  <Route
-                    path="admin/duplicates"
-                    element={
-                      <DomainGuard domain="ucds" user={currentUser}>
-                        <Duplicates theme={theme} />
-                      </DomainGuard>
-                    }
-                  />
+                  {/* Duplicate data is now a tab of Admin Settings > Register,
+                      alongside the configuration and activity trail for the
+                      same register. The old path redirects there. */}
 
                   {/* The NAS File Explorer lives on the Storage Configuration
                       screen, behind the same emailed code. It is not a separate

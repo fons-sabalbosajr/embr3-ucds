@@ -22,6 +22,7 @@ import {
 } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
 import NasActivationCard from "./NasActivationCard";
+import NasPinCard from "./NasPinCard";
 import NasFileExplorer from "./NasFileExplorer";
 
 const { Text, Paragraph } = Typography;
@@ -60,6 +61,9 @@ const StorageConfig = () => {
   const [sentTo, setSentTo] = useState(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState(null);
+  const [pin, setPin] = useState(null);
+  const [pinEntry, setPinEntry] = useState("");
+  const [forceEmail, setForceEmail] = useState(false);
 
   const loadConfig = useCallback(async () => {
     const res = await api("/api/nas/config");
@@ -84,6 +88,9 @@ const StorageConfig = () => {
         const res = await api("/api/nas/elevation");
         const state = await res.json().catch(() => ({}));
         if (cancelled) return;
+        // Tells the gate which challenge to offer first. Carries no secret —
+        // only whether a PIN exists and whether it is locked out.
+        setPin(state.pin || null);
         if (state.elevated) await loadConfig();
         else setElevated(false);
       } catch {
@@ -136,6 +143,28 @@ const StorageConfig = () => {
     }
   };
 
+  const submitPin = async () => {
+    setVerifying(true);
+    setError(null);
+    try {
+      const res = await jsonPost("/api/nas/elevation/pin/verify", { pin: pinEntry.trim() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          data.attemptsLeft != null && data.attemptsLeft > 0
+            ? `${data.message} ${data.attemptsLeft} attempt(s) left.`
+            : data.message || "That PIN was not accepted."
+        );
+        if (data.code === "PIN_LOCKED") setPin((p) => ({ ...(p || {}), locked: true }));
+        return;
+      }
+      setPinEntry("");
+      await loadConfig();
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const endSession = async () => {
     await api("/api/nas/elevation", { method: "DELETE" });
     setElevated(false);
@@ -170,6 +199,11 @@ const StorageConfig = () => {
   }
 
   if (!elevated) {
+    // A PIN is offered first when one is set: it re-opens a step-up already
+    // proved by email, so making someone wait for another email each time buys
+    // nothing except the habit of leaving the page open.
+    const pinAvailable = pin?.set && !pin?.locked && !forceEmail;
+
     return (
       <Card style={{ maxWidth: 560, margin: "24px auto" }}>
         <Result
@@ -178,15 +212,50 @@ const StorageConfig = () => {
           subTitle={
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
               The records share configuration names the internal server and the
-              service account, so reading or changing it needs a one-time code
-              sent to the email address registered on your account.
+              service account, so reading or changing it needs
+              {pinAvailable ? " your PIN." : " a one-time code sent to the email address registered on your account."}
             </Paragraph>
           }
         />
 
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
 
-        {!sentTo ? (
+        {pin?.locked && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="PIN locked"
+            description="Too many incorrect PINs. Verify by email to unlock it."
+          />
+        )}
+
+        {pinAvailable ? (
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            <Input.Password
+              size="large"
+              maxLength={12}
+              inputMode="numeric"
+              placeholder="PIN"
+              value={pinEntry}
+              onChange={(e) => setPinEntry(e.target.value.replace(/\D/g, ""))}
+              onPressEnter={submitPin}
+              style={{ letterSpacing: 4, textAlign: "center", fontSize: 18 }}
+            />
+            <Button
+              type="primary"
+              block
+              loading={verifying}
+              disabled={pinEntry.length < 6}
+              onClick={submitPin}
+            >
+              Unlock
+            </Button>
+            <Button type="link" block onClick={() => setForceEmail(true)}>
+              Email me a code instead
+            </Button>
+          </Space>
+        ) : !sentTo ? (
           <Button
             type="primary"
             block
@@ -313,6 +382,8 @@ const StorageConfig = () => {
       {/* Both of these need the same emailed code as the configuration above,
           so they live inside the verified section rather than on their own
           screen. */}
+      <NasPinCard />
+
       <NasActivationCard />
 
       <NasFileExplorer />

@@ -21,7 +21,8 @@
     "nas:coverage": "node scripts/nas-coverage.js",
     "daily-check": "node scripts/daily-check.js",
     "cutover:check": "node scripts/cutover-check.js",
-    "nav:check": "node scripts/nav-check.mjs"
+    "nav:check": "node scripts/nav-check.mjs",
+    "seed:test-users": "node scripts/seed-test-users.js"
   },
   "keywords": [],
   "author": "",

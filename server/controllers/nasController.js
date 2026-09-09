@@ -209,8 +209,66 @@ async function confirmElevation(req, res) {
   return res.json(result);
 }
 
-function elevationStatus(req, res) {
-  return res.json(elevation.elevationState(req, principalOf(req)));
+async function elevationStatus(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const state = elevation.elevationState(req, user);
+    // `pin` tells the screen which challenge to offer first. It carries no
+    // secret — whether a PIN exists, and whether it is locked out.
+    return res.json({ ...state, pin: await elevation.pinState(user) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Set or replace the PIN. Requires an elevation proved by email. */
+async function setElevationPin(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const result = await elevation.setPin(req, user, req.body?.pin);
+    await recordFileEvent(req, {
+      operation: 'nas-pin-set',
+      success: result.ok === true,
+      detail: result.ok ? 'pin set' : result.code,
+    });
+    if (!result.ok) return res.status(result.status).json(result);
+    return res.json({ ok: true });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Exchange a PIN for the same elevation an emailed code grants. */
+async function verifyElevationPin(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const result = await elevation.verifyPin(req, user, req.body?.pin);
+    await recordFileEvent(req, {
+      operation: 'nas-pin-verify',
+      success: result.ok === true,
+      detail: result.ok ? 'elevated by pin' : result.code,
+    });
+    if (!result.ok) return res.status(result.status).json(result);
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function removeElevationPin(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const result = await elevation.clearPin(req, user);
+    await recordFileEvent(req, {
+      operation: 'nas-pin-remove',
+      success: result.ok === true,
+      detail: result.ok ? 'pin removed' : result.code,
+    });
+    if (!result.ok) return res.status(result.status).json(result);
+    return res.json({ ok: true });
+  } catch (error) {
+    return next(error);
+  }
 }
 
 function endElevation(req, res) {
@@ -230,5 +288,8 @@ module.exports = {
   requestElevation,
   confirmElevation,
   elevationStatus,
+  setElevationPin,
+  verifyElevationPin,
+  removeElevationPin,
   endElevation,
 };

@@ -30,8 +30,6 @@ async function connectToMongo() {
   collections.ucdsLog = db.collection('ucds-log');
   collections.projectType = db.collection('project_type');
   // Developer settings collections
-  collections.fieldConfigs = db.collection('developer-field-configs');
-  collections.pdfForms = db.collection('developer-pdf-forms');
 
   // Year container registry (see services/yearService.js)
   collections.yearContainers = db.collection('year-containers');

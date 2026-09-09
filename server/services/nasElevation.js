@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 
 // ---------------------------------------------------------------------------
@@ -16,8 +17,29 @@ const nodemailer = require('nodemailer');
 // ---------------------------------------------------------------------------
 
 const CODE_TTL_MS = 10 * 60 * 1000; // to enter the code
-const ELEVATION_TTL_MS = 15 * 60 * 1000; // to use it
+// Long enough to do a piece of work without re-verifying halfway through. It
+// was 15 minutes, which meant an administrator configuring the share got sent
+// back to the email step mid-task. A PIN makes re-elevating cheap, so this
+// does not need to be generous to be usable.
+const ELEVATION_TTL_MS = 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
+
+// A PIN is a convenience over the emailed code, not a replacement for the
+// account password: it re-opens a step-up the person has already proved by
+// email, and grants exactly the same short elevation. So it is stored hashed,
+// tried a limited number of times, and can only be set by someone who is
+// already elevated.
+const PIN_MIN_LENGTH = 6;
+const PIN_MAX_LENGTH = 12;
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 15 * 60 * 1000;
+
+// Kept out of the users collection deliberately. PUBLIC_USER_PROJECTION is an
+// exclusion projection, so a field added to a user document is returned by
+// GET /api/users to every authenticated caller unless someone remembers to
+// exclude it. A separate collection cannot leak that way.
+const PIN_COLLECTION = 'app-config';
+const pinDocId = (userId) => `nas-pin:${userId}`;
 
 const now = () => Date.now();
 const generateCode = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
@@ -206,6 +228,153 @@ function verifyCode(req, user, submitted) {
   return { ok: true, elevatedUntil: req.session.nasElevation.elevatedUntil };
 }
 
+// --- PIN -------------------------------------------------------------------
+
+async function pinCollection() {
+  const { connectToMongo, getDb } = require('../config/db');
+  await connectToMongo();
+  return getDb().collection(PIN_COLLECTION);
+}
+
+/** Whether this account has a PIN set, and whether it is locked out. */
+async function pinState(user) {
+  if (!user?.userId) return { set: false };
+  const col = await pinCollection();
+  const doc = await col.findOne({ _id: pinDocId(user.userId) });
+  if (!doc?.hash) return { set: false };
+
+  const lockedUntil = doc.lockedUntil ? new Date(doc.lockedUntil) : null;
+  return {
+    set: true,
+    setAt: doc.setAt || null,
+    locked: Boolean(lockedUntil && lockedUntil > new Date()),
+    lockedUntil: lockedUntil && lockedUntil > new Date() ? lockedUntil : null,
+    attempts: doc.attempts || 0,
+  };
+}
+
+/**
+ * Set or replace the PIN.
+ *
+ * Requires the caller to be elevated already, which means they have proved the
+ * email challenge in this session. Without that a stolen session could set a
+ * PIN and turn a temporary hold on the account into a durable one.
+ */
+async function setPin(req, user, pin) {
+  const state = elevationState(req, user);
+  if (!state.elevated) {
+    return {
+      ok: false,
+      status: 403,
+      code: 'ELEVATION_REQUIRED',
+      message: 'Verify by email before setting a PIN.',
+    };
+  }
+
+  const value = String(pin ?? '').trim();
+  if (!/^\d+$/.test(value) || value.length < PIN_MIN_LENGTH || value.length > PIN_MAX_LENGTH) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'BAD_PIN',
+      message: `The PIN must be ${PIN_MIN_LENGTH} to ${PIN_MAX_LENGTH} digits.`,
+    };
+  }
+  // Rejects 000000, 123456, 111111 and the like — a PIN that re-opens the
+  // share configuration should not be one an attacker tries first.
+  if (/^(\d)\1*$/.test(value) || isSequential(value)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'WEAK_PIN',
+      message: 'That PIN is too easy to guess. Avoid repeated or sequential digits.',
+    };
+  }
+
+  const col = await pinCollection();
+  await col.updateOne(
+    { _id: pinDocId(user.userId) },
+    {
+      $set: {
+        hash: await bcrypt.hash(value, 10),
+        username: user.username,
+        setAt: new Date(),
+        attempts: 0,
+        lockedUntil: null,
+      },
+    },
+    { upsert: true }
+  );
+  return { ok: true };
+}
+
+const isSequential = (v) => {
+  const up = [...v].every((d, i, a) => i === 0 || Number(d) === Number(a[i - 1]) + 1);
+  const down = [...v].every((d, i, a) => i === 0 || Number(d) === Number(a[i - 1]) - 1);
+  return up || down;
+};
+
+/** Exchange a PIN for the same short elevation an emailed code grants. */
+async function verifyPin(req, user, pin) {
+  if (!user?.userId) {
+    return { ok: false, status: 401, code: 'NOT_AUTHENTICATED', message: 'Not signed in.' };
+  }
+
+  const col = await pinCollection();
+  const doc = await col.findOne({ _id: pinDocId(user.userId) });
+  if (!doc?.hash) {
+    return { ok: false, status: 409, code: 'NO_PIN_SET', message: 'No PIN is set for this account.' };
+  }
+
+  if (doc.lockedUntil && new Date(doc.lockedUntil) > new Date()) {
+    return {
+      ok: false,
+      status: 429,
+      code: 'PIN_LOCKED',
+      message: 'Too many incorrect PINs. Verify by email instead.',
+      lockedUntil: doc.lockedUntil,
+    };
+  }
+
+  const matches = await bcrypt.compare(String(pin ?? ''), doc.hash);
+  if (!matches) {
+    const attempts = (doc.attempts || 0) + 1;
+    const lock = attempts >= PIN_MAX_ATTEMPTS;
+    await col.updateOne(
+      { _id: pinDocId(user.userId) },
+      { $set: { attempts: lock ? 0 : attempts, lockedUntil: lock ? new Date(Date.now() + PIN_LOCKOUT_MS) : null } }
+    );
+    return {
+      ok: false,
+      status: 401,
+      code: lock ? 'PIN_LOCKED' : 'PIN_INCORRECT',
+      message: lock
+        ? 'Too many incorrect PINs. Verify by email instead.'
+        : 'That PIN is not correct.',
+      attemptsLeft: lock ? 0 : Math.max(PIN_MAX_ATTEMPTS - attempts, 0),
+    };
+  }
+
+  await col.updateOne({ _id: pinDocId(user.userId) }, { $set: { attempts: 0, lockedUntil: null } });
+  req.session.nasElevation = {
+    username: user.username,
+    elevatedUntil: now() + ELEVATION_TTL_MS,
+    via: 'pin',
+  };
+  return { ok: true, elevatedUntil: req.session.nasElevation.elevatedUntil };
+}
+
+/** Remove the PIN. Elevated only, same as setting it. */
+async function clearPin(req, user) {
+  const state = elevationState(req, user);
+  if (!state.elevated) {
+    return { ok: false, status: 403, code: 'ELEVATION_REQUIRED', message: 'Verify before removing the PIN.' };
+  }
+  const col = await pinCollection();
+  await col.deleteOne({ _id: pinDocId(user.userId) });
+  return { ok: true };
+}
+
 function elevationState(req, user) {
   const state = req.session?.nasElevation;
   if (!state?.elevatedUntil) return { elevated: false };
@@ -243,7 +412,14 @@ module.exports = {
   clearElevation,
   requireElevation,
   maskEmail,
+  pinState,
+  setPin,
+  verifyPin,
+  clearPin,
   CODE_TTL_MS,
   ELEVATION_TTL_MS,
   MAX_ATTEMPTS,
+  PIN_MIN_LENGTH,
+  PIN_MAX_LENGTH,
+  PIN_MAX_ATTEMPTS,
 };

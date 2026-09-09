@@ -84,7 +84,6 @@ const CHECKS = [
   // left it behind, and the next run reported 409 instead of 201 — the endpoint
   // was fine, the script was not.
   { label: 'create an org unit (admin)', method: 'POST', path: '/api/org-units', body: { code: PROBE_CODE } },
-  { label: 'read developer settings', method: 'GET', path: '/api/dev/field-configs' },
 ];
 
 const VERDICT = (status) => {

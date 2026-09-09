@@ -14,6 +14,9 @@ const {
   requestElevation,
   confirmElevation,
   elevationStatus,
+  setElevationPin,
+  verifyElevationPin,
+  removeElevationPin,
   endElevation,
 } = require('../controllers/nasController');
 
@@ -50,6 +53,14 @@ router.post('/api/nas/elevation/request', developerOnly, requestElevation);
 router.post('/api/nas/elevation/verify', developerOnly, confirmElevation);
 router.get('/api/nas/elevation', developerOnly, elevationStatus);
 router.delete('/api/nas/elevation', developerOnly, endElevation);
+
+// A PIN re-opens a step-up the person has already proved by email. Verifying
+// one therefore cannot itself require elevation — that is the whole point —
+// but setting or removing one can, and does: otherwise a stolen session could
+// turn a temporary hold on the account into a durable one.
+router.post('/api/nas/elevation/pin/verify', developerOnly, verifyElevationPin);
+router.post('/api/nas/elevation/pin', developerOnly, requireElevation, setElevationPin);
+router.delete('/api/nas/elevation/pin', developerOnly, requireElevation, removeElevationPin);
 
 // Configuration and diagnostics — elevated.
 router.get('/api/nas/config', sensitive, getConfig);

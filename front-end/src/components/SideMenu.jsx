@@ -43,7 +43,6 @@ const { Sider } = Layout;
 const rootSubmenuKeys = [
   "r3-monitoring",
   "admin",
-  "developer-settings",
 ];
 
 // `key` matches the per-province grant on the user account; `value` is the
@@ -107,17 +106,10 @@ const SideMenu = ({ theme, currentUser }) => {
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
     } else if (
-      path.startsWith("/universe/admin/users") ||
-      path.startsWith("/universe/admin/posting") ||
-      path.startsWith("/universe/admin/audit") ||
-      path.startsWith("/universe/admin/org-units") ||
-      path.startsWith("/universe/admin/duplicates") ||
-      path.startsWith("/universe/register/config") ||
-      path.startsWith("/universe/register/activity")
+      path.startsWith("/universe/admin/") ||
+      path.startsWith("/universe/register/")
     ) {
       setOpenKeys(["admin"]);
-    } else if (path.startsWith("/universe/admin/developer/")) {
-      setOpenKeys(["developer-settings"]);
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
@@ -338,49 +330,26 @@ const SideMenu = ({ theme, currentUser }) => {
         ),
       })),
     },
+    // One administrative section. "Settings" and "Developer Settings" were two
+    // menus over the same kind of work — every entry under both needed the
+    // admin domain, so the split told the user nothing except that there were
+    // two places to look. Related screens are now tabs rather than separate
+    // entries.
+    //
+    // Planning and Records staff get their own settings later; personal
+    // settings already live in the avatar menu, which is why nothing here is
+    // offered to them.
     hasAdmin && canViewAdminPanel && {
       key: "admin",
       icon: <SettingFilled />,
-      label: <div className="menu-label-wrapper main">Settings</div>,
+      label: <div className="menu-label-wrapper main">Admin Settings</div>,
       children: [
         {
           key: "/universe/admin/users",
           label: (
-            <LabelWithAvatars
-              to="/universe/admin/users"
-              label="User Accounts"
-              viewers={[]}
-            />
-          ),
-        },
-        {
-          key: "/universe/admin/posting",
-          label: (
-            <LabelWithAvatars
-              to="/universe/admin/posting"
-              label="Post to Bulletin"
-              viewers={[]}
-            />
-          ),
-        },
-        {
-          key: "/universe/register/config",
-          label: (
-            <LabelWithAvatars
-              to="/universe/register/config"
-              label="Monitoring Config"
-              viewers={[]}
-            />
-          ),
-        },
-        {
-          key: "/universe/register/activity",
-          label: (
-            <LabelWithAvatars
-              to="/universe/register/activity"
-              label="Register Activity"
-              viewers={[]}
-            />
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/users">User Accounts</Link>
+            </div>
           ),
         },
         {
@@ -391,63 +360,35 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
-        // Reconciling two records of the same firm is operational work, not
-        // system configuration, so it belongs here rather than under Admin
-        // Settings. It reads the register, hence the UCDS requirement.
+        // Monitoring Config, Register Activity and Duplicate Data were three
+        // entries about one thing: the register behind Monitoring Plan.
         hasUcds && {
-          key: "/universe/admin/duplicates",
+          key: "/universe/admin/register",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/duplicates">Duplicate Data</Link>
-            </div>
-          ),
-        },
-      ].filter(Boolean),
-    },
-    hasAdmin && canViewAdminPanel && {
-      key: "developer-settings",
-      icon: <ToolOutlined />,
-      label: <div className="menu-label-wrapper main">Admin Settings</div>,
-      children: [
-        {
-          key: "/universe/admin/developer/field-management",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/developer/field-management">Field Management</Link>
+              <Link to="/universe/admin/register">Register</Link>
             </div>
           ),
         },
         {
-          key: "/universe/admin/developer/database-settings",
+          key: "/universe/admin/posting",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/developer/database-settings">Database Settings</Link>
+              <Link to="/universe/admin/posting">Post to Bulletin</Link>
             </div>
           ),
         },
+        // Database status and audit configuration are both "how the system
+        // behaves", so they are tabs of one System screen.
         {
-          key: "/universe/admin/developer/pdf-forms",
+          key: "/universe/admin/system",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/developer/pdf-forms">PDF Forms</Link>
+              <Link to="/universe/admin/system">System</Link>
             </div>
           ),
         },
-        {
-          key: "/universe/admin/developer/activity-history",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/developer/activity-history">Activity History Configuration</Link>
-            </div>
-          ),
-        },
-        // The records share. It sat in its own top-level "NAS Storage" section
-        // with four entries, three of which were a dashboard, a browser and a
-        // settings page that all showed the same configuration. It is one
-        // developer setting, so it is one entry here.
-        //
-        // Guarded twice on purpose: the section already requires the admin
-        // domain, and this entry additionally requires the developer role,
+        // The records share. Developer-only on top of the admin domain,
         // because an Admin is not a developer.
         isDeveloper && {
           key: "/universe/admin/developer/storage-config",
