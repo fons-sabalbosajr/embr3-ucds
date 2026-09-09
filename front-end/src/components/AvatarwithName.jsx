@@ -45,36 +45,35 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         fetchUserData();
     }, [userHandle]);
 
-    if (loading) {
-        return <span>Loading...</span>;
-    }
+    // A placeholder rather than the words "Loading..." or "Error: ...". Those
+    // rendered as text in the header, so every navigation visibly reflowed the
+    // toolbar next to it, and a user with no avatar got an empty box. This
+    // keeps the slot the same size in all three cases.
+    const fallback = (
+        <Avatar
+            style={{ width: size, height: size, lineHeight: size, fontSize: "13px" }}
+            title={error ? `Could not load profile: ${error}` : name || undefined}
+        >
+            {(name || userHandle || "?").trim().charAt(0).toUpperCase()}
+        </Avatar>
+    );
 
-    if (error) {
-        return <span>Error: {error}</span>;
+    if (loading || error || !avatar) {
+        return (
+            <div style={{ display: "flex", alignItems: "center" }}>{fallback}</div>
+        );
     }
-
-    const renderOldAvatar = () => {
-        if (avatar) {
-            return (
-                <NiceAvatar
-                    style={{ width: size, height: size}}
-                    {...avatar}
-                />
-            );
-        }
-        return null;
-    };
 
     return (
         <div style={{ display: "flex", alignItems: "center" }}>
-            {typeof avatar === 'string' ? (
+            {typeof avatar === "string" ? (
                 <Avatar
                     src={`${API_BASE_URL}${avatar}`}
                     alt="Profile Picture"
                     style={{ width: size, height: size }}
                 />
             ) : (
-                renderOldAvatar()
+                <NiceAvatar style={{ width: size, height: size }} {...avatar} />
             )}
         </div>
     );

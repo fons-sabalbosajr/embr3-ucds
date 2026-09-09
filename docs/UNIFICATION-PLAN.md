@@ -673,7 +673,8 @@ Verified against 8 migrated records: **8/8 agreement** on both establishment and
 - [x] Security sweep over **every** route, not just ERMS
 - [x] Data reconciliation re-run against production — **10/10 gates**
 - [x] Per-role functional walkthrough (`npm run walkthrough`)
-- [ ] UI review, both themes, real devices — **requires a person**
+- [x] UI review, **both themes** and three breakpoints — automated
+- [ ] UI review on **real devices** — **requires a person**
 - [ ] Functional walkthrough of the screens — **requires a person**
 
 #### 🔴 The sweep found 20 unprotected routes
@@ -764,11 +765,41 @@ typing a UCDS URL saw a shell with failing requests instead of a refusal. They
 are now wrapped as three layout-route groups, and `/universe` redirects by
 domain so a Records clerk lands on their own dashboard.
 
+#### Themes and breakpoints
+
+`npm run smoke -- --themes` re-walks four representative screens in **both
+themes** across desktop (1440), tablet (1024) and phone (480), and fails on
+horizontal overflow. Splitting the old line 676 in two matters: the themes and
+the breakpoints are measurable, a real device is not, so only the second half is
+still blocked on a person.
+
+Measuring meant first making the two things measurable at all:
+
+| Found | Why it mattered |
+|---|---|
+| The theme choice was **not persisted** — `useState("dark")` with no storage | Every reload threw away the user's choice, so "review both themes" had no stable state to review. Now in `localStorage` under `ucds-theme`, which also lets the smoke run set the theme before load instead of clicking a toggle 24 times. |
+| `.profile_container` overflowed to **794px at a 480px viewport** | The header holds a `white-space: nowrap` date/name/division line. On a phone it pushed the avatar and theme toggle off-screen — **there was no way to sign out**. The text is now hidden below 768px; the name is still in the avatar popover. |
+| `AvatarWithName` rendered the words **"Loading..."**, then an **empty box** for any user with no avatar | Text in the header reflowed the toolbar on every navigation, and new accounts got a blank slot. Replaced with a same-size initial-letter placeholder covering the loading, error and no-avatar cases. |
+
+Two things the first run reported were **not** defects, and saying so is the
+point of the exercise:
+
+- A **wide data table** inside a horizontally scrolling wrapper is how a table
+  is supposed to behave on a narrow screen. `layoutIssues()` now walks ancestors
+  and ignores anything reachable by scrolling — otherwise the check trains you
+  to ignore it.
+- The **"Loading..."** text appeared in all 24 theme screenshots but none of the
+  main-loop ones. The theme loop was missing the main loop's `networkidle`
+  settle, so it photographed an in-flight state. The endpoint answers `200` in
+  milliseconds; there was no hang. The wait is now in both loops.
+
 **Gate:** ✅ zero endpoints answer without a domain check — enforced, not asserted.
 ✅ every screen renders for the roles that should reach it.
-⚠️ Still outstanding, and still human: **both themes on real devices**, and **a
-Records clerk completing a real filing end to end**. The smoke test proves a
-screen renders; it cannot tell you the workflow makes sense.
+✅ 50/50 screens clean across both themes × three breakpoints.
+⚠️ Still outstanding, and still human: **a real device** (an emulated 480px
+viewport is not a phone — touch targets, on-screen keyboards and real DPI are
+not simulated), and **a Records clerk completing a real filing end to end**. The
+smoke test proves a screen renders; it cannot tell you the workflow makes sense.
 
 ### Phase 10 — Parallel operation & cutover 🟡 tooling ready; the phase is a procedure
 

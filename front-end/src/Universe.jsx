@@ -67,7 +67,7 @@ import NasStorageConfig from "./shared/nas-browser/storage/NasStorageConfig";
 import NasSettings from "./shared/nas-browser/settings/NasSettings";
 
 // Legal Services Unit Components
-import LegalDashboard from "./modules/ucds/legal/legal-dashboard/LegalDashboard"; // Assuming these are the correct paths
+import LegalDashboard from "./modules/ucds/legal/legal-dashboard/LegalDashboard";
 import LegalDocket from "./modules/ucds/legal/docket/LegalDocket";
 import EnviLaws from "./modules/ucds/legal/envi-laws/EnviLaws";
 import { ROUTES } from "./config/routes";
@@ -82,13 +82,24 @@ import ErmsReports from "./modules/erms/pages/ErmsReports";
 
 const { Header, Content } = Layout;
 
+// Where the chosen theme is remembered. Cleared on sign-out along with
+// everything else in localStorage, which is the behaviour we want.
+const THEME_KEY = "ucds-theme";
+
 const Universe = () => {
   const [auth, setAuth] = useState(false);
   const [name, setName] = useState("");
   const [userHandle, setUserHandle] = useState(null);
   const [avatar, setAvatar] = useState(null);
   const [division, setDivision] = useState("");
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      return saved === "light" || saved === "dark" ? saved : "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const [collapsed, setCollapsed] = useState(false);
   // Named capability flags, replacing the positional boolean array this used to
   // build (permissions[2] meant "admin panel", permissions[i+5] meant
@@ -284,7 +295,21 @@ const Universe = () => {
 
     // Dynamically update the theme on the body element
     document.body.setAttribute("data-theme", newTheme);
+
+    // Remember the choice. Without this the theme reset to dark on every page
+    // load, so switching to light never survived a navigation.
+    try {
+      localStorage.setItem(THEME_KEY, newTheme);
+    } catch {
+      /* private browsing, or storage disabled — the toggle still works */
+    }
   };
+
+  // Keep the body attribute in step with the restored theme, which the toggle
+  // would otherwise be the only thing to set.
+  useEffect(() => {
+    document.body.setAttribute("data-theme", theme);
+  }, [theme]);
 
   const handleLogout = async () => {
     // Clear localStorage and force reload immediately

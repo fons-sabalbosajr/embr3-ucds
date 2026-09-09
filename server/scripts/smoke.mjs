@@ -37,6 +37,9 @@ const arg = (name, fallback) => {
 const BASE = arg('base', 'http://localhost:5173');
 const API = arg('api', process.env.VITE_API_BASE_URL || 'http://localhost:8081');
 const HEADED = process.argv.includes('--headed');
+// Phase 9 asked for "both themes, real devices". The themes and the breakpoints
+// are checkable here; a real device still is not.
+const THEMES = process.argv.includes('--themes');
 const SHOTS = path.join(repoRoot, 'reports', 'screenshots');
 const PASSWORD = 'Smoke!x9Test';
 
@@ -96,6 +99,67 @@ const ACCOUNTS = [
 
 const log = (...a) => console.log(...a);
 const pad = (s, n) => String(s).padEnd(n);
+
+// The sidebar narrows at 1080 and the logo shrinks again at 600, so those are
+// the widths where layout actually changes.
+const VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'tablet', width: 1024, height: 768 },
+  { name: 'phone', width: 480, height: 900 },
+];
+
+// A representative screen per area rather than all 26 per theme per viewport,
+// which would be six times the runtime for very little more coverage.
+const RESPONSIVE_SCREENS = [
+  ['dashboard', '/universe/dashboard'],
+  ['province-bataan', '/universe/province/Bataan'],
+  ['erms-records', '/universe/erms/records'],
+  ['admin-users', '/universe/admin/users'],
+];
+
+/**
+ * Layout problems a screenshot would show but a text check would not:
+ * content wider than the window, or an element spilling out of it.
+ */
+async function layoutIssues(page) {
+  return page.evaluate(() => {
+    const docWidth = document.documentElement.clientWidth;
+    const issues = [];
+
+    if (document.documentElement.scrollWidth > docWidth + 2) {
+      issues.push(
+        `page scrolls horizontally (${document.documentElement.scrollWidth} > ${docWidth})`
+      );
+    }
+
+    // A wide element is only a problem if the user cannot reach the rest of
+    // it. Inside a horizontally scrolling ancestor — how a data table is meant
+    // to behave on a narrow screen — it is reachable, so it is not a finding.
+    const scrollsHorizontally = (el) => {
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const overflow = getComputedStyle(p).overflowX;
+        if (overflow === 'auto' || overflow === 'scroll') return true;
+      }
+      return false;
+    };
+
+    // Only flag sizeable, visible elements — a decorative overflow of a few
+    // pixels is noise.
+    for (const el of document.querySelectorAll('#root *')) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 80 || r.height < 20) continue;
+      if (getComputedStyle(el).position === 'fixed') continue;
+      if (scrollsHorizontally(el)) continue;
+      if (r.right > docWidth + 24) {
+        issues.push(
+          `${el.tagName.toLowerCase()}.${String(el.className || '').split(' ')[0]} extends to ${Math.round(r.right)}px`
+        );
+        if (issues.length > 3) break;
+      }
+    }
+    return issues;
+  });
+}
 
 async function seedAccounts(db) {
   const password = await bcrypt.hash(PASSWORD, 10);
@@ -289,6 +353,74 @@ async function main() {
 
         results.push({ account: account.label, screen: name, route, ok, note, consoleErrors: [...consoleErrors] });
         log(`  ${ok ? 'ok  ' : 'FAIL'}  ${pad(name, 28)}${note}`);
+      }
+
+      // Themes and breakpoints, on the administrator only — the layout is the
+      // same shell for everyone, so repeating it per role adds runtime, not
+      // coverage.
+      if (THEMES && account.user === '__smoke_admin') {
+        log(`\n  ${'-'.repeat(84)}`);
+        log('  themes and breakpoints');
+        log(`  ${'-'.repeat(84)}`);
+
+        for (const theme of ['dark', 'light']) {
+          // The theme is remembered in localStorage, so it can be set before
+          // load rather than by clicking the toggle on every screen.
+          await context.addInitScript(
+            ([key, value]) => {
+              try {
+                window.localStorage.setItem(key, value);
+              } catch {
+                /* ignore */
+              }
+            },
+            ['ucds-theme', theme]
+          );
+
+          for (const vp of VIEWPORTS) {
+            await page.setViewportSize({ width: vp.width, height: vp.height });
+
+            for (const [name, route] of RESPONSIVE_SCREENS) {
+              const before = pageErrors.length;
+              await page.goto(BASE + route, { waitUntil: 'domcontentloaded' }).catch(() => {});
+              await page
+                .waitForFunction(
+                  () => (document.getElementById('root')?.innerText || '').trim().length > 40,
+                  null,
+                  { timeout: 20000 }
+                )
+                .catch(() => {});
+              // Same settle as the main loop. Without it the screenshots caught
+              // in-flight placeholders and the measurement ran against a layout
+              // that was still filling in.
+              await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+
+              const applied = await page.evaluate(() =>
+                document.body.getAttribute('data-theme')
+              );
+              const issues = await layoutIssues(page);
+              const threw = pageErrors.slice(before);
+              const label = `${name} · ${theme} · ${vp.name}`;
+
+              await page
+                .screenshot({ path: path.join(SHOTS, `${name}-${theme}-${vp.name}.png`) })
+                .catch(() => {});
+
+              const themeOk = applied === theme;
+              const ok = themeOk && issues.length === 0 && threw.length === 0;
+              const note = !themeOk
+                ? `theme did not apply (body says "${applied}")`
+                : threw.length
+                  ? `threw: ${threw[0]}`
+                  : issues.length
+                    ? issues[0]
+                    : 'clean';
+
+              results.push({ account: account.label, screen: label, ok, note });
+              log(`  ${ok ? 'ok  ' : 'FAIL'}  ${pad(label, 40)}${note}`);
+            }
+          }
+        }
       }
 
       await context.close();
