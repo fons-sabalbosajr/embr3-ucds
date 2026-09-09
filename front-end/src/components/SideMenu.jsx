@@ -88,8 +88,12 @@ const SideMenu = ({ theme, currentUser }) => {
   const hasAdmin = domains.includes("admin");
   // The records share configuration is developer-only. It is a role question,
   // not a domain one — the share is infrastructure, not a business module.
-  const isDeveloper =
-    (currentUser?.permission ?? currentUser?.role) === "developer";
+  const role = currentUser?.permission ?? currentUser?.role;
+  const isDeveloper = role === "developer";
+  // A Records clerk works the same register, but reaches it looking for
+  // documents rather than planning monitoring, so the section is named for
+  // that. Behaviour and scope are identical.
+  const isRecords = role === "records";
   const visibleProvinces = PROVINCE_MENU.filter((p) =>
     grantedProvinces.includes(p.key)
   ).map((p) => p.value);
@@ -310,10 +314,19 @@ const SideMenu = ({ theme, currentUser }) => {
         </div>
       ),
     },
+    // The same register, named for the work the role does with it. Planning
+    // staff are planning monitoring; a Records clerk is looking through the
+    // universe of firms for the documents filed against one. One screen, one
+    // set of data, one province scope — only the label differs, because
+    // building two of these is what the unification was undoing.
     hasUcds && {
       key: "r3-monitoring",
       icon: <CheckCircleFilled />,
-      label: <div className="menu-label-wrapper main">Monitoring Plan</div>,
+      label: (
+        <div className="menu-label-wrapper main">
+          {isRecords ? "Universe" : "Monitoring Plan"}
+        </div>
+      ),
       children: visibleProvinces.map((province) => ({
         key: `/universe/province/${province}`,
         label: (

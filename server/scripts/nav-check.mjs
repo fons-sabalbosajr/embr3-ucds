@@ -168,7 +168,12 @@ try {
 
   // Old NAS URLs should land on the canonical route.
   await dev.goto(`${BASE}/universe/nas/settings`, { waitUntil: 'domcontentloaded' });
-  await dev.waitForTimeout(2500);
+  // A client-side redirect: wait for the URL to actually change rather than
+  // for a fixed delay, which passes or fails on timing rather than on
+  // behaviour.
+  await dev
+    .waitForFunction(() => !/\/universe\/nas\//.test(location.href), null, { timeout: 20000 })
+    .catch(() => {});
   check(
     'old /universe/nas/settings redirects to Developer Settings',
     dev.url().includes('/universe/admin/developer/storage-config'),
@@ -186,7 +191,9 @@ try {
   const recMenu = await rec.evaluate(() => document.querySelector('.ant-menu')?.innerText || '');
   check('Records clerk sees no Admin Settings', !recMenu.includes('Admin Settings'));
   check('Records clerk sees no NAS Storage', !recMenu.includes('NAS Storage'));
-  check('Records clerk sees Monitoring Plan', recMenu.includes('Monitoring Plan'));
+  // Named 'Universe' for a Records clerk and 'Monitoring Plan' for Planning —
+  // same screen, same scope, named for the work.
+  check('Records clerk sees the register as "Universe"', recMenu.includes('Universe'));
 
   await rec.goto(`${BASE}/universe/admin/developer/storage-config`, { waitUntil: 'domcontentloaded' });
   // Same as above: wait for the guard to decide rather than for a fixed delay,

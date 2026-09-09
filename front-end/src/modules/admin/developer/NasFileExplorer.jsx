@@ -97,6 +97,7 @@ const NasFileExplorer = () => {
       title: "Name",
       dataIndex: "name",
       key: "name",
+      align: "left",
       render: (name, row) =>
         row.type === "directory" ? (
           <Button type="link" style={{ padding: 0 }} onClick={() => load(row.path)}>

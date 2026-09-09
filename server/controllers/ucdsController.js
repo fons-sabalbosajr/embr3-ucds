@@ -583,8 +583,14 @@ async function getProvinceData(req, res) {
       });
     }
 
-    const query = withProvinceScope(req, { province: new RegExp(`^${province}$`, 'i') });
-    const provinceData = await ucdsFor(req).find(query).toArray();
+    // ucdsFor() already applies the request's province scope to every find, so
+    // the filter here only narrows to the province that was asked for. This
+    // previously called an undefined `withProvinceScope`, which threw on every
+    // request — the helper exists in services/provinces.js but was never
+    // imported, and applying it here would have scoped the query twice anyway.
+    const provinceData = await ucdsFor(req)
+      .find({ province: new RegExp(`^${province}$`, 'i') })
+      .toArray();
     if (provinceData.length === 0) return res.status(404).json({ message: `No data found for ${province}.` });
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
     const formattedData = provinceData.map((doc) => ({
