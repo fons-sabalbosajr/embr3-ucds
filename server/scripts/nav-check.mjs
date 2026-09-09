@@ -104,12 +104,31 @@ await users.insertMany([
 ]);
 
 const browser = await chromium.launch();
+// Collected across the whole developer session, then asserted at the end.
+const consoleProblems = [];
+const failedRequests = [];
+
 try {
   // ---- developer -----------------------------------------------------------
   console.log('\nDeveloper');
   const devCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const dev = await devCtx.newPage();
+
+  dev.on('console', (m) => {
+    const text = m.text();
+    if (m.type() === 'warning' || m.type() === 'error') consoleProblems.push(text);
+  });
+  dev.on('response', (r) => {
+    if (r.status() === 401 && r.url().includes('/api/')) {
+      failedRequests.push(`401 ${r.url().replace(BASE, '')}`);
+    }
+  });
+
   await signIn(dev, DEV);
+  // Only 401s raised once a session exists are interesting. YearProvider
+  // mounts on the login page and asks for /api/years before anyone has signed
+  // in, which is correctly refused.
+  failedRequests.length = 0;
   await dev.waitForTimeout(2500);
 
   const menu = await dev.evaluate(() => document.querySelector('.ant-menu')?.innerText || '');
@@ -229,6 +248,25 @@ try {
     dev.url().includes('/universe/admin/developer/storage-config'),
     dev.url().replace(BASE, '')
   );
+  // The Ant Design static-API warning, and any 401 for a signed-in user.
+  const antdWarning = consoleProblems.find((t) =>
+    /Static function can not consume context/i.test(t)
+  );
+  check(
+    'no Ant Design static-context warning',
+    !antdWarning,
+    antdWarning ? antdWarning.slice(0, 70) : ''
+  );
+
+  // /api/auth/me answers 401 by design before sign-in, so only count the ones
+  // raised after the session exists.
+  const unexpected401 = failedRequests.filter((u) => !u.includes('/api/auth/me'));
+  check(
+    'no 401 for a signed-in developer',
+    unexpected401.length === 0,
+    unexpected401.slice(0, 2).join(', ')
+  );
+
   await devCtx.close();
 
   // ---- records clerk -------------------------------------------------------

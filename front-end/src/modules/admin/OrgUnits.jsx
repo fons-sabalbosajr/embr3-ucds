@@ -129,6 +129,8 @@ const OrgUnits = () => {
       title: "Code",
       dataIndex: "code",
       key: "code",
+      width: 150,
+      align: "left",
       sorter: (a, b) => a.code.localeCompare(b.code),
       render: (code, unit) => (
         <Space size={6}>
@@ -137,7 +139,7 @@ const OrgUnits = () => {
         </Space>
       ),
     },
-    { title: "Name", dataIndex: "name", key: "name" },
+    { title: "Name", dataIndex: "name", key: "name", width: 200, align: "left" },
     {
       title: "Type",
       dataIndex: "type",

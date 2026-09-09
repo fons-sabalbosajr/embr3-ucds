@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Input, Space, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Input, Space, Tag, Typography } from "antd";
+import { message } from "../../../shared/feedback";
 import { KeyOutlined } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
 

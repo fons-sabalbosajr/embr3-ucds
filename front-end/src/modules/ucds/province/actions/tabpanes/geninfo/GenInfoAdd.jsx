@@ -110,7 +110,8 @@ const GenInfoAdd = ({
           const response = await fetch(
             `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
               fullAddress
-            )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+            )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`,
+            { credentials: "include" }
           );
           const data = await response.json();
           //console.log("Geocoding API response:", data);

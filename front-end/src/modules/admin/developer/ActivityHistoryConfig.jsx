@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, Table, Space, Button, Input, message, Modal, Select, Tag, DatePicker } from "antd";
+import { Card, Table, Space, Button, Input, Select, Tag, DatePicker } from "antd";
+import { message, modal } from "../../../shared/feedback";
 import { getActivityLogs, updateActivityLog, deleteActivityLog } from "../../../api/developerService";
 
 const ActivityHistoryConfig = () => {
@@ -38,7 +39,7 @@ const ActivityHistoryConfig = () => {
 
   const onEdit = (record) => {
     let newMsg = record.message || "";
-    Modal.confirm({
+    modal.confirm({
       title: "Edit message",
       content: (
         <Input.TextArea defaultValue={newMsg} onChange={(e)=>{ newMsg = e.target.value; }} rows={4} />
@@ -56,7 +57,7 @@ const ActivityHistoryConfig = () => {
   };
 
   const onDelete = (record) => {
-    Modal.confirm({
+    modal.confirm({
       title: "Delete this log?",
       onOk: async () => {
         try {

@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Input,
-  Result,
-  Space,
-  Spin,
-  Statistic,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Alert, Button, Card, Descriptions, Input, Result, Space, Spin, Statistic, Tag, Typography } from "antd";
+import { message } from "../../../shared/feedback";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,

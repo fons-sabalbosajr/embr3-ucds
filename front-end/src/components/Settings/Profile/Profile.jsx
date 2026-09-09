@@ -1,15 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Row,
-  Col,
-  Button,
-  Input,
-  Typography,
-  Progress,
-  Skeleton,
-  message,
-  Empty,
-} from "antd";
+import { Row, Col, Button, Input, Typography, Progress, Skeleton, Empty } from "antd";
+import { message } from "../../../shared/feedback";
 import {
   CameraFilled,
   UploadOutlined,

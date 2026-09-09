@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Table, Spin, Alert, Empty, notification } from "antd";
+import { Table, Spin, Alert, Empty } from "antd";
+import { notification } from "../../../../../shared/feedback";
 import moment from "moment";
 import "./reportdrafts.css";
 import { API_BASE_URL } from "../../../../../config/api";

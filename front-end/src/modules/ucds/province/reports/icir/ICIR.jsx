@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  Table,
-  Checkbox,
-  Button,
-  Modal,
-  Spin,
-  Menu,
-  Dropdown,
-  Tour,
-} from "antd";
+import { Table, Checkbox, Button, Spin, Menu, Dropdown, Tour } from "antd";
+import { modal } from "../../../../../shared/feedback";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
 import "./icir.css";
@@ -239,7 +231,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       document.body.style.cursor = "wait";
   
       // Show processing modal
-      const processingModal = Modal.info({
+      const processingModal = modal.info({
         title: "Generating PDF...",
         content: (
           <Spin spinning={true} size="large">
@@ -310,7 +302,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       setLoadingPDF(false);
       document.body.style.cursor = "default";
       Modal.destroyAll();
-      Modal.error({
+      modal.error({
         title: "Error",
         content: "Failed to generate PDF",
       });
@@ -355,7 +347,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       }
 
       // Show processing modal
-      const processingModal = Modal.info({
+      const processingModal = modal.info({
         title: "Generating PDF...",
         content: (
           <Spin spinning={true} size="large">
@@ -409,7 +401,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       // Save draft report to MongoDB
       await axios.post(`${API_BASE_URL}/save-draft-report`, formData);
 
-      Modal.success({
+      modal.success({
         title: "Success",
         content: "Draft report has been saved successfully.",
       });
@@ -423,7 +415,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
       document.body.removeChild(downloadLink);
     } catch (error) {
       Modal.destroyAll();
-      Modal.error({
+      modal.error({
         title: "Error",
         content: "Failed to generate PDF",
       });
@@ -435,7 +427,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   };
 
   const confirmGeneratePDF = () => {
-    Modal.confirm({
+    modal.confirm({
       title: "Are you sure you want to generate the PDF?",
       content:
         "Please confirm that you want to proceed. \n Note:All data sources can be modified upon generation of PDF.",
@@ -447,7 +439,7 @@ const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
   };
 
   const confirmGenerateDraft = () => {
-    Modal.confirm({
+    modal.confirm({
       title: "Save generated PDF to Draft Reports?",
       content:
         "Please confirm that you want to proceed. \n Note:All data sources can be modified upon generation of PDF.",

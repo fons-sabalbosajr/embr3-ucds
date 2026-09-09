@@ -103,7 +103,8 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/ucds/next-id?province=${province}`
+        `${API_BASE_URL}/api/ucds/next-id?province=${province}`,
+        { credentials: "include" }
       );
       const data = await response.json();
       setNextIdNo(data.nextIdNo);
@@ -137,13 +138,9 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/ucds/add-establishment`,
-        {
-          method: "POST",
+        `${API_BASE_URL}/api/ucds/add-establishment`, { method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(completeData),
-        }
-      );
+          body: JSON.stringify(completeData), credentials: "include" });
 
       const data = await response.json();
 

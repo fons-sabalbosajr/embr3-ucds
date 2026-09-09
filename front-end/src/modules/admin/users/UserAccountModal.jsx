@@ -1,15 +1,5 @@
-import {
-  Modal,
-  Avatar,
-  Input,
-  Select,
-  Button,
-  Tabs,
-  Table,
-  Progress,
-  ConfigProvider,
-  message,
-} from "antd";
+import { Avatar, Input, Select, Button, Tabs, Table, Progress, ConfigProvider } from "antd";
+import { message } from "../../../shared/feedback";
 import "./useraccountmodal.css";
 import { UserOutlined, CameraOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";

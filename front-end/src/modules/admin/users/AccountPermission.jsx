@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  Table,
-  Switch,
-  Row,
-  Col,
-  message,
-  Button,
-  Tabs,
-  Avatar,
-  Tag,
-} from "antd";
+import { Table, Switch, Row, Col, Button, Tabs, Avatar, Tag } from "antd";
+import { message } from "../../../shared/feedback";
 import {
   EyeOutlined,
   DatabaseOutlined,

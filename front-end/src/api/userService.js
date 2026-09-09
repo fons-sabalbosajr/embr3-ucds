@@ -38,7 +38,14 @@ export const fetchUserByUsername = async (username) => {
 };
 
 export const fetchUserDetails = async (username) => {
-  const res = await fetch(`${API_URL}/user/details?username=${username}`);
+  // credentials: "include" is required. fetch defaults to "same-origin" and
+  // the SPA and API are different origins, so without it the session cookie is
+  // never sent and an authenticated user gets 401. The username is encoded
+  // because it goes into a query string.
+  const res = await fetch(
+    `${API_URL}/user/details?username=${encodeURIComponent(username)}`,
+    { credentials: "include" }
+  );
   if (!res.ok) throw new Error("Failed to fetch user details");
   return await res.json();
 };
@@ -51,6 +58,7 @@ export const uploadUserPhoto = async (username, file) => {
   const res = await fetch(`${API_URL}/users/update`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
   if (!res.ok) {
     const error = await res.json();

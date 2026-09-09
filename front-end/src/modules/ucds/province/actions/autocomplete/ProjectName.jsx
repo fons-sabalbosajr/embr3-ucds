@@ -12,7 +12,8 @@ const ProjectName = ({ isEditing }) => {
       setLoading(true);
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/ucds/search-name?query=${value}`
+          `${API_BASE_URL}/api/ucds/search-name?query=${value}`,
+          { credentials: "include" }
         );
         const data = await response.json();
         const uniqueNames = data

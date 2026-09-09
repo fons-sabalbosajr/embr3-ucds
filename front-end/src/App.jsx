@@ -1,6 +1,7 @@
 import React from 'react';
 import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Navigate } from 'react-router-dom';
 import { App as AntdApp, ConfigProvider } from 'antd';
+import FeedbackBridge from './shared/FeedbackBridge';
 import Landing from './Landing';
 import Register from './Register';
 import Login from './Login';
@@ -88,6 +89,10 @@ function App() {
   return (
     <ConfigProvider>
       <AntdApp component={false}>
+        {/* Captures the context-aware message/notification/modal instances so
+            code outside a component can use them without the static API's
+            "cannot consume context" warning. Renders nothing. */}
+        <FeedbackBridge />
         <YearProvider>
           <RouterProvider router={router} />
         </YearProvider>

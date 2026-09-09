@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dropdown, Tag, Modal } from "antd";
+import { Dropdown, Tag } from "antd";
+import { modal } from "../shared/feedback";
 import { DownOutlined, DatabaseOutlined, CheckOutlined, AppstoreOutlined } from "@ant-design/icons";
 import { useYear } from "../context/YearContext";
 import { ROUTES } from "../config/routes";
@@ -26,7 +27,7 @@ const YearSwitcher = ({ theme }) => {
       // instead of showing the previous year's rows.
       navigate(0);
     } catch (e) {
-      Modal.error({
+      modal.error({
         title: "Cannot switch year",
         content:
           e?.response?.data?.error ||

@@ -1,4 +1,5 @@
-import { Modal, Upload, Button, message, Spin, Typography } from "antd";
+import { Modal, Upload, Button, Spin, Typography } from "antd";
+import { message } from "../../../../shared/feedback";
 import { UploadOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";

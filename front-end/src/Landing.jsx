@@ -99,7 +99,7 @@ const Landing = () => {
           <div className="ucds-brand">
             <img src={embLogo} alt="EMB Region III seal" />
             <span className="ucds-brand-text">
-              <span className="ucds-brand-name">E-Universe</span>
+              <span className="ucds-brand-name">EMBR R3 E-Universe</span>
               <span className="ucds-brand-sub">
                 Unified Information and Records Management System
               </span>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Modal, Upload, Button, Avatar, message } from "antd";
+import { Modal, Upload, Button, Avatar } from "antd";
+import { message } from "../shared/feedback";
 import { UploadOutlined } from "@ant-design/icons";
 
 // Generate a default avatar using UI Avatars

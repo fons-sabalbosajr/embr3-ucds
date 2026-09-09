@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  DatePicker,
-  Descriptions,
-  InputNumber,
-  Radio,
-  Space,
-  Statistic,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Alert, Button, Card, DatePicker, Descriptions, InputNumber, Radio, Space, Statistic, Tag, Typography } from "antd";
+import { message } from "../../../shared/feedback";
 import { PoweroffOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { API_BASE_URL } from "../../../config/api";

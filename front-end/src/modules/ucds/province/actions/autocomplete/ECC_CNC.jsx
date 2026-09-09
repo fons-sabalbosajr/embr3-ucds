@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { AutoComplete, Spin, Input, ConfigProvider, notification } from "antd";
+import { AutoComplete, Spin, Input, ConfigProvider } from "antd";
+import { notification } from "../../../../../shared/feedback";
 import "./autocompletestyles.css";
 import { API_BASE_URL } from "../../../../../config/api";
 
@@ -14,7 +15,8 @@ const ECC_CNC = ({ isEditing }) => {
   const checkDuplicateInDatabase = async (value) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/ucds/check-duplicate?query=${encodeURIComponent(value)}`
+        `${API_BASE_URL}/api/ucds/check-duplicate?query=${encodeURIComponent(value)}`,
+        { credentials: "include" }
       );
       const data = await response.json();
       return data.duplicate ? data.details : null;
@@ -35,7 +37,8 @@ const ECC_CNC = ({ isEditing }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/ucds/search-ecc-cnc?query=${encodeURIComponent(lastQuery)}`
+        `${API_BASE_URL}/api/ucds/search-ecc-cnc?query=${encodeURIComponent(lastQuery)}`,
+        { credentials: "include" }
       );
       const data = await response.json();
       const uniqueNames = data

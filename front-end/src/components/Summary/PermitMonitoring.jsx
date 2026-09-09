@@ -1,17 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Modal,
-  Table,
-  Spin,
-  Tag,
-  Tooltip,
-  Input,
-  Button,
-  Space,
-  Select,
-  Pagination,
-  message,
-} from "antd";
+import { Modal, Table, Spin, Tag, Tooltip, Input, Button, Space, Select, Pagination } from "antd";
+import { message } from "../../shared/feedback";
 import {
   SearchOutlined,
   EditOutlined,

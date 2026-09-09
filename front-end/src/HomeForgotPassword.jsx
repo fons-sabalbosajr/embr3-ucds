@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Form, Input, Button, message, ConfigProvider } from "antd";
+import { Form, Input, Button, ConfigProvider } from "antd";
+import { message } from "./shared/feedback";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import "./login.css";

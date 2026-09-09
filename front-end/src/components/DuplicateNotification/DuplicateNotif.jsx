@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { Table, Spin, Input, Tooltip, Button, Modal, message } from "antd";
+import { Table, Spin, Input, Tooltip, Button, Modal } from "antd";
+import { message } from "../../shared/feedback";
 import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
 import fieldLabels from "../../constants/fieldLabels";
 import {

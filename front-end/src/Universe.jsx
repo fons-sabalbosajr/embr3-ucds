@@ -1,14 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Layout,
-  Button,
-  Spin,
-  Popover,
-  List,
-  message,
-  ConfigProvider,
-  theme as antdTheme,
-} from "antd";
+import { Layout, Button, Spin, Popover, List, ConfigProvider, theme as antdTheme } from "antd";
+import { message } from "./shared/feedback";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import {

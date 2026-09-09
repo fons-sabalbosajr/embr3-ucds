@@ -16,7 +16,8 @@ const PCO = ({ isEditing }) => {
       setLoading(true);
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/ucds/search-pco-no?query=${lastQuery}`
+          `${API_BASE_URL}/api/ucds/search-pco-no?query=${lastQuery}`,
+          { credentials: "include" }
         );
         const data = await response.json();
         const uniqueNames = data

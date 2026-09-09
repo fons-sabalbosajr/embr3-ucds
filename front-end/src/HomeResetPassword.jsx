@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Input, Button, Form, message, ConfigProvider } from 'antd';
+import { Input, Button, Form, ConfigProvider } from "antd";
+import { message } from "./shared/feedback";
 import "./login.css";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
