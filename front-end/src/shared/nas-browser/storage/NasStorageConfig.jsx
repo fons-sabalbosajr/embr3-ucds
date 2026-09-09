@@ -1,28 +1,9 @@
-import { useState } from "react";
-import { Button, Modal } from "antd";
-import NasStorageBrowser from "./NasStorageBrowser";
+import NasSettings from "../settings/NasSettings";
 
-const NasStorageConfig = () => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div>
-      <Button type="primary" onClick={() => setOpen(true)}>
-        Open Storage Explorer
-      </Button>
-      <Modal
-        title="NAS Storage Explorer"
-        open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-        width={800}
-        destroyOnClose
-      >
-        {/* The browser handles its own content, including the login form */}
-        <NasStorageBrowser />
-      </Modal>
-    </div>
-  );
-};
+// Storage Configuration and Settings were two routes onto the same thing, and
+// keeping two half-built screens meant neither said where the real controls
+// were. Both now render the configuration screen, so the existing sidebar link
+// and any saved bookmark still work.
+const NasStorageConfig = () => <NasSettings />;
 
 export default NasStorageConfig;

@@ -72,6 +72,7 @@ import LegalDocket from "./modules/ucds/legal/docket/LegalDocket";
 import EnviLaws from "./modules/ucds/legal/envi-laws/EnviLaws";
 import { ROUTES } from "./config/routes";
 import DomainGuard from "./auth/DomainGuard";
+import RoleGuard from "./auth/RoleGuard";
 import Forbidden from "./shared/components/Forbidden";
 import OrgUnits from "./modules/admin/OrgUnits";
 import ErmsDashboard from "./modules/erms/pages/ErmsDashboard";
@@ -823,23 +824,31 @@ const Universe = () => {
 
                   {/* NAS storage routes (shared infrastructure).
                       Renamed from erms/* so the ERMS records module can own
-                      that namespace — see docs/UNIFICATION-PLAN.md, Phase 1. */}
-                  <Route
-                    path="nas/dashboard"
-                    element={<NasDashboard theme={theme} />}
-                  />
-                  <Route
-                    path="nas/browser"
-                    element={<NasBrowser theme={theme} />}
-                  />
-                  <Route
-                    path="nas/storage-config"
-                    element={<NasStorageConfig theme={theme} />}
-                  />
-                  <Route
-                    path="nas/settings"
-                    element={<NasSettings theme={theme} />}
-                  />
+                      that namespace — see docs/UNIFICATION-PLAN.md, Phase 1.
+
+                      Developer-only since Phase 7. These sat outside every
+                      guard, so any signed-in user — Planning, Viewer, anyone —
+                      reached the share configuration screens. The server now
+                      refuses them too; this stops rendering a page that would
+                      only fail. */}
+                  <Route element={<RoleGuard roles={["developer"]} user={currentUser} />}>
+                    <Route
+                      path="nas/dashboard"
+                      element={<NasDashboard theme={theme} />}
+                    />
+                    <Route
+                      path="nas/browser"
+                      element={<NasBrowser theme={theme} />}
+                    />
+                    <Route
+                      path="nas/storage-config"
+                      element={<NasStorageConfig theme={theme} />}
+                    />
+                    <Route
+                      path="nas/settings"
+                      element={<NasSettings theme={theme} />}
+                    />
+                  </Route>
                   {/* Legacy paths — kept so existing bookmarks keep working */}
                   <Route
                     path="erms/dashboard"

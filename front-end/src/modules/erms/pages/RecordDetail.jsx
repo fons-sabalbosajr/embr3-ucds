@@ -16,7 +16,6 @@ import { useState } from "react";
 import {
   ArrowLeftOutlined,
   EditOutlined,
-  FilePdfOutlined,
   LinkOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -31,6 +30,7 @@ import {
 import TrackingPanel from "../components/TrackingPanel";
 import RecordFormModal from "../components/RecordFormModal";
 import BoxAssignment from "../components/BoxAssignment";
+import DocumentPanel from "../components/DocumentPanel";
 
 const date = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 const dateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
@@ -238,27 +238,20 @@ const RecordDetail = () => {
           <Descriptions.Item label="Uploaded">
             {dateTime(doc?.uploadedAt)} by {orDash(doc?.uploadedBy)}
           </Descriptions.Item>
-          <Descriptions.Item label="Location on the share">
-            <Typography.Text code style={{ fontSize: 12, wordBreak: "break-all" }}>
-              {orDash(doc?.sharePath)}
-            </Typography.Text>
-          </Descriptions.Item>
+          {/* The API sends this to developers only — the path describes the
+              internal layout of the records share, and nobody filing a record
+              needs it. Absent for everyone else, so the row simply is not
+              there rather than showing an empty one. */}
+          {doc?.sharePath && (
+            <Descriptions.Item label="Location on the share">
+              <Typography.Text code style={{ fontSize: 12, wordBreak: "break-all" }}>
+                {doc.sharePath}
+              </Typography.Text>
+            </Descriptions.Item>
+          )}
         </Descriptions>
 
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginTop: 12 }}
-          message="Opening documents is not enabled yet"
-          description="The scanned files stay on the records share. The server needs the share root configured before it can read them — the stored paths use a drive letter mapped on each workstation, which means nothing to the server."
-          action={
-            <Tooltip title="Available once the records share is configured">
-              <Button icon={<FilePdfOutlined />} disabled>
-                Open document
-              </Button>
-            </Tooltip>
-          }
-        />
+        <DocumentPanel serialNo={record.serialNo} fileName={doc?.fileName} />
       </Card>
 
       <BoxAssignment record={record} canWrite={canWrite} />

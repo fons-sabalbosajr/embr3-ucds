@@ -35,7 +35,26 @@ VITE_CRYPTOJS_ENCRYPTION_KEY=<any random string>
 
 BYPASS_AUTH=false
 ERMS_MODULE_ENABLED=false     # true once Records personnel have signed off
+
+# The records share. See docs/NAS-ARCHITECTURE.md.
+NAS_ROOT=\\10.14.76.167\IDMS_Records_Database
+NAS_USERNAME=<read-only service account>
+NAS_PASSWORD=<its password>
+NAS_DOMAIN=EMBR3SYNOLOGY
+NAS_LEGACY_PREFIXES=Z:,N:     # drive letters present in the legacy data
+NAS_BASE_DIR=                 # empty: stored paths already start at RECORDS\
+NAS_ENABLED=true              # false turns document access off, keeping config
 ```
+
+> The Node process reaches the share through **Windows**, so the account must
+> also be stored on the machine — `.env` documents which account is intended,
+> it does not authenticate the SMB session:
+>
+> ```powershell
+> cmdkey /add:10.14.76.167 /user:EMBR3SYNOLOGY\<account> /pass
+> ```
+>
+> Use a **read-only** account: nothing in E-Universe writes to the share.
 
 > **Never end a value with a semicolon.** `dotenv` keeps it as part of the
 > value, so `BYPASS_AUTH=true;` reads as `"true;"` — off by accident, and
@@ -72,7 +91,12 @@ curl -o /dev/null -w "%{http_code}\n" \
      http://10.14.76.250:8081/api/ucds/count     # 401 — auth is live
 cd server && npm run audit:routes                # 0 unprotected routes
 cd server && npm run walkthrough                 # per-role capability matrix
+cd server && node scripts/nas-coverage.js 300    # ~98% of records resolve
 ```
+
+`nas-coverage` is the one to watch after any network or share change. It
+reports how many records resolve to a real file — a sudden drop means the
+server has lost the share, not that documents have been deleted.
 
 ### Check the screens too
 

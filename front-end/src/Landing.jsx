@@ -99,8 +99,10 @@ const Landing = () => {
           <div className="ucds-brand">
             <img src={embLogo} alt="EMB Region III seal" />
             <span className="ucds-brand-text">
-              <span className="ucds-brand-name">Universe Central Database System</span>
-              <span className="ucds-brand-sub">DENR &middot; EMB Region III</span>
+              <span className="ucds-brand-name">E-Universe</span>
+              <span className="ucds-brand-sub">
+                Unified Information and Records Management System
+              </span>
             </span>
           </div>
 
@@ -271,7 +273,7 @@ const Landing = () => {
               <AuthBrand size="sm" showText={false} />
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>
-                  Universe Central Database System
+                  E-Universe &mdash; Unified Information and Records Management System
                 </div>
                 <div className="ucds-footer-note">
                   Environmental Management Bureau, Regional Office III &mdash; Department of

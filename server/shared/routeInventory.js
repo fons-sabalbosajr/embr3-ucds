@@ -18,6 +18,7 @@ const GUARD_NAMES = new Set([
   'requireRole',
   'requireErmsWrite',
   'requireNasConfig',
+  'requireElevation',
   'resolveYearContext',
   'rejectYearOverride',
   'logActivity',

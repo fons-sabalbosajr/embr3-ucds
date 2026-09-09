@@ -529,7 +529,7 @@ Matching is layered exact → punctuation-insensitive → digits-only (≥8 digi
 **Gate:** ✅ all reconciliation checks pass against staging.
 **Rollback:** drop `universe-db-staging`. Production was never written to.
 
-### Phase 7 — ERMS module build 🟡 IN PROGRESS (read-only surfaces done)
+### Phase 7 — ERMS module build ✅ DONE
 
 Behind `ERMS_MODULE_ENABLED`. Read-only surfaces before write surfaces.
 
@@ -541,7 +541,7 @@ Behind `ERMS_MODULE_ENABLED`. Read-only surfaces before write surfaces.
 - [x] Tracking & routing — append-only custody history
 - [x] Archiving & retention — boxes, sealing, disposal recording
 - [x] ERMS reports — four reports with CSV export
-- [ ] Document access via NAS — **blocked**, see below
+- [x] Document access via NAS — full note in [`NAS-ARCHITECTURE.md`](NAS-ARCHITECTURE.md)
 
 #### Write path
 
@@ -575,7 +575,13 @@ The recovery worked because the import is idempotent and upserts on `serialNo` �
 
 **Tests:** 33 new (160 total). They cover the capability and province refusals, serial uniqueness under concurrency, permit-number conflict, nested-merge on update, the raw-date clearing when a flagged value is corrected, custody calculation, overdue loans clearing on return, sealed boxes refusing records, disposal requiring an authority, and CSV export.
 
-**Gate:** ⚠️ built and tested; **acceptance by Records personnel still outstanding**.
+**Gate:** ⚠️ built and tested, documents included; **acceptance by Records personnel still outstanding**.
+
+#### The rename
+
+The application is now **E-Universe — Unified Information and Records Management System**.
+
+Display names only: `<title>`, the landing page, the sidebar logo, Help. **Deliberately not renamed** — `SITE_BASE` stays `/universe-central-database-system`, because changing it breaks every saved bookmark and every password-reset link already sitting in someone's inbox; collections keep their `erms-*` / `ucds-*` names; the `logo-ucds` CSS class stays, because PurgeCSS matches class names literally and renaming it would drop the rule from the production bundle — the same failure mode Phase 9 already hit once.
 
 **Production import.** Staging reconciled 10/10, so the same pipeline was run against `universe-db`: 18,067 records, 11,465 linked, 36 flagged. Additive only — `erms-records` and `erms-id-map` are new collections; nothing existing was touched. `universe-db` went 27 → 30 collections (`org-units` + the two `erms-*`).
 
@@ -610,9 +616,24 @@ modules/erms/
 
 Sidebar lists only Dashboard and Records — linking to unbuilt screens would just lead to a "not built yet" page.
 
-#### 🚧 Blocked: opening documents
+#### ✅ Opening documents — unblocked
 
-The stored paths are `Z:\RECORDS\Database\Records Database\…` — a **drive letter mapped on each workstation**, which means nothing to the server. The share root is deferred by the team, so the detail screen shows the file name, classification, uploader and share-relative path, with a disabled **Open document** button and a plain explanation. Everything else works without it.
+Full note: [`NAS-ARCHITECTURE.md`](NAS-ARCHITECTURE.md). A clerk opens a document from its record; the server resolves the stored path inside the configured share and streams it. No workstation needs `Z:` mapped and no credential reaches a browser.
+
+Four findings, each of which changed the design:
+
+| Found | Consequence |
+|---|---|
+| **The `smb2` package cannot run on Node 22.** It builds an NTLMv1 response, which needs DES, which OpenSSL 3 removed — every call died with `ERR_OSSL_EVP_UNSUPPORTED`. Last published 2018. | The NAS feature was **already 100% non-functional**. Replaced with native `fs` over a UNC path: the server is Windows on the same network, so the OS is already an SMB client. That also gives real streaming and range requests instead of buffering whole files, and removes a dead dependency rather than swapping in another. |
+| **26.7% of paths exceed the 260-character `MAX_PATH` limit**, and Windows reports those as *file not found* rather than as an error. | A first coverage measurement said **0 of 400** resolved and looked like catastrophic data loss. With the `\\?\UNC\` prefix the same sample resolved **98.7%**. The prefix also disables path normalisation, so validation has to run *before* it is applied — `resolveSharePath()` does, then re-checks containment. |
+| **`/api/nas/*` required only `authenticateSession`.** | Authentication with no authorization: any signed-in user could read **any file on the share** by supplying a path. The Phase 9 sweep passed it because the sweep checks that a guard exists, not that it is sufficient. The path-taking route is now deleted rather than guarded, and the rest is developer-only plus an emailed code. |
+| **The four `nas/*` screens sat outside every `DomainGuard`**, and the sidebar offered them to any Admin or Records user. | Both fixed — a `RoleGuard`, and the menu entry now requires the developer role. |
+
+Coverage is measured, not assumed: `node scripts/nas-coverage.js` reports **98.3% of a 300-record sample resolving to a real file**. The rest are directories that no longer exist, including one row whose path contains `Bulacan\Bulacan` — a fault in the original data.
+
+Two drive letters appear in the legacy data, `Z:` (18,065 rows) and **`N:` (2 rows)**, so the prefix is configurable and a hard-coded `Z:` would have silently lost two records.
+
+**Verified end to end** against a real migrated record: a 59 MB scan at a 287-character path returns correct metadata, streams in ~4s, answers `206` to a range request, downloads with its filename, and writes an audit entry that names the record but **not** the UNC path — the path would publish the internal host to everyone who can read a log.
 
 **Tests:** 22 new (127 total), covering the domain refusal, the fail-closed province scope, the filter-cannot-widen rule, 404-not-403 for out-of-scope records, validation rejections, and that the module exposes **no write API** to other domains. The suite skips itself with a warning if the flag is off, rather than reporting misleading 404s.
 
@@ -806,10 +827,24 @@ smoke test proves a screen renders; it cannot tell you the workflow makes sense.
 **Full runbook: [`CUTOVER.md`](CUTOVER.md).**
 
 - [x] Divergence checker built and proven to detect drift
+- [x] **Document access working** — the prerequisite, see Phase 7
+- [x] Daily check reduced to one command — `npm run daily-check`
+- [x] Training material written — [`RECORDS-USER-GUIDE.md`](RECORDS-USER-GUIDE.md)
+- [ ] Read-only NAS account provisioned on the Synology — **on the appliance, not in this repo**
 - [ ] Desktop ERMS set to read-only — **the irreversible step**
 - [ ] 2–4 weeks parallel with daily delta checks
 - [ ] Remove feature flag
-- [ ] User training
+- [ ] Training delivered
+
+**Document access was a prerequisite, not a parallel task.** A two-to-four week
+trial of a records system in which nobody can open a scan proves nothing —
+staff would return to the desktop app on the first day and the period would
+measure nothing except how long they tolerated it. That is why Phase 7's NAS
+work came first.
+
+**What is left is not code.** Freezing the desktop app is an irreversible
+decision, the parallel period is elapsed time, and training is people in a
+room. The tooling for all three is built and the material is written.
 
 **`npm run divergence -- --file=<export>.csv`** compares a fresh desktop export
 against `erms-records`, reusing the Phase 6 transform so the two sides are

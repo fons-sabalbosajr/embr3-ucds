@@ -1,21 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { Typography, Card, Alert, Space } from "antd";
+import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../../../config/api";
 
 const DatabaseSettings = () => {
-  const [envStatus, setEnvStatus] = useState(null);
+  const [nasStatus, setNasStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Absolute URL: the SPA and the API are separate services on different
     // hosts in a deployed environment, so a relative path would resolve
     // against the static site and never reach the API.
-    fetch(`${API_BASE_URL}/api/nas/env-status`, { credentials: "include" })
+    //
+    // /api/nas/status replaced /api/nas/env-status in Phase 7. The old
+    // endpoint returned the share name, domain and a directory listing to any
+    // signed-in user; this one answers only whether a share is configured, and
+    // the details moved behind an emailed code on NAS Settings.
+    fetch(`${API_BASE_URL}/api/nas/status`, { credentials: "include" })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
-        setEnvStatus({ ok: res.ok, ...data });
+        setNasStatus({ ok: res.ok, ...data });
       })
-      .catch((err) => setEnvStatus({ ok: false, message: err.message }))
+      .catch((err) => setNasStatus({ ok: false, message: err.message }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -30,31 +36,36 @@ const DatabaseSettings = () => {
         </Typography.Paragraph>
       </Card>
 
-      <Card title="NAS Connection (ENV)">
+      <Card title="Records share">
         {loading ? (
-          <Typography.Text>Checking NAS status…</Typography.Text>
-        ) : envStatus?.ok ? (
+          <Typography.Text>Checking the records share…</Typography.Text>
+        ) : nasStatus?.configured && nasStatus?.enabled ? (
           <Alert
             type="success"
             showIcon
-            message="Connected to NAS using ENV credentials"
+            message="A records share is configured and enabled"
             description={
-              envStatus?.share
-                ? `Share: ${envStatus.share} (domain: ${envStatus.domain || "n/a"})`
-                : null
+              <>
+                Host, share and service account are on{" "}
+                <Link to="/universe/nas/settings">NAS Settings</Link>, which
+                asks for an emailed code before showing them.
+              </>
             }
           />
         ) : (
           <Alert
             type="warning"
             showIcon
-            message={envStatus?.message || "Failed to connect to NAS via ENV"}
+            message={
+              nasStatus?.configured
+                ? "The records share is configured but turned off"
+                : "No records share is configured"
+            }
             description={
-              envStatus?.otpLikely
-                ? "OTP challenge likely detected from NAS (inform IT Admin)."
-                : envStatus?.code
-                ? `Error code: ${envStatus.code}`
-                : undefined
+              <>
+                Documents cannot be opened until this is resolved. See{" "}
+                <Link to="/universe/nas/settings">NAS Settings</Link>.
+              </>
             }
           />
         )}

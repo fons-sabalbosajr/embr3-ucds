@@ -17,7 +17,9 @@
     "walkthrough": "node scripts/walkthrough.js",
     "reconcile": "node scripts/migrate-erms/reconcile.js --db=universe-db",
     "divergence": "node scripts/migrate-erms/divergence.js",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "nas:coverage": "node scripts/nas-coverage.js",
+    "daily-check": "node scripts/migrate-erms/divergence.js --csv=../data/tb_maindata_erms.csv"
   },
   "keywords": [],
   "author": "",
@@ -40,7 +42,6 @@
     "node-cron": "^4.6.0",
     "nodemailer": "^10.0.0",
     "pdf-lib": "^1.17.1",
-    "smb2": "^0.2.11",
     "socket.io": "^4.8.3",
     "zod": "^4.5.4"
   },

@@ -23,17 +23,48 @@ These are not optional, and none of them is a code change.
 - [ ] **Planning has seen the 6,602 unmatched permits**, or has explicitly
       accepted 63.5% as the working match rate —
       `reports/erms-unmatched-permits.csv`.
-- [ ] **A decision on document access.** ⏸️ Deliberately on hold — see
-      "Documents" below. This is not a configuration gap; the desktop app's
-      approach does not carry over to a web application, and the replacement
-      flow has to be designed. Until it is, the web module holds record
-      *metadata* and the desktop app remains the way to open a scan.
+- [x] **Document access.** ✅ Decided and built — the server reaches the share
+      over SMB. See "Documents" below and `NAS-ARCHITECTURE.md`.
+- [ ] **The read-only NAS account exists on the Synology.** Provisioned on the
+      appliance, not from this repo — `NAS-ARCHITECTURE.md` has the steps.
+      Until it does, the deployment uses an account with more rights than it
+      needs.
+- [ ] **`nas-coverage` still reports ~98%.** Run it the morning of the freeze.
+      A drop means the server has lost the share, and a parallel period where
+      nobody can open a document proves nothing.
 - [ ] **The server has a stable address** — see `DEPLOYMENT.md`. A DHCP lease
       that moves during the parallel period will look exactly like an outage.
 
 ---
 
-## Documents — why this is a design question, not a setting
+## Documents — resolved: the server reaches the share
+
+**Decided in Phase 7.** Of the three options below, the first was taken. The
+record for why the other two were not:
+
+- *Browser uploads to the server* would have orphaned 18,067 existing paths and
+  moved every scan into GridFS — a migration of the files themselves, on top of
+  the metadata migration already done.
+- *Hybrid* would have meant two retrieval paths to maintain forever, for a
+  benefit that only materialises if the share goes away.
+
+The share is not going away, and the server sits on the same network as it, so
+the first option is both the smallest change and the closest to what Records
+staff already do. What it needed was not configuration but a rewrite: the SMB
+library in the codebase had not worked since Node 18, and 26.7% of the paths
+were longer than Windows will open without a long-path prefix. See
+[`NAS-ARCHITECTURE.md`](NAS-ARCHITECTURE.md).
+
+**Open document** and **Download** are live on the record detail. A clerk asks
+for a document by record; the server resolves the path and streams the file.
+
+The original reasoning is kept below, because the constraint it describes is
+still what shapes the design.
+
+<details>
+<summary>Why this was a design question, not a setting</summary>
+
+
 
 The WinForms ERMS reached the scans through **`Z:\`, a drive mapped on each
 workstation**. That works because the application and the person run on the same
@@ -54,9 +85,12 @@ The migration deliberately **stored the paths rather than moving the files**, so
 none of these is foreclosed. `document.filePath` keeps the original value and
 `document.sharePath` the drive-letter-stripped remainder.
 
-Until this is decided, the **Open document** button in the record detail stays
-disabled and says why. Everything else — search, filtering, the register link,
-tracking, archiving, reports — works without it.
+The migration deliberately stored the paths rather than moving the files, so
+none of these was foreclosed. That is what made the decision reversible, and it
+is why `document.filePath` still keeps the original `Z:\…` value alongside the
+resolved `document.sharePath`.
+
+</details>
 
 ---
 

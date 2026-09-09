@@ -14,3 +14,6 @@ data/tb_maindata_erms.csv
 node_modules/
 .env
 .env.local
+# Backups taken before editing .env hold the same secrets.
+.env.bak*
+.env.*.bak

@@ -53,6 +53,10 @@ const caps = (over = {}) => ({
   canViewDataHistory: true, canAccessRangePicker: true, ...over,
 });
 
+// A real migrated record whose document resolves on the share. Only its
+// metadata is fetched by the panel, so this does not pull the scan itself.
+const SAMPLE_SERIAL = process.env.SMOKE_SERIAL || 'FSN-0000512';
+
 const ACCOUNTS = [
   {
     user: '__smoke_admin',
@@ -81,6 +85,21 @@ const ACCOUNTS = [
       ['erms-records', '/universe/erms/records'],
       ['erms-archive', '/universe/erms/archive'],
       ['erms-reports', '/universe/erms/reports'],
+      // An admin is not a developer, so the share configuration must refuse
+      // them — the screens sat outside every guard until Phase 7.
+      ['nas-settings-denied', '/universe/nas/settings', { expectForbidden: true }],
+    ],
+  },
+  {
+    user: '__smoke_developer',
+    label: 'Developer',
+    doc: { permission: 'developer', domains: ['ucds', 'erms', 'admin'], capabilities: caps() },
+    screens: [
+      ['nas-dashboard', '/universe/nas/dashboard'],
+      // Reaches the screen, and must land on the "verify by email" prompt
+      // rather than on the configuration itself.
+      ['nas-settings', '/universe/nas/settings'],
+      ['nas-browser', '/universe/nas/browser'],
     ],
   },
   {
@@ -91,8 +110,12 @@ const ACCOUNTS = [
       ['records-erms-dashboard', '/universe/erms/dashboard'],
       ['records-erms-records', '/universe/erms/records'],
       ['records-erms-archive', '/universe/erms/archive'],
+      // The document panel on a real migrated record. Proves the Records-facing
+      // half of the NAS work renders, not just that the API answers.
+      ['records-record-detail', `/universe/erms/records/${SAMPLE_SERIAL}`],
       // Must be refused, and refused *gracefully* — an explanation, not a crash.
       ['records-denied-province', '/universe/province/Bataan', { expectForbidden: true }],
+      ['records-nas-denied', '/universe/nas/settings', { expectForbidden: true }],
     ],
   },
 ];

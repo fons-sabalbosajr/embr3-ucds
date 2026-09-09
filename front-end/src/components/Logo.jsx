@@ -15,8 +15,11 @@ const Logo = ({ theme, collapsed }) => {
           <div
             className={`logo-icon-text ${theme === "light" ? "light-theme" : "dark-theme"}`}
           >
+            {/* The class name stays `logo-ucds` — it is a style hook, and
+                PurgeCSS matches it literally, so renaming it would drop the
+                rule from the production bundle. */}
             <span>
-              EMBR3&nbsp;<span className="logo-ucds">UCDS</span>
+              E-<span className="logo-ucds">Universe</span>
             </span>
           </div>
         )}

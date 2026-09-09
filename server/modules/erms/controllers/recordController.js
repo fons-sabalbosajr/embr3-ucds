@@ -4,9 +4,11 @@ const archiveService = require('../services/archiveService');
 const reportService = require('../services/reportService');
 const audit = require('../../../shared/services/audit');
 const { principalOf } = require('../../../middleware/auth');
-const { canAccessAllYears, DOMAINS } = require('../../../services/authorization');
+const { canAccessAllYears, isDeveloper, DOMAINS } = require('../../../services/authorization');
 const { userProvinceKeys, userWritableProvinceKeys } = require('../../../services/provinces');
 const { notFoundError } = require('../../../shared/middleware/errorHandler');
+const nas = require('../../../services/nasStorage');
+const { recordFileEvent } = require('../../../services/nasAudit');
 
 // ---------------------------------------------------------------------------
 // Province scope for the acting user, or null when unrestricted.
@@ -35,6 +37,22 @@ const actor = (req) => ({
   writableProvinces: writeScope(req),
 });
 
+/**
+ * Strip the stored share paths unless the caller is a developer.
+ *
+ * They describe the internal layout of the records share, and nobody filing a
+ * record needs them — the document is opened from the record itself. They stay
+ * for whoever has to diagnose a path that will not resolve.
+ *
+ * Read-side only. The update path merges the document object over the stored
+ * one, so a redacted read cannot write the paths back as null.
+ */
+function withoutInternalPaths(record, user) {
+  if (!record || isDeveloper(user)) return record;
+  const { filePath, sharePath, ...document } = record.document || {};
+  return { ...record, document };
+}
+
 // --- records ---------------------------------------------------------------
 
 async function listRecords(req, res, next) {
@@ -56,11 +74,151 @@ async function getRecord(req, res, next) {
       trackingService.currentCustody(record.serialNo),
     ]);
 
-    res.json({ record, attachments, tracking, custody });
+    res.json({ record: withoutInternalPaths(record, principalOf(req)), attachments, tracking, custody });
   } catch (error) {
     next(error);
   }
 }
+
+// --- documents on the records share ----------------------------------------
+//
+// The caller names a record, never a path. The stored path is looked up here
+// and resolved server-side, so there is no input a caller could shape into a
+// different file — and province scope is inherited from getRecord(), so a
+// clerk who cannot read a record cannot read its document either.
+
+/** The record plus its resolved file, or a response already sent. */
+async function resolveRecordFile(req, res) {
+  const record = await recordService.getRecord(req.params.serialNo, readScope(req));
+  if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+
+  const stored = record.document?.sharePath || record.document?.filePath;
+  if (!stored) {
+    res.status(404).json({
+      code: 'NO_DOCUMENT',
+      message: 'This record has no document filed against it.',
+    });
+    return null;
+  }
+
+  const file = await nas.statFile(stored);
+  if (!file.ok) {
+    // Each reason is a different thing for the user to do, so they are not
+    // collapsed into one "unavailable".
+    const responses = {
+      'not-configured': [503, 'NAS_NOT_CONFIGURED', 'The records share is not configured on the server.'],
+      disabled: [503, 'NAS_DISABLED', 'Document access is turned off.'],
+      'invalid-path': [422, 'BAD_STORED_PATH', 'The stored file path for this record cannot be resolved.'],
+      missing: [404, 'FILE_MISSING', 'The document is recorded but is not on the records share.'],
+      'not-a-file': [404, 'FILE_MISSING', 'The document is recorded but is not on the records share.'],
+      denied: [502, 'NAS_DENIED', 'The server is not permitted to read this document.'],
+      unreachable: [502, 'NAS_UNREACHABLE', 'The records share could not be reached.'],
+    };
+    const [status, code, message] = responses[file.reason] || [502, 'NAS_ERROR', 'The document could not be read.'];
+
+    await recordFileEvent(req, {
+      operation: 'document-read',
+      serialNo: record.serialNo,
+      fileName: record.document?.fileName,
+      success: false,
+      detail: file.reason,
+    });
+    res.status(status).json({ code, message });
+    return null;
+  }
+
+  return { record, file };
+}
+
+/** Metadata only — lets the UI show size and type without fetching the file. */
+async function getRecordFileInfo(req, res, next) {
+  try {
+    const resolved = await resolveRecordFile(req, res);
+    if (!resolved) return undefined;
+    const { record, file } = resolved;
+    return res.json({
+      serialNo: record.serialNo,
+      fileName: file.fileName,
+      size: file.size,
+      contentType: file.contentType,
+      previewable: file.previewable,
+      modifiedAt: file.modifiedAt,
+      fileClass: record.document?.fileClass || null,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * Stream the document.
+ *
+ * Streamed rather than read into memory: these are scans, some are large, and
+ * buffering them would put the whole file in the server's heap per concurrent
+ * reader. Range requests are honoured so a PDF viewer can page through a large
+ * document without pulling all of it.
+ */
+async function streamRecordFile(req, res, next, { disposition }) {
+  try {
+    const resolved = await resolveRecordFile(req, res);
+    if (!resolved) return undefined;
+    const { record, file } = resolved;
+
+    // The stored name can contain commas, quotes and non-ASCII; both forms are
+    // sent so every browser gets one it can parse.
+    const safeName = file.fileName.replace(/["\\]/g, '_');
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`
+    );
+    res.setHeader('Accept-Ranges', 'bytes');
+    // Documents are not public and must not be cached by an intermediary.
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    let options;
+    if (range && file.size > 0) {
+      const start = range[1] ? Number(range[1]) : 0;
+      const end = range[2] ? Math.min(Number(range[2]), file.size - 1) : file.size - 1;
+      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= file.size) {
+        res.setHeader('Content-Range', `bytes */${file.size}`);
+        return res.status(416).end();
+      }
+      options = { start, end };
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${file.size}`);
+      res.setHeader('Content-Length', end - start + 1);
+    } else {
+      res.setHeader('Content-Length', file.size);
+    }
+
+    await recordFileEvent(req, {
+      operation: disposition === 'attachment' ? 'document-download' : 'document-view',
+      serialNo: record.serialNo,
+      fileName: file.fileName,
+      success: true,
+      bytes: file.size,
+    });
+
+    const stream = nas.openStream(file.resolved, options);
+    stream.on('error', (err) => {
+      console.error('NAS stream failed:', err.code || err.message);
+      // Headers are already sent by the time a stream fails, so the only
+      // honest thing left is to break the response rather than append an
+      // error body to a partial file.
+      res.destroy(err);
+    });
+    return stream.pipe(res);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+const viewRecordFile = (req, res, next) => streamRecordFile(req, res, next, { disposition: 'inline' });
+const downloadRecordFile = (req, res, next) =>
+  streamRecordFile(req, res, next, { disposition: 'attachment' });
 
 async function createRecord(req, res, next) {
   try {
@@ -292,6 +450,9 @@ async function runReport(req, res, next) {
 module.exports = {
   listRecords,
   getRecord,
+  getRecordFileInfo,
+  viewRecordFile,
+  downloadRecordFile,
   createRecord,
   updateRecord,
   nextSerial,

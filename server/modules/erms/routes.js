@@ -173,6 +173,29 @@ router.patch(
   ctrl.updateRecord
 );
 
+// Documents on the records share. Addressed by record, never by path: the
+// stored path is looked up server-side, so there is no caller input that could
+// name a different file. ermsAccess carries the province scope, so a clerk who
+// cannot read the record cannot read its document.
+router.get(
+  '/api/erms/records/:serialNo/file',
+  ermsAccess,
+  validate(serialParam, 'params'),
+  ctrl.getRecordFileInfo
+);
+router.get(
+  '/api/erms/records/:serialNo/file/preview',
+  ermsAccess,
+  validate(serialParam, 'params'),
+  ctrl.viewRecordFile
+);
+router.get(
+  '/api/erms/records/:serialNo/file/download',
+  ermsAccess,
+  validate(serialParam, 'params'),
+  ctrl.downloadRecordFile
+);
+
 // Tracking is append-only: no PATCH, no DELETE. A mistake is corrected by
 // recording a correction, not by rewriting the custody trail.
 router.get(

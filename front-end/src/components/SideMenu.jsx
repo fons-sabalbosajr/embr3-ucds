@@ -138,6 +138,10 @@ const SideMenu = ({ theme, currentUser }) => {
   const hasUcds = domains.includes("ucds");
   const hasErms = domains.includes("erms");
   const hasAdmin = domains.includes("admin");
+  // The records share configuration is developer-only. It is a role question,
+  // not a domain one — the share is infrastructure, not a business module.
+  const isDeveloper =
+    (currentUser?.permission ?? currentUser?.role) === "developer";
   const visibleProvinces = PROVINCE_MENU.filter((p) =>
     grantedProvinces.includes(p.key)
   ).map((p) => p.value);
@@ -1007,7 +1011,11 @@ const SideMenu = ({ theme, currentUser }) => {
         },
       ],
     },
-    (hasAdmin || hasErms) && canViewAdminPanel && {
+    // Was (hasAdmin || hasErms) && canViewAdminPanel, which offered the share
+    // configuration to every Records and Admin user. The routes behind it are
+    // developer-only, so the menu was advertising four screens that now refuse
+    // them.
+    isDeveloper && {
       key: "nas-storage",
       icon: <ContainerFilled />,
       label: <div className="menu-label-wrapper main nas">NAS Storage</div>,

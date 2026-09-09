@@ -3,6 +3,9 @@ node_modules
 # Ignore .env file(s)
 .env
 .env.local
+# Backups taken before editing .env hold the same secrets.
+.env.bak*
+.env.*.bak
 .env.*.local
 
 config/service-account.json

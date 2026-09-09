@@ -55,7 +55,7 @@ const Help = ({ theme = "light" }) => {
     <div className={`help-container ${theme}`}>
       {/* Welcome Card */}
       <div className="help-welcome-card">
-        <h2>Welcome to Universe Central Database System Support</h2>
+        <h2>Welcome to E-Universe Support</h2>
         <div className="help-search-box">
           <input
             type="text"
