@@ -25,9 +25,11 @@
   width: var(--sidebar-width-collapsed) !important;
 }
 
+/* The sider background comes from Ant Design's Layout token, so it follows the
+   theme and the chosen accent. It used to be pinned to one bluish-grey with
+   !important, which stayed that colour in dark mode. */
 .side-menu-light {
-  background-color: #e9eef5 !important;  /* Slightly bluish-gray */
-  border-right: 1px solid #dbe3ed;
+  border-right: 1px solid rgba(128, 128, 128, 0.15);
 }
 
 /* Applies to light theme menu items */

@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Layout, Button, Spin, Popover, List, ConfigProvider, theme as antdTheme } from "antd";
+import { Layout, Button, Spin, Popover, List } from "antd";
 import { message } from "./shared/feedback";
+import { useTheme } from "./theme/ThemeProvider";
+import {
+  clearSessionStorageKeepingPreferences,
+  getPreference,
+  setPreference,
+} from "./shared/preferences";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import {
@@ -39,11 +45,13 @@ import DomainGuard from "./auth/DomainGuard";
 import RoleGuard from "./auth/RoleGuard";
 import Forbidden from "./shared/components/Forbidden";
 import OrgUnits from "./modules/admin/OrgUnits";
+import GeneralSettings from "./modules/settings/GeneralSettings";
 
 const { Header, Content } = Layout;
 
-// Where the chosen theme is remembered. Cleared on sign-out along with
-// everything else in localStorage, which is the behaviour we want.
+// Where the chosen theme is remembered. It survives sign-out: a display
+// preference is not session data, and losing it on every logout reads as a
+// setting that does not work. See shared/preferences.js.
 const THEME_KEY = "ucds-theme";
 
 const Universe = () => {
@@ -52,14 +60,10 @@ const Universe = () => {
   const [userHandle, setUserHandle] = useState(null);
   const [avatar, setAvatar] = useState(null);
   const [division, setDivision] = useState("");
-  const [theme, setTheme] = useState(() => {
-    try {
-      const saved = localStorage.getItem(THEME_KEY);
-      return saved === "light" || saved === "dark" ? saved : "dark";
-    } catch {
-      return "dark";
-    }
-  });
+  // The mode, its persistence and the Ant Design tokens all live in
+  // ThemeProvider, so the login and year-selection screens share them rather
+  // than rendering in Ant Design's defaults.
+  const { mode: theme, toggleMode: toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   // Named capability flags, replacing the positional boolean array this used to
   // build (permissions[2] meant "admin panel", permissions[i+5] meant
@@ -226,22 +230,35 @@ const Universe = () => {
     // If you need polling, you can set it up here, calling the memoized fetchDataIssues
   }, [auth, fetchDataIssues]); // fetchDataIssues is now a dependency
 
+  // Whether the one-off "Toggle Theme" hint has been dismissed for good.
+  //
+  // This used to store an AES-encrypted "true" and only read it back when the
+  // encryption key was present — so a missing key, or any decryption failure,
+  // silently meant "show it again". It is a dismissed tooltip: encrypting it
+  // bought nothing and added two ways to fail. Values written by the old
+  // version are still honoured so nobody has to dismiss it twice.
   useEffect(() => {
-    const encrypted = localStorage.getItem("hideThemeHint");
-    if (encrypted && encryptionKey) {
+    const stored = getPreference("hideThemeHint");
+    if (!stored) {
+      setShowThemeHint(true);
+      return;
+    }
+    if (stored === "true") return;
+
+    if (encryptionKey) {
       try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, encryptionKey);
-        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-        if (decrypted === "true") {
-          setShowThemeHint(false);
-          return;
-        }
-      } catch (err) {
-        // fallback: show the hint if decryption fails
+        const decrypted = CryptoJS.AES.decrypt(stored, encryptionKey).toString(
+          CryptoJS.enc.Utf8
+        );
+        if (decrypted === "true") return;
+      } catch {
+        // An unreadable legacy value is treated as dismissed rather than
+        // nagging: the user did click the button.
+        return;
       }
     }
     setShowThemeHint(true);
-  }, []);
+  }, [encryptionKey]);
 
   const handleRetry = () => {
     setRetrying(true);
@@ -249,31 +266,15 @@ const Universe = () => {
     setRetrying(false);
   };
 
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-
-    // Dynamically update the theme on the body element
-    document.body.setAttribute("data-theme", newTheme);
-
-    // Remember the choice. Without this the theme reset to dark on every page
-    // load, so switching to light never survived a navigation.
-    try {
-      localStorage.setItem(THEME_KEY, newTheme);
-    } catch {
-      /* private browsing, or storage disabled — the toggle still works */
-    }
-  };
-
-  // Keep the body attribute in step with the restored theme, which the toggle
-  // would otherwise be the only thing to set.
-  useEffect(() => {
-    document.body.setAttribute("data-theme", theme);
-  }, [theme]);
+  // toggleTheme, persistence and the body attribute all come from
+  // ThemeProvider now, so there is one place that decides what the theme is.
 
   const handleLogout = async () => {
-    // Clear localStorage and force reload immediately
-    localStorage.clear();
+    // Clear session material but keep this device's display preferences.
+    // This used to be localStorage.clear(), which also threw away the chosen
+    // theme and the dismissed "Toggle Theme" hint — so both came back on the
+    // next sign-in and looked like settings that did not work.
+    clearSessionStorageKeepingPreferences();
     window.location.replace("/login");
 
     // Optionally, notify the backend (this runs in the background)
@@ -291,12 +292,7 @@ const Universe = () => {
   };
 
   const handleDontShowAgainHint = () => {
-    if (encryptionKey) {
-      const encrypted = CryptoJS.AES.encrypt("true", encryptionKey).toString();
-      localStorage.setItem("hideThemeHint", encrypted);
-    } else {
-      localStorage.setItem("hideThemeHint", "true");
-    }
+    setPreference("hideThemeHint", "true");
     setShowThemeHint(false);
   };
 
@@ -314,67 +310,6 @@ const Universe = () => {
     );
   }
 
-  const isDark = theme === "dark";
-  const themeConfig = {
-    algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-    token: {
-      colorPrimary: "#2f7ecb",
-      borderRadius: 8,
-      fontSize: 13,
-      controlHeight: 36,
-      colorBgBase: isDark ? "#0f1113" : "#ffffff",
-      colorBgContainer: isDark ? "#14181c" : "#f7f8fa",
-      colorBgElevated: isDark ? "#1b2026" : "#ffffff",
-      colorText: isDark ? "#e6eaf0" : "#1f2937",
-      colorTextSecondary: isDark ? "#b5bfcc" : "#4b5563",
-      colorBorder: isDark ? "#2a323b" : "#e5e7eb",
-      colorLink: "#2f7ecb",
-      colorLinkHover: "#3b82f6",
-      colorSuccess: isDark ? "#3fb950" : "#16a34a",
-      colorWarning: isDark ? "#d29922" : "#d97706",
-      colorError: isDark ? "#f85149" : "#dc2626",
-    },
-    components: {
-      Layout: {
-        headerBg: isDark ? "#14181c" : "#ffffff",
-        bodyBg: isDark ? "#0f1113" : "#f5f6f8",
-        siderBg: isDark ? "#12161a" : "#ffffff",
-      },
-      Menu: {
-        darkItemBg: "transparent",
-        itemBorderRadius: 6,
-      },
-      Button: {
-        borderRadius: 6,
-        paddingInline: 14,
-        fontWeight: 500,
-      },
-      Input: {
-        colorBgContainer: isDark ? "#0f1113" : "#ffffff",
-        colorBorder: isDark ? "#2a323b" : "#e5e7eb",
-        activeBorderColor: "#2f7ecb",
-        hoverBorderColor: "#2f7ecb",
-        borderRadius: 6,
-      },
-      Table: {
-        headerBg: isDark ? "#111418" : "#f3f4f6",
-        headerColor: isDark ? "#d1d5db" : "#374151",
-        rowHoverBg: isDark ? "#111418" : "#f9fafb",
-        borderColor: isDark ? "#262c35" : "#e5e7eb",
-      },
-      Card: {
-        colorBgContainer: isDark ? "#14181c" : "#ffffff",
-        borderRadiusLG: 12,
-      },
-      Modal: {
-        colorBgElevated: isDark ? "#14181c" : "#ffffff",
-        borderRadiusLG: 12,
-      },
-      Popover: {
-        colorBgElevated: isDark ? "#14181c" : "#ffffff",
-      },
-    },
-  };
 
   const currentUser = {
     name,
@@ -390,7 +325,7 @@ const Universe = () => {
 
   return (
     <>
-      <ConfigProvider theme={themeConfig}>
+      <>
         <DataProvider>
           <Layout className={`layout-container ${theme}-theme`}>
             <SideMenu
@@ -646,6 +581,19 @@ const Universe = () => {
                     }
                   />
 
+                  {/* Appearance, for every role. Per-device display
+                      preferences affect nobody else, so this needs no
+                      entitlement — and it gives Records and Planning staff a
+                      Settings section of their own. */}
+                  <Route
+                    path="settings/general"
+                    element={<GeneralSettings theme={theme} />}
+                  />
+                  <Route
+                    path="settings"
+                    element={<Navigate to="/universe/settings/general" replace />}
+                  />
+
                   {/* Duplicate data is now a tab of Admin Settings > Register,
                       alongside the configuration and activity trail for the
                       same register. The old path redirects there. */}
@@ -715,7 +663,7 @@ const Universe = () => {
             </Layout>
           </Layout>
         </DataProvider>
-      </ConfigProvider>
+      </>
       <EnvStatus />
     </>
   );

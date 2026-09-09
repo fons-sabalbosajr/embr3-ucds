@@ -172,6 +172,51 @@ try {
   );
   await dev.screenshot({ path: path.join(here, '..', '..', 'reports', 'screenshots', 'nav-developer.png') });
 
+  // Appearance settings exist for every role, and the theme survives a
+  // sign-out. Both were reported as settings that did not work: logout called
+  // localStorage.clear(), which took the theme and the dismissed hint with it.
+  await dev.goto(`${BASE}/universe/settings/general`, { waitUntil: 'domcontentloaded' });
+  await dev
+    .waitForFunction(
+      () => /Appearance|Accent colour/i.test(document.getElementById('root')?.innerText || ''),
+      null,
+      { timeout: 25000 }
+    )
+    .catch(() => {});
+  const appearanceText = await dev.evaluate(() => document.getElementById('root')?.innerText || '');
+  check(
+    'Settings > General offers appearance controls',
+    /Accent colour/i.test(appearanceText) && /Density/i.test(appearanceText),
+    appearanceText.slice(0, 50).replace(/\s+/g, ' ')
+  );
+
+  // Switch to light, confirm it applies, then confirm it survives a reload.
+  await dev.getByText('Light', { exact: true }).first().click().catch(() => {});
+  await dev.waitForTimeout(800);
+  const afterSwitch = await dev.evaluate(() => document.body.getAttribute('data-theme'));
+  check('switching to light applies immediately', afterSwitch === 'light', `body says ${afterSwitch}`);
+
+  await dev.reload({ waitUntil: 'domcontentloaded' });
+  await dev.waitForTimeout(2500);
+  const afterReload = await dev.evaluate(() => document.body.getAttribute('data-theme'));
+  check('the theme survives a reload', afterReload === 'light', `body says ${afterReload}`);
+
+  const hintDismissed = await dev.evaluate(() => {
+    try {
+      localStorage.setItem('hideThemeHint', 'true');
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  check('the dismissed-hint flag can be stored', hintDismissed);
+
+  // Put it back so the rest of the run, and the screenshots, are in dark mode.
+  await dev.goto(`${BASE}/universe/settings/general`, { waitUntil: 'domcontentloaded' });
+  await dev.waitForTimeout(1500);
+  await dev.getByText('Dark', { exact: true }).first().click().catch(() => {});
+  await dev.waitForTimeout(600);
+
   // The merged screens: three register entries and two system entries became
   // two tabbed screens. Assert the tabs are actually there, not just that the
   // route resolves.

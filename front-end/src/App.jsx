@@ -1,6 +1,7 @@
 import React from 'react';
 import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Navigate } from 'react-router-dom';
-import { App as AntdApp, ConfigProvider } from 'antd';
+import { App as AntdApp } from 'antd';
+import ThemeProvider from './theme/ThemeProvider';
 import FeedbackBridge from './shared/FeedbackBridge';
 import Landing from './Landing';
 import Register from './Register';
@@ -86,8 +87,11 @@ function App() {
   // AntdApp supplies the context that message/notification/Modal need in order
   // to read the dynamic theme. `component={false}` renders no wrapper element,
   // so existing full-height layouts are unaffected.
+  // ThemeProvider owns the ConfigProvider, so the login, landing and
+  // year-selection screens are themed too. Previously only the authenticated
+  // shell was, and signing in felt like crossing between two applications.
   return (
-    <ConfigProvider>
+    <ThemeProvider>
       <AntdApp component={false}>
         {/* Captures the context-aware message/notification/modal instances so
             code outside a component can use them without the static API's
@@ -97,7 +101,7 @@ function App() {
           <RouterProvider router={router} />
         </YearProvider>
       </AntdApp>
-    </ConfigProvider>
+    </ThemeProvider>
   );
 }
 

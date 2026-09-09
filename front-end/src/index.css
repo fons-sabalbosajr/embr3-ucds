@@ -163,17 +163,13 @@
 }
 
 .link-menu-hover:hover {
-  color: #9cc6ed !important;
-  text-decoration: none !important;
+  color: var(--eu-link-hover, inherit);
+  text-decoration: none;
 }
 
-:is(.dark-theme, [data-theme="dark"]) .layout-container {
-  background-color: #121212 !important;
-}
-
-:is(.dark-theme, [data-theme="dark"]) .ant-layout {
-  background-color: #121212 !important;
-}
+/* Layout backgrounds come from Ant Design's algorithm. These used to pin
+   #121212 with !important in dark mode, which no component could correct
+   and which ignored the accent entirely. */
 
 /* Responsive Table Wrapper */
 .table-responsive-wrapper {

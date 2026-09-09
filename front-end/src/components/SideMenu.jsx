@@ -42,6 +42,7 @@ const { Sider } = Layout;
 
 const rootSubmenuKeys = [
   "r3-monitoring",
+  "settings",
   "admin",
 ];
 
@@ -105,6 +106,8 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["r3-monitoring"]);
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
+    } else if (path.startsWith("/universe/settings/")) {
+      setOpenKeys(["settings"]);
     } else if (
       path.startsWith("/universe/admin/") ||
       path.startsWith("/universe/register/")
@@ -339,9 +342,28 @@ const SideMenu = ({ theme, currentUser }) => {
     // Planning and Records staff get their own settings later; personal
     // settings already live in the avatar menu, which is why nothing here is
     // offered to them.
+    // Settings everyone has, whatever their role. Appearance is per-device and
+    // affects nobody else, so it needs no entitlement — and it gives Records
+    // and Planning staff a Settings section of their own, which they had none
+    // of once the administrative one became developer and admin only.
+    {
+      key: "settings",
+      icon: <SettingFilled />,
+      label: <div className="menu-label-wrapper main">Settings</div>,
+      children: [
+        {
+          key: "/universe/settings/general",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/settings/general">General</Link>
+            </div>
+          ),
+        },
+      ],
+    },
     hasAdmin && canViewAdminPanel && {
       key: "admin",
-      icon: <SettingFilled />,
+      icon: <ToolOutlined />,
       label: <div className="menu-label-wrapper main">Admin Settings</div>,
       children: [
         {
