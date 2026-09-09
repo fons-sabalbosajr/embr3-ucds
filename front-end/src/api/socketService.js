@@ -53,19 +53,9 @@ const emitEvent = (eventName, data) => {
 
 export const emitJoinProvince = (province, user) => emitEvent("joinProvince", { province, user });
 export const emitLeaveProvince = () => emitEvent("leaveProvince");
-export const emitJoinSurvey = (user) => emitEvent("joinSurvey", { user });
-export const emitLeaveSurvey = () => emitEvent("leaveSurvey"); // Assuming you might need this
 export const emitJoinMbu = (user) => emitEvent("joinMbu", { user }); // Removed path, MBU is a single route
 export const emitLeaveMbu = () => emitEvent("leaveMbu"); // Removed path
 // Added Planning Unit specific events
-export const emitJoinHealthcare = (user) => emitEvent("joinHealthcare", { user });
-export const emitLeaveHealthcare = () => emitEvent("leaveHealthcare");
-export const emitJoinChemicals = (user) => emitEvent("joinChemicals", { user });
-export const emitLeaveChemicals = () => emitEvent("leaveChemicals");
-export const emitJoinTsd = (user) => emitEvent("joinTsd", { user });
-export const emitLeaveTsd = () => emitEvent("leaveTsd");
-export const emitJoinTrc = (user) => emitEvent("joinTrc", { user });
-export const emitLeaveTrc = () => emitEvent("leaveTrc");
 
 
 // --- Event Listeners ---
@@ -88,13 +78,8 @@ const setupListener = (eventName, callback) => {
 };
 
 export const onProvinceViewersUpdate = (callback) => setupListener("provinceViewers", callback);
-export const onSurveyViewersUpdate = (callback) => setupListener("surveyViewers", callback);
 export const onMbuViewersUpdate = (callback) => setupListener("mbuViewers", callback);
 // Added Planning Unit specific listeners
-export const onHealthcareViewersUpdate = (callback) => setupListener("healthcareViewers", callback);
-export const onChemicalsViewersUpdate = (callback) => setupListener("chemicalsViewers", callback);
-export const onTsdViewersUpdate = (callback) => setupListener("tsdViewers", callback);
-export const onTrcViewersUpdate = (callback) => setupListener("trcViewers", callback);
 
 // Special listeners for connect/disconnect if component needs to react to these
 export const onSocketConnect = (callback) => setupListener("connect", callback);

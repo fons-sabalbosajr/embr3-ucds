@@ -43,7 +43,10 @@ describe('domainsOf', () => {
   it('defaults by role', () => {
     expect(domainsOf({ permission: 'developer' })).toEqual(['ucds', 'erms', 'admin']);
     expect(domainsOf({ permission: 'admin' })).toEqual(['ucds', 'erms', 'admin']);
-    expect(domainsOf({ permission: 'records' })).toEqual(['erms']);
+    // Records holds UCDS as well since the standalone Records menu was
+    // removed: Monitoring Plan is a UCDS screen and it is the only workspace
+    // a clerk has left. Reading, not writing — canManageData still gates that.
+    expect(domainsOf({ permission: 'records' })).toEqual(['erms', 'ucds']);
     expect(domainsOf({ permission: 'planning' })).toEqual(['ucds']);
   });
 
@@ -59,7 +62,7 @@ describe('domainsOf', () => {
   it('ignores unknown domain names rather than trusting them', () => {
     expect(domainsOf({ permission: 'viewer', domains: ['erms', 'nonsense'] })).toEqual(['erms']);
     // An array of only junk is empty, so the role default applies.
-    expect(domainsOf({ permission: 'records', domains: ['nonsense'] })).toEqual(['erms']);
+    expect(domainsOf({ permission: 'records', domains: ['nonsense'] })).toEqual(['erms', 'ucds']);
   });
 
   it('normalises case and removes duplicates', () => {
@@ -69,7 +72,7 @@ describe('domainsOf', () => {
   it('gates the domain boundary', () => {
     const records = { permission: 'records' };
     expect(hasDomain(records, DOMAINS.ERMS)).toBe(true);
-    expect(hasDomain(records, DOMAINS.UCDS)).toBe(false);
+    expect(hasDomain(records, DOMAINS.UCDS)).toBe(true);
     expect(hasDomain(records, DOMAINS.ADMIN)).toBe(false);
   });
 });

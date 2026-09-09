@@ -2,12 +2,7 @@ const { Server } = require('socket.io');
 
 // In-memory store for online users per province
 let provinceViewers = {}; // Changed to let if you plan to reassign; if not, const is fine.
-const surveyViewers = [];
 const mbuViewers = [];
-const healthcareViewers = [];
-const chemicalsViewers = [];
-const tsdViewers = [];
-const trcViewers = [];
 
 // Generic manager for array-based viewer lists
 function createViewerManager(viewersArray, viewersEventName, socketUserKey, logPrefix) {
@@ -54,12 +49,7 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
     },
   });
 
-  const surveyManager = createViewerManager(surveyViewers, "surveyViewers", "surveyUser", "Survey");
   const mbuManager = createViewerManager(mbuViewers, "mbuViewers", "mbuUser", "MBU");
-  const healthcareManager = createViewerManager(healthcareViewers, "healthcareViewers", "healthcareUser", "Healthcare");
-  const chemicalsManager = createViewerManager(chemicalsViewers, "chemicalsViewers", "chemicalsUser", "Chemicals");
-  const tsdManager = createViewerManager(tsdViewers, "tsdViewers", "tsdUser", "TSD");
-  const trcManager = createViewerManager(trcViewers, "trcViewers", "trcUser", "TRC");
 
   io.on("connection", (socket) => {
     // console.log(`[Socket ${socket.id}] connected.`);
@@ -85,12 +75,7 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
       // );
     });
 
-    socket.on("joinSurvey", (payload) => surveyManager.join(socket, io, payload));
     socket.on("joinMbu", (payload) => mbuManager.join(socket, io, payload));
-    socket.on("joinHealthcare", (payload) => healthcareManager.join(socket, io, payload));
-    socket.on("joinChemicals", (payload) => chemicalsManager.join(socket, io, payload));
-    socket.on("joinTsd", (payload) => tsdManager.join(socket, io, payload));
-    socket.on("joinTrc", (payload) => trcManager.join(socket, io, payload));
 
     function leaveProvince(reason = "unknown") {
       const { province, user } = socket;
@@ -118,22 +103,12 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
     }
 
     socket.on("leaveProvince", () => leaveProvince("event"));
-    socket.on("leaveSurvey", () => surveyManager.leave(socket, io, "event"));
     socket.on("leaveMbu", () => mbuManager.leave(socket, io, "event"));
-    socket.on("leaveHealthcare", () => healthcareManager.leave(socket, io, "event"));
-    socket.on("leaveChemicals", () => chemicalsManager.leave(socket, io, "event"));
-    socket.on("leaveTsd", () => tsdManager.leave(socket, io, "event"));
-    socket.on("leaveTrc", () => trcManager.leave(socket, io, "event"));
 
     socket.on("disconnect", () => {
       // console.log(`[Socket ${socket.id}] disconnected.`);
       leaveProvince("disconnect");
-      surveyManager.leave(socket, io, "disconnect");
       mbuManager.leave(socket, io, "disconnect");
-      healthcareManager.leave(socket, io, "disconnect");
-      chemicalsManager.leave(socket, io, "disconnect");
-      tsdManager.leave(socket, io, "disconnect");
-      trcManager.leave(socket, io, "disconnect");
     });
   });
 }

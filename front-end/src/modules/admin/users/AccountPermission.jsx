@@ -457,13 +457,6 @@ const AccountPermission = ({
             pagination={false}
           />
         </TabPane>
-        <TabPane tab="Survey Access" key="3">
-          <Table
-            dataSource={provinceAccessList}
-            columns={provinceColumns}
-            pagination={false}
-          />
-        </TabPane>
       </Tabs>
 
       <div className="footer-actions">

@@ -506,84 +506,6 @@ async function permitsSummary(req, res) {
   }
 }
 
-async function permitExpiryBreakdown(req, res) {
-  const { permitKey } = req.params;
-  const permitConfig = permitKeyToFieldMap[permitKey];
-  if (!permitConfig) return res.status(400).json({ error: 'Invalid permit key.' });
-  try {
-    await connectToMongo();
-    const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-    const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-    const blankCount = await ucdsFor(req).countDocuments({ $or: [{ [permitConfig.queryField]: null }, { [permitConfig.queryField]: '' }] });
-    let ongoingProcessCount = 0;
-    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) {
-      ongoingProcessCount = await ucdsFor(req).countDocuments({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } });
-    }
-    let applicationCount = 0;
-    let applicationStagesCount = 0;
-    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) {
-      applicationCount = await ucdsFor(req).countDocuments({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } });
-      applicationStagesCount = ongoingProcessCount + applicationCount;
-    }
-    const recordsWithPermitCode = await ucdsFor(req).find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: { _id: 1, [permitConfig.dateField]: 1, [permitConfig.queryField]: 1 } }).toArray();
-    const recordsForExpiryCalculation = recordsWithPermitCode.filter((record) => {
-      if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) {
-        const codeVal = String(record[permitConfig.queryField] || '').trim();
-        return !codeVal.match(ptoOngoingKeywordsRegex) && !codeVal.match(ptoApplicationKeywordsRegex);
-      }
-      return true;
-    });
-    let expiredCount = 0; let nearExpiryCount = 0; let notExpiredCount = 0; const now = new Date();
-    recordsForExpiryCalculation.forEach((record) => {
-      const dateValue = record[permitConfig.dateField];
-      let actualExpiryDate = null;
-      const parsedDate = parseDateStringForStats(dateValue);
-      if (parsedDate instanceof Date && !isNaN(parsedDate)) {
-        if (permitConfig.isDateAnExpiry) actualExpiryDate = parsedDate; else if (permitConfig.validityYears) { actualExpiryDate = new Date(parsedDate); actualExpiryDate.setFullYear(actualExpiryDate.getFullYear() + permitConfig.validityYears); }
-      }
-      if (actualExpiryDate) {
-        const expiryDateString = actualExpiryDate.toISOString().split('T')[0];
-        if (isPermitExpired(expiryDateString)) expiredCount++; else if (isPermitNearExpiry(expiryDateString, now)) nearExpiryCount++; else notExpiredCount++;
-      }
-    });
-    const payload = { permitKey, displayName: permitConfig.displayName, expired: expiredCount, nearExpiry: nearExpiryCount, notExpired: notExpiredCount, blank: blankCount, totalWithPermit: recordsForExpiryCalculation.length };
-    if (['pto_code', 'wwdp_code', 'haz_id'].includes(permitKey)) payload.applicationStages = applicationStagesCount;
-    return res.json(payload);
-  } catch (error) {
-    console.error(`Error fetching expiry breakdown for ${permitKey}:`, error);
-    return res.status(500).json({ error: `Failed to fetch expiry breakdown for ${permitKey}.` });
-  }
-}
-
-async function listAllIndustries(req, res) {
-  try {
-    await connectToMongo();
-    const projectionFields = { sort_key: 1, name: 1, title: 1, _id: 1, province: 1, city: 1, brgy: 1, ecc_cnc: 1 };
-    const allIndustries = await ucdsFor(req).find({}).project(projectionFields).sort({ sort_key: 1 }).toArray();
-    return res.json(allIndustries);
-  } catch (error) {
-    console.error('Error fetching all industries:', error);
-    return res.status(500).json({ message: 'Server error while fetching all industries.' });
-  }
-}
-
-async function eccCncSubtypesBreakdown(req, res) {
-  try {
-    await connectToMongo();
-    const eccManual = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^ECC Manual$/i } });
-    const eccOnline = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^ECC Online$/i } });
-    const eccCO = await ucdsFor(req).countDocuments({ permit_process: { $in: [/^ECC CO$/i, /^ECC \(EMB CO\)$/i] } });
-    const cncManual = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^CNC Manual$/i } });
-    const cncOnline = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^CNC Online$/i } });
-    const cncCO = await ucdsFor(req).countDocuments({ permit_process: { $regex: /^CNC CO$/i } });
-    const blankEccCnc = await ucdsFor(req).countDocuments({ $or: [{ ecc_cnc: null }, { ecc_cnc: '' }] });
-    return res.json({ eccManual, eccOnline, eccCO, cncManual, cncOnline, cncCO, blankEccCnc });
-  } catch (error) {
-    console.error('Error fetching ECC/CNC subtypes breakdown:', error);
-    return res.status(500).json({ error: 'Failed to fetch ECC/CNC subtypes breakdown.' });
-  }
-}
-
 async function dashboardStats(req, res) {
   try {
     await connectToMongo();
@@ -857,85 +779,6 @@ async function extractProvinceData(req, res) {
 module.exports.getProvinceData = getProvinceData;
 module.exports.extractProvinceData = extractProvinceData;
 
-async function listByEccCncSubtype(req, res) {
-  try {
-    await connectToMongo();
-    const { subtypeLabel } = req.query;
-    if (!subtypeLabel) return res.status(400).json({ message: 'subtypeLabel query parameter is required.' });
-    const query = {};
-    if (subtypeLabel === 'Blank ECC/CNC') query.$or = [{ ecc_cnc: null }, { ecc_cnc: '' }];
-    else query.permit_process = { $regex: `^${subtypeLabel}$`, $options: 'i' };
-    const selectedFields = { sort_key: 1, name: 1, title: 1, ecc_cnc: 1, permit_process: 1, date_approved: 1, date_amended: 1, iis_no_2024: 1, iis_no_2025: 1, brgy: 1, city: 1, province: 1, _id: 1 };
-    const industries = await ucdsFor(req).find(query).project(selectedFields).sort({ sort_key: 1 }).toArray();
-    return res.json(industries);
-  } catch (error) {
-    console.error('Error fetching ECC/CNC subtype breakdown:', error);
-    return res.status(500).json({ message: 'Server error while fetching breakdown data.' });
-  }
-}
-
-async function listByPermitStatus(req, res) {
-  try {
-    await connectToMongo();
-    const { permitKey, status } = req.query;
-    const permitConfig = permitKeyToFieldMap[permitKey];
-    if (!permitConfig) return res.status(400).json({ message: 'Invalid permitKey.' });
-    if (!['Expired','Near Expiry','Not Expired','Blank','Ongoing Process','Application','Application Stages','All'].includes(status)) return res.status(400).json({ message: 'Invalid status.' });
-    const baseProjection = { sort_key: 1, name: 1, title: 1, _id: 1 };
-    const permitSpecificProjection = {};
-    if (permitConfig.queryField) permitSpecificProjection[permitConfig.queryField] = 1;
-    if (permitConfig.dateField) permitSpecificProjection[permitConfig.dateField] = 1;
-    if (permitKey === 'pto_code') { Object.assign(permitSpecificProjection, { pto_issued: 1, iis_no_2024: 1, iis_no_2025: 1, brgy: 1, city: 1, province: 1 }); }
-    else if (permitKey === 'wwdp_code') { Object.assign(permitSpecificProjection, { wwdp_issued: 1, iis_no_2024: 1, iis_no_2025: 1, brgy: 1, city: 1, province: 1 }); }
-    else if (permitKey === 'pco_no') { Object.assign(permitSpecificProjection, { pco_name: 1, iis_no_2024: 1, iis_no_2025: 1, brgy: 1, city: 1, province: 1 }); }
-    const projectionFields = { ...baseProjection, ...permitSpecificProjection };
-    let industriesToReturn = [];
-    if (status === 'Blank') {
-      industriesToReturn = await ucdsFor(req).find({ $or: [{ [permitConfig.queryField]: null }, { [permitConfig.queryField]: '' }] }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
-    } else if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && status === 'Ongoing Process') {
-      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-      industriesToReturn = await ucdsFor(req).find({ [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
-    } else if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && status === 'Application') {
-      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-      industriesToReturn = await ucdsFor(req).find({ [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
-    } else if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && status === 'Application Stages') {
-      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-      industriesToReturn = await ucdsFor(req).find({ $or: [ { [permitConfig.queryField]: { $regex: ptoOngoingKeywordsRegex } }, { [permitConfig.queryField]: { $regex: ptoApplicationKeywordsRegex } } ] }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
-    } else if (status === 'All' && permitConfig.queryField) {
-      industriesToReturn = await ucdsFor(req).find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: projectionFields }).sort({ sort_key: 1 }).toArray();
-    } else {
-      const allRecordsWithPermit = await ucdsFor(req).find({ [permitConfig.queryField]: { $exists: true, $ne: null, $ne: '' } }, { projection: projectionFields }).toArray();
-      const now = new Date();
-      const ptoOngoingKeywordsRegex = /\b(In-process|In process|On Process|ON GOING)\b/i;
-      const ptoApplicationKeywordsRegex = /\b(App(\.\s*No\.?)?|Application(\s*No\.?|lication\sNumber)?)\b/i;
-      allRecordsWithPermit.forEach((record) => {
-        const codeVal = String(record[permitConfig.queryField] || '').trim();
-        if (['pto_code','wwdp_code','haz_id'].includes(permitKey) && (codeVal.match(ptoOngoingKeywordsRegex) || codeVal.match(ptoApplicationKeywordsRegex))) return;
-        const dateValue = record[permitConfig.dateField];
-        let actualExpiryDate = null;
-        const parsedDate = parseDateStringForStats(dateValue);
-        if (parsedDate instanceof Date && !isNaN(parsedDate)) {
-          if (permitConfig.isDateAnExpiry) actualExpiryDate = parsedDate; else if (permitConfig.validityYears) { actualExpiryDate = new Date(parsedDate); actualExpiryDate.setFullYear(actualExpiryDate.getFullYear() + permitConfig.validityYears); }
-        }
-        if (actualExpiryDate) {
-          const expiryDateString = actualExpiryDate.toISOString().split('T')[0];
-          const expired = isPermitExpired(expiryDateString);
-          const near = isPermitNearExpiry(expiryDateString, now);
-          if (status === 'Expired' && expired) industriesToReturn.push(record);
-          else if (status === 'Near Expiry' && near && !expired) industriesToReturn.push(record);
-          else if (status === 'Not Expired' && !expired && !near) industriesToReturn.push(record);
-        }
-      });
-      industriesToReturn.sort((a, b) => (String(a.sort_key) || '').localeCompare(String(b.sort_key) || ''));
-    }
-    return res.json(industriesToReturn);
-  } catch (error) {
-    console.error('Error fetching permit status breakdown:', error);
-    return res.status(500).json({ message: 'Server error while fetching permit status breakdown data.' });
-  }
-}
-
 async function getBySortKey(req, res) {
   const { sort_key } = req.params;
   try {
@@ -1193,12 +1036,7 @@ async function getUcdsData(req, res) {
 
 module.exports.getUcdsData = getUcdsData;
 module.exports.permitsSummary = permitsSummary;
-module.exports.permitExpiryBreakdown = permitExpiryBreakdown;
-module.exports.listAllIndustries = listAllIndustries;
-module.exports.eccCncSubtypesBreakdown = eccCncSubtypesBreakdown;
 module.exports.dashboardStats = dashboardStats;
-module.exports.listByEccCncSubtype = listByEccCncSubtype;
-module.exports.listByPermitStatus = listByPermitStatus;
 module.exports.getBySortKey = getBySortKey;
 module.exports.getNextId = getNextId;
 module.exports.searchName = searchName;

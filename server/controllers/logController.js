@@ -7,18 +7,6 @@ const { roleOf, ROLES } = require('../services/authorization');
 // to 2026 and must not surface in the 2025 container. The year always comes
 // from req.activeYear, never from the request body.
 
-async function saveSurveyLog(req, res) {
-  try {
-    await connectToMongo();
-    const logEntry = stampYear('surveyLog', req.activeYear, req.body);
-    await collections.surveyLog.insertOne(logEntry);
-    res.status(200).send(logEntry);
-  } catch (error) {
-    console.error('Error saving log entry:', error);
-    res.status(500).send('Error saving log entry');
-  }
-}
-
 async function saveUcdsLog(req, res) {
   try {
     await connectToMongo();
@@ -31,7 +19,6 @@ async function saveUcdsLog(req, res) {
   }
 }
 
-module.exports = { saveSurveyLog, saveUcdsLog };
 
 // GET /api/logs — migrated from server.js
 async function getLogs(req, res) {
@@ -55,6 +42,7 @@ async function getLogs(req, res) {
   }
 }
 
+module.exports.saveUcdsLog = saveUcdsLog;
 module.exports.getLogs = getLogs;
 
 // GET /api/ucds-log — migrated from server.js
@@ -89,20 +77,4 @@ async function deleteUcdsTransaction(req, res) {
   }
 }
 
-async function deleteSurveyTransaction(req, res) {
-  const { transactionID } = req.params;
-  try {
-    await connectToMongo();
-    const result = await collections.surveyLog.deleteOne(
-      withYear('surveyLog', req.activeYear, { transactionID })
-    );
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Transaction not found' });
-    return res.json({ message: 'Transaction deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting transaction:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
-
 module.exports.deleteUcdsTransaction = deleteUcdsTransaction;
-module.exports.deleteSurveyTransaction = deleteSurveyTransaction;

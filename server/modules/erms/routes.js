@@ -4,6 +4,7 @@ const { authenticateSession, requireDomain } = require('../../middleware/auth');
 const { DOMAINS, capabilitiesOf } = require('../../services/authorization');
 const { principalOf } = require('../../middleware/auth');
 const { validate, z } = require('../../shared/middleware/validate');
+const { requireNasActive } = require('../../services/nasActivation');
 const ctrl = require('./controllers/recordController');
 const { PERMIT_TYPES } = require('./services/recordService');
 const { ACTION_CODES } = require('./services/trackingService');
@@ -180,18 +181,21 @@ router.patch(
 router.get(
   '/api/erms/records/:serialNo/file',
   ermsAccess,
+  requireNasActive,
   validate(serialParam, 'params'),
   ctrl.getRecordFileInfo
 );
 router.get(
   '/api/erms/records/:serialNo/file/preview',
   ermsAccess,
+  requireNasActive,
   validate(serialParam, 'params'),
   ctrl.viewRecordFile
 );
 router.get(
   '/api/erms/records/:serialNo/file/download',
   ermsAccess,
+  requireNasActive,
   validate(serialParam, 'params'),
   ctrl.downloadRecordFile
 );

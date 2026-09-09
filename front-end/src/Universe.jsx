@@ -22,11 +22,6 @@ import "./index.css";
 import CryptoJS from "crypto-js";
 import Dashboard from "./modules/ucds/dashboard/Dashboard";
 import Province from "./modules/ucds/province/Province";
-import Survey from "./modules/ucds/survey/Survey";
-import Healthcare from "./modules/ucds/healthcare/Healthcare";
-import Chemicals from "./modules/ucds/chemicals/Chemicals";
-import TSD from "./modules/ucds/tsd/TSDPermits";
-import TRC from "./modules/ucds/trc/TRCPermits";
 import MBU from "./modules/ucds/mbu/MBU";
 import Admin from "./modules/admin/Admin";
 import Accounts from "./modules/admin/users/UserAccounts";
@@ -57,11 +52,6 @@ import DomainGuard from "./auth/DomainGuard";
 import RoleGuard from "./auth/RoleGuard";
 import Forbidden from "./shared/components/Forbidden";
 import OrgUnits from "./modules/admin/OrgUnits";
-import ErmsDashboard from "./modules/erms/pages/ErmsDashboard";
-import RecordsList from "./modules/erms/pages/RecordsList";
-import RecordDetail from "./modules/erms/pages/RecordDetail";
-import ArchiveBoxes from "./modules/erms/pages/ArchiveBoxes";
-import ErmsReports from "./modules/erms/pages/ErmsReports";
 
 const { Header, Content } = Layout;
 
@@ -571,20 +561,6 @@ const Universe = () => {
                       <Province currentUser={currentUser} theme={theme} />
                     }
                   />
-                  <Route
-                    path="survey"
-                    element={<Survey currentUser={currentUser} theme={theme} />}
-                  />
-                  <Route
-                    path="healthcare"
-                    element={<Healthcare theme={theme} />}
-                  />
-                  <Route
-                    path="chemicals"
-                    element={<Chemicals theme={theme} />}
-                  />
-                  <Route path="tsd" element={<TSD theme={theme} />} />
-                  <Route path="trc" element={<TRC theme={theme} />} />
                   <Route path="mbu" element={<MBU theme={theme} />} />
                   </Route>
 
@@ -708,63 +684,26 @@ const Universe = () => {
                     }
                   />
 
-                  {/* ERMS records module lands here in Phase 7. The guard and
-                      the route tree exist now so the boundary is real from the
-                      first screen rather than retrofitted. */}
+                  {/* Duplicate data. A Settings screen rather than an Admin
+                      Settings one: reconciling two records of the same firm is
+                      operational work, not system configuration. It reads the
+                      register, so it needs the UCDS domain, and it neither
+                      merges nor deletes anything. */}
                   <Route
-                    path="erms/dashboard"
+                    path="admin/duplicates"
                     element={
-                      <DomainGuard domain="erms" user={currentUser}>
-                        <ErmsDashboard />
+                      <DomainGuard domain="ucds" user={currentUser}>
+                        <Duplicates theme={theme} />
                       </DomainGuard>
                     }
                   />
-                  <Route
-                    path="erms/records"
-                    element={
-                      <DomainGuard domain="erms" user={currentUser}>
-                        <RecordsList />
-                      </DomainGuard>
-                    }
-                  />
-                  <Route
-                    path="erms/records/:serialNo"
-                    element={
-                      <DomainGuard domain="erms" user={currentUser}>
-                        <RecordDetail />
-                      </DomainGuard>
-                    }
-                  />
-                  <Route
-                    path="erms/archive"
-                    element={
-                      <DomainGuard domain="erms" user={currentUser}>
-                        <ArchiveBoxes />
-                      </DomainGuard>
-                    }
-                  />
-                  <Route
-                    path="erms/reports"
-                    element={
-                      <DomainGuard domain="erms" user={currentUser}>
-                        <ErmsReports />
-                      </DomainGuard>
-                    }
-                  />
-                  <Route path="erms" element={<Navigate to="/universe/erms/dashboard" replace />} />
-                  {/* Anything else under erms/ is not built. The guard stays so
-                      the domain boundary holds regardless. */}
-                  <Route
-                    path="erms/*"
-                    element={
-                      <DomainGuard domain="erms" user={currentUser}>
-                        <Forbidden
-                          module="Records"
-                          detail="This part of the Records module is not built yet."
-                        />
-                      </DomainGuard>
-                    }
-                  />
+
+                  {/* The NAS File Explorer lives on the Storage Configuration
+                      screen, behind the same emailed code. It is not a separate
+                      route: browsing the share and configuring it are one
+                      administrative task, and splitting them would mean two
+                      places to get the guard right. */}
+
 
                   {/* The records share, now a Developer Settings screen.
                       It had four routes — a dashboard, a browser, a storage
@@ -813,9 +752,10 @@ const Universe = () => {
                     path="posting"
                     element={<Navigate to="/universe/admin/posting" replace />}
                   />
+                  {/* Old location, kept as a redirect so one page has one URL. */}
                   <Route
                     path="duplicates"
-                    element={<Duplicates theme={theme} />}
+                    element={<Navigate to="/universe/admin/duplicates" replace />}
                   />
                   </Route>
                 </Routes>

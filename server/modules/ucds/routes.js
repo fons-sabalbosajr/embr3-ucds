@@ -27,6 +27,13 @@ router.get(
 );
 
 router.get(
+  '/api/ucds/establishments/:sortKey',
+  ucdsAccess,
+  validate(z.object({ sortKey: z.string().trim().min(1).max(60) }), 'params'),
+  ctrl.getEstablishment
+);
+
+router.get(
   '/api/erms/register/search',
   ermsAccess,
   validate(

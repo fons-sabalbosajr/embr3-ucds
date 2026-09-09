@@ -82,4 +82,23 @@ async function resolvePermit(req, res, next) {
   }
 }
 
-module.exports = { establishmentRecords, searchRegister, resolvePermit };
+
+/**
+ * One establishment by its register key.
+ *
+ * Added for the duplicate-comparison view, which has to show the stored values
+ * side by side rather than only the key the records collide on. Province scope
+ * applies: an establishment outside the caller's scope answers 404, not 403,
+ * so the API does not confirm a record exists to someone who may not see it.
+ */
+async function getEstablishment(req, res, next) {
+  try {
+    const establishment = await registryService.findBySortKey(req.params.sortKey, scopeOf(req));
+    if (!establishment) throw notFoundError('Establishment not found.', 'ESTABLISHMENT_NOT_FOUND');
+    return res.json({ establishment });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { establishmentRecords, getEstablishment, searchRegister, resolvePermit };

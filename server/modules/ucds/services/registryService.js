@@ -18,6 +18,25 @@ const register = () => getDb().collection(REGISTER);
 
 const REF_PROJECTION = { sort_key: 1, name: 1, title: 1, province: 1, ecc_cnc: 1, haz_id: 1, city: 1 };
 
+// The duplicate-comparison view needs the stored values it has to reconcile,
+// not just the key two records collide on. Still a projection rather than the
+// whole document: this is a read for one screen, not a general export.
+const DETAIL_PROJECTION = {
+  sort_key: 1,
+  name: 1,
+  name_of_firms: 1,
+  title: 1,
+  project_name: 1,
+  ecc_cnc: 1,
+  haz_id: 1,
+  province: 1,
+  city: 1,
+  city_municipality: 1,
+  barangay: 1,
+  industry_type: 1,
+  date_issued: 1,
+};
+
 // The migration builds an index over the whole register, which is right for a
 // script but not for a request: pulling all 16,000 entries takes ~40s, almost
 // entirely transfer — the server executes that query in 12ms.
@@ -82,10 +101,24 @@ async function resolveByPermitNumber(permitNumber) {
   };
 }
 
-async function findBySortKey(sortKey) {
+/**
+ * One establishment by register key.
+ *
+ * `allowedProvinces` of null means unrestricted, matching every other read
+ * here. Passing a scope actually confines the lookup: without that, a key is
+ * enough to read any establishment in the region, which is the escalation the
+ * province rules exist to prevent.
+ */
+async function findBySortKey(sortKey, allowedProvinces = null) {
   await connectToMongo();
   if (!sortKey) return null;
-  return register().findOne({ sort_key: sortKey }, { projection: REF_PROJECTION });
+
+  const filter = { sort_key: sortKey };
+  if (Array.isArray(allowedProvinces)) {
+    if (!allowedProvinces.length) return null; // fail closed
+    filter.province = { $in: allowedProvinces };
+  }
+  return register().findOne(filter, { projection: DETAIL_PROJECTION });
 }
 
 /**

@@ -71,9 +71,6 @@ describe('unauthenticated access', () => {
   it.each([
     '/api/auth/me',
     '/api/ucds/count',
-    '/api/healthcare',
-    '/api/chemicals',
-    '/api/tsd',
     '/api/draft-report',
     '/api/org-units',
   ])('%s requires a session', async (path) => {
@@ -108,7 +105,6 @@ describe('a user holding the ucds domain', () => {
     const agent = await signIn(PLANNING);
     expect((await agent.post('/api/years/select').send({ year: 2025 })).status).toBe(200);
     expect((await agent.get('/api/ucds/count')).status).toBe(200);
-    expect((await agent.get('/api/healthcare')).status).toBe(200);
   });
 
   it('sees only its own provinces in the register', async () => {
@@ -145,7 +141,6 @@ describe('a user without the ucds domain', () => {
 
   it.each([
     '/api/ucds/count',
-    '/api/healthcare',
     '/api/postings',
     '/api/draft-report',
   ])('is refused %s', async (path) => {
@@ -195,7 +190,7 @@ describe('removed modules', () => {
   it('left the shared UCDS endpoints alone', async () => {
     // The removed screens called these too, but so does everything else. A
     // 401 proves the route still exists and is still guarded.
-    for (const path of ['/api/ucds/count', '/api/healthcare', '/api/survey-log']) {
+    for (const path of ['/api/ucds/count', '/api/ucds-log', '/api/org-units']) {
       const res = await request(app).get(path);
       expect(res.status).not.toBe(404);
     }

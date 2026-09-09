@@ -21,6 +21,8 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
+import NasActivationCard from "./NasActivationCard";
+import NasFileExplorer from "./NasFileExplorer";
 
 const { Text, Paragraph } = Typography;
 
@@ -307,6 +309,13 @@ const StorageConfig = () => {
           )}
         </Card>
       )}
+
+      {/* Both of these need the same emailed code as the configuration above,
+          so they live inside the verified section rather than on their own
+          screen. */}
+      <NasActivationCard />
+
+      <NasFileExplorer />
 
       <Alert
         type="info"

@@ -455,14 +455,27 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                   />
                 ),
               },
-              // Documents filed against this establishment in ERMS. The panel
-              // renders nothing when the records module is unavailable to the
-              // viewer, so this tab is simply empty rather than broken.
+              // Permits, clearances and scanned documents filed against this
+              // establishment. Read-only on purpose, including while the rest
+              // of the record is being edited: Monitoring Plan metadata and
+              // document metadata are separate things, and editing one must
+              // not be able to repoint the other at a different file. The
+              // panel renders nothing when document access is unavailable to
+              // the viewer, so this tab is empty rather than broken.
               {
                 key: "7",
-                label: <span className="custom-tab">Records</span>,
+                label: <span className="custom-tab">Documents</span>,
                 children: (
-                  <EstablishmentRecordsPanel sortKey={editedRecord.sort_key} />
+                  <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                    {isEditing && (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        Documents are not edited here. Editing this record
+                        changes its Monitoring Plan details only — the filed
+                        documents and where they live are held separately.
+                      </Typography.Text>
+                    )}
+                    <EstablishmentRecordsPanel sortKey={editedRecord.sort_key} />
+                  </Space>
                 ),
               },
             ]}

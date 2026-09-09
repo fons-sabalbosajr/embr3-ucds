@@ -8,7 +8,6 @@ import { API_BASE_URL } from "../../config/api";
 
 const History = () => {
   const [ucdsLogs, setUcdsLogs] = useState([]);
-  const [surveyLogs, setSurveyLogs] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalData, setModalData] = useState(null);
   const [searchText, setSearchText] = useState("");
@@ -25,19 +24,7 @@ const History = () => {
       }
     };
 
-    const fetchSurveyLogs = async () => {
-      try {
-        const surveyLogsResponse = await axios.get(
-          `${API_BASE_URL}/api/survey-log`
-        );
-        setSurveyLogs(surveyLogsResponse.data);
-      } catch (error) {
-        console.error("Error fetching survey logs:", error);
-      }
-    };
-
     fetchUcdsLogs();
-    fetchSurveyLogs();
   }, []);
 
   const showModal = (record) => {
@@ -54,7 +41,7 @@ const History = () => {
     setSearchText(e.target.value);
   };
 
-  const combinedLogs = [...ucdsLogs, ...surveyLogs];
+  const combinedLogs = [...ucdsLogs];
 
   const filteredLogs = combinedLogs.filter((log) => {
     return Object.values(log).some((value) =>

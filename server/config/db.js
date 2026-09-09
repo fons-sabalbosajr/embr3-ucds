@@ -26,16 +26,9 @@ async function connectToMongo() {
   collections.archive = db.collection('archive-data');
   collections.postings = db.collection('postings');
   collections.draftReports = db.collection('draft-reports');
-  collections.survey2024 = db.collection('survey-data-2024');
-  collections.survey2025 = db.collection('survey-data-2025');
   collections.activityLogs = db.collection('app-logs');
-  collections.surveyLog = db.collection('survey-log');
   collections.ucdsLog = db.collection('ucds-log');
   collections.projectType = db.collection('project_type');
-  collections.healthcare = db.collection('ucds-data-healthcare');
-  collections.chemicals = db.collection('ucds-data-chemicals');
-  collections.tsd = db.collection('ucds-data-tsd');
-  collections.trc = db.collection('ucds-data-trc');
   // Developer settings collections
   collections.fieldConfigs = db.collection('developer-field-configs');
   collections.pdfForms = db.collection('developer-pdf-forms');

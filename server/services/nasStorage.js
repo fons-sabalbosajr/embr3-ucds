@@ -250,6 +250,72 @@ async function statFile(storedPath) {
   }
 }
 
+/**
+ * One directory level under the share root, for the administrative explorer.
+ *
+ * Takes a share-relative path and returns its entries. It goes through the
+ * same resolveSharePath() as document reads, so "../.." is rejected before the
+ * long-path prefix is applied and containment is re-checked afterwards — there
+ * is no second, weaker path implementation to get wrong.
+ *
+ * Never returns an absolute path. The caller navigates by the relative path it
+ * was given, so the internal host and share name stay on the server.
+ */
+async function listDirectory(relativePath = '') {
+  const cfg = nasConfig();
+  if (!cfg) return { ok: false, reason: 'not-configured' };
+
+  const clean = String(relativePath || '').replace(/^[\\/]+/, '');
+  let target;
+  if (!clean) {
+    target = cfg.base;
+  } else {
+    target = resolveSharePath(clean);
+    if (!target) return { ok: false, reason: 'invalid-path' };
+  }
+
+  let dirents;
+  try {
+    dirents = await fsp.readdir(toLongPath(target), { withFileTypes: true });
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return { ok: false, reason: 'missing' };
+    if (err.code === 'EACCES' || err.code === 'EPERM') return { ok: false, reason: 'denied' };
+    return { ok: false, reason: 'unreachable', detail: err.code };
+  }
+
+  const entries = [];
+  for (const d of dirents) {
+    const isDir = d.isDirectory();
+    const childRelative = clean ? `${clean.replace(/[\\/]+$/, '')}\\${d.name}` : d.name;
+    const entry = {
+      name: d.name,
+      type: isDir ? 'directory' : 'file',
+      path: childRelative,
+    };
+    if (!isDir) {
+      entry.contentType = contentTypeFor(d.name);
+      entry.previewable = canPreview(d.name);
+      try {
+        const s = await fsp.stat(toLongPath(path.win32.join(target, d.name)));
+        entry.size = s.size;
+        entry.modifiedAt = s.mtime;
+      } catch {
+        // A file that disappears between readdir and stat is listed without
+        // its size rather than failing the whole listing.
+        entry.size = null;
+      }
+    }
+    entries.push(entry);
+  }
+
+  entries.sort((a, b) =>
+    a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'directory' ? -1 : 1
+  );
+
+  const parent = clean ? clean.split(/[\\/]/).slice(0, -1).join('\\') : null;
+  return { ok: true, path: clean, parent, entries };
+}
+
 /** A read stream for an already-resolved path. Callers must stat() first. */
 const openStream = (resolved, options = {}) =>
   fs.createReadStream(toLongPath(resolved), options);
@@ -350,6 +416,7 @@ module.exports = {
   contentTypeFor,
   canPreview,
   statFile,
+  listDirectory,
   openStream,
   testConnection,
   toLongPath,

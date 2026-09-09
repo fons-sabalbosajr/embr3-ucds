@@ -34,8 +34,12 @@ const PROVINCES = {
   nuevaEcija: 'readWrite', pampanga: 'readWrite', tarlac: 'readWrite', zambales: 'readWrite',
 };
 
-const REMOVED = ['ESWM Database', 'Legal Services Unit', 'Planning Unit', 'Reports', 'NAS Storage'];
-const KEPT = ['Dashboard', 'Monitoring Plan', 'Healthcare', 'Survey', 'Admin', 'Developer Settings'];
+const REMOVED = [
+  'ESWM Database', 'Legal Services Unit', 'Planning Unit', 'Reports',
+  'NAS Storage', 'Healthcare', 'Chemical Industries', 'TSD Facilities',
+  'TRC Permits', 'Survey',
+];
+const KEPT = ['Dashboard', 'Monitoring Plan', 'Settings', 'Admin Settings'];
 
 const results = [];
 const check = (name, ok, note) => {
@@ -88,7 +92,11 @@ await users.insertMany([
   {
     username: RECORDS, name: 'Nav Check Records', email: `${RECORDS}@test.local`,
     division: 'TEST', status: 'offline', assignedYears: [2025], password,
-    permission: 'records', domains: ['erms'], ...PROVINCES,
+    // No explicit domains, so the role default applies — which is what a
+    // Records account created today gets. An account pinned to erms-only
+    // predates the merge and now sees nothing but the dashboard; that is a
+    // misconfiguration to fix on the account, not something to paper over.
+    permission: 'records', ...PROVINCES,
   },
 ]);
 
@@ -110,13 +118,26 @@ try {
   }
 
   // Storage Configuration must live under Developer Settings.
-  await dev.getByText('Developer Settings', { exact: false }).first().click().catch(() => {});
+  await dev.getByText('Admin Settings', { exact: false }).first().click().catch(() => {});
   await dev.waitForTimeout(1200);
   const menu2 = await dev.evaluate(() => document.querySelector('.ant-menu')?.innerText || '');
-  check('Developer Settings contains "Storage Configuration"', menu2.includes('Storage Configuration'));
+  check('Admin Settings contains "Storage Configuration"', menu2.includes('Storage Configuration'));
 
   await dev.goto(`${BASE}/universe/admin/developer/storage-config`, { waitUntil: 'domcontentloaded' });
   await dev.waitForTimeout(3000);
+  // Wait for the elevation check to resolve. Without this the assertion can
+  // land on the screen's own "Loading" spinner and report a failure that is
+  // only impatience.
+  await dev
+    .waitForFunction(
+      () => {
+        const t = document.getElementById('root')?.innerText || '';
+        return /Verification required|Records share|no email address/i.test(t);
+      },
+      null,
+      { timeout: 25000 }
+    )
+    .catch(() => {});
   const devText = await dev.evaluate(() => document.getElementById('root')?.innerText || '');
   check(
     'storage-config renders the verification gate',
@@ -163,12 +184,23 @@ try {
   await rec.waitForTimeout(2500);
 
   const recMenu = await rec.evaluate(() => document.querySelector('.ant-menu')?.innerText || '');
-  check('Records clerk sees no Developer Settings', !recMenu.includes('Developer Settings'));
+  check('Records clerk sees no Admin Settings', !recMenu.includes('Admin Settings'));
   check('Records clerk sees no NAS Storage', !recMenu.includes('NAS Storage'));
-  check('Records clerk sees "Records"', recMenu.includes('Records'));
+  check('Records clerk sees Monitoring Plan', recMenu.includes('Monitoring Plan'));
 
   await rec.goto(`${BASE}/universe/admin/developer/storage-config`, { waitUntil: 'domcontentloaded' });
-  await rec.waitForTimeout(2500);
+  // Same as above: wait for the guard to decide rather than for a fixed delay,
+  // or an empty page reads as "not refused".
+  await rec
+    .waitForFunction(
+      () => {
+        const t = document.getElementById('root')?.innerText || '';
+        return /do not have access|not assigned|limited to developers|Verification required/i.test(t);
+      },
+      null,
+      { timeout: 25000 }
+    )
+    .catch(() => {});
   const recText = await rec.evaluate(() => document.getElementById('root')?.innerText || '');
   check(
     'Records clerk typing the URL is refused',

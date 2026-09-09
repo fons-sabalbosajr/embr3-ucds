@@ -30,23 +30,8 @@ import {
   initializeSocket,
   emitJoinProvince,
   emitLeaveProvince,
-  emitJoinSurvey,
-  emitLeaveSurvey, // Corrected typo here
-  emitJoinHealthcare,
-  emitLeaveHealthcare,
-  emitJoinChemicals,
-  emitLeaveChemicals,
-  emitJoinTsd,
-  emitLeaveTsd,
-  emitJoinTrc,
-  emitLeaveTrc,
   onProvinceViewersUpdate, // Corrected typo here
-  onSurveyViewersUpdate, // Corrected typo here
   onMbuViewersUpdate, // Corrected typo here
-  onHealthcareViewersUpdate, // Corrected typo here
-  onChemicalsViewersUpdate, // Corrected typo here
-  onTsdViewersUpdate,
-  onTrcViewersUpdate,
   onSocketConnect,
   // onSocketDisconnect, // If needed
 } from "../api/socketService"; // Import socket service
@@ -57,10 +42,8 @@ const { Sider } = Layout;
 
 const rootSubmenuKeys = [
   "r3-monitoring",
-  "healthcare",
   "admin",
   "developer-settings",
-  "erms",
 ];
 
 // `key` matches the per-province grant on the user account; `value` is the
@@ -82,12 +65,7 @@ const SideMenu = ({ theme, currentUser }) => {
   const [siderWidth, setSiderWidth] = useState(220);
   const [openKeys, setOpenKeys] = useState([]);
   const [provinceViewers, setProvinceViewers] = useState({});
-  const [surveyViewers, setSurveyViewers] = useState([]);
   const [mbuViewers, setMbuViewers] = useState([]);
-  const [healthcareViewers, setHealthcareViewers] = useState([]);
-  const [chemicalsViewers, setChemicalsViewers] = useState([]);
-  const [tsdViewers, setTsdViewers] = useState([]);
-  const [trcViewers, setTrcViewers] = useState([]);
   const [currentProvince, setCurrentProvinceState] = useState(null);
 
   const location = useLocation();
@@ -107,7 +85,6 @@ const SideMenu = ({ theme, currentUser }) => {
   // sidebar honest about what the account can actually reach.
   const domains = currentUser?.domains || [];
   const hasUcds = domains.includes("ucds");
-  const hasErms = domains.includes("erms");
   const hasAdmin = domains.includes("admin");
   // The records share configuration is developer-only. It is a role question,
   // not a domain one — the share is infrastructure, not a business module.
@@ -123,15 +100,6 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys([]);
     } else if (path.startsWith("/universe/province/")) {
       setOpenKeys(["r3-monitoring"]);
-    } else if (
-      path.startsWith("/universe/healthcare") ||
-      path.startsWith("/universe/chemicals") ||
-      path.startsWith("/universe/tsd") ||
-      path.startsWith("/universe/trc")
-    ) {
-      setOpenKeys(["healthcare"]);
-    } else if (path.startsWith("/universe/survey")) {
-      setOpenKeys([]);
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
     } else if (
@@ -139,14 +107,13 @@ const SideMenu = ({ theme, currentUser }) => {
       path.startsWith("/universe/admin/posting") ||
       path.startsWith("/universe/admin/audit") ||
       path.startsWith("/universe/admin/org-units") ||
+      path.startsWith("/universe/admin/duplicates") ||
       path.startsWith("/universe/register/config") ||
       path.startsWith("/universe/register/activity")
     ) {
       setOpenKeys(["admin"]);
     } else if (path.startsWith("/universe/admin/developer/")) {
       setOpenKeys(["developer-settings"]);
-    } else if (path.startsWith("/universe/erms/")) {
-      setOpenKeys(["erms"]);
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
@@ -171,12 +138,7 @@ const SideMenu = ({ theme, currentUser }) => {
 
     const cleanups = [
       onProvinceViewersUpdate(setProvinceViewers),
-      onSurveyViewersUpdate(setSurveyViewers),
       onMbuViewersUpdate(setMbuViewers),
-      onHealthcareViewersUpdate(setHealthcareViewers),
-      onChemicalsViewersUpdate(setChemicalsViewers),
-      onTsdViewersUpdate(setTsdViewers),
-      onTrcViewersUpdate(setTrcViewers),
     ];
 
     const handleSocketReconnect = () => {
@@ -193,24 +155,9 @@ const SideMenu = ({ theme, currentUser }) => {
         // currentProvince is from component's state
         emitJoinProvince(currentProvince, userPayload);
       }
-      if (location.pathname === "/universe/survey") {
-        emitJoinSurvey(userPayload);
-      }
       // if (location.pathname === "/universe/mbu") {
       //   emitJoinMbu(userPayload);
       // }
-      if (location.pathname === "/universe/chemicals") {
-        emitJoinChemicals(userPayload);
-      }
-      if (location.pathname === "/universe/tsd") {
-        emitJoinTsd(userPayload);
-      }
-      if (location.pathname === "/universe/trc") {
-        emitJoinTrc(userPayload);
-      } // Healthcare join/leave logic - moved to its own effect below
-      if (location.pathname === "/universe/healthcare") {
-        emitJoinHealthcare(userPayload);
-      }
       if (location.pathname === "/universe/admin") {
         // Add admin room join/leave if needed
       }
@@ -295,110 +242,6 @@ const SideMenu = ({ theme, currentUser }) => {
   //   };
   // }, [currentUser, location.pathname]);
 
-  // Healthcare join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      return;
-    }
-
-    let didJoinHealthcareThisEffect = false;
-
-    if (location.pathname === "/universe/healthcare") {
-      // console.log("[SideMenu] Path is /universe/healthcare, attempting to joinHealthcare.");
-      emitJoinHealthcare({
-        // Corrected payload
-        username: currentUser.username,
-        avatar: currentUser.avatar || currentUser.avatarUrl,
-        name: currentUser.name,
-      });
-      didJoinHealthcareThisEffect = true;
-    }
-
-    return () => {
-      if (didJoinHealthcareThisEffect && currentUser?.username) {
-        emitLeaveHealthcare();
-      }
-    };
-  }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
-
-  // Chemicals join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      // Removed canViewDataHistory check
-      return;
-    }
-
-    let didJoinChemicalsThisEffect = false;
-
-    if (location.pathname === "/universe/chemicals") {
-      emitJoinChemicals({
-        // Corrected payload
-        username: currentUser.username,
-        avatar: currentUser.avatar || currentUser.avatarUrl,
-        name: currentUser.name,
-      });
-      didJoinChemicalsThisEffect = true;
-    }
-
-    return () => {
-      if (didJoinChemicalsThisEffect && currentUser?.username) {
-        emitLeaveChemicals();
-      }
-    };
-  }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
-
-  // TSD join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      // Corrected: Removed socketRef
-      // Removed canViewDataHistory check
-      return;
-    }
-
-    let didJoinTsdThisEffect = false;
-    if (location.pathname === "/universe/tsd") {
-      // console.log("[SideMenu] Path is /universe/tsd, attempting to joinTsd.");
-      emitJoinTsd({
-        // Corrected: Use emitJoinTsd and direct payload
-        username: currentUser.username,
-        avatar: currentUser.avatar || currentUser.avatarUrl,
-        name: currentUser.name,
-      });
-      didJoinTsdThisEffect = true;
-    }
-
-    return () => {
-      if (didJoinTsdThisEffect && currentUser?.username) {
-        emitLeaveTsd();
-      }
-    };
-  }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
-
-  // TRC join/leave logic
-  useEffect(() => {
-    if (!currentUser?.username) {
-      // Removed canViewDataHistory check
-      return;
-    }
-
-    let didJoinTrcThisEffect = false;
-
-    if (location.pathname === "/universe/trc") {
-      emitJoinTrc({
-        // Corrected payload
-        username: currentUser.username,
-        avatar: currentUser.avatar || currentUser.avatarUrl,
-        name: currentUser.name,
-      });
-      didJoinTrcThisEffect = true;
-    }
-    return () => {
-      if (didJoinTrcThisEffect && currentUser?.username) {
-        emitLeaveTrc();
-      }
-    };
-  }, [currentUser, location.pathname]); // Removed canViewDataHistory from deps
-
   const handleProvinceSelect = (province) => {
     setCurrentProvinceState(province);
     setCurrentProvince(province);
@@ -482,67 +325,10 @@ const SideMenu = ({ theme, currentUser }) => {
         ),
       })),
     },
-    hasUcds && {
-      key: "healthcare",
-      icon: <MedicineBoxFilled />,
-      label: <div className="menu-label-wrapper main">Healthcare</div>,
-      children: [
-        {
-          key: "/universe/healthcare",
-          label: (
-            <LabelWithAvatars
-              to="/universe/healthcare"
-              label="Healthcare Industries"
-              viewers={healthcareViewers}
-            />
-          ),
-        },
-        {
-          key: "/universe/chemicals",
-          label: (
-            <LabelWithAvatars
-              to="/universe/chemicals"
-              label="Chemical Industries"
-              viewers={chemicalsViewers}
-            />
-          ),
-        },
-        {
-          key: "/universe/tsd",
-          label: (
-            <LabelWithAvatars
-              to="/universe/tsd"
-              label="TSD Facilities"
-              viewers={tsdViewers}
-            />
-          ),
-        },
-        {
-          key: "/universe/trc",
-          label: (
-            <LabelWithAvatars
-              to="/universe/trc"
-              label="TRC Permits"
-              viewers={trcViewers}
-            />
-          ),
-        },
-      ],
-    },
-    hasUcds && {
-      key: "/universe/survey",
-      icon: <ReconciliationFilled />,
-      label: (
-        <div className="menu-label-wrapper main">
-          <Link to="/universe/survey">Survey</Link>
-          {renderAvatars(surveyViewers)}
-        </div>
-      ),
-    },
     hasAdmin && canViewAdminPanel && {
       key: "admin",
       icon: <SettingFilled />,
-      label: <div className="menu-label-wrapper main">Admin</div>,
+      label: <div className="menu-label-wrapper main">Settings</div>,
       children: [
         {
           key: "/universe/admin/users",
@@ -550,7 +336,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <LabelWithAvatars
               to="/universe/admin/users"
               label="User Accounts"
-              viewers={chemicalsViewers}
+              viewers={[]}
             />
           ),
         },
@@ -560,7 +346,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <LabelWithAvatars
               to="/universe/admin/posting"
               label="Post to Bulletin"
-              viewers={chemicalsViewers}
+              viewers={[]}
             />
           ),
         },
@@ -570,7 +356,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <LabelWithAvatars
               to="/universe/register/config"
               label="Monitoring Config"
-              viewers={chemicalsViewers}
+              viewers={[]}
             />
           ),
         },
@@ -580,7 +366,7 @@ const SideMenu = ({ theme, currentUser }) => {
             <LabelWithAvatars
               to="/universe/register/activity"
               label="Register Activity"
-              viewers={chemicalsViewers}
+              viewers={[]}
             />
           ),
         },
@@ -592,12 +378,23 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
-      ],
+        // Reconciling two records of the same firm is operational work, not
+        // system configuration, so it belongs here rather than under Admin
+        // Settings. It reads the register, hence the UCDS requirement.
+        hasUcds && {
+          key: "/universe/admin/duplicates",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/duplicates">Duplicate Data</Link>
+            </div>
+          ),
+        },
+      ].filter(Boolean),
     },
     hasAdmin && canViewAdminPanel && {
       key: "developer-settings",
       icon: <ToolOutlined />,
-      label: <div className="menu-label-wrapper main">Developer Settings</div>,
+      label: <div className="menu-label-wrapper main">Admin Settings</div>,
       children: [
         {
           key: "/universe/admin/developer/field-management",
@@ -650,55 +447,6 @@ const SideMenu = ({ theme, currentUser }) => {
           ),
         },
       ].filter(Boolean),
-    },
-    // Records module. Visible to anyone holding the ERMS domain, independent
-    // of the UCDS capability flags — a Records clerk has no reason to hold
-    // canViewAdminPanel.
-    hasErms && {
-      key: "erms",
-      icon: <FileProtectOutlined />,
-      // "Records", not "Records (ERMS)". ERMS is the system this replaced, not
-      // a section of E-Universe — naming it in the sidebar tells a clerk they
-      // are in a second application bolted onto the first. The route keys and
-      // API namespace stay `erms`, which nobody outside the code sees.
-      label: <div className="menu-label-wrapper main">Records</div>,
-      // Only the screens that exist are listed. Documents, tracking, archiving
-      // and reports arrive later; linking to them now would just lead to a
-      // "not built yet" page.
-      children: [
-        {
-          key: "/universe/erms/dashboard",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/dashboard">Dashboard</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/records",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/records">Records</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/archive",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/archive">Archive</Link>
-            </div>
-          ),
-        },
-        {
-          key: "/universe/erms/reports",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/erms/reports">Reports</Link>
-            </div>
-          ),
-        },
-      ],
     },
     // canViewAdminPanel && {
     //   key: "/universe/mbu",

@@ -43,7 +43,13 @@ const DOMAIN_VALUES = new Set(Object.values(DOMAINS));
 const DEFAULT_DOMAINS = {
   [ROLES.DEVELOPER]: [DOMAINS.UCDS, DOMAINS.ERMS, DOMAINS.ADMIN],
   [ROLES.ADMIN]: [DOMAINS.UCDS, DOMAINS.ERMS, DOMAINS.ADMIN],
-  [ROLES.RECORDS]: [DOMAINS.ERMS],
+  // Records staff hold UCDS as well as ERMS. Their own menu was removed when
+  // records were folded into the Monitoring Plan, and Monitoring Plan is a
+  // UCDS screen — without this a Records clerk signs in to an empty
+  // application. It grants *reading* the register, not writing it:
+  // canManageData still gates every write, and province scope still decides
+  // which records they see at all.
+  [ROLES.RECORDS]: [DOMAINS.ERMS, DOMAINS.UCDS],
   [ROLES.PLANNING]: [DOMAINS.UCDS],
   [ROLES.VIEWER]: [DOMAINS.UCDS],
 };

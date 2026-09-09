@@ -41,6 +41,7 @@ const LIST_PROJECTION = {
   'location.provinceLabel': 1,
   'location.city': 1,
   'document.fileName': 1,
+  'document.fileClass': 1,
   'document.uploadedAt': 1,
   'document.uploadedBy': 1,
   isAttachment: 1,

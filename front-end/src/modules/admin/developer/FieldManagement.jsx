@@ -4,8 +4,6 @@ import { getFieldConfigs, createFieldConfig, updateFieldConfig, deleteFieldConfi
 
 const MODULE_OPTIONS = [
   { value: "monitoring", label: "Monitoring Plan" },
-  { value: "survey", label: "Survey" },
-  { value: "healthcare", label: "Healthcare" },
 ];
 
 const FieldManagement = () => {

@@ -2,6 +2,7 @@ const nas = require('../services/nasStorage');
 const elevation = require('../services/nasElevation');
 const { principalOf } = require('../middleware/auth');
 const { recordFileEvent } = require('../services/nasAudit');
+const activation = require('../services/nasActivation');
 
 // ---------------------------------------------------------------------------
 // NAS (SMB) storage access — administrative surface.
@@ -63,19 +64,123 @@ async function testConnection(req, res) {
 }
 
 /**
- * List the share root only — one level, no path parameter.
+ * One directory level, for the administrative file explorer.
  *
- * There is deliberately no way to walk into subdirectories from here. Browsing
- * the share is not a feature anyone needs: documents are reached through their
- * record, and an arbitrary directory walker would be the exact "browse the NAS
- * freely" capability the design forbids.
+ * The caller supplies a share-relative path, which is why this is the most
+ * sensitive route here: it is the only place a path from a browser reaches the
+ * filesystem at all. It goes through the same resolveSharePath() as document
+ * reads, so `?path=../../` is rejected, and the response never contains an
+ * absolute path — the client navigates by relative path and never learns the
+ * host or share name.
+ *
+ * Developer-only and elevation-gated. Ordinary users reach documents through
+ * their record, where province scope applies; this bypasses that, which is
+ * precisely why it is not available to them.
  */
-async function listRoot(req, res) {
-  const result = await nas.testConnection();
+async function browse(req, res) {
+  const requested = req.query.path || '';
+  const result = await nas.listDirectory(requested);
+
+  await recordFileEvent(req, {
+    operation: 'nas-browse',
+    fileName: requested || '(root)',
+    success: result.ok === true,
+    detail: result.ok ? `${result.entries.length} entries` : result.reason,
+  });
+
   if (!result.ok) {
-    return res.status(502).json({ code: 'NAS_UNREACHABLE', message: result.message, reason: result.reason });
+    const statuses = {
+      'not-configured': [503, 'NAS_NOT_CONFIGURED', 'The records share is not configured.'],
+      'invalid-path': [400, 'BAD_PATH', 'That path is not inside the records share.'],
+      missing: [404, 'NOT_FOUND', 'No such folder on the records share.'],
+      denied: [502, 'NAS_DENIED', 'The server is not permitted to read that folder.'],
+      unreachable: [502, 'NAS_UNREACHABLE', 'The records share could not be reached.'],
+    };
+    const [status, code, message] = statuses[result.reason] || [502, 'NAS_ERROR', 'Could not read that folder.'];
+    return res.status(status).json({ code, message });
   }
-  return res.json({ entries: result.entries, entryCount: result.entryCount });
+
+  return res.json(result);
+}
+
+/** Stream one file from the explorer, by share-relative path. */
+async function readByPath(req, res, next) {
+  try {
+    const requested = req.query.path || '';
+    const file = await nas.statFile(requested);
+    if (!file.ok) {
+      await recordFileEvent(req, {
+        operation: 'nas-file-read',
+        fileName: requested,
+        success: false,
+        detail: file.reason,
+      });
+      return res.status(file.reason === 'invalid-path' ? 400 : 404).json({
+        code: file.reason === 'invalid-path' ? 'BAD_PATH' : 'NOT_FOUND',
+        message: 'That file is not available on the records share.',
+      });
+    }
+
+    const safeName = file.fileName.replace(/["\\]/g, '_');
+    const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`
+    );
+    res.setHeader('Content-Length', file.size);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    await recordFileEvent(req, {
+      operation: 'nas-file-read',
+      fileName: file.fileName,
+      success: true,
+      bytes: file.size,
+    });
+
+    const stream = nas.openStream(file.resolved);
+    stream.on('error', (err) => {
+      console.error('NAS explorer stream failed:', err.code || err.message);
+      res.destroy(err);
+    });
+    return stream.pipe(res);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- application-wide activation -------------------------------------------
+
+/** Current activation state. Any signed-in user may ask — it names nothing. */
+async function activationStatus(req, res, next) {
+  try {
+    const state = await activation.evaluate();
+    return res.json(state);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Turn document access on or off for the whole deployment. */
+async function setActivation(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const result = await activation.setActivation(req.body || {}, user);
+
+    await recordFileEvent(req, {
+      operation: req.body?.enabled ? 'nas-activate' : 'nas-deactivate',
+      success: result.ok === true,
+      detail: result.ok
+        ? `until ${result.state.endsAt ? new Date(result.state.endsAt).toISOString() : 'no expiry'}`
+        : result.code,
+    });
+
+    if (!result.ok) return res.status(result.status).json(result);
+    return res.json(result.state);
+  } catch (error) {
+    return next(error);
+  }
 }
 
 // --- step-up authentication -------------------------------------------------
@@ -118,7 +223,10 @@ module.exports = {
   getConfig,
   status,
   testConnection,
-  listRoot,
+  browse,
+  readByPath,
+  activationStatus,
+  setActivation,
   requestElevation,
   confirmElevation,
   elevationStatus,

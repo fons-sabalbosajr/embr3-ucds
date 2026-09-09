@@ -3,6 +3,7 @@ import request from 'supertest';
 import bcrypt from 'bcrypt';
 
 import app from '../app.js';
+import activation from '../services/nasActivation.js';
 import db from '../config/db.js';
 
 const { connectToMongo, collections, getDb } = db;
@@ -94,6 +95,17 @@ beforeAll(async () => {
     recordDoc(SERIAL_OUT_OF_SCOPE, 'aurora', 'RECORDS\\__test\\nothing-here.pdf'),
     recordDoc(SERIAL_NO_DOC, 'bataan', null),
   ]);
+
+  // These assert authorization and record scoping, so document access has to
+  // be switched on: otherwise every one of them returns 503 NAS_INACTIVE and
+  // proves nothing about who may read what.
+  await getDb()
+    .collection(activation.COLLECTION)
+    .updateOne(
+      { _id: activation.DOC_ID },
+      { $set: { enabled: true, startsAt: new Date(Date.now() - 60000), endsAt: new Date(Date.now() + 3600000) } },
+      { upsert: true }
+    );
 
   [records, planning, developer] = await Promise.all([
     signIn(RECORDS),
@@ -198,7 +210,7 @@ describe('the NAS administrative surface', () => {
     for (const agent of [records, planning]) {
       expect((await agent.get('/api/nas/config')).status).toBe(403);
       expect((await agent.post('/api/nas/test-connection')).status).toBe(403);
-      expect((await agent.get('/api/nas/files')).status).toBe(403);
+      expect((await agent.get('/api/nas/browse')).status).toBe(403);
     }
   });
 
@@ -206,7 +218,7 @@ describe('the NAS administrative surface', () => {
     for (const res of [
       await developer.get('/api/nas/config'),
       await developer.post('/api/nas/test-connection'),
-      await developer.get('/api/nas/files'),
+      await developer.get('/api/nas/browse'),
     ]) {
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('ELEVATION_REQUIRED');
