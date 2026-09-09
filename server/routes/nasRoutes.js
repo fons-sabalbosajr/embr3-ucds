@@ -5,6 +5,8 @@ const { requireElevation } = require('../services/nasElevation');
 const {
   requireNasConfig,
   getConfig,
+  saveConfig,
+  resetConfig,
   status,
   testConnection,
   browse,
@@ -65,6 +67,15 @@ router.delete('/api/nas/elevation/pin', developerOnly, requireElevation, removeE
 // Configuration and diagnostics — elevated.
 router.get('/api/nas/config', sensitive, getConfig);
 router.post('/api/nas/test-connection', sensitive, testConnection);
+
+// Rotating the share password is an operational routine, not a redeploy. The
+// password is encrypted at rest, never returned by GET, and applied to the
+// machine's own credential store so the change actually takes effect.
+//
+// Deliberately not behind requireNasConfig: the first save is how a
+// deployment with no configuration gets one.
+router.put('/api/nas/config', developerOnly, requireElevation, saveConfig);
+router.delete('/api/nas/config', developerOnly, requireElevation, resetConfig);
 
 // Turning document access on or off for the whole deployment, with an
 // expiry window the server evaluates. Elevated: it changes what every user

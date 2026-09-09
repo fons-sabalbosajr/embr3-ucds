@@ -3,6 +3,7 @@ const elevation = require('../services/nasElevation');
 const { principalOf } = require('../middleware/auth');
 const { recordFileEvent } = require('../services/nasAudit');
 const activation = require('../services/nasActivation');
+const credentials = require('../services/nasCredentials');
 
 // ---------------------------------------------------------------------------
 // NAS (SMB) storage access — administrative surface.
@@ -38,9 +39,97 @@ function requireNasConfig(req, res, next) {
   next();
 }
 
-/** Configuration as the settings screen may see it. Never includes a password. */
-function getConfig(req, res) {
-  return res.json(nas.describeConfig());
+/**
+ * Configuration as the settings screen may see it. Never includes a password —
+ * `passwordSet` says whether one exists, and that is all a screen needs.
+ */
+async function getConfig(req, res, next) {
+  try {
+    return res.json(await credentials.describe());
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * Save connection details, then make them the ones actually in force.
+ *
+ * The order matters. Nothing here authenticates to the share — Windows does,
+ * from its own credential store — so storing a password without applying it
+ * would leave the old one authenticating while the screen reported success.
+ *
+ * The connection is tested after applying and the result recorded, but a
+ * failed test does not roll back: an administrator correcting a host name
+ * while the NAS is down would otherwise be unable to save the correction. The
+ * response says plainly whether the test passed.
+ */
+async function saveConfig(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const body = req.body || {};
+
+    const result = await credentials.save(body, user);
+    if (!result.ok) {
+      await recordFileEvent(req, {
+        operation: 'nas-credentials-save',
+        success: false,
+        detail: result.code,
+      });
+      return res.status(result.status).json(result);
+    }
+
+    // Refresh before anything else reads the configuration, so the next
+    // request uses the new share without a restart.
+    await nas.refreshConfig();
+
+    const resolved = await credentials.resolve();
+    let applied = { ok: false, code: 'SKIPPED' };
+    if (body.password) {
+      applied = await credentials.applyToWindows(resolved);
+    }
+
+    const probe = await nas.testConnection();
+    await credentials.recordTest({
+      ok: probe.ok,
+      detail: probe.ok ? `${probe.entryCount} entries at the root` : `${probe.reason}/${probe.code}`,
+    });
+
+    await recordFileEvent(req, {
+      operation: 'nas-credentials-save',
+      success: true,
+      // Never the password, and never the host: the audit trail is readable
+      // from the Admin screens.
+      detail: `by ${user?.username || 'unknown'}; test ${probe.ok ? 'passed' : 'failed'}`,
+    });
+
+    return res.json({
+      ok: true,
+      config: await credentials.describe(),
+      credentialApplied: applied.ok,
+      credentialMessage: applied.ok ? null : applied.message,
+      test: probe.ok
+        ? { ok: true, ms: probe.ms, entryCount: probe.entryCount }
+        : { ok: false, reason: probe.reason, message: probe.message },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Discard stored credentials and fall back to the environment. */
+async function resetConfig(req, res, next) {
+  try {
+    await credentials.reset();
+    await nas.refreshConfig();
+    await recordFileEvent(req, {
+      operation: 'nas-credentials-reset',
+      success: true,
+      detail: 'reverted to environment',
+    });
+    return res.json({ ok: true, config: await credentials.describe() });
+  } catch (error) {
+    return next(error);
+  }
 }
 
 /**
@@ -279,6 +368,8 @@ function endElevation(req, res) {
 module.exports = {
   requireNasConfig,
   getConfig,
+  saveConfig,
+  resetConfig,
   status,
   testConnection,
   browse,

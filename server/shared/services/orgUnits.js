@@ -2,7 +2,7 @@ const { connectToMongo, getDb, ObjectId } = require('../../config/db');
 const { conflict, notFoundError } = require('../middleware/errorHandler');
 
 // ---------------------------------------------------------------------------
-// Organisational units — shared master data, owned by the platform.
+// Organizational Units — shared master data, owned by the platform.
 //
 // Today "division" is a free-text string on each user document, which has
 // already accumulated variants ("ORD-PISMU" and "ORD - PISMU" are the same

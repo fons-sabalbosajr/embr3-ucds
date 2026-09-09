@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
+const templates = require('./mailTemplates');
 
 // ---------------------------------------------------------------------------
 // Step-up authentication for administrative NAS operations.
@@ -141,29 +142,13 @@ async function requestCode(req, user) {
   };
 
   try {
+    const mail = templates.nasVerificationCode({ code, minutes: CODE_TTL_MS / 60000 });
     await transporter().sendMail({
-      from: process.env.EMAIL_USER,
+      from: { name: templates.PRODUCT, address: process.env.EMAIL_USER },
       to: email,
-      subject: 'E-Universe — NAS configuration verification code',
-      text:
-        `Your verification code is ${code}\n\n` +
-        `It expires in ${CODE_TTL_MS / 60000} minutes and can be used once.\n\n` +
-        'This code authorises changes to the records share configuration. ' +
-        'If you did not request it, tell the system administrator — someone ' +
-        'signed in as you is trying to reach the NAS settings.',
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
-          <h2 style="margin:0 0 4px">E-Universe</h2>
-          <p style="margin:0 0 20px;color:#666">Unified Information and Records Management System</p>
-          <p>Your verification code for <strong>records share configuration</strong> is:</p>
-          <p style="font-size:30px;letter-spacing:7px;font-weight:700;margin:20px 0">${code}</p>
-          <p style="color:#666">Expires in ${CODE_TTL_MS / 60000} minutes. It can be used once.</p>
-          <hr style="border:none;border-top:1px solid #eee;margin:22px 0">
-          <p style="color:#a33">
-            If you did not request this, tell the system administrator. Someone
-            signed in as you is trying to reach the NAS settings.
-          </p>
-        </div>`,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
     });
   } catch (err) {
     delete req.session.nasElevation;

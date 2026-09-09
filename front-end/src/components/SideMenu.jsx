@@ -356,7 +356,7 @@ const SideMenu = ({ theme, currentUser }) => {
           key: "/universe/admin/org-units",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/org-units">Organisational Units</Link>
+              <Link to="/universe/admin/org-units">Organizational Units</Link>
             </div>
           ),
         },

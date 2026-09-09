@@ -54,23 +54,68 @@ const normalizeRoot = (value) =>
  * already used, so it is accepted unchanged — the two mean the same thing and
  * requiring a rename would break a working configuration for no benefit.
  */
+/**
+ * Where the connection details come from, cached.
+ *
+ * nasConfig() is synchronous and called from resolveSharePath() on every
+ * document read, so it cannot await a database lookup. The resolved details
+ * are therefore held here and refreshed explicitly — refreshConfig() is called
+ * at startup and again whenever the credentials are saved, so a change takes
+ * effect on the next request rather than after a restart or a cache timeout.
+ *
+ * Until the first refresh completes, and whenever nothing is stored, the
+ * environment is used. That is the previous behaviour, so a deployment that
+ * never opens the settings screen is unaffected.
+ */
+let cachedSource = null;
+
+function fromEnvironment() {
+  return {
+    root: normalizeRoot(process.env.NAS_ROOT || process.env.NAS_SHARE),
+    baseDir: String(process.env.NAS_BASE_DIR || '').trim().replace(/^[\\/]+|[\\/]+$/g, ''),
+    username: process.env.NAS_USERNAME || null,
+    domain: process.env.NAS_DOMAIN || '',
+    source: 'environment',
+  };
+}
+
+/** Re-read the stored credentials. Called at startup and after every save. */
+async function refreshConfig() {
+  try {
+    const resolved = await require('./nasCredentials').resolve();
+    cachedSource = {
+      root: resolved.root,
+      baseDir: resolved.baseDir,
+      username: resolved.username,
+      domain: resolved.domain,
+      source: resolved.source,
+    };
+  } catch (err) {
+    console.error('NAS: could not read stored credentials, using the environment:', err.message);
+    cachedSource = null;
+  }
+  return cachedSource || fromEnvironment();
+}
+
 function nasConfig() {
-  const root = normalizeRoot(process.env.NAS_ROOT || process.env.NAS_SHARE);
+  const src = cachedSource || fromEnvironment();
+  const root = normalizeRoot(src.root);
   if (!root || !/^\\\\[^\\]+\\[^\\]+/.test(root)) return null;
 
-  // Optional subdirectory below the share root. Empty here, because the
-  // migrated sharePath values already begin at "RECORDS\Database\...".
-  const baseDir = String(process.env.NAS_BASE_DIR || '')
-    .trim()
-    .replace(/^[\\/]+|[\\/]+$/g, '');
+  // Optional subdirectory below the share root. Empty on this deployment,
+  // because the migrated sharePath values already begin at "RECORDS\Database".
+  const baseDir = String(src.baseDir || '').trim().replace(/^[\\/]+|[\\/]+$/g, '');
 
   return {
     root,
     baseDir,
     // The full path everything resolves against.
     base: baseDir ? `${root}\\${baseDir.replace(/\//g, '\\')}` : root,
-    username: process.env.NAS_USERNAME || null,
-    domain: process.env.NAS_DOMAIN || '',
+    username: src.username || null,
+    domain: src.domain || '',
+    source: src.source || 'environment',
+    // The deployment-level switch stays in the environment: it is how an
+    // operator turns document access off without touching stored settings.
     enabled: String(process.env.NAS_ENABLED ?? 'true').trim().toLowerCase() !== 'false',
   };
 }
@@ -407,6 +452,7 @@ function warnAboutNasConfig() {
 
 module.exports = {
   nasConfig,
+  refreshConfig,
   warnAboutNasConfig,
   isConfigured,
   describeConfig,

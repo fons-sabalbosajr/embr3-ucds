@@ -190,7 +190,7 @@ const OrgUnits = () => {
 
   return (
     <Card
-      title="Organisational Units"
+      title="Organizational Units"
       extra={
         <Space size={16}>
           <Space size={6}>

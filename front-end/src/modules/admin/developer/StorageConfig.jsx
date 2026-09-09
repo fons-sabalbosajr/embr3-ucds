@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Descriptions, Input, Result, Space, Spin, Statistic, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Input, Result, Space, Spin, Statistic, Tabs, Tag, Typography } from "antd";
+import { useSearchParams } from "react-router-dom";
 import { message } from "../../../shared/feedback";
 import {
   CheckCircleOutlined,
@@ -9,6 +10,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
+import NasConnectionCard from "./NasConnectionCard";
 import NasActivationCard from "./NasActivationCard";
 import NasPinCard from "./NasPinCard";
 import NasFileExplorer from "./NasFileExplorer";
@@ -52,6 +54,10 @@ const StorageConfig = () => {
   const [pin, setPin] = useState(null);
   const [pinEntry, setPinEntry] = useState("");
   const [forceEmail, setForceEmail] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const tab = ["connection", "access", "explorer", "diagnostics"].includes(params.get("tab"))
+    ? params.get("tab")
+    : "connection";
 
   const loadConfig = useCallback(async () => {
     const res = await api("/api/nas/config");
@@ -290,105 +296,148 @@ const StorageConfig = () => {
     );
   }
 
+  // Four tabs rather than one long column. Connection and Access are
+  // deliberately separate: how the backend authenticates to the share is a
+  // different question from whether the application is currently permitted to
+  // use it, and changing a password should not silently turn access on.
+  const tabs = [
+    {
+      key: "connection",
+      label: "Connection",
+      children: <NasConnectionCard onSaved={() => setTestResult(null)} />,
+    },
+    {
+      key: "access",
+      label: "Access",
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <NasActivationCard />
+          <NasPinCard />
+        </Space>
+      ),
+    },
+    {
+      key: "explorer",
+      label: "File Explorer",
+      children: <NasFileExplorer />,
+    },
+    {
+      key: "diagnostics",
+      label: "Diagnostics",
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Card
+            title="Connectivity"
+            size="small"
+            extra={
+              <Button icon={<ReloadOutlined />} loading={testing} onClick={testConnection}>
+                Test connection
+              </Button>
+            }
+          >
+            {testResult ? (
+              testResult.ok ? (
+                <Space size="large" wrap>
+                  <Statistic
+                    title="Share"
+                    value="Reachable"
+                    prefix={<CheckCircleOutlined style={{ color: "#52c41a" }} />}
+                  />
+                  <Statistic title="Round trip" value={testResult.ms} suffix="ms" />
+                  <Statistic title="Entries at root" value={testResult.entryCount} />
+                </Space>
+              ) : (
+                <Alert
+                  type="error"
+                  showIcon
+                  icon={<CloseCircleOutlined />}
+                  message={testResult.message || "The share could not be reached."}
+                  description={`Reason: ${testResult.reason || "unknown"}${
+                    testResult.code ? ` (${testResult.code})` : ""
+                  }`}
+                />
+              )
+            ) : (
+              <Text type="secondary">
+                Not tested in this session. Run a test to see whether the share
+                answers right now.
+              </Text>
+            )}
+          </Card>
+
+          <Card title="Configuration" size="small">
+            {config?.configured ? (
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label="Source">
+                  {config.source === "database" ? "Admin Settings" : "server environment"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Host">{config.host}</Descriptions.Item>
+                <Descriptions.Item label="Share">{config.share}</Descriptions.Item>
+                <Descriptions.Item label="Base directory">
+                  {config.baseDir || <Text type="secondary">share root</Text>}
+                </Descriptions.Item>
+                <Descriptions.Item label="Service account">
+                  {config.username || <Text type="secondary">the server&rsquo;s own identity</Text>}
+                </Descriptions.Item>
+                <Descriptions.Item label="Domain">
+                  {config.domain || <Text type="secondary">none</Text>}
+                </Descriptions.Item>
+                <Descriptions.Item label="Password">
+                  {config.passwordSet ? (
+                    <Tag color="green">Set</Tag>
+                  ) : (
+                    <Tag color="orange">Not set</Tag>
+                  )}
+                  <Text type="secondary" style={{ marginLeft: 8 }}>
+                    Held on the server. It is never sent to this screen.
+                  </Text>
+                </Descriptions.Item>
+                {config.lastTestAt && (
+                  <Descriptions.Item label="Last test">
+                    <Tag color={config.lastTestOk ? "green" : "red"}>
+                      {config.lastTestOk ? "passed" : "failed"}
+                    </Tag>
+                    {new Date(config.lastTestAt).toLocaleString()}
+                    {config.lastTestDetail ? ` · ${config.lastTestDetail}` : ""}
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                message="No share is configured"
+                description="Set it on the Connection tab, or set NAS_ROOT in server/.env."
+              />
+            )}
+          </Card>
+
+          <Alert
+            type="info"
+            showIcon
+            message="How documents are served"
+            description="Staff never reach the share directly. A document is requested by its record, the server resolves the stored path inside the configured share and streams the file back. No workstation needs the drive mapped, and no credential reaches a browser."
+          />
+        </Space>
+      ),
+    },
+  ];
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       {error && <Alert type="warning" showIcon message={error} closable />}
 
       <Card
         title="Records share"
-        extra={
-          <Space>
-            <Button icon={<ReloadOutlined />} loading={testing} onClick={testConnection}>
-              Test connection
-            </Button>
-            <Button onClick={endSession}>End verified session</Button>
-          </Space>
-        }
+        extra={<Button onClick={endSession}>End verified session</Button>}
+        styles={{ body: { paddingTop: 8 } }}
       >
-        {config?.configured ? (
-          <Descriptions column={1} size="small" bordered>
-            <Descriptions.Item label="Status">
-              {config.enabled ? (
-                <Tag color="green">Enabled</Tag>
-              ) : (
-                <Tag color="orange">Disabled</Tag>
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Host">{config.host}</Descriptions.Item>
-            <Descriptions.Item label="Share">{config.share}</Descriptions.Item>
-            <Descriptions.Item label="Base directory">
-              {config.baseDir || <Text type="secondary">share root</Text>}
-            </Descriptions.Item>
-            <Descriptions.Item label="Service account">
-              {config.username || <Text type="secondary">the server&rsquo;s own identity</Text>}
-            </Descriptions.Item>
-            <Descriptions.Item label="Domain">
-              {config.domain || <Text type="secondary">none</Text>}
-            </Descriptions.Item>
-            <Descriptions.Item label="Password">
-              <Text type="secondary">
-                Held in the server environment. It is never sent to this screen.
-              </Text>
-            </Descriptions.Item>
-          </Descriptions>
-        ) : (
-          <Alert
-            type="warning"
-            showIcon
-            message="No share is configured"
-            description="Set NAS_ROOT, NAS_USERNAME and NAS_PASSWORD in server/.env, then restart the server."
-          />
-        )}
+        <Tabs
+          items={tabs}
+          activeKey={tab}
+          onChange={(key) => setParams({ tab: key }, { replace: true })}
+        />
       </Card>
-
-      {testResult && (
-        <Card size="small">
-          {testResult.ok ? (
-            <Space size="large">
-              <Statistic
-                title="Connection"
-                value="Reachable"
-                prefix={<CheckCircleOutlined style={{ color: "#52c41a" }} />}
-              />
-              <Statistic title="Round trip" value={testResult.ms} suffix="ms" />
-              <Statistic title="Entries at root" value={testResult.entryCount} />
-            </Space>
-          ) : (
-            <Alert
-              type="error"
-              showIcon
-              icon={<CloseCircleOutlined />}
-              message={testResult.message || "The share could not be reached."}
-              description={`Reason: ${testResult.reason || "unknown"}${
-                testResult.code ? ` (${testResult.code})` : ""
-              }`}
-            />
-          )}
-        </Card>
-      )}
-
-      {/* Both of these need the same emailed code as the configuration above,
-          so they live inside the verified section rather than on their own
-          screen. */}
-      <NasPinCard />
-
-      <NasActivationCard />
-
-      <NasFileExplorer />
-
-      <Alert
-        type="info"
-        showIcon
-        message="How documents are served"
-        description={
-          <>
-            Staff never reach the share directly. A document is requested by its
-            record, the server resolves the stored path inside the configured
-            share and streams the file back. No workstation needs the drive
-            mapped, and no credential reaches a browser.
-          </>
-        }
-      />
     </Space>
   );
 };
