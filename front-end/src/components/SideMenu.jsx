@@ -62,7 +62,7 @@ const PROVINCE_MENU = [
 
 const SideMenu = ({ theme, currentUser }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [siderWidth, setSiderWidth] = useState(220);
+  const [siderWidth, setSiderWidth] = useState(230);
   const [openKeys, setOpenKeys] = useState([]);
   const [provinceViewers, setProvinceViewers] = useState({});
   const [mbuViewers, setMbuViewers] = useState([]);
@@ -440,16 +440,22 @@ const SideMenu = ({ theme, currentUser }) => {
     <Sider
       collapsed={collapsed}
       onCollapse={setCollapsed}
-      theme={theme}
-      width={210} // expanded
+      // Always dark. The sider is a fixed, accent-derived surface rather than
+      // something that inverts with the reading theme — see ThemeProvider.
+      theme="dark"
+      width={220} // expanded
       collapsedWidth={68} // collapsed
       trigger={null}
     >
       <Logo theme={theme} collapsed={collapsed} />
 
       {window.innerWidth >= 600 && (
+        // Styled like the theme toggle in the header: the header surface with
+        // navigation-coloured type. It used to be a primary button filled with
+        // the accent, which sat on an accent-derived sider and was almost
+        // invisible — the control blended into the surface it sits on.
         <Button
-          type="primary"
+          type="text"
           onClick={() => setCollapsed(!collapsed)}
           icon={collapsed ? <CaretRightOutlined /> : <CaretLeftOutlined />}
           size="small"
@@ -459,11 +465,14 @@ const SideMenu = ({ theme, currentUser }) => {
             right: collapsed ? -10 : -14,
             zIndex: 101,
             borderRadius: "50%",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-            background: "var(--highlight-color)",
-            border: "none",
-            width: 20,
-            height: 20,
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.25)",
+            background: "var(--eu-header-bg, #1f242c)",
+            color: "var(--eu-nav-text, #e8ecf2)",
+            border: "1px solid rgba(255, 255, 255, 0.18)",
+            width: 22,
+            height: 22,
+            minWidth: 22,
+            padding: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -482,7 +491,7 @@ const SideMenu = ({ theme, currentUser }) => {
         }}
       >
         <Menu
-          theme={theme}
+          theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           openKeys={openKeys}

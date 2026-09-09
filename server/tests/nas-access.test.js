@@ -99,6 +99,10 @@ beforeAll(async () => {
   // These assert authorization and record scoping, so document access has to
   // be switched on: otherwise every one of them returns 503 NAS_INACTIVE and
   // proves nothing about who may read what.
+  //
+  // tests/setup.js snapshots app-config for the whole run and restores it
+  // afterwards, so this no longer overwrites the deployment's real activation
+  // window. It used to, which reset a 30-day setting to one hour on every run.
   await getDb()
     .collection(activation.COLLECTION)
     .updateOne(

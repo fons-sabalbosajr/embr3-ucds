@@ -17,9 +17,13 @@ const Logo = ({ theme, collapsed }) => {
           >
             {/* The class name stays `logo-ucds` — it is a style hook, and
                 PurgeCSS matches it literally, so renaming it would drop the
-                rule from the production bundle. */}
-            <span>
-              E-<span className="logo-ucds">Universe</span>
+                rule from the production bundle. It now carries the accent on
+                the "E" rather than on "Universe". */}
+            <span className="logo-wordmark">
+              <span className="logo-ucds">E</span>-Universe
+            </span>
+            <span className="logo-tagline">
+              Unified Information & Records Management System
             </span>
           </div>
         )}

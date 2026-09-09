@@ -1,15 +1,14 @@
+/* Colours come from the Ant Design theme tokens. This file used to pin
+   input backgrounds, text and borders per theme class — several with
+   !important — so these controls ignored the theme, and #555 dropdown
+   text was unreadable on a dark surface. Structure only now. */
 .custom-autocomplete .ant-select-selector {
-    border: 1px solid #ccc !important; /* Border color */
     font-size: 11px !important;        /* Font size */
     border-radius: 4px !important;     /* Border radius */
   }
   
   .custom-autocomplete-dropdown .ant-select-item {
     font-size: 11px !important;        /* Font size for dropdown items */
-    color: #555 !important;            /* Text color for dropdown items */
   }
   
-  .custom-autocomplete .ant-select-selection-placeholder {
-    color: #555 !important;            /* Placeholder text color */
-  }
   

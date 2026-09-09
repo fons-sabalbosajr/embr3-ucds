@@ -35,28 +35,47 @@
 }
 
 .logo-icon-text {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-left: 8px;
   transition: color 0.2s;
-  white-space: nowrap;
   user-select: none;
-  line-height: 1;
+  min-width: 0;
 }
 
-.logo-icon-text.light-theme {
-  color: #222;
-}
-
+/* The sider is a fixed dark surface in both themes, so the wordmark does not
+   flip with the reading theme. The two theme classes are kept because other
+   rules and PurgeCSS match on them. */
+.logo-icon-text.light-theme,
 .logo-icon-text.dark-theme {
-  color: #f0f0f0;
+  color: var(--eu-nav-text, #eef2f8);
 }
 
+.logo-wordmark {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* The accent sits on the "E", not on "Universe". */
 .logo-ucds {
-  font-weight: 700;
-  color: var(--highlight-color, #1890ff);
-  letter-spacing: 1px;
+  font-weight: 800;
+  color: var(--eu-accent, #1890ff);
+}
+
+.logo-tagline {
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.1px;
+  opacity: 0.62;
+  /* Wraps rather than truncating: the sider is 210px and the full name does
+     not fit on one line at a legible size. */
+  white-space: normal;
+  max-width: 140px;
 }
 
 @media (max-width: 1080px) {

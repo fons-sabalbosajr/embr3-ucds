@@ -433,7 +433,7 @@ const StorageConfig = () => {
       {error && <Alert type="warning" showIcon message={error} closable />}
 
       <Card
-        title="Records share"
+        title="Network Attached Storage (NAS Configuration)"
         extra={<Button onClick={endSession}>End verified session</Button>}
         styles={{ body: { paddingTop: 8 } }}
       >

@@ -36,7 +36,7 @@ const DatabaseSettings = () => {
         </Typography.Paragraph>
       </Card>
 
-      <Card title="Records share">
+      <Card title="NAS Configuration">
         {loading ? (
           <Typography.Text>Checking the records share…</Typography.Text>
         ) : nasStatus?.configured && nasStatus?.enabled ? (

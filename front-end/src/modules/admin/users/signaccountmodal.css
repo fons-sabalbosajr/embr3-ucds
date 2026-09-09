@@ -21,11 +21,9 @@
   color: #ddd;
 }
 
-.ant-input-password input {
-  background-color: #2a2a2a !important;
-  color: #f0f0f0 !important;
-  border-color: #444 !important;
-}
+/* Removed: this pinned every password field in the application to a dark
+   background with !important — not just this modal's. Ant Design's tokens
+   handle it, and in light mode the old rule made the field unreadable. */
 
 .create-user-section {
   margin-left: 20px;

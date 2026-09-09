@@ -11,7 +11,7 @@
 }
 
 .sidebar {
-  color: #ffffff;
+  color: var(--eu-nav-text, #e8ecf2);
 }
 
 /* Header container theme-aware */
@@ -24,12 +24,13 @@
   box-shadow: 0 4px 5px rgba(0, 0, 0, 0.1);
 }
 
-:is(.dark-theme, [data-theme="dark"]) .header-container {
-  background-color: #1f1f22;
-}
-
-:is(.light-theme, [data-theme="light"]) .header-container {
-  background-color: #f5f5f5;
+/* The header follows the accent rather than the reading theme: the navigation
+   is the product's identity, and inverting it made the application look like
+   two different systems depending on a setting that is really about reading
+   comfort. It is a shade lighter than the sider so the hierarchy reads. */
+.header-container {
+  background-color: var(--eu-header-bg, #1f242c);
+  color: var(--eu-nav-text, #e8ecf2);
 }
 
 .header-content {
@@ -150,7 +151,9 @@
 .notification-icon {
   margin-right: 15px;
   font-size: 15px;
-  color: white;
+  /* The header is always a dark surface, so light type is correct in both
+     themes rather than only in dark. */
+  color: var(--eu-nav-text, #e8ecf2);
 }
 
 .link-menu {
