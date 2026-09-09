@@ -292,8 +292,56 @@ async function testConnection() {
   }
 }
 
+/**
+ * Startup check for the share configuration.
+ *
+ * NAS_BASE_DIR is the one setting here that can take the whole feature down
+ * silently. It is a subdirectory *below* the share root, and on this
+ * deployment it must be empty, because the stored sharePath values already
+ * begin at "RECORDS\". Setting it to the legacy prefix instead —
+ * "Z:\RECORDS\Database\Records Database", which is a natural reading of the
+ * name — produces
+ *
+ *   \\host\share\Z:\RECORDS\Database\Records Database\RECORDS\Database\...
+ *
+ * and every document in the system stops opening. Nothing else reports that:
+ * each record simply says the file is not on the share, which reads like the
+ * NAS lost the data rather than like a typo in one line of .env.
+ *
+ * So it is checked out loud at boot, the same way the cookie and env-format
+ * warnings are.
+ */
+function warnAboutNasConfig() {
+  const raw = String(process.env.NAS_BASE_DIR || '').trim();
+  if (!raw) return;
+
+  if (/^[A-Za-z]:/.test(raw) || /^\\{2}/.test(raw)) {
+    console.warn(
+      '\n[NAS] NAS_BASE_DIR is a drive letter or UNC path:\n' +
+        `        ${raw}\n` +
+        '      It is a subdirectory below the share root, not the legacy path\n' +
+        '      to strip — that is NAS_LEGACY_PREFIXES. Left as is, every\n' +
+        '      document will report "not on the share".\n' +
+        '      On this deployment it should be empty.\n'
+    );
+    return;
+  }
+
+  // Cheap and decisive: does the configured base actually exist?
+  testConnection().then((result) => {
+    if (!result.ok) {
+      console.warn(
+        `\n[NAS] The configured share could not be read (${result.reason}/${result.code}).\n` +
+          '      Documents will not open. Check NAS_ROOT and NAS_BASE_DIR, and\n' +
+          '      that this account holds a stored credential for the host.\n'
+      );
+    }
+  });
+}
+
 module.exports = {
   nasConfig,
+  warnAboutNasConfig,
   isConfigured,
   describeConfig,
   stripLegacyPrefix,

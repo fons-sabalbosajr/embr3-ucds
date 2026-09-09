@@ -19,7 +19,8 @@
     "divergence": "node scripts/migrate-erms/divergence.js",
     "smoke": "node scripts/smoke.mjs",
     "nas:coverage": "node scripts/nas-coverage.js",
-    "daily-check": "node scripts/migrate-erms/divergence.js --csv=../data/tb_maindata_erms.csv"
+    "daily-check": "node scripts/daily-check.js",
+    "cutover:check": "node scripts/cutover-check.js"
   },
   "keywords": [],
   "author": "",

@@ -11,7 +11,15 @@ that can be undone by setting `ERMS_MODULE_ENABLED=false`.
 
 ## Before you start
 
-These are not optional, and none of them is a code change.
+```bash
+cd server && npm run cutover:check
+```
+
+Runs every gate a machine can check and exits non-zero if any fails. **A pass
+is not a decision to cut over** — it means nothing mechanical is blocking. The
+items below it prints are the ones only a person can answer.
+
+Then the list below. None of them is a code change.
 
 - [ ] **Planning personnel have clicked through UCDS.** Phase 5a moved 225
       files. The build proves imports resolve; it says nothing about whether the
@@ -129,9 +137,15 @@ from here the web module is the only place records are created.
 ### 4. Check daily
 
 ```bash
-cd server
-node scripts/migrate-erms/divergence.js --file=../data/<todays-export>.csv --report
+cd server && npm run daily-check -- --csv=../data/<todays-export>.csv
 ```
+
+Every run **keeps a dated copy** at `reports/divergence-YYYY-MM-DD.txt`, and
+appends rather than overwrites if you run it twice in a day. That trail is the
+deliverable: the value of a parallel period is being able to say afterwards
+that the two systems agreed *every day*, and a check that overwrites its own
+output cannot support that. If drift shows up in week three, these files say
+which day it started.
 
 | Finding | Means | Do |
 |---|---|---|

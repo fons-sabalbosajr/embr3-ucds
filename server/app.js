@@ -57,6 +57,7 @@ app.use(securityHeaders());
 assertSessionSecret();
 warnAboutEnvFormatting();
 warnAboutCookieConfig();
+require('./services/nasStorage').warnAboutNasConfig();
 
 // Use the shared Mongo client for the session store to avoid a second pool.
 const sessionStore = MongoStore.create({

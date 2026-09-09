@@ -6,6 +6,7 @@ import {
   contentTypeFor,
   canPreview,
   toLongPath,
+  warnAboutNasConfig,
 } from '../services/nasStorage.js';
 import { normalizeCode } from '../shared/services/orgUnits.js';
 
@@ -124,6 +125,55 @@ describe('resolveSharePath', () => {
     delete process.env.NAS_ROOT;
     delete process.env.NAS_SHARE;
     expect(resolveSharePath('a.pdf')).toBeNull();
+  });
+});
+
+describe('NAS_BASE_DIR misconfiguration', () => {
+  const ROOT = '\\\\10.0.0.9\\RECORDS_SHARE';
+
+  beforeEach(() => {
+    process.env.NAS_ROOT = ROOT;
+  });
+  afterEach(() => {
+    delete process.env.NAS_ROOT;
+    delete process.env.NAS_BASE_DIR;
+  });
+
+  it('doubles the path when set to the legacy prefix, which is why it is warned about', () => {
+    // The natural misreading: NAS_BASE_DIR looks like "the legacy path", but
+    // it is a subdirectory below the share root. Set to the legacy prefix it
+    // produces \\host\share\Z:\RECORDS\...\RECORDS\... and every document in
+    // the system reports "not on the share" — a silent, total outage.
+    process.env.NAS_BASE_DIR = 'Z:\\RECORDS\\Database\\Records Database';
+    const resolved = resolveSharePath('RECORDS\\Database\\Records Database\\a.pdf');
+    expect(resolved).toContain('\\Z:\\');
+    expect(resolved.match(/RECORDS/g).length).toBeGreaterThan(1);
+  });
+
+  it('warns at startup rather than failing silently', () => {
+    process.env.NAS_BASE_DIR = 'Z:\\RECORDS\\Database\\Records Database';
+    const warnings = [];
+    const original = console.warn;
+    console.warn = (m) => warnings.push(String(m));
+    try {
+      warnAboutNasConfig();
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings.join('\n')).toMatch(/NAS_BASE_DIR is a drive letter or UNC path/);
+  });
+
+  it('says nothing when it is empty, which is correct for this deployment', () => {
+    process.env.NAS_BASE_DIR = '';
+    const warnings = [];
+    const original = console.warn;
+    console.warn = (m) => warnings.push(String(m));
+    try {
+      warnAboutNasConfig();
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings).toEqual([]);
   });
 });
 

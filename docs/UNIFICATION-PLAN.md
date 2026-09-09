@@ -828,7 +828,8 @@ smoke test proves a screen renders; it cannot tell you the workflow makes sense.
 
 - [x] Divergence checker built and proven to detect drift
 - [x] **Document access working** — the prerequisite, see Phase 7
-- [x] Daily check reduced to one command — `npm run daily-check`
+- [x] Daily check reduced to one command, keeping a dated trail — `npm run daily-check`
+- [x] Readiness gate — `npm run cutover:check`, one command, exits non-zero
 - [x] Training material written — [`RECORDS-USER-GUIDE.md`](RECORDS-USER-GUIDE.md)
 - [ ] Read-only NAS account provisioned on the Synology — **on the appliance, not in this repo**
 - [ ] Desktop ERMS set to read-only — **the irreversible step**
@@ -845,6 +846,34 @@ work came first.
 **What is left is not code.** Freezing the desktop app is an irreversible
 decision, the parallel period is elapsed time, and training is people in a
 room. The tooling for all three is built and the material is written.
+
+#### 🔴 `NAS_BASE_DIR` set to the legacy prefix took document access down entirely
+
+Set to `Z:\RECORDS\Database\Records Database` — a natural reading of the name —
+it resolves to:
+
+```
+\\host\share\Z:\RECORDS\Database\Records Database\RECORDS\Database\Records Database\…
+```
+
+The share became unreachable and **every document in the system would have
+reported "not on the share"**. Nothing said otherwise: each record just claims
+its file is missing, which reads like the NAS lost the data rather than like
+one line of `.env`.
+
+`NAS_BASE_DIR` is a subdirectory *below* the share root; the legacy prefix to
+strip is `NAS_LEGACY_PREFIXES`. On this deployment it must be **empty**,
+because the stored `sharePath` values already begin at `RECORDS\`.
+
+The value is corrected, but the fix is the guard: `warnAboutNasConfig()` runs
+at startup beside the existing cookie and env-format warnings, refuses to stay
+quiet about a drive-qualified or UNC base directory, and probes the share so an
+unreadable base is a loud line at boot rather than a silent outage.
+`npm run cutover:check` fails on it too — verified by setting the bad value
+back and watching three gates go red and the exit code go to 1.
+
+A configuration field that invites a plausible wrong answer and then fails
+silently is a design fault, not a user error.
 
 **`npm run divergence -- --file=<export>.csv`** compares a fresh desktop export
 against `erms-records`, reusing the Phase 6 transform so the two sides are
