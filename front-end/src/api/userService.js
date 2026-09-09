@@ -23,7 +23,12 @@ export const getOnlineUsers = async () => {
 
 export const fetchUserByUsername = async (username) => {
   try {
-    const response = await fetch(`${API_URL}/users?username=${username}`);
+    // fetch defaults to credentials: "same-origin", and the SPA and API are
+    // different origins, so without this the session cookie is not sent.
+    const response = await fetch(
+      `${API_URL}/users?username=${encodeURIComponent(username)}`,
+      { credentials: "include" }
+    );
     const data = await response.json();
     return data[0];
   } catch (error) {

@@ -521,10 +521,31 @@ const Universe = () => {
 
               <Content className="content-container">
                 <Routes>
+                  {/* Land people where they can actually work: a Records
+                      clerk has no UCDS domain, so the planning dashboard
+                      would only tell them they are not allowed. */}
                   <Route
                     path="/"
-                    element={<Navigate to="dashboard" replace />}
+                    element={
+                      <Navigate
+                        to={
+                          domains.includes("ucds")
+                            ? "dashboard"
+                            : domains.includes("erms")
+                              ? "erms/dashboard"
+                              : "dashboard"
+                        }
+                        replace
+                      />
+                    }
                   />
+
+                  {/* UCDS planning routes. Guarded as a group rather than one
+                      at a time — the API refuses these to a non-UCDS user
+                      anyway, and without this they would render a shell whose
+                      every request fails, which reads as breakage rather than
+                      as a permission boundary. */}
+                  <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
                   <Route
                     path="dashboard"
                     element={
@@ -583,6 +604,7 @@ const Universe = () => {
                     element={<Equipments theme={theme} />}
                   />
                   <Route path="extract" element={<Extract theme={theme} />} />
+                  </Route>
 
                   {/* Platform administration, consolidated under /admin.
                       Legacy paths below redirect, so existing bookmarks and
@@ -619,6 +641,8 @@ const Universe = () => {
                     path="activity-log"
                     element={<Navigate to="/universe/admin/audit" replace />}
                   />
+                  {/* Planning unit and register configuration — UCDS. */}
+                  <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
                   <Route
                     path="planning-unit/monitoring"
                     element={<Monitoring theme={theme} />}
@@ -648,6 +672,8 @@ const Universe = () => {
                     path="records/activity"
                     element={<Navigate to="/universe/register/activity" replace />}
                   />
+                  </Route>
+
                   {/* Developer settings, also under /admin. */}
                   <Route
                     path="admin/developer/field-management"
@@ -807,7 +833,8 @@ const Universe = () => {
                     element={<Navigate to="/universe/nas/settings" replace />}
                   />
 
-                  {/* Legal Services Unit Routes */}
+                  {/* Legal Services Unit and the remaining UCDS screens. */}
+                  <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
                   <Route
                     path="legal/dashboard"
                     element={<LegalDashboard theme={theme} />}
@@ -835,6 +862,7 @@ const Universe = () => {
                     path="duplicates"
                     element={<Duplicates theme={theme} />}
                   />
+                  </Route>
                 </Routes>
               </Content>
             </Layout>

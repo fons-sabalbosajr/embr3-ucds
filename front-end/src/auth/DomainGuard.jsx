@@ -1,3 +1,4 @@
+import { Outlet } from "react-router-dom";
 import Forbidden from "../shared/components/Forbidden";
 
 /**
@@ -7,7 +8,14 @@ import Forbidden from "../shared/components/Forbidden";
  * route behind these screens, so a user who reaches one another way is refused
  * there. Hiding it here just avoids a page that would only fail to load.
  *
- * Usage:  <DomainGuard domain="erms" user={currentUser}><Records /></DomainGuard>
+ * Two forms, because a domain with many routes should not repeat the guard on
+ * every one of them:
+ *
+ *   wrapping one element   <DomainGuard domain="erms" user={u}><Records /></DomainGuard>
+ *   as a layout route      <Route element={<DomainGuard domain="ucds" user={u} />}>
+ *                            <Route path="survey" element={<Survey />} />
+ *                            …
+ *                          </Route>
  */
 const DomainGuard = ({ domain, user, children }) => {
   const domains = user?.domains;
@@ -20,7 +28,9 @@ const DomainGuard = ({ domain, user, children }) => {
     return <Forbidden module={domain.toUpperCase()} />;
   }
 
-  return children;
+  // No children means it is being used as a layout route, so the matched child
+  // route renders through the outlet.
+  return children ?? <Outlet />;
 };
 
 export default DomainGuard;

@@ -12,8 +12,15 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
     useEffect(() => {
         const fetchUserData = async () => {
             try {
+                // credentials: "include" is required. axios.defaults.withCredentials
+                // in App.jsx does not apply to fetch, and fetch defaults to
+                // "same-origin" — but the SPA and the API are different origins,
+                // so the session cookie was never sent. Every request 401'd and
+                // the header showed "Error: User not found" instead of the
+                // signed-in user's name, on every screen.
                 const response = await fetch(
-                    `${API_BASE_URL}/api/users?username=${userHandle}`
+                    `${API_BASE_URL}/api/users?username=${encodeURIComponent(userHandle)}`,
+                    { credentials: "include" }
                 );
                 if (!response.ok) {
                     throw new Error("User not found");
