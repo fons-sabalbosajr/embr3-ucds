@@ -7,8 +7,8 @@
   --menu-item-active: #e6f7ff;
 
   --font-size-desktop: 13px;
-  --font-size-tablet: 11px;
-  --font-size-mobile: 10px;
+  --font-size-tablet: 12px;
+  --font-size-mobile: 11px;
 }
 
 .side-menu {
@@ -75,17 +75,17 @@
 
 /* ========== Label Wrapper ========== */
 .submenu-item-label{
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .main{
-  font-size: 11px;
+  font-size: 12px;
   
 }
 
 .nas{
   line-height: .5;       /* Reduce vertical spacing between lines */
-  font-size: 11px;        /* Optional: slightly smaller text */
+  font-size: 12px;        /* Optional: slightly smaller text */
   padding-top: 4px;       /* Optional: fine-tune vertical alignment */
   padding-bottom: 4px;
   white-space: normal; 

@@ -116,6 +116,15 @@ async function saveConfig(req, res, next) {
   }
 }
 
+/** The credential rotation log. Field names only, never any value. */
+async function configHistory(req, res, next) {
+  try {
+    return res.json({ history: await credentials.history() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 /** Discard stored credentials and fall back to the environment. */
 async function resetConfig(req, res, next) {
   try {
@@ -370,6 +379,7 @@ module.exports = {
   getConfig,
   saveConfig,
   resetConfig,
+  configHistory,
   status,
   testConnection,
   browse,

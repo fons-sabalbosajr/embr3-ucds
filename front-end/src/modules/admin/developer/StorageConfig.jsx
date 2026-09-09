@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
 import NasConnectionCard from "./NasConnectionCard";
+import NasHistoryCard from "./NasHistoryCard";
 import NasActivationCard from "./NasActivationCard";
 import NasPinCard from "./NasPinCard";
 import NasFileExplorer from "./NasFileExplorer";
@@ -411,6 +412,10 @@ const StorageConfig = () => {
               />
             )}
           </Card>
+
+          {/* Refreshed when a connection test runs, so a rotation and its
+              outcome appear together without a manual reload. */}
+          <NasHistoryCard refreshKey={testResult} />
 
           <Alert
             type="info"

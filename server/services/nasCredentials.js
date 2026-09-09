@@ -174,9 +174,57 @@ async function save(input, actor) {
   else if (existing?.password) doc.password = existing.password;
   else doc.password = null;
 
+  // What changed, by name only. A rotation record has to answer "when was the
+  // password last changed and by whom" months later, and it must be safe to
+  // read on screen — so it records that the password changed, never any part
+  // of the value, not even its length.
+  const changed = [];
+  const before = existing || {};
+  if (normalizeRoot(before.root || '') !== root) changed.push('share path');
+  if (clean(before.baseDir) !== baseDir) changed.push('base directory');
+  if (clean(before.username) !== (doc.username || '')) changed.push('username');
+  if (clean(before.domain) !== doc.domain) changed.push('domain');
+  if (password) changed.push('password');
+
+  const entry = {
+    at: doc.updatedAt,
+    by: doc.updatedBy,
+    changed,
+    // Recorded separately by recordTest() once the connection has been tried.
+    testOk: null,
+  };
+
   const col = await collection();
-  await col.updateOne({ _id: DOC_ID }, { $set: doc }, { upsert: true });
-  return { ok: true };
+  await col.updateOne(
+    { _id: DOC_ID },
+    {
+      $set: doc,
+      // Newest first, capped — this is a rotation log, not an archive, and an
+      // unbounded array inside one document grows without anyone noticing.
+      $push: { history: { $each: [entry], $position: 0, $slice: HISTORY_LIMIT } },
+    },
+    { upsert: true }
+  );
+  return { ok: true, changed };
+}
+
+const HISTORY_LIMIT = 50;
+
+/**
+ * The rotation log, safe to render.
+ *
+ * Field names only — never a value, and never the host, since this is read on
+ * a screen and copied into tickets.
+ */
+async function history() {
+  const stored = await readStored();
+  return (stored?.history || []).map((h) => ({
+    at: h.at,
+    by: h.by,
+    changed: Array.isArray(h.changed) ? h.changed : [],
+    testOk: h.testOk ?? null,
+    testDetail: h.testDetail || null,
+  }));
 }
 
 /**
@@ -250,10 +298,19 @@ async function recordTest({ ok, detail }) {
   const col = await collection();
   const stored = await readStored();
   if (!stored) return; // environment-sourced config has nowhere to record it
-  await col.updateOne(
-    { _id: DOC_ID },
-    { $set: { lastTestAt: new Date(), lastTestOk: ok === true, lastTestDetail: detail || null } }
-  );
+
+  const update = {
+    lastTestAt: new Date(),
+    lastTestOk: ok === true,
+    lastTestDetail: detail || null,
+  };
+  // Attach the outcome to the change it followed, so the log reads "password
+  // rotated, connection passed" rather than leaving the two unconnected.
+  if (Array.isArray(stored.history) && stored.history.length) {
+    update['history.0.testOk'] = ok === true;
+    update['history.0.testDetail'] = detail || null;
+  }
+  await col.updateOne({ _id: DOC_ID }, { $set: update });
 }
 
 /** Drop the stored record and fall back to the environment. */
@@ -268,6 +325,7 @@ module.exports = {
   describe,
   save,
   applyToWindows,
+  history,
   recordTest,
   reset,
   COLLECTION,

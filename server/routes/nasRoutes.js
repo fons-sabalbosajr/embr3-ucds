@@ -7,6 +7,7 @@ const {
   getConfig,
   saveConfig,
   resetConfig,
+  configHistory,
   status,
   testConnection,
   browse,
@@ -76,6 +77,7 @@ router.post('/api/nas/test-connection', sensitive, testConnection);
 // deployment with no configuration gets one.
 router.put('/api/nas/config', developerOnly, requireElevation, saveConfig);
 router.delete('/api/nas/config', developerOnly, requireElevation, resetConfig);
+router.get('/api/nas/config/history', developerOnly, requireElevation, configHistory);
 
 // Turning document access on or off for the whole deployment, with an
 // expiry window the server evaluates. Elevated: it changes what every user
