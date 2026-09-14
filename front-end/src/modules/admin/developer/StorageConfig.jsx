@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Descriptions, Input, Result, Space, Spin, Statistic, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Input, Result, Space, Spin, Tabs, Tag, Typography } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { message } from "../../../shared/feedback";
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LockOutlined,
-  MailOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
+import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
 import NasConnectionCard from "./NasConnectionCard";
 import NasHistoryCard from "./NasHistoryCard";
 import NasActivationCard from "./NasActivationCard";
 import NasPinCard from "./NasPinCard";
 import NasFileExplorer from "./NasFileExplorer";
+import NasContainersCard from "./NasContainersCard";
+import NasAccessCard from "./NasAccessCard";
+import NasDiagnosticsCard from "./NasDiagnosticsCard";
+import NasAuditCard from "./NasAuditCard";
+import NasReportFilesCard from "./NasReportFilesCard";
 
 const { Text, Paragraph } = Typography;
 
@@ -47,7 +46,6 @@ const StorageConfig = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [sentTo, setSentTo] = useState(null);
   const [code, setCode] = useState("");
@@ -56,7 +54,7 @@ const StorageConfig = () => {
   const [pinEntry, setPinEntry] = useState("");
   const [forceEmail, setForceEmail] = useState(false);
   const [params, setParams] = useSearchParams();
-  const tab = ["connection", "access", "explorer", "diagnostics"].includes(params.get("tab"))
+  const tab = ["connection", "containers", "access", "explorer", "reports", "diagnostics", "audit"].includes(params.get("tab"))
     ? params.get("tab")
     : "connection";
 
@@ -167,23 +165,7 @@ const StorageConfig = () => {
     setTestResult(null);
   };
 
-  const testConnection = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await jsonPost("/api/nas/test-connection");
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 403) {
-        setElevated(false);
-        setConfig(null);
-        setError("Your verification expired. Verify again to continue.");
-        return;
-      }
-      setTestResult(data);
-    } finally {
-      setTesting(false);
-    }
-  };
+
 
   if (loading) {
     return (
@@ -304,15 +286,37 @@ const StorageConfig = () => {
   const tabs = [
     {
       key: "connection",
-      label: "Connection",
-      children: <NasConnectionCard onSaved={() => setTestResult(null)} />,
+      label: "Records connection",
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message="This is the Records container"
+            description="ERMS documents resolve against it, and the NAS_* variables in server/.env describe it when nothing is stored here. The Legal, Laboratory and any other shares are managed under Containers; who may open each is set under Access."
+          />
+          <NasConnectionCard onSaved={() => setTestResult(null)} />
+        </Space>
+      ),
+    },
+    {
+      key: "containers",
+      label: "Containers",
+      children: <NasContainersCard onChanged={() => setTestResult(null)} />,
     },
     {
       key: "access",
       label: "Access",
       children: (
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message="How the NAS reaches staff"
+            description="Two switches, both yours. Activation turns document access on for everyone for a set window. The table decides which containers each Planning or Records admin may open in that window; Encoders never have storage. Nobody but you holds a share credential."
+          />
           <NasActivationCard />
+          <NasAccessCard refreshKey={testResult} />
           <NasPinCard />
         </Space>
       ),
@@ -320,53 +324,31 @@ const StorageConfig = () => {
     {
       key: "explorer",
       label: "File Explorer",
-      children: <NasFileExplorer />,
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message="Your view of every container"
+            description="Pick a container to browse it as the server sees it. Staff see the same explorer under Storage, limited to the containers shared with them on the Access tab."
+          />
+          <NasFileExplorer />
+        </Space>
+      ),
+    },
+    {
+      key: "reports",
+      label: "Report Files",
+      children: <NasReportFilesCard />,
     },
     {
       key: "diagnostics",
       label: "Diagnostics",
       children: (
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          <Card
-            title="Connectivity"
-            size="small"
-            extra={
-              <Button icon={<ReloadOutlined />} loading={testing} onClick={testConnection}>
-                Test connection
-              </Button>
-            }
-          >
-            {testResult ? (
-              testResult.ok ? (
-                <Space size="large" wrap>
-                  <Statistic
-                    title="Share"
-                    value="Reachable"
-                    prefix={<CheckCircleOutlined style={{ color: "#52c41a" }} />}
-                  />
-                  <Statistic title="Round trip" value={testResult.ms} suffix="ms" />
-                  <Statistic title="Entries at root" value={testResult.entryCount} />
-                </Space>
-              ) : (
-                <Alert
-                  type="error"
-                  showIcon
-                  icon={<CloseCircleOutlined />}
-                  message={testResult.message || "The share could not be reached."}
-                  description={`Reason: ${testResult.reason || "unknown"}${
-                    testResult.code ? ` (${testResult.code})` : ""
-                  }`}
-                />
-              )
-            ) : (
-              <Text type="secondary">
-                Not tested in this session. Run a test to see whether the share
-                answers right now.
-              </Text>
-            )}
-          </Card>
+          <NasDiagnosticsCard onTested={(r) => setTestResult(r)} />
 
-          <Card title="Configuration" size="small">
+          <Card title="Records container" size="small">
             {config?.configured ? (
               <Descriptions column={1} size="small" bordered>
                 <Descriptions.Item label="Source">
@@ -425,6 +407,11 @@ const StorageConfig = () => {
           />
         </Space>
       ),
+    },
+    {
+      key: "audit",
+      label: "Audit Log",
+      children: <NasAuditCard />,
     },
   ];
 

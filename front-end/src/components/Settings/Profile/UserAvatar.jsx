@@ -1,19 +1,21 @@
-import React from 'react';
-import NiceAvatar from "react-nice-avatar";
+import React from "react";
+import { Avatar } from "antd";
+import DefaultAvatar from "../../DefaultAvatar";
+import { API_BASE_URL } from "../../../config/api";
 
 const UserAvatar = ({ userData }) => {
-  // Check if userData is provided and contains username
   if (!userData || !userData.username) {
-    return <div>No user data available</div>; // Fallback message
+    return <div>No user data available</div>;
   }
-
+  const photo = typeof userData.avatar === "string" && userData.avatar ? userData.avatar : null;
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
-    <NiceAvatar
-      style={{ width: "100px", height: "100px", marginRight: "8px" }}
-      {...userData.avatar}
-    />
-  </div>
+      {photo ? (
+        <Avatar src={`${API_BASE_URL}${photo}`} size={100} style={{ marginRight: 8 }} />
+      ) : (
+        <DefaultAvatar name={userData.name || userData.username} size={100} style={{ marginRight: 8 }} />
+      )}
+    </div>
   );
 };
 

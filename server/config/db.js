@@ -6,7 +6,18 @@ if (!mongoUri) {
   throw new Error('MONGO_URI is not set in environment variables');
 }
 
-const client = new MongoClient(mongoUri, { ssl: true });
+// Pool sized for ~500 people working at once. Atlas free/shared tiers cap
+// connections per cluster (500 on M0), and every Node process shares this one
+// client, so 50 leaves room for a second instance and the session store.
+// Idle connections are released so a quiet evening does not hold 50 open.
+const client = new MongoClient(mongoUri, {
+  ssl: true,
+  maxPoolSize: Number(process.env.MONGO_MAX_POOL) || 50,
+  minPoolSize: 5,
+  maxIdleTimeMS: 60_000,
+  serverSelectionTimeoutMS: 10_000,
+  compressors: ['zstd', 'snappy', 'zlib'],
+});
 
 let db; // universe-db
 

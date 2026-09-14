@@ -7,6 +7,10 @@ const { DOMAINS } = require('../services/authorization');
 // a year container. Composed once rather than repeated across ~50 routes, so a
 // new endpoint cannot be added with one of the three quietly missing.
 const ucdsAccess = [authenticateSession, requireDomain(DOMAINS.UCDS), resolveYearContext];
+// Routes that scan or aggregate the whole register. A few a minute per
+// person is normal; hundreds would take the database away from everyone.
+const { expensiveLimiter } = require('../config/security');
+const heavy = [...ucdsAccess, expensiveLimiter];
 
 // The firm register itself is shared across containers, but every request here
 // still runs inside a year context: transaction logs written by these handlers
@@ -54,10 +58,10 @@ const {
 } = require('../controllers/ucdsController');
 
 // Keep legacy paths and methods
-router.post('/check-data', ucdsAccess, checkData);
-router.post('/api/check-data', ucdsAccess, checkData);
-router.get('/ucds/duplicates', ucdsAccess, getDuplicates);
-router.get('/api/ucds/duplicates', ucdsAccess, getDuplicates);
+router.post('/check-data', heavy, checkData);
+router.post('/api/check-data', heavy, checkData);
+router.get('/ucds/duplicates', heavy, getDuplicates);
+router.get('/api/ucds/duplicates', heavy, getDuplicates);
 router.post('/ucds/update-duplicates', ucdsAccess, updateDuplicates);
 router.post('/api/ucds/update-duplicates', ucdsAccess, updateDuplicates);
 router.post('/archive-data', ucdsAccess, archiveData);
@@ -72,8 +76,8 @@ router.get('/ucds-data/distinct-dropdown-values', ucdsAccess, getDistinctDropdow
 router.get('/api/ucds-data/distinct-dropdown-values', ucdsAccess, getDistinctDropdownValues);
 
 // Additional GET routes migrated from server.js
-router.get('/api/permits-summary', ucdsAccess, permitsSummary);
-router.get('/api/ucds/dashboard-stats', ucdsAccess, dashboardStats);
+router.get('/api/permits-summary', heavy, permitsSummary);
+router.get('/api/ucds/dashboard-stats', heavy, dashboardStats);
 router.get('/api/ucds-data/by-sort-key/:sort_key', ucdsAccess, getBySortKey);
 router.get('/api/ucds/next-id', ucdsAccess, getNextId);
 router.get('/api/ucds/search-name', ucdsAccess, searchName);
@@ -94,7 +98,7 @@ router.get('/api/ucds-data', ucdsAccess, getUcdsData);
 router.get('/api/ucds-locations', ucdsAccess, getUcdsLocations);
 router.get('/api/ucds/count', ucdsAccess, getUcdsCount);
 router.get('/api/get-province-data', ucdsAccess, getProvinceData);
-router.get('/api/extract-province-data', ucdsAccess, extractProvinceData);
+router.get('/api/extract-province-data', heavy, extractProvinceData);
 router.get('/api/monitored_dates', ucdsAccess, getMonitoredDates);
 router.get('/api/daily_notices', ucdsAccess, getDailyNotices);
 

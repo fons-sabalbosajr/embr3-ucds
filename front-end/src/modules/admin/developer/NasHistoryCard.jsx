@@ -52,13 +52,16 @@ const NasHistoryCard = ({ refreshKey }) => {
       dataIndex: "at",
       key: "at",
       width: 190,
+      align: "left",
       render: (v) => (v ? new Date(v).toLocaleString() : "—"),
     },
-    { title: "By", dataIndex: "by", key: "by", width: 160 },
+    { title: "By", dataIndex: "by", key: "by", width: 160, align: "left" },
     {
       title: "Changed",
       dataIndex: "changed",
       key: "changed",
+      width: 400,
+      align: "left",
       render: (fields) =>
         fields?.length ? (
           <Space size={4} wrap>
@@ -76,7 +79,8 @@ const NasHistoryCard = ({ refreshKey }) => {
       title: "Connection after",
       dataIndex: "testOk",
       key: "testOk",
-      width: 170,
+      width: 400,
+      align: "left",
       render: (ok, row) =>
         ok == null ? (
           <Text type="secondary">not tested</Text>

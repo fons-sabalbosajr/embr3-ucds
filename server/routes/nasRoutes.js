@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { authenticateSession, requireDeveloper } = require('../middleware/auth');
 const { requireElevation } = require('../services/nasElevation');
+const { requireNasActive } = require('../services/nasActivation');
+const { requireContainerAccess } = require('../services/storageAccess');
 const {
   requireNasConfig,
   getConfig,
@@ -10,6 +12,19 @@ const {
   configHistory,
   status,
   testConnection,
+  listAccess,
+  setAccess,
+  myContainers,
+  auditLog,
+  reportFilesInventory,
+  reportFilesMove,
+  reportFilesRemove,
+  listContainers,
+  createContainer,
+  updateContainer,
+  setContainerEnabled,
+  deleteContainer,
+  containerHistory,
   browse,
   readByPath,
   activationStatus,
@@ -79,16 +94,57 @@ router.put('/api/nas/config', developerOnly, requireElevation, saveConfig);
 router.delete('/api/nas/config', developerOnly, requireElevation, resetConfig);
 router.get('/api/nas/config/history', developerOnly, requireElevation, configHistory);
 
+// Containers: one share and one service account each — Records, Legal,
+// Laboratory, and whatever comes next. The single-share routes above edit
+// the `records` container; these edit any. Creating one is deliberately not
+// behind requireNasConfig, for the same reason as PUT /api/nas/config.
+router.get('/api/nas/containers', developerOnly, requireElevation, listContainers);
+router.post('/api/nas/containers', developerOnly, requireElevation, createContainer);
+router.put('/api/nas/containers/:key', developerOnly, requireElevation, updateContainer);
+router.patch('/api/nas/containers/:key/enabled', developerOnly, requireElevation, setContainerEnabled);
+router.delete('/api/nas/containers/:key', developerOnly, requireElevation, deleteContainer);
+router.get('/api/nas/containers/:key/history', developerOnly, requireElevation, containerHistory);
+router.post('/api/nas/containers/:key/test', developerOnly, requireElevation, testConnection);
+
 // Turning document access on or off for the whole deployment, with an
 // expiry window the server evaluates. Elevated: it changes what every user
 // of the application can do.
 router.put('/api/nas/activation', sensitive, setActivation);
 
-// The file explorer. The only route that accepts a path from a browser, so it
-// carries every guard available: a session, the developer role, a configured
-// share, and an emailed code.
+// Generated reports: from the database to a folder on the Records share.
+// Writes to the share and drops a collection, so elevated.
+router.get('/api/nas/report-files', sensitive, reportFilesInventory);
+router.post('/api/nas/report-files/move', sensitive, reportFilesMove);
+router.delete('/api/nas/report-files/database', sensitive, reportFilesRemove);
+
+// Who may open which container. The Developer designates containers per
+// account here and from the Accounts screen. Developer-only, like setting an
+// account's type; it names containers by key and label, never a host.
+// The audit trail. Elevated, like the configuration it records changes to.
+router.get('/api/nas/audit', developerOnly, requireElevation, auditLog);
+
+router.get('/api/nas/access', developerOnly, listAccess);
+router.put('/api/nas/access/:userId', developerOnly, setAccess);
+
+// The developer's file explorer. Accepts a path from a browser, so it carries
+// every guard available: a session, the developer role, a configured share,
+// and an emailed code.
 router.get('/api/nas/browse', sensitive, browse);
 router.get('/api/nas/file', sensitive, readByPath);
+
+// Shared storage, for everyone the Developer has designated a container to.
+//
+// This is how the NAS reaches Planning and Records staff: not a drive
+// letter, not a credential, but a container the Developer put on their
+// account. Three guards: a session; document access switched on for the
+// deployment (the activation window); and the named container being on
+// this account — checked against the account document on every request, so
+// a revocation takes effect at once. Every read is audited with the
+// container and the user.
+const shared = [authenticateSession, requireNasActive];
+router.get('/api/storage/containers', authenticateSession, myContainers);
+router.get('/api/storage/browse', shared, requireContainerAccess, browse);
+router.get('/api/storage/file', shared, requireContainerAccess, readByPath);
 
 // GET /api/nas/view-pdf is gone. It accepted a caller-supplied path with only
 // a session check, which is the one thing a document endpoint must never do.

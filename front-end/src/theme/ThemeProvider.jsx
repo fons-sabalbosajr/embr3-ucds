@@ -36,9 +36,11 @@ export const ACCENTS = [
 ];
 
 export const DENSITIES = [
-  { key: "comfortable", label: "Comfortable", fontSize: 14, controlHeight: 36 },
-  { key: "compact", label: "Compact", fontSize: 13, controlHeight: 32 },
-  { key: "relaxed", label: "Relaxed", fontSize: 15, controlHeight: 40 },
+  // Ant Design's own 14px / 32px scale, the same one ESWMP runs on; the
+  // other two step one notch either side of it.
+  { key: "comfortable", label: "Comfortable", fontSize: 14, controlHeight: 32 },
+  { key: "compact", label: "Compact", fontSize: 13, controlHeight: 28 },
+  { key: "relaxed", label: "Relaxed", fontSize: 15, controlHeight: 36 },
 ];
 
 const DEFAULTS = { accent: "blue", density: "comfortable", tintedSider: true };
@@ -178,8 +180,10 @@ export const ThemeProvider = ({ children }) => {
         borderRadius: 8,
         fontSize: density.fontSize,
         controlHeight: density.controlHeight,
+        // Ant Design's own stack: the system face on every platform, no web
+        // font to download and no Poppins to fall back from.
         fontFamily:
-          "Poppins, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
       },
       components: {
         // Content colours come from the algorithm so light and dark stay in
@@ -194,7 +198,9 @@ export const ThemeProvider = ({ children }) => {
         Menu: {
           itemBorderRadius: 6,
           darkItemBg: "transparent",
-          darkSubMenuItemBg: "transparent",
+          // Expanded submenu panels sit a shade below the sider so the
+          // hierarchy (section > year > dataset) reads at a glance.
+          darkSubMenuItemBg: mix(nav.sider, "#000000", 0.28),
           darkItemColor: "rgba(238, 242, 248, 0.78)",
           darkItemHoverColor: nav.text,
           darkItemHoverBg: "rgba(255, 255, 255, 0.08)",

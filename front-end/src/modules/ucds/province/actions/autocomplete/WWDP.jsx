@@ -64,7 +64,6 @@ const WWDP = ({ isEditing }) => {
         components: {
           AutoComplete: {
             optionFontSize: 10,
-            colorTextPlaceholder: "#555",
             fontSize: "11px",
             boxShadow: "none",
           },

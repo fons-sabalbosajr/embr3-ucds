@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { List, Modal, Button, Row, Col } from "antd";
-import NiceAvatar from "react-nice-avatar";
+import DefaultAvatar from "../DefaultAvatar";
 import "./userstatus.css";
 import { API_BASE_URL } from "../../config/api";
 import { getOnlineUsers } from "../../api/userService"; // Import the new service
@@ -151,13 +151,10 @@ const UserStatus = ({ theme }) => {
                           className="user-status-item-avatar"
                         />
                       ) : (
-                        <NiceAvatar
-                          className="user-status-item-avatar"
-                          {...user.avatar}
-                        />
+                        <DefaultAvatar name={user.name || user.userName} className="user-status-item-avatar" size={40} />
                       )
                     ) : (
-                      <NiceAvatar className="user-status-item-avatar" />
+                      <DefaultAvatar name={user.name || user.userName} className="user-status-item-avatar" size={40} />
                     )}
                     <div
                       className={`user-status-dot ${
@@ -226,13 +223,10 @@ const UserStatus = ({ theme }) => {
                           className="user-status-item-avatar" // modal-list will target this for size
                         />
                       ) : (
-                        <NiceAvatar
-                          className="user-status-item-avatar" // modal-list will target this for size
-                          {...user.avatar}
-                        />
+                        <DefaultAvatar name={user.name || user.userName} className="user-status-item-avatar" size={40} />
                       )
                     ) : (
-                      <NiceAvatar className="user-status-item-avatar" /> // modal-list will target this for size
+                      <DefaultAvatar name={user.name || user.userName} className="user-status-item-avatar" size={40} />
                     )}
                     <div
                       className="user-status-dot online" // modal-list will target this for size/pos
@@ -271,13 +265,10 @@ const UserStatus = ({ theme }) => {
                           className="user-status-item-avatar" // modal-list will target this for size
                         />
                       ) : (
-                        <NiceAvatar
-                          className="user-status-item-avatar" // modal-list will target this for size
-                          {...user.avatar}
-                        />
+                        <DefaultAvatar name={user.name || user.userName} className="user-status-item-avatar" size={40} />
                       )
                     ) : (
-                      <NiceAvatar className="user-status-item-avatar" /> // modal-list will target this for size
+                      <DefaultAvatar name={user.name || user.userName} className="user-status-item-avatar" size={40} />
                     )}
                     <div
                       className="user-status-dot offline" // modal-list will target this for size/pos

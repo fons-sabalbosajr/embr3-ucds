@@ -7,6 +7,7 @@ import {
   Empty,
   Input,
   Modal,
+  Select,
   Space,
   Table,
   Tag,
@@ -48,10 +49,19 @@ const humanSize = (bytes) => {
   return `${v.toFixed(v < 10 && u > 0 ? 1 : 0)} ${units[u]}`;
 };
 
-const fileUrl = (path, download) =>
-  `${API_BASE_URL}/api/nas/file?path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`;
+const fileUrl = (endpoint, container, path, download) =>
+  `${API_BASE_URL}${endpoint}/file?container=${encodeURIComponent(container)}&path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`;
 
-const NasFileExplorer = () => {
+// Browses one container at a time. The list comes from the elevated
+// containers route — this screen only renders once the developer is verified.
+//
+// Two callers share it: the developer explorer (endpoint /api/nas, every
+// container, elevated) and the Storage screen staff use (endpoint
+// /api/storage, only the containers designated to them). The server decides
+// what each may open; this component only asks.
+const NasFileExplorer = ({ endpoint = "/api/nas", title = "NAS File Explorer", initialContainer = "records" }) => {
+  const [containers, setContainers] = useState([]);
+  const [container, setContainer] = useState(initialContainer);
   const [path, setPath] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,12 +69,12 @@ const NasFileExplorer = () => {
   const [filter, setFilter] = useState("");
   const [preview, setPreview] = useState(null);
 
-  const load = useCallback(async (target) => {
+  const load = useCallback(async (target, key = container) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/nas/browse?path=${encodeURIComponent(target || "")}`,
+        `${API_BASE_URL}${endpoint}/browse?container=${encodeURIComponent(key)}&path=${encodeURIComponent(target || "")}`,
         { credentials: "include" }
       );
       const body = await res.json().catch(() => ({}));
@@ -72,7 +82,9 @@ const NasFileExplorer = () => {
         setError(
           body.code === "ELEVATION_REQUIRED" || body.code === "ELEVATION_EXPIRED"
             ? "Verify by email on this page to browse the share."
-            : body.message || "Could not read that folder."
+            : body.code === "NAS_INACTIVE" || body.code === "NAS_NOT_ACTIVE"
+              ? "Document access is switched off right now. The Developer turns it on from Storage settings."
+              : body.message || "Could not read that folder."
         );
         setData(null);
         return;
@@ -84,11 +96,30 @@ const NasFileExplorer = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [container, endpoint]);
 
   useEffect(() => {
     load("");
   }, [load]);
+
+  useEffect(() => {
+    // /api/nas/containers is the elevated developer list; /api/storage/containers
+    // is what the signed-in person has been given. Both answer {containers}.
+    fetch(`${API_BASE_URL}${endpoint}/containers`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((s) => {
+        const list = Array.isArray(s.containers) ? s.containers : [];
+        setContainers(list);
+        if (list.length && !list.some((c) => c.key === initialContainer)) setContainer(list[0].key);
+      })
+      .catch(() => setContainers([]));
+  }, [endpoint, initialContainer]);
+
+  const switchContainer = (key) => {
+    setContainer(key);
+    setPath("");
+    setFilter("");
+  };
 
   const segments = path ? path.split(/[\\/]/).filter(Boolean) : [];
 
@@ -159,7 +190,7 @@ const NasFileExplorer = () => {
             <Button
               size="small"
               icon={<DownloadOutlined />}
-              href={fileUrl(row.path, true)}
+              href={fileUrl(endpoint, container, row.path, true)}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -176,9 +207,20 @@ const NasFileExplorer = () => {
 
   return (
     <Card
-      title="NAS File Explorer"
+      title={title}
       extra={
         <Space>
+          <Select
+            size="small"
+            value={container}
+            onChange={switchContainer}
+            style={{ width: 180 }}
+            options={(containers.length ? containers : [{ key: initialContainer, label: "Records", enabled: true }]).map((c) => ({
+              value: c.key,
+              label: c.enabled === false ? `${c.label} (off)` : c.label,
+              disabled: c.enabled === false,
+            }))}
+          />
           <Input.Search
             size="small"
             allowClear
@@ -209,7 +251,7 @@ const NasFileExplorer = () => {
             {
               title: (
                 <Button type="link" style={{ padding: 0 }} onClick={() => load("")}>
-                  <HomeOutlined /> share root
+                  <HomeOutlined /> {containers.find((c) => c.key === container)?.label || "share"} root
                 </Button>
               ),
             },
@@ -254,7 +296,7 @@ const NasFileExplorer = () => {
           <Button
             key="dl"
             icon={<DownloadOutlined />}
-            href={preview ? fileUrl(preview.path, true) : undefined}
+            href={preview ? fileUrl(endpoint, container, preview.path, true) : undefined}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -269,7 +311,7 @@ const NasFileExplorer = () => {
         {preview && (
           <iframe
             title={preview.name}
-            src={fileUrl(preview.path, false)}
+            src={fileUrl(endpoint, container, preview.path, false)}
             style={{ width: "100%", height: "78vh", border: "none" }}
           />
         )}

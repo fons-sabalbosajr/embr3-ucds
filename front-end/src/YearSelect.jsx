@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Empty, Result, Spin } from "antd";
-import { DatabaseOutlined, LogoutOutlined } from "@ant-design/icons";
+import { Button, Empty, Result, Spin, Tooltip } from "antd";
+import { DatabaseOutlined, LockOutlined, LogoutOutlined } from "@ant-design/icons";
 import AuthBrand from "./components/AuthBrand";
 import { useYear } from "./context/YearContext";
 import { logoutUserService } from "./api/universeService";
@@ -97,23 +97,50 @@ const YearSelect = () => {
           <>
             {failed && <div className="yearselect-error">{failed}</div>}
             <div className="yearselect-grid">
-              {years.map((y) => (
-                <button
-                  type="button"
-                  key={y.year}
-                  className="yearselect-card"
-                  onClick={() => handleSelect(y.year)}
-                  disabled={entering !== null}
-                  aria-label={`Open the ${y.year} data container`}
-                >
-                  <DatabaseOutlined className="yearselect-card-icon" />
-                  <span className="yearselect-card-year">{y.year}</span>
-                  <span className="yearselect-card-label">
-                    {(y.label || `${y.year} Data`).replace(String(y.year), "").trim() || "Data"}
-                  </span>
-                  {entering === y.year && <Spin size="small" className="yearselect-card-spin" />}
-                </button>
-              ))}
+              {[...years]
+                .sort((a, b) => a.year - b.year)
+                .map((y) => {
+                  // The API says whether a container has opened; a year that
+                  // has not arrived is shown so the timeline is visible, but
+                  // cannot be entered. The server refuses it too.
+                  const open = y.open !== false;
+                  return (
+                    <Tooltip
+                      key={y.year}
+                      title={open ? null : `Opens in January ${y.year}`}
+                      placement="top"
+                    >
+                      <button
+                        type="button"
+                        className={`yearselect-card${open ? "" : " is-upcoming"}`}
+                        // Not the `disabled` attribute for an upcoming year: a
+                        // disabled element gets no pointer events, so the
+                        // tooltip explaining why it is locked would never show.
+                        onClick={open ? () => handleSelect(y.year) : undefined}
+                        disabled={open && entering !== null}
+                        aria-disabled={!open}
+                        aria-label={
+                          open
+                            ? `Open the ${y.year} data container`
+                            : `The ${y.year} data container opens in January ${y.year}`
+                        }
+                      >
+                        {open ? (
+                          <DatabaseOutlined className="yearselect-card-icon" />
+                        ) : (
+                          <LockOutlined className="yearselect-card-icon" />
+                        )}
+                        <span className="yearselect-card-year">{y.year}</span>
+                        <span className="yearselect-card-label">
+                          {open
+                            ? (y.label || `${y.year} Data`).replace(String(y.year), "").trim() || "Data"
+                            : "Upcoming"}
+                        </span>
+                        {entering === y.year && <Spin size="small" className="yearselect-card-spin" />}
+                      </button>
+                    </Tooltip>
+                  );
+                })}
             </div>
           </>
         )}

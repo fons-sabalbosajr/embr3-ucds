@@ -6,10 +6,13 @@ backups/
 # names and project titles, so they stay local like the extract itself.
 reports/
 
-# ERMS source extract (~18k records with proponent names and addresses).
-# Kept local so the data does not enter git history. Remove this line if the
-# team decides the extract should be versioned with the migration scripts.
-data/tb_maindata_erms.csv
+# Source data: the ERMS extract (~18k records with proponent names and
+# addresses), the yearly UCDS spreadsheets, the NAS credentials workbook and
+# the ERMS SQL backups. None of it belongs in git history.
+data/
+
+# Design notes and runbooks are kept locally, not versioned.
+docs/
 
 node_modules/
 .env

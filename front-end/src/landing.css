@@ -1,13 +1,16 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 
 /* Corporate landing page for the Universe Central Database System.
-   Palette and typography follow the existing app shell (home.css / login.css). */
+
+   The brand colour is the accent the user chose in Settings > General
+   (published by ThemeProvider as --eu-accent), so the landing page and the
+   application behind it are visibly the same product. The CTA band uses the
+   fixed navigation surfaces for the same reason. */
 
 .ucds-landing {
-  --brand: #548547;
-  --brand-bright: #71ce58;
-  --brand-deep: #2f5228;
-  --accent: #00796b;
+  --brand: var(--eu-accent, #2f7ecb);
+  --brand-bright: color-mix(in srgb, var(--brand) 70%, white);
+  --brand-deep: color-mix(in srgb, var(--brand) 75%, black);
+  --accent: var(--eu-header-bg, #1f242c);
   --surface: #ffffff;
   --page: #f5f7fa;
   --page-alt: #eef2f6;
@@ -16,7 +19,7 @@
   --line: #e3e9e5;
   --shadow: 0 10px 30px rgba(31, 42, 36, 0.08);
 
-  font-family: "Poppins", sans-serif;
+  font-family: inherit;
   background: var(--page);
   color: var(--ink);
   min-height: 100vh;
@@ -24,10 +27,11 @@
 }
 
 .ucds-landing.dark-theme {
-  --brand: #9ddf85;
-  --brand-bright: #b6e8a2;
-  --brand-deep: #9ddf85;
-  --accent: #5fd3c4;
+  /* Lifted towards white so the accent stays legible on the dark page. */
+  --brand: color-mix(in srgb, var(--eu-accent, #2f7ecb) 60%, white);
+  --brand-bright: color-mix(in srgb, var(--eu-accent, #2f7ecb) 45%, white);
+  --brand-deep: var(--brand);
+  --accent: var(--eu-header-bg, #1f242c);
   --surface: #1c1c1c;
   --page: #141414;
   --page-alt: #1a1a1a;
@@ -133,15 +137,39 @@
   margin: 0 auto;
 }
 
+/* The Bureau's building behind the hero, under a page-coloured gradient that
+   is nearly opaque where the copy sits and thins out toward the illustration.
+   The text keeps its theme tokens; only the overlay changes with the mode. */
 .ucds-hero::before {
   content: "";
   position: absolute;
   inset: 0 -50vw;
-  background: radial-gradient(
-    60% 70% at 70% 30%,
-    color-mix(in srgb, var(--brand) 14%, transparent) 0%,
-    transparent 70%
-  );
+  background:
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--page) 94%, transparent) 0%,
+      color-mix(in srgb, var(--page) 88%, transparent) 55%,
+      color-mix(in srgb, var(--page) 72%, transparent) 100%
+    ),
+    radial-gradient(
+      60% 70% at 70% 30%,
+      color-mix(in srgb, var(--brand) 22%, transparent) 0%,
+      transparent 70%
+    ),
+    url("./assets/bgemb-hero.webp") center 40% / cover no-repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ucds-hero::after {
+  /* Fades the photo into the page so the hero does not end on a hard line. */
+  content: "";
+  position: absolute;
+  left: -50vw;
+  right: -50vw;
+  bottom: 0;
+  height: 120px;
+  background: linear-gradient(to bottom, transparent, var(--page));
   pointer-events: none;
   z-index: 0;
 }
@@ -437,13 +465,11 @@
   border-radius: 18px;
   padding: 56px 40px;
   text-align: center;
-  background: linear-gradient(135deg, var(--brand-deep), var(--accent));
+  /* The navigation surfaces: fixed across themes, so the band and its white
+     type read the same in both. */
+  background: linear-gradient(135deg, var(--eu-sider-bg, #161a20), var(--eu-header-bg, #1f242c));
   color: #fff;
   box-shadow: var(--shadow);
-}
-
-.ucds-landing.dark-theme .ucds-cta-inner {
-  color: #0f1a14;
 }
 
 .ucds-cta-inner h2 {

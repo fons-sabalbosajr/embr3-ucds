@@ -1,127 +1,109 @@
 import React, { useState } from "react";
-import { Input, Button, ConfigProvider } from "antd";
-import { LoadingOutlined } from "@ant-design/icons";
-import { Link, useNavigate } from "react-router-dom";
-import CryptoJS from "crypto-js";
-import "./login.css";
-import { loginUser } from "./api/authService"; // Import the new service
+import { Form, Input, Button } from "antd";
+import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { loginUser } from "./api/authService";
 import { ROUTES } from "./config/routes";
-import AuthBrand from "./components/AuthBrand";
+import { API_BASE_URL } from "./config/api";
+import AuthShell, { AuthError } from "./components/AuthShell";
 
 const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  // Set by the reset-password page after a successful reset.
+  const presetUsername = useLocation().state?.username || "";
 
-  // Access the encryption key using Vite's import.meta.env
-  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  
-  
-  const handleSubmit = async (values) => {
+  const handleSubmit = async ({ username, password }) => {
     setIsLoading(true);
     setError(null);
-
     try {
-      const responseData = await loginUser(values.username, values.password);
-
+      const responseData = await loginUser(username.trim(), password);
       if (responseData.status === "success") {
-        // const { password, ...safeProfile } = responseData; // password is not in responseData if service handles it
-        // No longer storing the full profile in localStorage
-        // Login no longer lands in the application directly — a year container
-        // must be chosen first, and the server clears any previous selection.
+        // The server accepted the password; make sure the browser kept the
+        // session before moving on. It does not when the app is opened by a
+        // different host than the API (localhost vs the LAN address, say):
+        // the cookie is cross-site and dropped, and the next screen would
+        // bounce back here with a bare "unauthorized". Say what happened.
+        const check = await fetch(`${API_BASE_URL}/auth-check`, { credentials: "include" }).catch(() => null);
+        if (!check || check.status === 401) {
+          setError(
+            `Signed in, but this browser did not keep the session. Open the application by the same address the server uses (${API_BASE_URL.replace(/:d+$/, "")}), not localhost, and try again.`
+          );
+          return;
+        }
+        // A year container must be chosen before the application opens; the
+        // server clears any previous selection on sign-in.
         navigate(ROUTES.selectYear);
       } else {
-        setError("Login failed. Please check your credentials.");
+        setError("Sign-in failed. Check your username and password.");
       }
-    } catch (error) {
-      console.error("Error during login:", error); // error here is what's thrown by loginUser
-      if (error && error.message) {
-        setError(error.message);
-      } else {
-        setError("Invalid username or password. Please try again.");
-      }
+    } catch (err) {
+      console.error("Error during login:", err);
+      // authService throws the response body, which carries `error`.
+      setError(err?.error || err?.message || "Invalid username or password. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <ConfigProvider
+    <AuthShell
+      title="Sign in"
+      footer={
+        <>
+          Need an account?{" "}
+          <Link to={ROUTES.register}>Request access</Link>
+        </>
+      }
     >
-      <div className="background-login">
-        <div className="animated-circles-container">
-          {[...Array(10)].map((_, i) => ( 
-            <div key={i} className="circle"></div>
-          ))}
-        </div>
-        <div className="login-form-wrapper"> {/* Renamed class */}
-          <div className="login-card"> {/* Renamed class */}
-            <div className="login-logo-container"> {/* New container for logo */}
-              <AuthBrand size="md" />
-            </div>
-            <div className="login-title-container"> {/* New container for titles */}
-              <p className="login-title-main">
-                ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-              </p>
-              <p className="login-title-sub">
-                Universe Centralized Database System
-              </p>
-            </div>
+      <AuthError>{error}</AuthError>
 
-            {error && (
-              <p className="login-error-message">{error}</p> /* Added class for styling */
-            )}
+      <Form
+        layout="vertical"
+        onFinish={handleSubmit}
+        requiredMark={false}
+        initialValues={{ username: presetUsername }}
+      >
+        <Form.Item
+          name="username"
+          label="Username or email"
+          rules={[{ required: true, whitespace: true, message: "Enter your username or email address." }]}
+        >
+          <Input
+            size="large"
+            prefix={<UserOutlined />}
+            placeholder="Username or email address"
+            autoComplete="username"
+            autoFocus={!presetUsername}
+          />
+        </Form.Item>
 
-            <Input
-              placeholder="Enter Username"
-              size="large"
-              autoComplete="off"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              style={{ marginBottom: "20px", fontSize:"14px" }} 
-            />
-            <Input.Password
-              placeholder="Enter Password"
-              size="small"
-              autoComplete="off"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ marginBottom: "20px", fontSize:"14px" }}
-            />
+        <Form.Item
+          name="password"
+          label="Password"
+          rules={[{ required: true, message: "Enter your password." }]}
+        >
+          <Input.Password
+            size="large"
+            prefix={<LockOutlined />}
+            placeholder="Password"
+            autoComplete="current-password"
+            autoFocus={Boolean(presetUsername)}
+          />
+        </Form.Item>
 
-            <Button
-              type="primary"
-              block
-              size="large"
-              icon={isLoading ? <LoadingOutlined spin /> : null}
-              onClick={() => handleSubmit({username: username, password: password})} // Call handleSubmit with values
-            >
-              {isLoading ? "Logging in..." : "Login"}
-            </Button>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
+            {isLoading ? "Signing in…" : "Sign in"}
+          </Button>
+        </Form.Item>
+      </Form>
 
-            <div style={{ marginTop: "20px" }}>
-              {/* Use div for consistent spacing around the link buttons */}
-
-              <div style={{ marginTop: "10px" }}>
-                <Link to={ROUTES.register} style={{ display: 'block' }}> {/* Make Link block for Button to take full width */}
-                  <Button block size="large">
-                    Create Account
-                  </Button>
-                </Link>
-              </div>
-
-              <div style={{ marginBottom: 0, textAlign: 'center' }}> {/* Center link button, remove excess bottom margin */}
-                  <Link to={ROUTES.forgotPassword}>
-                      <Button type="link">Forgot Password?</Button>
-                  </Link>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="auth-card-links">
+        <Link to={ROUTES.forgotPassword}>Forgot your password?</Link>
       </div>
-    </ConfigProvider>
+    </AuthShell>
   );
 };
 

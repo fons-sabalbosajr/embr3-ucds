@@ -16,7 +16,7 @@ const { principalOf } = require('../middleware/auth');
 // the path can be derived from the record by anyone entitled to it.
 // ---------------------------------------------------------------------------
 
-async function recordFileEvent(req, { operation, serialNo, fileName, success, detail, bytes }) {
+async function recordFileEvent(req, { operation, serialNo, fileName, success, detail, bytes, containerKey }) {
   const user = principalOf(req) || {};
 
   const entry = {
@@ -29,10 +29,17 @@ async function recordFileEvent(req, { operation, serialNo, fileName, success, de
     actionLabel: operation,
     operation,
     serialNo: serialNo || null,
+    // The container key names nothing about the host or share; it is the
+    // label the Access tab shows, so an auditor can tell whose share was read.
+    container: containerKey || null,
     fileName: fileName || null,
     success: success !== false,
     detail: detail || null,
     bytes: typeof bytes === 'number' ? bytes : null,
+    // Where the request came from, as Express resolved it behind the proxy.
+    // Never a credential, never a share path.
+    ip: req?.ip || null,
+    userAgent: req?.get ? String(req.get('user-agent') || '').slice(0, 200) : null,
     timestamp: new Date(),
   };
 

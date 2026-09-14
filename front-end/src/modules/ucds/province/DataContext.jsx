@@ -118,6 +118,13 @@ export const DataProvider = ({ children }) => {
         currentProvince,
         setCurrentProvince,
         fetchData,
+        // Forget every province's rows. Called when the year container
+        // changes: the cache is keyed by province only, and the next screen
+        // must fetch the new year's rows rather than reuse the old ones.
+        clearCache: () => {
+          setDataCache({});
+          setData([]);
+        },
       }}
     >
       {children}

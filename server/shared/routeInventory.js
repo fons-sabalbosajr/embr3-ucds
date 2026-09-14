@@ -20,6 +20,7 @@ const GUARD_NAMES = new Set([
   'requireNasConfig',
   'requireElevation',
   'requireNasActive',
+  'requireContainerAccess',
   'resolveYearContext',
   'rejectYearOverride',
   'logActivity',

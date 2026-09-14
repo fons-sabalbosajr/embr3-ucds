@@ -1,209 +1,117 @@
 import React, { useState } from "react";
-import { Form, Input, Button, ConfigProvider } from "antd";
+import { Form, Input, Button } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import Swal from "sweetalert2";
-import withReactContent from "sweetalert2-react-content";
-import emailjs from "emailjs-com";
-import { LoadingOutlined } from "@ant-design/icons";
-import "./register.css";
+import { modal } from "./shared/feedback";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
-import AuthBrand from "./components/AuthBrand";
-import {
-  EMAILJS_SERVICE_ID,
-  EMAILJS_TEMPLATE_ID,
-  EMAILJS_PUBLIC_KEY,
-} from "./config/emailjs";
+import AuthShell, { AuthError } from "./components/AuthShell";
+
+// The request is recorded and the notification emails are sent by the server.
+// This page used to send the administrator's email itself through EmailJS
+// from the browser, which meant a public key in the bundle, a second mail
+// system to configure, and — because it was never configured — a
+// "Configuration Error" dialog for everyone who registered.
 
 const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const MySwal = withReactContent(Swal);
-
-  // Environment variables (see server/.env -> front-end/.env.local)
-  const serviceId = EMAILJS_SERVICE_ID;
-  const templateId = EMAILJS_TEMPLATE_ID;
-  const publicKey = EMAILJS_PUBLIC_KEY;
-
-
-  // Function to send email using emailjs-com
-  const sendEmail = async (formData) => {
-    if (!serviceId || !templateId || !publicKey) {
-      console.error("Missing EmailJS configuration");
-      MySwal.fire({
-        icon: "error",
-        title: "Configuration Error",
-        text: "EmailJS configuration is missing. Please contact support.",
-      });
-      return;
-    }
-
-    try {
-      const response = await emailjs.send(serviceId, templateId, formData, publicKey);
-      console.log("Email sent successfully:", response);
-    } catch (error) {
-      console.error("Error sending email:", error);
-      MySwal.fire({
-        icon: "error",
-        title: "Email Sending Failed",
-        text: "There was an issue sending the email. Please try again later.",
-      });
-    }
-  };
 
   const onFinish = async (values) => {
     setIsLoading(true);
-
+    setError(null);
     try {
       const response = await axios.post(
         `${API_BASE_URL}/register`,
         {
-          name: values.name,
-          division: values.division,
-          position: values.position,
-          email: values.email,
+          name: values.name.trim(),
+          division: values.division.trim(),
+          position: values.position.trim(),
+          email: values.email.trim(),
         },
         { withCredentials: true }
       );
 
       if (response.status === 201) {
-        // Prepare the email form data for system email
-        const formData = {
-          to_email: "emb.idms@gmail.com", // System email address
-          from_name: values.name,
-          to_name: "Admin", // Optional, use if needed in your template
-          name: values.name,
-          division: values.division,
-          position: values.position,
-          email: values.email,
-        };
-
-        // Send the email
-        await sendEmail(formData);
-
-        MySwal.fire({
-          icon: "info",
-          title: "Registration submitted for approval",
-          text: "Your account registration has been submitted for admin approval. You will receive further instructions via email once approved.",
-        }).then(() => {
-          navigate(ROUTES.login); // Navigate to login page after registration submission
+        modal.success({
+          title: "Request submitted",
+          content:
+            "Your access request has been sent to the system administrator. " +
+            "You will receive your account details by email once it is approved.",
+          okText: "Back to sign in",
+          onOk: () => navigate(ROUTES.login),
         });
       } else {
-        MySwal.fire({
-          icon: "error",
-          title: "Registration failed",
-          text: "Please try again later.",
-        });
+        setError("The request could not be submitted. Please try again later.");
       }
-    } catch (error) {
-      console.error("Error response:", error.response);
-      MySwal.fire({
-        icon: "error",
-        title: "Registration failed",
-        text:
-          error.response?.data.error ||
-          "An unexpected error occurred. Please try again later.",
-      });
+    } catch (err) {
+      console.error("Error response:", err.response);
+      setError(
+        err.response?.data?.error || "An unexpected error occurred. Please try again later."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <ConfigProvider theme={{}}>
-      <div className="background-login"> {/* Use same class as login page for background */}
-        <div className="animated-circles-container">
-          {[...Array(10)].map((_, i) => (
-            <div key={i} className="circle"></div>
-          ))}
-        </div>
-        <div className="login-form-wrapper"> {/* Use same class for centering */}
-          <div className="login-card"> {/* Use same card styling */}
-            <div className="login-logo-container">
-              <AuthBrand size="md" />
-            </div>
-            <div className="login-title-container">
-              <p className="login-title-main">
-                ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-              </p>
-              <p className="login-title-sub">
-                Universe Centralized Database System
-              </p>
-              <h3 className="form-title" style={{marginTop: "15px", color: "var(--grad-clr1)"}}>SIGN-UP</h3> {/* Re-styled title */}
-            </div>
+    <AuthShell
+      width={460}
+      title="Request access"
+      intro="Accounts are issued to EMB Region III personnel. Tell us who you are and the administrator will set one up."
+      footer={
+        <>
+          Already have an account? <Link to={ROUTES.login}>Sign in</Link>
+        </>
+      }
+    >
+      <AuthError>{error}</AuthError>
 
-            <Form layout="vertical" onFinish={onFinish}>
-              <Form.Item
-                name="name"
-                label="Full Name"
-                rules={[{ required: true, message: "Please enter your full name" }]}
-              >
-                <Input placeholder="Enter Full Name" size="large" />
-              </Form.Item>
+      <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
+        <Form.Item
+          name="name"
+          label="Full name"
+          rules={[{ required: true, whitespace: true, message: "Enter your full name." }]}
+        >
+          <Input size="large" placeholder="e.g. Juan D. dela Cruz" autoComplete="name" autoFocus />
+        </Form.Item>
 
-              <Form.Item
-                name="division"
-                label="Division/Section"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter your division/section",
-                  },
-                ]}
-              >
-                <Input placeholder="Enter Division/Section" size="large" />
-              </Form.Item>
+        <Form.Item
+          name="division"
+          label="Division / Section"
+          rules={[{ required: true, whitespace: true, message: "Enter your division or section." }]}
+        >
+          <Input size="large" placeholder="e.g. Clearance and Permitting Division" />
+        </Form.Item>
 
-              <Form.Item
-                name="position"
-                label="Position"
-                rules={[
-                  { required: true, message: "Please enter your position" },
-                ]}
-              >
-                <Input placeholder="Enter Position" size="large" />
-              </Form.Item>
+        <Form.Item
+          name="position"
+          label="Position"
+          rules={[{ required: true, whitespace: true, message: "Enter your position." }]}
+        >
+          <Input size="large" placeholder="e.g. Environmental Management Specialist II" autoComplete="organization-title" />
+        </Form.Item>
 
-              <Form.Item
-                name="email"
-                label="Email Address"
-                rules={[
-                  { required: true, message: "Email is required" },
-                  { type: "email", message: "Invalid email format" },
-                ]}
-              >
-                <Input placeholder="Enter Email Address" size="large" />
-              </Form.Item>
+        <Form.Item
+          name="email"
+          label="Email address"
+          extra="Your account details will be sent here."
+          rules={[
+            { required: true, message: "Enter your email address." },
+            { type: "email", message: "Enter a valid email address." },
+          ]}
+        >
+          <Input size="large" placeholder="name@denr.gov.ph" autoComplete="email" inputMode="email" />
+        </Form.Item>
 
-              <Form.Item>
-                <p className="terms-text"> {/* Added class for styling */}
-                  By signing up, you agree to our Terms and Conditions.
-                </p>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  block
-                  size="large"
-                  disabled={isLoading}
-                  icon={isLoading ? <LoadingOutlined spin /> : null}
-                  // className="btn-sign-up" // Rely on .ant-btn-primary styling
-                >
-                  {isLoading ? "Signing Up..." : "Sign Up"}
-                </Button>
-              </Form.Item>
-              <Form.Item style={{marginBottom: 0}}> {/* Ensure consistent spacing */}
-                <Link to={ROUTES.login}>
-                  <Button block size="large"> {/* This will get default button styling */}
-                    Back to Log In
-                  </Button>
-                </Link>
-              </Form.Item>
-            </Form>
-          </div>
-        </div>
-      </div>
-    </ConfigProvider>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
+            {isLoading ? "Submitting…" : "Submit request"}
+          </Button>
+        </Form.Item>
+      </Form>
+    </AuthShell>
   );
 };
 

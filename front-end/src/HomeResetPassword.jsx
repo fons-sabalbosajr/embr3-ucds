@@ -1,133 +1,137 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { Input, Button, Form, ConfigProvider } from "antd";
+import React, { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { Button, Form, Input, Result } from "antd";
+import { LockOutlined } from "@ant-design/icons";
 import { message } from "./shared/feedback";
-import "./login.css";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
-import AuthBrand from "./components/AuthBrand";
+import AuthShell, { AuthError } from "./components/AuthShell";
 
 const HomeResetPassword = () => {
-    const location = useLocation();
-    const navigate = useNavigate();
-
-     // State for password input and error handling
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  // The username of the account that was reset, so the sign-in page can be
+  // prefilled: the reset was addressed by email, and "invalid username or
+  // password" after a successful reset is usually the username.
+  const [done, setDone] = useState(null);
 
-  // Extract token from the URL
-  const token = new URLSearchParams(location.search).get('token');
+  const token = new URLSearchParams(location.search).get("token");
 
   useEffect(() => {
     if (!token) {
-      message.error('Invalid token.');
-      navigate('/');
+      message.error("This password reset link is not valid.");
+      navigate(ROUTES.forgotPassword, { replace: true });
     }
   }, [token, navigate]);
 
-  const handleSubmit = async () => {
-    if (newPassword !== confirmPassword) {
-      message.error('Passwords do not match.');
-      return;
-    }
-
+  const handleSubmit = async ({ newPassword }) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      const response = await axios.post(`${API_BASE_URL}/reset-password`, {
-        token,
-        newPassword
-      });
-
-      if (response.status === 200) {
-        message.success('Password reset successful.');
-        navigate(ROUTES.login); // Redirect user to login after successful password reset
-      }
-    } catch (error) {
+      const response = await axios.post(`${API_BASE_URL}/reset-password`, { token, newPassword });
+      if (response.status === 200) setDone({ username: response.data?.username || "" });
+    } catch (err) {
+      console.error("Reset password error:", err);
+      setError(
+        err.response?.data?.error ||
+          "The password could not be reset. The link may have expired — request a new one."
+      );
+    } finally {
       setLoading(false);
-      message.error('Error resetting password. Please try again.');
     }
   };
 
+  if (done) {
+    return (
+      <AuthShell>
+        <Result
+          status="success"
+          title="Password updated"
+          subTitle={
+            done.username ? (
+              <>
+                Your new password is in effect. Sign in as <strong>{done.username}</strong> (or with your
+                email address) and use the new password even if your browser offers a saved one.
+              </>
+            ) : (
+              "Your new password is in effect. Sign in with it to continue."
+            )
+          }
+          extra={
+            <Link to={ROUTES.login} state={{ username: done.username }}>
+              <Button type="primary" size="large">
+                Sign in
+              </Button>
+            </Link>
+          }
+        />
+      </AuthShell>
+    );
+  }
+
   return (
-    <ConfigProvider theme={{}}>
-      <div className="background-login">
-        <div className="animated-circles-container">
-          {[...Array(10)].map((_, i) => (
-            <div key={i} className="circle"></div>
-          ))}
-        </div>
-        <div className="login-form-wrapper">
-          <div className="login-card">
-            <div className="login-logo-container">
-              <AuthBrand size="md" />
-            </div>
-            <div className="login-title-container">
-              <p className="login-title-main">
-                ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-              </p>
-              <p className="login-title-sub">
-                Universe Centralized Database System
-              </p>
-              <h3 className="form-title" style={{marginTop: "15px", color: "var(--grad-clr1)"}}>
-                Reset Your Password
-              </h3>
-            </div>
+    <AuthShell
+      title="Choose a new password"
+      intro="Use at least 8 characters. Avoid something you use elsewhere."
+      footer={
+        <>
+          Link expired? <Link to={ROUTES.forgotPassword}>Request a new one</Link>
+        </>
+      }
+    >
+      <AuthError>{error}</AuthError>
 
-            <Form onFinish={handleSubmit} layout="vertical">
-              <Form.Item
-                label="New Password"
-                name="newPassword" // Name prop is good for Form.Item
-                rules={[
-                  { required: true, message: 'Please input your new password!' },
-                  { min: 6, message: 'Password must be at least 6 characters long.' }
-                ]}
-              >
-                <Input.Password
-                  value={newPassword} // Keep controlled component if preferred
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
-                  size="large"
-                />
-              </Form.Item>
+      <Form onFinish={handleSubmit} layout="vertical" requiredMark={false}>
+        <Form.Item
+          label="New password"
+          name="newPassword"
+          rules={[
+            { required: true, message: "Enter a new password." },
+            { min: 8, message: "Use at least 8 characters." },
+          ]}
+        >
+          <Input.Password
+            size="large"
+            prefix={<LockOutlined />}
+            placeholder="New password"
+            autoComplete="new-password"
+            autoFocus
+          />
+        </Form.Item>
 
-              <Form.Item
-                label="Confirm New Password"
-                name="confirmPassword" // Name prop is good for Form.Item
-                rules={[{ required: true, message: 'Please confirm your new password!' }]}
-              >
-                <Input.Password
-                  value={confirmPassword} // Keep controlled component if preferred
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
-                  size="large"
-                />
-              </Form.Item>
+        <Form.Item
+          label="Confirm new password"
+          name="confirmPassword"
+          dependencies={["newPassword"]}
+          rules={[
+            { required: true, message: "Confirm your new password." },
+            ({ getFieldValue }) => ({
+              validator: (_, value) =>
+                !value || getFieldValue("newPassword") === value
+                  ? Promise.resolve()
+                  : Promise.reject(new Error("The passwords do not match.")),
+            }),
+          ]}
+        >
+          <Input.Password
+            size="large"
+            prefix={<LockOutlined />}
+            placeholder="Confirm new password"
+            autoComplete="new-password"
+          />
+        </Form.Item>
 
-              <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  block
-                  size="large"
-                  loading={loading}
-                >
-                  {loading ? 'Resetting Password...' : 'Reset Password'}
-                </Button>
-              </Form.Item>
-
-              <Form.Item style={{marginBottom: 0}}>
-                <Button block size="large" onClick={() => navigate(ROUTES.login)}>
-                  Back to Login
-                </Button>
-              </Form.Item>
-            </Form>
-          </div>
-        </div>
-      </div>
-    </ConfigProvider>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" block size="large" loading={loading}>
+            {loading ? "Updating…" : "Update password"}
+          </Button>
+        </Form.Item>
+      </Form>
+    </AuthShell>
   );
-}
+};
 
 export default HomeResetPassword;

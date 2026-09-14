@@ -12,6 +12,7 @@ import YearGuard from './YearGuard';
 import RouteError from './RouteError';
 import YearSelect from './YearSelect';
 import { YearProvider } from './context/YearContext';
+import { UcdsSettingsProvider } from './context/UcdsSettingsContext';
 import HomeForgotPassword from './HomeForgotPassword';
 import HomeResetPassword from './HomeResetPassword';
 import { ROUTES, SITE_BASE } from './config/routes';

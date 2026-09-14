@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { lazy, Suspense,  useState, useEffect, useCallback } from "react";
 import { Layout, Button, Spin, Popover, List } from "antd";
 import { message } from "./shared/feedback";
 import { useTheme } from "./theme/ThemeProvider";
@@ -19,15 +19,22 @@ import { API_BASE_URL as backendUrl } from "./config/api";
 import "./index.css";
 import CryptoJS from "crypto-js";
 import Dashboard from "./modules/ucds/dashboard/Dashboard";
-import Province from "./modules/ucds/province/Province";
-import MBU from "./modules/ucds/mbu/MBU";
-import Admin from "./modules/admin/Admin";
-import Accounts from "./modules/admin/users/UserAccounts";
-import Report from "./modules/admin/Admin";
-import Posting from "./modules/admin/posting/Posting";
+const Province = lazy(() => import("./modules/ucds/province/Province"));
+const MBU = lazy(() => import("./modules/ucds/mbu/MBU"));
+const Admin = lazy(() => import("./modules/admin/Admin"));
+const Accounts = lazy(() => import("./modules/admin/users/UserAccounts"));
+const StorageBrowser = lazy(() => import("./modules/storage/StorageBrowser"));
+const DatasetPage = lazy(() => import("./modules/ucds/datasets/DatasetPage"));
+const ErmsDashboard = lazy(() => import("./modules/erms/pages/ErmsDashboard"));
+const RecordsList = lazy(() => import("./modules/erms/pages/RecordsList"));
+const RecordDetail = lazy(() => import("./modules/erms/pages/RecordDetail"));
+const ArchiveBoxes = lazy(() => import("./modules/erms/pages/ArchiveBoxes"));
+const ErmsReports = lazy(() => import("./modules/erms/pages/ErmsReports"));
+const Report = Admin;
+const Posting = lazy(() => import("./modules/admin/posting/Posting"));
 import ActivityLog from "./components/ActivityLog/ActivityLog";
-import RegisterSettings from "./modules/admin/RegisterSettings";
-import SystemSettings from "./modules/admin/SystemSettings";
+const RegisterSettings = lazy(() => import("./modules/admin/RegisterSettings"));
+const SystemSettings = lazy(() => import("./modules/admin/SystemSettings"));
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
@@ -38,14 +45,18 @@ import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import moment from "moment";
 
-import StorageConfig from "./modules/admin/developer/StorageConfig";
+const StorageConfig = lazy(() => import("./modules/admin/developer/StorageConfig"));
 
 import { ROUTES } from "./config/routes";
 import DomainGuard from "./auth/DomainGuard";
+import NotFound from "./shared/components/NotFound";
+import ContentLoading from "./shared/components/ContentLoading";
+import { useYear } from "./context/YearContext";
 import RoleGuard from "./auth/RoleGuard";
 import Forbidden from "./shared/components/Forbidden";
-import OrgUnits from "./modules/admin/OrgUnits";
+const OrgUnits = lazy(() => import("./modules/admin/OrgUnits"));
 import GeneralSettings from "./modules/settings/GeneralSettings";
+const UcdsSettings = lazy(() => import("./modules/settings/UcdsSettings"));
 
 const { Header, Content } = Layout;
 
@@ -65,12 +76,14 @@ const Universe = () => {
   // than rendering in Ant Design's defaults.
   const { mode: theme, toggleMode: toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
+  const { activeYear } = useYear();
   // Named capability flags, replacing the positional boolean array this used to
   // build (permissions[2] meant "admin panel", permissions[i+5] meant
   // "province i"). Everything here is advisory — the API re-checks the same
   // entitlement on every request.
   const [capabilities, setCapabilities] = useState({});
   const [domains, setDomains] = useState([]);
+  const [storageContainers, setStorageContainers] = useState([]);
   const [provinces, setProvinces] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +126,7 @@ const Universe = () => {
 
       setCapabilities(data.capabilities || {});
       setDomains(data.domains || []);
+      setStorageContainers(data.storageContainers || []);
       setProvinces(data.provinces || []);
       setUserRole(data.role || "viewer");
       setUserHandle(data.user?.username);
@@ -319,6 +333,7 @@ const Universe = () => {
     role: userRole,
     capabilities,
     domains,
+    storageContainers,
     provinces,
     provinceStringPermissions: userProvinceStringPermissions,
   };
@@ -425,14 +440,6 @@ const Universe = () => {
                             <MoonOutlined style={{ fontSize: 15 }} />
                           )
                         }
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
                       />
                     </Popover>
                   </div>
@@ -440,7 +447,14 @@ const Universe = () => {
               </Header>
 
               <Content className="content-container">
-                <Routes>
+                {/* Heavy screens are separate chunks, fetched on first visit:
+                    the register alone is a third of the bundle, and an Encoder
+                    should not download the admin and records screens to open it. */}
+                <Suspense fallback={<ContentLoading />}>
+                {/* Keyed on the active year: switching containers remounts the
+                    screens (and the province data context inside them) so
+                    they refetch, while the shell around them stays. */}
+                <Routes key={activeYear}>
                   {/* Land people where they can actually work: a Records
                       clerk has no UCDS domain, so the planning dashboard
                       would only tell them they are not allowed. */}
@@ -585,6 +599,29 @@ const Universe = () => {
                       preferences affect nobody else, so this needs no
                       entitlement — and it gives Records and Planning staff a
                       Settings section of their own. */}
+                  {/* Shared storage. Who may open what is decided on the
+                      server per container; the screen only shows what it is
+                      given. */}
+                  <Route path="storage" element={<StorageBrowser />} />
+
+                  {/* Records (ERMS): dashboard, the records register, archive
+                      boxes and reports. Guarded by the ERMS domain — a
+                      Developer and a Records Admin hold it; the API refuses
+                      everyone else regardless. */}
+                  <Route element={<DomainGuard domain="erms" user={currentUser} />}>
+                    <Route path="erms/dashboard" element={<ErmsDashboard />} />
+                    <Route path="erms/records" element={<RecordsList />} />
+                    <Route path="erms/records/:serialNo" element={<RecordDetail />} />
+                    <Route path="erms/archive" element={<ArchiveBoxes />} />
+                    <Route path="erms/reports" element={<ErmsReports />} />
+                    <Route path="erms" element={<Navigate to="/universe/erms/dashboard" replace />} />
+                  </Route>
+
+                  {/* Universe Central DB settings: read by every UCDS account,
+                      changed by a Developer or Administrator (enforced by the API). */}
+                  <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
+                    <Route path="settings/ucds" element={<UcdsSettings />} />
+                  </Route>
                   <Route
                     path="settings/general"
                     element={<GeneralSettings theme={theme} />}
@@ -647,6 +684,8 @@ const Universe = () => {
 
                   {/* The remaining UCDS screens. */}
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
+                  {/* The year folder's spreadsheets, one screen for all of them. */}
+                  <Route path="datasets/:key" element={<DatasetPage />} />
                   <Route path="report" element={<Report theme={theme} />} />
                   <Route
                     path="posting"
@@ -658,7 +697,12 @@ const Universe = () => {
                     element={<Navigate to="/universe/admin/duplicates" replace />}
                   />
                   </Route>
+
+                  {/* Anything else inside the application gets a proper
+                      not-found card rather than an empty content area. */}
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
+                </Suspense>
               </Content>
             </Layout>
           </Layout>

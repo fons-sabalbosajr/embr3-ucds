@@ -4,6 +4,9 @@ const { principalOf } = require('../middleware/auth');
 const { recordFileEvent } = require('../services/nasAudit');
 const activation = require('../services/nasActivation');
 const credentials = require('../services/nasCredentials');
+const containers = require('../services/nasContainers');
+const storageAccess = require('../services/storageAccess');
+const reportFiles = require('../services/reportFiles');
 
 // ---------------------------------------------------------------------------
 // NAS (SMB) storage access — administrative surface.
@@ -144,21 +147,223 @@ async function resetConfig(req, res, next) {
 /**
  * Whether the share is configured at all. Deliberately not elevated and
  * deliberately thin: the ERMS screens need to know whether to offer a document
- * viewer, and that answer is not sensitive. It names nothing about the host.
+ * viewer, and that answer is not sensitive. It names nothing about the host —
+ * and nothing about which containers exist: that list is for the elevated
+ * developer routes.
  */
 function status(req, res) {
   const cfg = nas.describeConfig();
   return res.json({ configured: cfg.configured === true, enabled: cfg.enabled === true });
 }
 
+/** The container a request names, validated against what exists. */
+function containerOf(req) {
+  const key = String(req.query.container || req.params.key || nas.RECORDS_KEY).trim();
+  return containers.KEY_PATTERN.test(key) ? key : nas.RECORDS_KEY;
+}
+
 async function testConnection(req, res) {
-  const result = await nas.testConnection();
+  const key = containerOf(req);
+  const result = await nas.testConnection(key);
   await recordFileEvent(req, {
     operation: 'nas-test-connection',
     success: result.ok === true,
-    detail: result.ok ? `${result.entryCount} entries` : result.reason,
+    detail: `${key}: ${result.ok ? `${result.entryCount} entries` : result.reason}`,
   });
-  return res.status(result.ok ? 200 : 502).json(result);
+  return res.status(result.ok ? 200 : 502).json({ ...result, container: key });
+}
+
+// --- who may open what ---------------------------------------------------------
+
+/**
+ * Every account with its type and the containers designated on it. For the
+ * Developer's Access tab; names only.
+ */
+async function listAccess(req, res, next) {
+  try {
+    return res.json(await storageAccess.accessTable());
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Designate containers on one account. Takes effect on their next request. */
+async function setAccess(req, res, next) {
+  try {
+    const actor = principalOf(req);
+    const result = await storageAccess.setGrants(req.params.userId, req.body?.nasContainers, actor);
+    if (!result.ok) return res.status(result.status).json(result);
+    await recordFileEvent(req, {
+      operation: 'nas-access-grant',
+      success: true,
+      detail: `${req.params.userId}: ${result.nasContainers.join(', ') || '(none)'} by ${actor?.username || 'unknown'}`,
+    });
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- shared storage (end users) ----------------------------------------------
+
+/** Containers the signed-in user may open right now, by key and label. */
+async function myContainers(req, res, next) {
+  try {
+    const active = await activation.evaluate();
+    return res.json({
+      active: active.active === true,
+      containers: await storageAccess.grantedContainers(principalOf(req)),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- report files (database -> share) -----------------------------------------
+
+async function reportFilesInventory(req, res, next) {
+  try {
+    return res.json(await reportFiles.inventory());
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function reportFilesMove(req, res, next) {
+  try {
+    const r = await reportFiles.moveToShare(principalOf(req));
+    await recordFileEvent(req, {
+      operation: 'nas-report-files-move',
+      containerKey: nas.RECORDS_KEY,
+      success: r.ok === true,
+      detail: r.results ? `${r.results.filter((x) => x.ok).length}/${r.results.length} copied to ${r.folder}` : r.code || r.message,
+    });
+    return res.status(r.ok ? 200 : r.status || 502).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function reportFilesRemove(req, res, next) {
+  try {
+    const r = await reportFiles.removeFromDatabase();
+    await recordFileEvent(req, {
+      operation: 'nas-report-files-remove',
+      success: r.ok === true,
+      detail: r.ok ? `${r.removed} file(s) removed from the database` : r.code || r.message,
+    });
+    return res.status(r.ok ? 200 : r.status || 502).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- containers --------------------------------------------------------------
+
+/** Every container, as a screen may see it. Never a password. */
+async function listContainers(req, res, next) {
+  try {
+    return res.json(await containers.list());
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * Create or update a container: store, refresh, apply the credential to
+ * Windows if one was given, test, record. The same order as saveConfig, for
+ * the same reasons — see the note there.
+ */
+async function persistContainer(req, res, next, key) {
+  try {
+    const user = principalOf(req);
+    const body = req.body || {};
+
+    const result = await containers.save(key, body, user);
+    if (!result.ok) {
+      await recordFileEvent(req, {
+        operation: 'nas-container-save',
+        success: false,
+        detail: `${key || body.key || '(new)'}: ${result.code}`,
+      });
+      return res.status(result.status).json(result);
+    }
+
+    await nas.refreshConfig();
+
+    const resolved = await containers.resolve(result.key);
+    let applied = { ok: false, code: 'SKIPPED' };
+    if (body.password && resolved) applied = await containers.applyToWindows(resolved);
+
+    const probe = await nas.testConnection(result.key);
+    await containers.recordTest(result.key, {
+      ok: probe.ok,
+      detail: probe.ok ? `${probe.entryCount} entries at the root` : `${probe.reason}/${probe.code}`,
+    });
+
+    await recordFileEvent(req, {
+      operation: 'nas-container-save',
+      success: true,
+      detail: `${result.key} by ${user?.username || 'unknown'}; ${result.changed.join(', ')}; test ${probe.ok ? 'passed' : 'failed'}`,
+    });
+
+    return res.status(key ? 200 : 201).json({
+      ok: true,
+      container: await containers.describe(result.key),
+      changed: result.changed,
+      conflicts: result.conflicts,
+      conflictMessage: result.conflictMessage,
+      credentialApplied: applied.ok,
+      credentialMessage: applied.ok ? null : applied.message,
+      test: probe.ok
+        ? { ok: true, ms: probe.ms, entryCount: probe.entryCount }
+        : { ok: false, reason: probe.reason, message: probe.message },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+const createContainer = (req, res, next) => persistContainer(req, res, next, null);
+const updateContainer = (req, res, next) => persistContainer(req, res, next, containerOf(req));
+
+async function setContainerEnabled(req, res, next) {
+  try {
+    const key = containerOf(req);
+    const enabled = req.body?.enabled !== false;
+    const result = await containers.setEnabled(key, enabled, principalOf(req));
+    if (!result.ok) return res.status(result.status).json(result);
+    await nas.refreshConfig();
+    await recordFileEvent(req, {
+      operation: 'nas-container-save',
+      success: true,
+      detail: `${key}: ${enabled ? 'enabled' : 'disabled'}`,
+    });
+    return res.json({ ok: true, container: await containers.describe(key) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function deleteContainer(req, res, next) {
+  try {
+    const key = containerOf(req);
+    const result = await containers.remove(key);
+    if (!result.ok) return res.status(result.status).json(result);
+    await nas.refreshConfig();
+    await recordFileEvent(req, { operation: 'nas-container-remove', success: true, detail: key });
+    return res.json({ ok: true });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function containerHistory(req, res, next) {
+  try {
+    return res.json({ container: containerOf(req), history: await containers.history(containerOf(req)) });
+  } catch (error) {
+    return next(error);
+  }
 }
 
 /**
@@ -177,10 +382,14 @@ async function testConnection(req, res) {
  */
 async function browse(req, res) {
   const requested = req.query.path || '';
-  const result = await nas.listDirectory(requested);
+  // req.container is set by requireContainerAccess on the shared storage
+  // routes; the developer explorer names the container itself.
+  const key = req.container?.key || containerOf(req);
+  const result = await nas.listDirectory(requested, key);
 
   await recordFileEvent(req, {
-    operation: 'nas-browse',
+    operation: req.container ? 'storage-browse' : 'nas-browse',
+    containerKey: key,
     fileName: requested || '(root)',
     success: result.ok === true,
     detail: result.ok ? `${result.entries.length} entries` : result.reason,
@@ -188,11 +397,12 @@ async function browse(req, res) {
 
   if (!result.ok) {
     const statuses = {
-      'not-configured': [503, 'NAS_NOT_CONFIGURED', 'The records share is not configured.'],
-      'invalid-path': [400, 'BAD_PATH', 'That path is not inside the records share.'],
-      missing: [404, 'NOT_FOUND', 'No such folder on the records share.'],
+      'not-configured': [503, 'NAS_NOT_CONFIGURED', 'That container is not configured.'],
+      disabled: [503, 'NAS_DISABLED', 'That container is switched off.'],
+      'invalid-path': [400, 'BAD_PATH', 'That path is not inside the container.'],
+      missing: [404, 'NOT_FOUND', 'No such folder in the container.'],
       denied: [502, 'NAS_DENIED', 'The server is not permitted to read that folder.'],
-      unreachable: [502, 'NAS_UNREACHABLE', 'The records share could not be reached.'],
+      unreachable: [502, 'NAS_UNREACHABLE', 'The container could not be reached.'],
     };
     const [status, code, message] = statuses[result.reason] || [502, 'NAS_ERROR', 'Could not read that folder.'];
     return res.status(status).json({ code, message });
@@ -205,10 +415,12 @@ async function browse(req, res) {
 async function readByPath(req, res, next) {
   try {
     const requested = req.query.path || '';
-    const file = await nas.statFile(requested);
+    const key = req.container?.key || containerOf(req);
+    const file = await nas.statFile(requested, key);
     if (!file.ok) {
       await recordFileEvent(req, {
-        operation: 'nas-file-read',
+        operation: req.container ? 'storage-file-read' : 'nas-file-read',
+        containerKey: key,
         fileName: requested,
         success: false,
         detail: file.reason,
@@ -231,7 +443,8 @@ async function readByPath(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
     await recordFileEvent(req, {
-      operation: 'nas-file-read',
+      operation: req.container ? 'storage-file-read' : 'nas-file-read',
+      containerKey: key,
       fileName: file.fileName,
       success: true,
       bytes: file.size,
@@ -369,9 +582,50 @@ async function removeElevationPin(req, res, next) {
   }
 }
 
-function endElevation(req, res) {
+async function endElevation(req, res) {
   elevation.clearElevation(req);
+  await recordFileEvent(req, { operation: 'nas-elevation-end', success: true, detail: 'verified session ended' });
   return res.json({ elevated: false });
+}
+
+// --- audit log -----------------------------------------------------------------
+
+/**
+ * The NAS audit trail: every configuration change, activation, verification,
+ * connection test, container change, access grant and document read, newest
+ * first. Read-only — the entries are written by recordFileEvent and the
+ * developer log editor refuses to touch domain 'nas'.
+ */
+async function auditLog(req, res, next) {
+  try {
+    const { getDb } = require('../config/db');
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 1), 200);
+    const filter = { domain: 'nas' };
+    if (req.query.operation) filter.operation = String(req.query.operation);
+    if (req.query.username) filter.username = String(req.query.username);
+    if (req.query.success === 'true') filter.success = true;
+    if (req.query.success === 'false') filter.success = false;
+    if (req.query.from || req.query.to) {
+      filter.timestamp = {};
+      if (req.query.from) filter.timestamp.$gte = new Date(req.query.from);
+      if (req.query.to) filter.timestamp.$lte = new Date(req.query.to);
+    }
+    const q = String(req.query.q || '').trim();
+    if (q) {
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ username: re }, { detail: re }, { fileName: re }, { serialNo: re }, { container: re }, { operation: re }];
+    }
+    const col = getDb().collection('app-logs');
+    const [total, items, operations] = await Promise.all([
+      col.countDocuments(filter),
+      col.find(filter, { projection: { method: 0, path: 0 } }).sort({ timestamp: -1 }).skip((page - 1) * pageSize).limit(pageSize).toArray(),
+      col.distinct('operation', { domain: 'nas' }),
+    ]);
+    return res.json({ total, page, pageSize, items, operations: operations.filter(Boolean).sort() });
+  } catch (error) {
+    return next(error);
+  }
 }
 
 module.exports = {
@@ -382,6 +636,19 @@ module.exports = {
   configHistory,
   status,
   testConnection,
+  listAccess,
+  setAccess,
+  myContainers,
+  auditLog,
+  reportFilesInventory,
+  reportFilesMove,
+  reportFilesRemove,
+  listContainers,
+  createContainer,
+  updateContainer,
+  setContainerEnabled,
+  deleteContainer,
+  containerHistory,
   browse,
   readByPath,
   activationStatus,

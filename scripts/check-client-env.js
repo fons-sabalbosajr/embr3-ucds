@@ -56,12 +56,10 @@ function parseEnvFile(content) {
 
   // Feature keys. The build still succeeds without them, but the feature that
   // reads each one will fail at runtime, so surface it here instead.
+  // Email is sent by the server (EMAIL_USER / EMAIL_PASS in server/.env), so
+  // the client needs no mail keys at all.
   const FEATURE_KEYS = {
     VITE_GOOGLE_MAPS_API_KEY: 'map rendering and address lookup',
-    VITE_EMAILJS_SERVICE_ID: 'sign-up and credential emails',
-    VITE_EMAILJS_PUBLIC_KEY: 'sign-up and credential emails',
-    VITE_EMAILJS_TEMPLATE_ID: 'sign-up notification email',
-    VITE_EMAILJS_CREDENTIALS_TEMPLATE_ID: 'new-account credentials email',
   };
 
   for (const [key, feature] of Object.entries(FEATURE_KEYS)) {

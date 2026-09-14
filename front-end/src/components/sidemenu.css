@@ -6,9 +6,12 @@
   --menu-item-hover: #f5f7fa;
   --menu-item-active: #e6f7ff;
 
-  --font-size-desktop: 13px;
-  --font-size-tablet: 12px;
-  --font-size-mobile: 11px;
+  /* Ant Design's 14px for top-level items and 12px inside a branch — the
+     same two sizes the ESWMP sider uses. */
+  --font-size-desktop: 14px;
+  --font-size-sub: 12px;
+  --font-size-tablet: 13px;
+  --font-size-mobile: 12px;
 }
 
 .side-menu {
@@ -65,24 +68,78 @@
   min-height: 44px;
 }
 
-/* Submenu items */
-.side-menu-list .ant-menu-submenu .ant-menu-item {
-  font-size: calc(var(--font-size-desktop) - 1px) !important;
-  padding-left: 32px !important;
+/* Submenu items. Depth is shown by indent: a section's items start at
+   28px, a year's items (datasets, Monitoring Plan) at 42px, and the
+   provinces under Monitoring Plan at 56px. The expanded panel itself is a
+   shade darker than the sider (Menu.darkSubMenuItemBg in ThemeProvider), so
+   the open branch reads as one block. */
+.side-menu-list .ant-menu-submenu .ant-menu-item,
+.side-menu-list .ant-menu-submenu .ant-menu-submenu-title {
+  font-size: var(--font-size-sub) !important;
   display: flex !important;
   align-items: center !important;
   height: auto !important;
   line-height: normal !important;
 }
 
-/* ========== Label Wrapper ========== */
-.submenu-item-label{
-  font-size: 11px;
+.side-menu-list .ant-menu-sub .ant-menu-item,
+.side-menu-list .ant-menu-sub .ant-menu-submenu-title {
+  padding-left: 28px !important;
+  margin: 2px 8px;
+  min-height: 36px;
 }
 
-.main{
-  font-size: 12px;
-  
+.side-menu-list .ant-menu-sub .ant-menu-sub .ant-menu-item,
+.side-menu-list .ant-menu-sub .ant-menu-sub .ant-menu-submenu-title {
+  padding-left: 42px !important;
+}
+
+.side-menu-list .ant-menu-sub .ant-menu-sub .ant-menu-sub .ant-menu-item {
+  padding-left: 56px !important;
+}
+
+/* The open branch: a darker panel with a hairline top and bottom. */
+.side-menu-list .ant-menu-sub.ant-menu-inline {
+  border-radius: 8px;
+  margin: 0 4px 4px;
+  padding: 4px 0;
+}
+
+.side-menu-list .ant-menu-sub .ant-menu-sub.ant-menu-inline {
+  background: transparent !important;
+  margin: 0;
+}
+
+.side-menu-list .ant-menu-sub .submenu-item-label {
+  min-height: 32px;
+}
+
+/* ========== Label Wrapper ========== */
+.submenu-item-label {
+  font-size: var(--font-size-sub);
+}
+
+.main {
+  font-size: var(--font-size-desktop);
+}
+
+/* Labels wrap instead of being cut with an ellipsis. Ant Design keeps inline
+   menu text on one line; a sider 220px wide with "Organizational Units" or a
+   long dataset name at three levels of indent needs the second line. */
+.side-menu-list .ant-menu-item .ant-menu-title-content,
+.side-menu-list .ant-menu-submenu-title .ant-menu-title-content,
+.menu-label-wrapper,
+.submenu-item-label {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.side-menu-list .ant-menu-title-content {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .nas{
@@ -101,7 +158,6 @@
   gap: 6px;
   width: 100%;
   min-height: 40px;
-  line-height: normal;
   padding: 4px 0;
 }
 
@@ -135,7 +191,6 @@
 
   .side-menu-list .ant-menu-submenu .ant-menu-item {
     font-size: var(--font-size-tablet);
-    padding-left: 28px !important;
   }
 
   .menu-label-wrapper {
@@ -176,11 +231,44 @@
 
   .side-menu-list .ant-menu-submenu .ant-menu-item {
     font-size: var(--font-size-mobile) !important;
-    padding-left: 26px !important;
   }
 
   .menu-label-wrapper,
   .submenu-item-label {
     font-size: var(--font-size-mobile);
   }
+}
+
+/* ========== Active year ========== */
+.year-label {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.year-label.is-active {
+  font-weight: 600;
+}
+
+/* A dot in the accent with a soft pulse behind it: the container the
+   session is working in. Still, not spinning; it should be noticed, not
+   watched. */
+.year-active-dot {
+  position: relative;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--eu-accent, #2f7ecb);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--eu-accent, #2f7ecb) 55%, transparent);
+  animation: year-pulse 2s ease-out infinite;
+}
+
+@keyframes year-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--eu-accent, #2f7ecb) 55%, transparent); }
+  70% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--eu-accent, #2f7ecb) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--eu-accent, #2f7ecb) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .year-active-dot { animation: none; }
 }

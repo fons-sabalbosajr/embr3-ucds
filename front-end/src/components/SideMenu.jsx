@@ -1,21 +1,15 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import {
-  ConfigProvider,
-  Layout,
-  Menu,
-  Button,
-  Avatar,
-  Tooltip,
-  theme as antdTheme,
-} from "antd";
+import { Layout, Menu, Button, Avatar, Tooltip } from "antd";
 import {
   DashboardFilled,
-  CheckCircleFilled,
+  DatabaseFilled,
+  LockOutlined,
   SettingFilled,
   MedicineBoxFilled,
   ReconciliationFilled,
   CaretLeftOutlined,
   CaretRightOutlined,
+  FolderOpenOutlined,
   FileProtectOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
@@ -36,12 +30,15 @@ import {
   // onSocketDisconnect, // If needed
 } from "../api/socketService"; // Import socket service
 import Logo from "./Logo";
+import { useYear } from "../context/YearContext";
+import { API_BASE_URL } from "../config/api";
 import "./sidemenu.css";
 
 const { Sider } = Layout;
 
 const rootSubmenuKeys = [
-  "r3-monitoring",
+  "ucds-db",
+  "erms",
   "settings",
   "admin",
 ];
@@ -67,10 +64,14 @@ const SideMenu = ({ theme, currentUser }) => {
   const [provinceViewers, setProvinceViewers] = useState({});
   const [mbuViewers, setMbuViewers] = useState([]);
   const [currentProvince, setCurrentProvinceState] = useState(null);
+  // Year containers and what each year's folder holds, for the Universe
+  // Central DB tree. The registry is names only and is fetched once.
+  const { years: yearContainers, activeYear, selectYear } = useYear();
+  const [datasetRegistry, setDatasetRegistry] = useState({});
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { setCurrentProvince } = useContext(DataContext);
+  const { setCurrentProvince, clearCache } = useContext(DataContext);
   const prevLocationPathnameRef = useRef(location.pathname); // To track previous path
   // Named entitlement from GET /api/auth/me. Hiding a menu item is a courtesy,
   // not a control: every route behind these links is checked again server-side.
@@ -84,16 +85,17 @@ const SideMenu = ({ theme, currentUser }) => {
   // enforces the same boundary with requireDomain(); this only keeps the
   // sidebar honest about what the account can actually reach.
   const domains = currentUser?.domains || [];
+  // Storage containers the Developer shared with this account. Present for a
+  // Developer (all of them) and for a Planning or Records admin with a
+  // designation; an Encoder never has any, so the entry never appears.
+  const storageContainers = currentUser?.storageContainers || [];
   const hasUcds = domains.includes("ucds");
   const hasAdmin = domains.includes("admin");
   // The records share configuration is developer-only. It is a role question,
   // not a domain one — the share is infrastructure, not a business module.
   const role = currentUser?.permission ?? currentUser?.role;
   const isDeveloper = role === "developer";
-  // A Records clerk works the same register, but reaches it looking for
-  // documents rather than planning monitoring, so the section is named for
-  // that. Behaviour and scope are identical.
-  const isRecords = role === "records";
+  const hasErms = domains.includes("erms");
   const visibleProvinces = PROVINCE_MENU.filter((p) =>
     grantedProvinces.includes(p.key)
   ).map((p) => p.value);
@@ -102,10 +104,12 @@ const SideMenu = ({ theme, currentUser }) => {
     const path = location.pathname;
     if (path.startsWith("/universe/dashboard")) {
       setOpenKeys([]);
-    } else if (path.startsWith("/universe/province/")) {
-      setOpenKeys(["r3-monitoring"]);
+    } else if (path.startsWith("/universe/province/") || path.startsWith("/universe/datasets/")) {
+      setOpenKeys(["ucds-db", `year-${activeYear}`]);
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
+    } else if (path.startsWith("/universe/erms/")) {
+      setOpenKeys(["erms"]);
     } else if (path.startsWith("/universe/settings/")) {
       setOpenKeys(["settings"]);
     } else if (
@@ -116,7 +120,43 @@ const SideMenu = ({ theme, currentUser }) => {
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
-  }, [location.pathname]);
+  }, [location.pathname, activeYear]);
+
+  useEffect(() => {
+    if (!hasUcds) return undefined;
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/ucds/datasets/registry`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { years: [] }))
+      .then((body) => {
+        if (cancelled) return;
+        const map = {};
+        for (const y of body.years || []) map[y.year] = y.datasets || [];
+        setDatasetRegistry(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [hasUcds]);
+
+  // Every dataset lives in one year container, and the server reads the year
+  // from the session. Picking something under another year selects that
+  // container first, then navigates in place: the content area is keyed on
+  // the active year, so the screens remount and refetch under the new year
+  // while the sidebar and header stay put. No page reload.
+  const openInYear = async (year, path) => {
+    if (year === activeYear) {
+      navigate(path);
+      return;
+    }
+    try {
+      await selectYear(year);
+      clearCache?.();
+      navigate(path);
+    } catch {
+      navigate("/select-year");
+    }
+  };
 
   // Effect for handling responsive sidebar width
   useEffect(() => {
@@ -314,24 +354,101 @@ const SideMenu = ({ theme, currentUser }) => {
     // universe of firms for the documents filed against one. One screen, one
     // set of data, one province scope — only the label differs, because
     // building two of these is what the unification was undoing.
+    // Universe Central DB: one branch per year container, in order. The
+    // active year is marked; a year that has not opened yet is listed but
+    // locked, the same rule the year picker applies. Under each year: the
+    // Monitoring Plan (the register, per province) and every other spreadsheet
+    // in that year's data folder, as the server found it.
     hasUcds && {
-      key: "r3-monitoring",
-      icon: <CheckCircleFilled />,
-      label: (
-        <div className="menu-label-wrapper main">
-          {isRecords ? "Universe" : "Monitoring Plan"}
-        </div>
-      ),
-      children: visibleProvinces.map((province) => ({
-        key: `/universe/province/${province}`,
+      key: "ucds-db",
+      icon: <DatabaseFilled />,
+      label: <div className="menu-label-wrapper main">Universe Central DB</div>,
+      children: [...yearContainers]
+        .sort((a, b) => a.year - b.year)
+        .map((y) => {
+          const open = y.open !== false;
+          const isActive = y.year === activeYear;
+          const datasets = datasetRegistry[y.year] || [];
+          const tables = datasets.filter((d) => d.kind !== "monitoring-plan");
+          const children = open
+            ? [
+                {
+                  key: `year-${y.year}-monitoring`,
+                  label: <div className="menu-label-wrapper submenu-item-label">Monitoring Plan</div>,
+                  children: visibleProvinces.map((province) => ({
+                    key: isActive ? `/universe/province/${province}` : `y${y.year}/province/${province}`,
+                    onClick: () => openInYear(y.year, `/universe/province/${province}`),
+                    label: isActive ? (
+                      <LabelWithAvatars
+                        to={`/universe/province/${province}`}
+                        label={province}
+                        viewers={provinceViewers[province] || []}
+                      />
+                    ) : (
+                      <div className="menu-label-wrapper submenu-item-label">{province}</div>
+                    ),
+                  })),
+                },
+                ...tables.map((d) => ({
+                  key: isActive ? `/universe/datasets/${d.key}` : `y${y.year}/datasets/${d.key}`,
+                  onClick: () => openInYear(y.year, `/universe/datasets/${d.key}`),
+                  label: (
+                    <div className="menu-label-wrapper submenu-item-label" title={d.imported ? `${d.rowCount} rows` : "Not imported yet"}>
+                      {d.label}
+                    </div>
+                  ),
+                })),
+              ]
+            : [];
+          return {
+            key: `year-${y.year}`,
+            disabled: !open,
+            icon: open ? null : <LockOutlined />,
+            label: (
+              <div
+                className={`menu-label-wrapper submenu-item-label year-label${isActive ? " is-active" : ""}`}
+                title={open ? (isActive ? `${y.year} — active container` : undefined) : `Opens in January ${y.year}`}
+              >
+                {/* The active container carries a pulsing indicator before the
+                    year, in the accent, rather than a tag fighting the caret. */}
+                {isActive && <span className="year-active-dot" aria-label="active container" />}
+                <span>{y.year}</span>
+              </div>
+            ),
+            children,
+          };
+        }),
+    },
+    // Records (ERMS). Visible to anyone holding the ERMS domain — the Developer
+    // and Records Admins — independent of the UCDS capability flags. The
+    // route keys and API namespace stay "erms", which nobody outside the code
+    // sees; the label is what the work is called.
+    hasErms && {
+      key: "erms",
+      icon: <FileProtectOutlined />,
+      label: <div className="menu-label-wrapper main">Dashboard ERMS</div>,
+      children: [
+        ["dashboard", "Dashboard"],
+        ["records", "Records register"],
+        ["archive", "Archive boxes"],
+        ["reports", "Reports"],
+      ].map(([path, label]) => ({
+        key: `/universe/erms/${path}`,
         label: (
-          <LabelWithAvatars
-            to={`/universe/province/${province}`}
-            label={province}
-            viewers={provinceViewers[province] || []}
-          />
+          <div className="menu-label-wrapper submenu-item-label">
+            <Link to={`/universe/erms/${path}`}>{label}</Link>
+          </div>
         ),
       })),
+    },
+    storageContainers.length > 0 && {
+      key: "/universe/storage",
+      icon: <FolderOpenOutlined />,
+      label: (
+        <div className="menu-label-wrapper main">
+          <Link to="/universe/storage">Storage</Link>
+        </div>
+      ),
     },
     // One administrative section. "Settings" and "Developer Settings" were two
     // menus over the same kind of work — every entry under both needed the
@@ -359,7 +476,15 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
-      ],
+        hasUcds && {
+          key: "/universe/settings/ucds",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/settings/ucds">Universe Central DB</Link>
+            </div>
+          ),
+        },
+      ].filter(Boolean),
     },
     hasAdmin && canViewAdminPanel && {
       key: "admin",
@@ -482,35 +607,31 @@ const SideMenu = ({ theme, currentUser }) => {
         />
       )}
 
-      <ConfigProvider
-        theme={{
-          algorithm:
-            theme === "dark"
-              ? antdTheme.darkAlgorithm
-              : antdTheme.defaultAlgorithm,
+      {/* No ConfigProvider of its own: the menu's dark-surface tokens are set
+          once in ThemeProvider, and re-applying the algorithm here only
+          re-derived the same palette a second time on every render. */}
+      <Menu
+        className="side-menu-list"
+        theme="dark"
+        mode="inline"
+        inlineIndent={14}
+        selectedKeys={[location.pathname]}
+        openKeys={openKeys}
+        onOpenChange={(keys) => {
+          const latestOpenKey = keys.find((key) => !openKeys.includes(key));
+          setOpenKeys(
+            rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys
+          );
         }}
-      >
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          openKeys={openKeys}
-          onOpenChange={(keys) => {
-            const latestOpenKey = keys.find((key) => !openKeys.includes(key));
-            setOpenKeys(
-              rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys
-            );
-          }}
-          inlineCollapsed={collapsed}
-          items={menuItems}
-          onClick={({ key }) => {
-            if (key.startsWith("/universe/province/")) {
-              const province = key.split("/").pop();
-              handleProvinceSelect(province);
-            }
-          }}
-        />
-      </ConfigProvider>
+        inlineCollapsed={collapsed}
+        items={menuItems}
+        onClick={({ key }) => {
+          if (key.startsWith("/universe/province/")) {
+            const province = key.split("/").pop();
+            handleProvinceSelect(province);
+          }
+        }}
+      />
     </Sider>
   );
 };

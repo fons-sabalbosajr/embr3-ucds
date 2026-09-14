@@ -619,7 +619,7 @@ const NotificationsPopover = ({
         getPopupContainer={() => document.body}
       >
         {/* Wrap trigger in a native element so Popover can attach a ref without findDOMNode */}
-        <span style={{ display: "inline-block", cursor: "pointer" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
           <Badge
             count={
               isLoading || isProcessingNotifications || isProcessingWarnings ? (
@@ -653,27 +653,8 @@ const NotificationsPopover = ({
                   : "#d9d9d9",
             }}
           >
-            <button
-              type="button"
-              aria-label="Notifications"
-              style={{
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-              }}
-            >
-              <BellOutlined
-                style={{
-                  fontSize: "18px",
-                  verticalAlign: "middle",
-                  marginRight: "10px",
-                  color: theme === "dark" ? "#e6eaf0" : "#1f2937",
-                }}
-              />
+            <button type="button" aria-label="Notifications" className="header-control" style={{ cursor: "pointer" }}>
+              <BellOutlined style={{ fontSize: 16 }} />
             </button>
           </Badge>
         </span>

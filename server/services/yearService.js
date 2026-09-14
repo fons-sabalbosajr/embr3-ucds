@@ -25,10 +25,30 @@ async function getYear(year) {
   return collections.yearContainers.findOne({ year: n });
 }
 
-/** A year is usable only if it is registered and active. */
+/**
+ * Whether a container has opened yet.
+ *
+ * Future years are registered ahead of time so the picker shows what is
+ * coming, but nobody enters 2029 in 2026: there is nothing there yet, and a
+ * record filed into it by mistake is stranded until then.
+ */
+const isOpenYear = (year, now = new Date()) => Number(year) <= now.getFullYear();
+
+/**
+ * The same rule, honouring the Universe Central DB setting that turns the
+ * lock off — for a deployment that wants next year's container open early.
+ */
+async function isOpenYearNow(year, now = new Date()) {
+  const doc = await getYear(year);
+  if (doc?.locked === true) return false;
+  const settings = await require('./ucdsSettings').read();
+  return settings.years.lockFuture === false ? true : isOpenYear(year, now);
+}
+
+/** A year is usable only if it is registered, active and has opened. */
 async function isSelectableYear(year) {
   const doc = await getYear(year);
-  return Boolean(doc && doc.status === 'active');
+  return Boolean(doc && doc.status === 'active' && doc.hidden !== true && (await isOpenYearNow(doc.year)));
 }
 
 async function createYear({ year, label, description, provinces, createdBy }) {
@@ -75,6 +95,26 @@ async function setYearProvinces(year, provinces) {
   return result && (result.value || result);
 }
 
+/**
+ * Per-container switches, set from Year Configuration:
+ *   hidden  the container is not offered to anyone — not on the picker, not
+ *           in the sidebar; the data stays and it can be shown again
+ *   locked  listed but not enterable, whatever the calendar says; for a year
+ *           that is being reconciled, or an old one that should not change
+ */
+async function setYearFlags(year, { hidden, locked }) {
+  await connectToMongo();
+  const set = { updatedAt: new Date() };
+  if (typeof hidden === 'boolean') set.hidden = hidden;
+  if (typeof locked === 'boolean') set.locked = locked;
+  const result = await collections.yearContainers.findOneAndUpdate(
+    { year: Number(year) },
+    { $set: set },
+    { returnDocument: 'after' }
+  );
+  return result && (result.value || result);
+}
+
 async function setYearStatus(year, status) {
   await connectToMongo();
   if (!['active', 'archived'].includes(status)) {
@@ -110,9 +150,12 @@ module.exports = {
   listYears,
   listYearNumbers,
   getYear,
+  isOpenYear,
+  isOpenYearNow,
   isSelectableYear,
   createYear,
   setYearStatus,
+  setYearFlags,
   setYearProvinces,
   ensureSeeded,
 };

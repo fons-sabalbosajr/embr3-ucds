@@ -17,6 +17,7 @@ import {
   UserOutlined,
   EditOutlined,
   KeyOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import UserProfileModal from "./UserAccountModal";
@@ -24,7 +25,8 @@ import SignAccountModal from "./SignAccountModal";
 import Swal from "sweetalert2";
 import AvatarWithName from "../../../components/AvatarwithName";
 import AccountPermission from "./AccountPermission";
-import { API_URLS } from "../../../constants/apiUrls";
+import { accountType, accountTypeLabel } from "../../../shared/accountTypes";
+import { fetchCurrentUser } from "../../../api/universeService";
 import "./useraccount.css";
 import { API_BASE_URL } from "../../../config/api";
 
@@ -33,6 +35,31 @@ const { TabPane } = Tabs;
 
 const UserAccounts = ({ theme = "dark" }) => {
   const [userData, setUserData] = useState([]);
+  // Whether the signed-in person may delete accounts. The server enforces it
+  // again; this only decides whether to draw the button.
+  const [isDeveloper, setIsDeveloper] = useState(false);
+  const [deleting, setDeleting] = useState(null); // { user, typed }
+  useEffect(() => {
+    fetchCurrentUser().then((me) => setIsDeveloper(me?.role === "developer")).catch(() => {});
+  }, []);
+
+  const deleteAccount = async () => {
+    const target = deleting?.user;
+    if (!target) return;
+    try {
+      const res = await axios.delete(`${API_BASE_URL}/api/users/${target._id}`, { withCredentials: true });
+      const gone = res.data?.removed || {};
+      setDeleting(null);
+      Swal.fire({
+        icon: "success",
+        title: `${target.username} deleted`,
+        text: `Signed out of ${gone.sessions || 0} session(s). The activity trail keeps the name for the audit record.`,
+      });
+      fetchUserData();
+    } catch (err) {
+      Swal.fire({ icon: "error", title: "Could not delete", text: err.response?.data?.error || "Please try again." });
+    }
+  };
   const [filteredUserData, setFilteredUserData] = useState([]);
   const [signUpUsers, setSignUpUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -455,45 +482,12 @@ const UserAccounts = ({ theme = "dark" }) => {
       width: 180,
     },
     {
-      title: "Permission",
+      title: "Type",
       dataIndex: "permission",
       key: "permission",
       render: (permission) => {
-        let bgColor = "";
-        let textColor = "#fff";
-        switch (permission) {
-          case "viewer":
-            bgColor = "#379777"; // Dark Gray
-            break;
-          case "contributor":
-            bgColor = "#F4CE14"; // Dark Blue
-            break;
-          case "admin":
-            bgColor = "#102E50"; // Dark Charcoal
-            break;
-          case "developer":
-            bgColor = "#3A3960"; // Dark Purple
-            break;
-          default:
-            bgColor = "#f0f0f0";
-        }
-        return (
-          <span
-            style={{
-              backgroundColor: bgColor,
-              color: textColor,
-              padding: "2px 6px",
-              borderRadius: "3px",
-              display: "inline-block",
-              fontSize: 11,
-              minWidth: "60px",
-              textAlign: "center",
-              fontWeight: 500,
-            }}
-          >
-            {permission}
-          </span>
-        );
+        const t = accountType(permission);
+        return <Tag color={t.color} style={{ marginRight: 0 }}>{t.label}</Tag>;
       },
       align: "center",
     },
@@ -555,10 +549,19 @@ const UserAccounts = ({ theme = "dark" }) => {
             onClick={() => handleEditAccess(record)}
             className="seagreen-btn"
           />
+          {isDeveloper && (
+            <Button
+              icon={<DeleteOutlined />}
+              size="small"
+              danger
+              title="Delete account"
+              onClick={() => setDeleting({ user: record, typed: "" })}
+            />
+          )}
         </div>
       ),
       align: "center",
-      width: 120,
+      width: 150,
     },
   ];
 
@@ -770,10 +773,10 @@ const UserAccounts = ({ theme = "dark" }) => {
               style={{ width: 180 }}
               onChange={handlePermissionChange}
             >
-              <Option value="all">All Permissions</Option>
+              <Option value="all">All types</Option>
               {permissions.map((permission) => (
                 <Option key={permission} value={permission}>
-                  {permission}
+                  {accountTypeLabel(permission)}
                 </Option>
               ))}
             </Select>
@@ -802,6 +805,36 @@ const UserAccounts = ({ theme = "dark" }) => {
           className={theme === "light" ? "light-theme-table" : ""}
         />
       </div>
+
+      <Modal
+        open={Boolean(deleting)}
+        title={deleting ? `Delete ${deleting.user.name || deleting.user.username}?` : ""}
+        onCancel={() => setDeleting(null)}
+        onOk={deleteAccount}
+        okText="Delete account"
+        okButtonProps={{ danger: true, disabled: deleting?.typed !== deleting?.user?.username }}
+        destroyOnClose
+      >
+        {deleting && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div>
+              The account, its sign-in sessions, its sign-up request, its storage PIN and its photo are
+              removed. Entries it wrote in the activity trail are kept under its name, for the audit
+              record. This cannot be undone.
+            </div>
+            <div>
+              Type <strong>{deleting.user.username}</strong> to confirm.
+            </div>
+            <Input
+              autoFocus
+              value={deleting.typed}
+              onChange={(e) => setDeleting({ ...deleting, typed: e.target.value })}
+              onPressEnter={() => deleting.typed === deleting.user.username && deleteAccount()}
+              placeholder={deleting.user.username}
+            />
+          </div>
+        )}
+      </Modal>
 
       <Modal
         title="Account Details"
@@ -835,6 +868,8 @@ const UserAccounts = ({ theme = "dark" }) => {
               email: selectedAccessUser.email,
               division: selectedAccessUser.division,
               permission: selectedAccessUser.permission,
+              _id: selectedAccessUser._id,
+              nasContainers: selectedAccessUser.nasContainers,
               username: selectedAccessUser.username,
               avatar: selectedAccessUser.avatar,
               status: selectedAccessUser.status, // if your AvatarWithName expects status

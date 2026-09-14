@@ -9,14 +9,26 @@ async function listAuthorizedYears(req, res) {
     const user = principalOf(req);
     const allowed = await authorizedYears(user);
     const all = await yearService.listYears();
+    const lockFuture = (await require('../services/ucdsSettings').read()).years.lockFuture !== false;
 
     return res.json({
       role: roleOf(user),
       canAccessAllYears: canAccessAllYears(user),
       activeYear: (req.session && req.session.activeYear) || null,
+      // Oldest first, so the list reads as a timeline. `open` is false for a
+      // year that has not arrived yet: the picker shows it but does not let
+      // anyone in, and selectYear below refuses it regardless.
       years: all
         .filter((y) => allowed.includes(y.year))
-        .map((y) => ({ year: y.year, label: y.label, description: y.description, provinces: y.provinces || [] })),
+        .sort((a, b) => a.year - b.year)
+        .map((y) => ({
+          year: y.year,
+          label: y.label,
+          description: y.description,
+          provinces: y.provinces || [],
+          open: y.locked !== true && (lockFuture ? yearService.isOpenYear(y.year) : true),
+          locked: y.locked === true,
+        })),
     });
   } catch (error) {
     console.error('Error listing year containers:', error);
@@ -33,6 +45,13 @@ async function selectYear(req, res) {
 
     if (!Number.isInteger(n)) {
       return res.status(400).json({ error: 'A year is required.' });
+    }
+    if (!(await yearService.isOpenYearNow(n))) {
+      const doc = await yearService.getYear(n);
+      return res.status(409).json({
+        code: doc?.locked ? 'YEAR_LOCKED' : 'YEAR_NOT_OPEN',
+        error: doc?.locked ? `The ${n} container is locked.` : `The ${n} container opens in January ${n}.`,
+      });
     }
     if (!(await yearService.isSelectableYear(n))) {
       return res.status(404).json({ error: `Year container ${n} is not available.` });
@@ -113,6 +132,13 @@ async function createYear(req, res) {
 
 async function updateYearStatus(req, res) {
   try {
+    const { status, hidden, locked } = req.body || {};
+    // Flags alone: hide/show or lock/unlock without touching the status.
+    if (status === undefined) {
+      const flagged = await yearService.setYearFlags(req.params.year, { hidden, locked });
+      if (!flagged) return res.status(404).json({ error: 'Year container not found' });
+      return res.json(flagged);
+    }
     const updated = await yearService.setYearStatus(req.params.year, req.body?.status);
     if (!updated) return res.status(404).json({ error: 'Year container not found' });
     return res.json(updated);

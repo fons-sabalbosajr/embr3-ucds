@@ -1,15 +1,15 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 
 /* Year Container Selection — shown between login and the application. */
 
 .yearselect {
-  --brand: #548547;
-  --brand-bright: #71ce58;
+  /* The accent chosen in Settings > General, like the other public pages. */
+  --brand: var(--eu-accent, #2f7ecb);
+  --brand-bright: color-mix(in srgb, var(--brand) 70%, white);
   --ink: #1f2a24;
   --ink-soft: #5b6b62;
   --line: #e3e9e5;
 
-  font-family: "Poppins", sans-serif;
+  font-family: inherit;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -20,7 +20,7 @@
 
 .yearselect-panel {
   width: 100%;
-  max-width: 720px;
+  max-width: 840px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -78,10 +78,13 @@
 
 /* ---------- Cards ---------- */
 
+/* Five to a row, oldest first, so a decade of containers reads as two
+   rows of a timeline rather than a ragged auto-fit. Narrow screens step
+   down to three, then two. */
 .yearselect-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .yearselect-card {
@@ -100,10 +103,10 @@
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.yearselect-card:hover:not(:disabled) {
+.yearselect-card:hover:not(:disabled):not(.is-upcoming) {
   transform: translateY(-4px);
   border-color: var(--brand);
-  box-shadow: 0 12px 26px rgba(84, 133, 71, 0.18);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--brand) 22%, transparent);
 }
 
 .yearselect-card:focus-visible {
@@ -114,6 +117,22 @@
 .yearselect-card:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* A year that has not arrived yet: visible on the timeline, not enterable. */
+.yearselect-card.is-upcoming {
+  cursor: not-allowed;
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.yearselect-card.is-upcoming .yearselect-card-icon,
+.yearselect-card.is-upcoming .yearselect-card-year,
+.yearselect-card.is-upcoming .yearselect-card-label {
+  color: var(--ink-soft);
+  opacity: 0.7;
 }
 
 .yearselect-card-icon {
@@ -200,14 +219,24 @@
   --ink: #f0f0f0;
   --ink-soft: #a8b3ac;
   --line: #2c2c2c;
-  --brand: #9ddf85;
-  --brand-bright: #b6e8a2;
-  background: linear-gradient(160deg, #141414 0%, #1b241a 100%);
+  --brand: color-mix(in srgb, var(--eu-accent, #2f7ecb) 60%, white);
+  --brand-bright: color-mix(in srgb, var(--eu-accent, #2f7ecb) 45%, white);
+  background: linear-gradient(160deg, #141414 0%, #171d24 100%);
 }
 
 .dark-theme .yearselect-panel,
 .dark-theme .yearselect-card {
   background: #1c1c1c;
+}
+
+.dark-theme .yearselect-card.is-upcoming {
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .yearselect-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -216,7 +245,11 @@
   }
 
   .yearselect-grid {
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .yearselect-card-year {
+    font-size: 24px;
   }
 }

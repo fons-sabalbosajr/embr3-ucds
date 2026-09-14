@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dropdown, Tag } from "antd";
 import { modal } from "../shared/feedback";
 import { DownOutlined, DatabaseOutlined, CheckOutlined, AppstoreOutlined } from "@ant-design/icons";
 import { useYear } from "../context/YearContext";
+// eslint-disable-next-line no-restricted-imports
+import { DataContext } from "../modules/ucds/province/DataContext";
 import { ROUTES } from "../config/routes";
 import "./yearswitcher.css";
 
@@ -14,6 +16,7 @@ import "./yearswitcher.css";
 const YearSwitcher = ({ theme }) => {
   const { activeYear, years, selectYear } = useYear();
   const [switching, setSwitching] = useState(false);
+  const { clearCache } = useContext(DataContext) || {};
   const navigate = useNavigate();
 
   if (!activeYear) return null;
@@ -23,9 +26,10 @@ const YearSwitcher = ({ theme }) => {
     setSwitching(true);
     try {
       await selectYear(year);
-      // Remount the app so every page refetches under the new container
-      // instead of showing the previous year's rows.
-      navigate(0);
+      clearCache?.();
+      // The content area is keyed on the active year, so every screen
+      // remounts and refetches under the new container without a page reload.
+      setSwitching(false);
     } catch (e) {
       modal.error({
         title: "Cannot switch year",

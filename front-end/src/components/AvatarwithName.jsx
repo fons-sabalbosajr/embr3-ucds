@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Avatar } from "antd";
-import NiceAvatar from "react-nice-avatar";
+import DefaultAvatar from "./DefaultAvatar";
 import { API_BASE_URL } from "../config/api";
 
 const AvatarWithName = ({ userHandle, size = "30px" }) => {
@@ -28,12 +28,10 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
                 const data = await response.json();
                 const user = data[0];
                 setName(user.name);
-
-                if (typeof user.avatar === 'string') {
-                    setAvatar(user.avatar);
-                } else if (typeof user.avatar === 'object' && user.avatar !== null) {
-                    setAvatar(user.avatar);
-                }
+                // Only an uploaded photo counts. Older records could hold a
+                // generated-cartoon config object here; those get the initials
+                // tile like anyone without a photo.
+                setAvatar(typeof user.avatar === "string" && user.avatar ? user.avatar : null);
             } catch (error) {
                 setError(error.message);
                 console.error("Error fetching user data:", error.message);
@@ -45,36 +43,27 @@ const AvatarWithName = ({ userHandle, size = "30px" }) => {
         fetchUserData();
     }, [userHandle]);
 
-    // A placeholder rather than the words "Loading..." or "Error: ...". Those
-    // rendered as text in the header, so every navigation visibly reflowed the
-    // toolbar next to it, and a user with no avatar got an empty box. This
-    // keeps the slot the same size in all three cases.
-    const fallback = (
-        <Avatar
-            style={{ width: size, height: size, lineHeight: size, fontSize: "13px" }}
-            title={error ? `Could not load profile: ${error}` : name || undefined}
-        >
-            {(name || userHandle || "?").trim().charAt(0).toUpperCase()}
-        </Avatar>
-    );
-
+    // The same tile in all three states — loading, failed, no photo — so the
+    // slot never changes size and the same account always looks the same.
     if (loading || error || !avatar) {
         return (
-            <div style={{ display: "flex", alignItems: "center" }}>{fallback}</div>
+            <div style={{ display: "flex", alignItems: "center" }}>
+                <DefaultAvatar
+                    name={name || userHandle}
+                    size={size}
+                    title={error ? `Could not load profile: ${error}` : name || undefined}
+                />
+            </div>
         );
     }
 
     return (
         <div style={{ display: "flex", alignItems: "center" }}>
-            {typeof avatar === "string" ? (
-                <Avatar
-                    src={`${API_BASE_URL}${avatar}`}
-                    alt="Profile Picture"
-                    style={{ width: size, height: size }}
-                />
-            ) : (
-                <NiceAvatar style={{ width: size, height: size }} {...avatar} />
-            )}
+            <Avatar
+                src={`${API_BASE_URL}${avatar}`}
+                alt="Profile Picture"
+                style={{ width: size, height: size, flex: "none" }}
+            />
         </div>
     );
 };

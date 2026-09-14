@@ -8,6 +8,7 @@ const { canAccessAllYears, isDeveloper, DOMAINS } = require('../../../services/a
 const { userProvinceKeys, userWritableProvinceKeys } = require('../../../services/provinces');
 const { notFoundError } = require('../../../shared/middleware/errorHandler');
 const nas = require('../../../services/nasStorage');
+const storageAccess = require('../../../services/storageAccess');
 const { recordFileEvent } = require('../../../services/nasAudit');
 
 // ---------------------------------------------------------------------------
@@ -101,7 +102,29 @@ async function resolveRecordFile(req, res) {
     return null;
   }
 
-  const file = await nas.statFile(stored);
+  // The container this document lives in must be on the account. The Developer
+  // designates containers per user from the storage Access tab; a Records
+  // Admin from before that field existed keeps the records container. Checked
+  // against the account document, so revoking it takes effect at once.
+  const containerKey = String(record.document?.container || nas.RECORDS_KEY).toLowerCase();
+  const granted = await storageAccess.grantedContainers(principalOf(req));
+  if (!granted.some((c) => c.key === containerKey)) {
+    await recordFileEvent(req, {
+      operation: 'document-read',
+      serialNo: record.serialNo,
+      containerKey,
+      fileName: record.document?.fileName,
+      success: false,
+      detail: 'container-not-granted',
+    });
+    res.status(403).json({
+      code: 'CONTAINER_FORBIDDEN',
+      message: 'Document access has not been shared with your account. Ask the system developer.',
+    });
+    return null;
+  }
+
+  const file = await nas.statFile(stored, containerKey);
   if (!file.ok) {
     // Each reason is a different thing for the user to do, so they are not
     // collapsed into one "unavailable".

@@ -5,16 +5,7 @@ import AvatarSelectionModalProfile from "../../../components/AvatarSelectionModa
 import "./signaccountmodal.css";
 import axios from "axios";
 import Swal from "sweetalert2";
-import emailjs from "emailjs-com";
 import { API_BASE_URL } from "../../../config/api";
-import {
-  EMAILJS_SERVICE_ID,
-  EMAILJS_CREDENTIALS_TEMPLATE_ID,
-  EMAILJS_PUBLIC_KEY,
-} from "../../../config/emailjs";
-
-const DEFAULT_AVATAR_URL =
-  "https://ui-avatars.com/api/?name=A&background=random&color=fff&size=100";
 
 const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
   const [editableUser , setEditableUser ] = useState({
@@ -121,14 +112,19 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
           }
         );
   
-        // Handle success based on the response
+        // The server sends the credentials email and says whether it went.
+        // Before, the browser sent it through EmailJS after the fact and
+        // reported success regardless — so an administrator was told the
+        // credentials were on their way when nothing had been sent.
         if (userResponse.status === 201) {
-          await sendCredentialsEmail(email, username, password);
-  
+          const { emailSent } = userResponse.data || {};
           Swal.fire({
-            icon: "success",
-            title: "Success!",
-            text: "User  saved and approved successfully. Credentials have been sent to the user's email.",
+            icon: emailSent ? "success" : "warning",
+            title: emailSent ? "Account created" : "Account created — email not sent",
+            text: emailSent
+              ? `The sign-in details have been emailed to ${email}.`
+              : `The account exists, but the credentials email to ${email} could not be sent. ` +
+                `Pass the username and password on to the user another way, or ask them to use "Forgot your password?" on the sign-in page.`,
           });
           onCancel(); // Close the modal after successful save
         } else {
@@ -154,31 +150,6 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
     }
   };
 
-
-  const sendCredentialsEmail = async (email, username, password) => {
-    // Environment variables (see server/.env -> front-end/.env.local)
-    const serviceId = EMAILJS_SERVICE_ID;
-    const templateId = EMAILJS_CREDENTIALS_TEMPLATE_ID;
-    const publicKey = EMAILJS_PUBLIC_KEY;
-
-    if (!serviceId || !templateId || !publicKey) {
-      console.error("Missing EmailJS configuration");
-      return;
-    }
-
-    const templateParams = {
-      to_email: email,
-      username,
-      password,
-    };
-
-    try {
-      await emailjs.send(serviceId, templateId, templateParams, publicKey);
-      console.log("Credentials email sent successfully!");
-    } catch (error) {
-      console.error("Error sending credentials email:", error);
-    }
-  };
 
   useEffect(() => {
     if (user) {
@@ -210,9 +181,9 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
         <div className={`modal-content ${document.body.classList.contains('dark') ? 'dark' : ''}`}>
           <div className="avatar-section">
             <Avatar
-              src={avatarPreview || DEFAULT_AVATAR_URL}
+              src={avatarPreview || undefined}
               size={120}
-              icon={!editableUser.avatar ? <UserOutlined /> : null}
+              icon={<UserOutlined />}
               className="avatar"
             />
             <Button

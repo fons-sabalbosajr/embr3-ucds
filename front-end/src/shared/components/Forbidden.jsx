@@ -1,5 +1,6 @@
-import { Button, Result } from "antd";
+import { Button } from "antd";
 import { useNavigate } from "react-router-dom";
+import ErrorCard from "./ErrorCard";
 
 /**
  * Shown when a signed-in user reaches something outside their domain.
@@ -12,20 +13,24 @@ const Forbidden = ({ module, detail }) => {
   const navigate = useNavigate();
 
   return (
-    <Result
-      status="403"
-      title="You do not have access to this module"
-      subTitle={
+    <ErrorCard
+      kind="forbidden"
+      code="403"
+      title={module ? `${module} is not on your account` : "This part of the application is not on your account"}
+      description={
         detail ||
         (module
-          ? `Your account is not assigned to the ${module} module. Ask an administrator if you need it.`
-          : "Your account is not assigned to this part of the application.")
+          ? `Your account type does not include the ${module} module. If you need it, ask the system developer to change your account type under User Accounts.`
+          : "Your account is not assigned to this part of the application. Ask the system developer if you need it.")
       }
-      extra={
-        <Button type="primary" onClick={() => navigate("/universe/dashboard")}>
+      actions={[
+        <Button type="primary" key="dash" onClick={() => navigate("/universe/dashboard")}>
           Back to dashboard
-        </Button>
-      }
+        </Button>,
+        <Button key="back" onClick={() => navigate(-1)}>
+          Go back
+        </Button>,
+      ]}
     />
   );
 };

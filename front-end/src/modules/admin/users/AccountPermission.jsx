@@ -10,10 +10,11 @@ import {
   SearchOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
-import NiceAvatar from "react-nice-avatar";
 import axios from "axios";
 import Swal from "sweetalert2";
 import AvatarWithName from "../../../components/AvatarwithName";
+import AccountTypePanel from "./AccountTypePanel";
+import { accountType } from "../../../shared/accountTypes";
 import "./accountpermission.css";
 import { API_BASE_URL } from "../../../config/api";
 
@@ -417,9 +418,7 @@ const AccountPermission = ({
           </p>
           <p className="user-email-details">{userData.email}</p>
           <p className="user-permission-details">
-            <span style={getPermissionStyle(userData.permission)}>
-              {userData.permission}
-            </span>
+            <Tag color={accountType(userData.permission).color}>{accountType(userData.permission).label}</Tag>
           </p>
         </div>
       </div>
@@ -433,7 +432,15 @@ const AccountPermission = ({
         </p>
       </div>
 
-      <Tabs defaultActiveKey="1">
+      <Tabs defaultActiveKey="type">
+        <TabPane tab="Type & Storage" key="type">
+          <AccountTypePanel
+            userId={userData._id}
+            permission={userData.permission}
+            nasContainers={userData.nasContainers}
+            onChanged={() => onPermissionsUpdate?.()}
+          />
+        </TabPane>
         <TabPane tab="Access Settings" key="1">
           <Table
             dataSource={accessList}

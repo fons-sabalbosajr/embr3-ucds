@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 8081;
 connectToMongo()
   .then(() => require("./services/yearService").ensureSeeded())
   .then(() => require("./shared/services/orgUnits").ensureIndexes())
+  .then(() => require("./services/datasetService").ensureIndexes())
   .then(() => {
     const erms = require("./modules/erms");
     return erms.isEnabled() ? erms.ensureIndexes() : null;

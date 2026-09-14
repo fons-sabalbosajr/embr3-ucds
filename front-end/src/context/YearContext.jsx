@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchAuthorizedYears,
   selectYearContainer,
@@ -36,8 +36,13 @@ export const YearProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const loadedOnce = useRef(false);
+
   const refresh = useCallback(async () => {
-    setLoading(true);
+    // Only the first load shows the guard's loader. A later refresh — after a
+    // year is locked or a setting saved — swaps the list in place; blanking
+    // the screen for it made every save look like a navigation.
+    if (!loadedOnce.current) setLoading(true);
     setError(null);
     try {
       const data = await fetchAuthorizedYears();
@@ -45,6 +50,7 @@ export const YearProvider = ({ children }) => {
       setActiveYear(data.activeYear ?? null);
       setRole(data.role ?? null);
       setCanAccessAllYears(Boolean(data.canAccessAllYears));
+      loadedOnce.current = true;
       return data;
     } catch (e) {
       if (e?.response?.status === 401) {

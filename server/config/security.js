@@ -1,5 +1,6 @@
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 // The live getter, not the snapshot cors.js computes at module load: the
 // snapshot cannot reflect an environment set after this file is first required,
 // which makes the cookie decision untestable and dependent on import order.
@@ -209,6 +210,45 @@ const registerLimiter = limiter({
   message: 'Too many registration requests. Please wait an hour and try again.',
 });
 
+// ---------------------------------------------------------------------------
+// Limits for signed-in traffic, sized for ~500 people working at once.
+//
+// Keyed by the account, not the address: the whole office arrives from one
+// NAT address, so an IP budget would throttle everyone for one person's
+// behaviour, and a remote laptop on the tailnet would be the only one ever
+// limited. Anonymous requests fall back to the address.
+//
+// Two tiers. Ordinary screens are chatty — the province register makes a
+// burst of a dozen requests on open — so the general budget is generous and
+// exists to stop a runaway tab or a script, not to shape normal use. The
+// expensive tier is for endpoints that aggregate or scan whole collections
+// (dashboard statistics, duplicate checks, exports, spreadsheet imports,
+// report generation): a handful a minute per person is normal, hundreds is
+// an attack or a bug, and either would take the database away from everyone.
+// ---------------------------------------------------------------------------
+const byAccount = (req, res) => req.session?.user?.userId || ipKeyGenerator(req, res);
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  keyGenerator: byAccount,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === 'test' || /^\/(healthz|readyz)/.test(req.path),
+  handler: (req, res) => res.status(429).json({ message: 'Too many requests. Please slow down and try again in a moment.' }),
+});
+
+const expensiveLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyGenerator: byAccount,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  handler: (req, res) =>
+    res.status(429).json({ message: 'This operation is limited to a few times a minute. Please wait and try again.' }),
+});
+
 module.exports = {
   isProduction,
   originsAreHttps,
@@ -220,4 +260,6 @@ module.exports = {
   loginLimiter,
   passwordResetLimiter,
   registerLimiter,
+  apiLimiter,
+  expensiveLimiter,
 };

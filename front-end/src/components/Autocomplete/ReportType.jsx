@@ -17,7 +17,6 @@ const ReportType = ({ value, disabled, onChange, theme, style, readOnly }) => {
         components: {
           AutoComplete: {
             optionFontSize: 10,
-            colorTextPlaceholder: "#555",
             fontSize: "11px",
             boxShadow: "none",
           },

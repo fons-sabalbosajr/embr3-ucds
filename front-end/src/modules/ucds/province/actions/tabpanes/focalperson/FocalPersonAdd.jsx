@@ -283,7 +283,6 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                   components: {
                     AutoComplete: {
                       optionFontSize: 10,
-                      colorTextPlaceholder: "#555",
                       fontSize: "11px",
                       boxShadow: "none",
                     },
@@ -337,7 +336,6 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                   components: {
                     AutoComplete: {
                       optionFontSize: 10,
-                      colorTextPlaceholder: "#555",
                       fontSize: "11px",
                       boxShadow: "none",
                     },
@@ -515,7 +513,6 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                   components: {
                     AutoComplete: {
                       optionFontSize: 10,
-                      colorTextPlaceholder: "#555",
                       fontSize: "11px",
                       boxShadow: "none",
                     },
@@ -686,7 +683,6 @@ const FocalPersonAdd = ({ isEditing, extractedData, }) => {
                         components: {
                           AutoComplete: {
                             optionFontSize: 10,
-                            colorTextPlaceholder: "#555",
                             fontSize: "11px",
                             boxShadow: "none",
                           },

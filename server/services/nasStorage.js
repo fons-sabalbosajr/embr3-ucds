@@ -67,38 +67,66 @@ const normalizeRoot = (value) =>
  * environment is used. That is the previous behaviour, so a deployment that
  * never opens the settings screen is unaffected.
  */
-let cachedSource = null;
+// Keyed by container. `records` is the ERMS container and the one every
+// caller that does not name a container gets — see nasContainers.js.
+const RECORDS_KEY = 'records';
+let cachedContainers = null;
 
 function fromEnvironment() {
   return {
+    key: RECORDS_KEY,
+    label: 'Records',
     root: normalizeRoot(process.env.NAS_ROOT || process.env.NAS_SHARE),
     baseDir: String(process.env.NAS_BASE_DIR || '').trim().replace(/^[\\/]+|[\\/]+$/g, ''),
     username: process.env.NAS_USERNAME || null,
     domain: process.env.NAS_DOMAIN || '',
+    enabled: true,
     source: 'environment',
   };
 }
 
-/** Re-read the stored credentials. Called at startup and after every save. */
+/** Re-read every stored container. Called at startup and after every save. */
 async function refreshConfig() {
   try {
-    const resolved = await require('./nasCredentials').resolve();
-    cachedSource = {
-      root: resolved.root,
-      baseDir: resolved.baseDir,
-      username: resolved.username,
-      domain: resolved.domain,
-      source: resolved.source,
-    };
+    const containers = require('./nasContainers');
+    await containers.ensureMigrated();
+    const all = await containers.resolveAll();
+    cachedContainers = new Map(
+      all.map((c) => [
+        c.key,
+        {
+          key: c.key,
+          label: c.label,
+          root: c.root,
+          baseDir: c.baseDir,
+          username: c.username,
+          domain: c.domain,
+          // An incoming container has no credentials yet; it is listed, not read.
+          enabled: c.enabled && !c.incoming,
+          source: c.source,
+        },
+      ])
+    );
   } catch (err) {
-    console.error('NAS: could not read stored credentials, using the environment:', err.message);
-    cachedSource = null;
+    console.error('NAS: could not read stored containers, using the environment:', err.message);
+    cachedContainers = null;
   }
-  return cachedSource || fromEnvironment();
+  return nasConfig();
 }
 
-function nasConfig() {
-  const src = cachedSource || fromEnvironment();
+const sourceFor = (key) => {
+  const k = String(key || RECORDS_KEY);
+  if (cachedContainers?.has(k)) return cachedContainers.get(k);
+  return k === RECORDS_KEY ? fromEnvironment() : null;
+};
+
+/**
+ * The resolved settings for one container, or null when it does not exist
+ * or has no usable root. Without a key, the records container.
+ */
+function nasConfig(key = RECORDS_KEY) {
+  const src = sourceFor(key);
+  if (!src) return null;
   const root = normalizeRoot(src.root);
   if (!root || !/^\\\\[^\\]+\\[^\\]+/.test(root)) return null;
 
@@ -107,6 +135,8 @@ function nasConfig() {
   const baseDir = String(src.baseDir || '').trim().replace(/^[\\/]+|[\\/]+$/g, '');
 
   return {
+    key: src.key,
+    label: src.label,
     root,
     baseDir,
     // The full path everything resolves against.
@@ -115,23 +145,35 @@ function nasConfig() {
     domain: src.domain || '',
     source: src.source || 'environment',
     // The deployment-level switch stays in the environment: it is how an
-    // operator turns document access off without touching stored settings.
-    enabled: String(process.env.NAS_ENABLED ?? 'true').trim().toLowerCase() !== 'false',
+    // operator turns every container off without touching stored settings.
+    // A container can also be switched off on its own.
+    enabled:
+      String(process.env.NAS_ENABLED ?? 'true').trim().toLowerCase() !== 'false' &&
+      src.enabled !== false,
   };
 }
 
-const isConfigured = () => nasConfig() !== null;
+const isConfigured = (key) => nasConfig(key) !== null;
+
+/** The keys of every container this server knows, records first. */
+function containerKeys() {
+  const keys = cachedContainers ? [...cachedContainers.keys()] : [];
+  if (!keys.includes(RECORDS_KEY) && nasConfig(RECORDS_KEY)) keys.unshift(RECORDS_KEY);
+  return keys.sort((a, b) => (a === RECORDS_KEY ? -1 : b === RECORDS_KEY ? 1 : a.localeCompare(b)));
+}
 
 /**
  * What the Developer Settings screen may see. Never includes the password —
  * not masked, absent, so there is nothing to accidentally render.
  */
-function describeConfig() {
-  const cfg = nasConfig();
+function describeConfig(key = RECORDS_KEY) {
+  const cfg = nasConfig(key);
   if (!cfg) return { configured: false };
 
   const [, , host, share] = cfg.root.split('\\');
   return {
+    key: cfg.key,
+    label: cfg.label,
     configured: true,
     enabled: cfg.enabled,
     host,
@@ -213,8 +255,8 @@ function safeRelativePath(input) {
  * the sanitising above — two independent checks, because this is the boundary
  * that decides whether a caller can read arbitrary files.
  */
-function resolveSharePath(input) {
-  const cfg = nasConfig();
+function resolveSharePath(input, container = RECORDS_KEY) {
+  const cfg = nasConfig(container);
   if (!cfg) return null;
 
   const relative = safeRelativePath(input);
@@ -268,12 +310,12 @@ const canPreview = (filePath) => INLINE_TYPES.has(contentTypeFor(filePath));
  * Never throws for a missing file — that is an expected outcome here, given
  * 1.3% of migrated rows point at directories that no longer exist.
  */
-async function statFile(storedPath) {
-  const cfg = nasConfig();
+async function statFile(storedPath, container = RECORDS_KEY) {
+  const cfg = nasConfig(container);
   if (!cfg) return { ok: false, reason: 'not-configured' };
   if (!cfg.enabled) return { ok: false, reason: 'disabled' };
 
-  const resolved = resolveSharePath(storedPath);
+  const resolved = resolveSharePath(storedPath, container);
   if (!resolved) return { ok: false, reason: 'invalid-path' };
 
   try {
@@ -306,16 +348,17 @@ async function statFile(storedPath) {
  * Never returns an absolute path. The caller navigates by the relative path it
  * was given, so the internal host and share name stay on the server.
  */
-async function listDirectory(relativePath = '') {
-  const cfg = nasConfig();
+async function listDirectory(relativePath = '', container = RECORDS_KEY) {
+  const cfg = nasConfig(container);
   if (!cfg) return { ok: false, reason: 'not-configured' };
+  if (!cfg.enabled) return { ok: false, reason: 'disabled' };
 
   const clean = String(relativePath || '').replace(/^[\\/]+/, '');
   let target;
   if (!clean) {
     target = cfg.base;
   } else {
-    target = resolveSharePath(clean);
+    target = resolveSharePath(clean, container);
     if (!target) return { ok: false, reason: 'invalid-path' };
   }
 
@@ -358,7 +401,7 @@ async function listDirectory(relativePath = '') {
   );
 
   const parent = clean ? clean.split(/[\\/]/).slice(0, -1).join('\\') : null;
-  return { ok: true, path: clean, parent, entries };
+  return { ok: true, container: cfg.key, path: clean, parent, entries };
 }
 
 /** A read stream for an already-resolved path. Callers must stat() first. */
@@ -369,8 +412,8 @@ const openStream = (resolved, options = {}) =>
  * Connectivity check for Developer Settings. Lists the share root, which is
  * the cheapest operation that proves credentials and reachability together.
  */
-async function testConnection() {
-  const cfg = nasConfig();
+async function testConnection(container = RECORDS_KEY) {
+  const cfg = nasConfig(container);
   if (!cfg) {
     return {
       ok: false,
@@ -398,7 +441,7 @@ async function testConnection() {
       // err.message repeats the full UNC path, which names the internal host.
       // The code is enough to act on and does not leak topology to the client.
       code: err.code || 'UNKNOWN',
-      message: 'Could not read the records share. Check the host, share name and service account.',
+      message: 'Could not read the share. Check the host, share name and service account.',
     };
   }
 }
@@ -451,6 +494,8 @@ function warnAboutNasConfig() {
 }
 
 module.exports = {
+  RECORDS_KEY,
+  containerKeys,
   nasConfig,
   refreshConfig,
   warnAboutNasConfig,

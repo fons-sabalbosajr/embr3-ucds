@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700;800&family=Roboto&display=swap");
 
 * {
   margin: 0;
@@ -7,7 +6,15 @@
   outline: none;
   list-style: none;
   box-sizing: border-box;
-  font-family: "Poppins", sans-serif;
+}
+
+/* Ant Design's default type stack, the same list ThemeProvider hands the
+   components as the fontFamily token. It is set on body rather than on every
+   element so plain markup (the sign-in pages, the landing page) inherits it
+   and components keep their own token; nothing else names a face. */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 .sidebar {
@@ -67,16 +74,75 @@
   padding-bottom: 7px;
 }
 
-.theme-button {
-  padding: 0;          /* remove default padding */
-  border-radius: 50%;  /* makes it a circle */
-  display: flex;
+/* Header controls: the year switcher, the bell, the theme toggle. One
+   size (the avatar's, 32px), one light-on-dark fill, so they read as a set
+   against the fixed navigation surface in both themes. */
+.header-control,
+.header-container .theme-button,
+.header-container .yearswitcher {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--eu-nav-text, #e8ecf2);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.theme-button .anticon {
-  font-size: 24px;     /* bigger icon inside */
+.header-control:hover,
+.header-container .theme-button:hover,
+.header-container .yearswitcher:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  color: var(--eu-nav-text, #e8ecf2) !important;
+}
+
+.header-control:focus-visible,
+.header-container .theme-button:focus-visible,
+.header-container .yearswitcher:focus-visible {
+  outline: 2px solid var(--eu-accent, #2f7ecb);
+  outline-offset: 1px;
+}
+
+.header-control:disabled,
+.header-container .yearswitcher:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.header-container .theme-button {
+  width: 32px;
+  padding: 0;
+}
+
+.header-container .theme-button .anticon {
+  font-size: 16px;
+}
+
+/* Every control sits on the same 32px line. The bell is wrapped in a Badge,
+   which is inline-block and takes the line-height of the header text, so it
+   rode a few pixels higher than the avatar next to it. */
+.header-container .profile_container > * {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.header-container .ant-badge {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.header-container .avatar-header .ant-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
 }
 
 .content {

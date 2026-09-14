@@ -58,7 +58,7 @@
 
 .bulletin-title {
   color: white !important; /* Force the title color to white */
-  font-size: 24px;
+  font-size: 20px;
   font-weight: bold;
   margin-bottom: 16px;
 }
@@ -179,7 +179,7 @@
 .modal-dark .ant-modal-title {
   color: #ffffff; /* White title */
   font-weight: bold;
-  font-size: 20px;
+  font-size: 17px;
 }
 
 .modal-dark .ant-modal-footer {
@@ -216,7 +216,7 @@
 .modal-light .ant-modal-title {
   color: #000000; /* Black title */
   font-weight: bold;
-  font-size: 20px;
+  font-size: 17px;
 }
 
 .modal-light .ant-modal-footer {

@@ -1,0 +1,55 @@
+// ---------------------------------------------------------------------------
+// Account types, as people see them.
+//
+// The stored values (`permission` on the account) are unchanged — accounts
+// keep working — only the words are new. "viewer" was never a good name for
+// the people who do the encoding. Mirrors ROLE_LABELS in
+// server/services/authorization.js; the server is the authority.
+// ---------------------------------------------------------------------------
+
+export const ACCOUNT_TYPES = [
+  {
+    value: "developer",
+    label: "Developer",
+    description: "Everything: UCDS, ERMS, administration, the NAS and every storage container.",
+    color: "purple",
+  },
+  {
+    value: "planning",
+    label: "Planning Admin",
+    description: "UCDS, and the storage containers the Developer designates.",
+    color: "blue",
+  },
+  {
+    value: "records",
+    label: "Records Admin",
+    description: "ERMS (and the register it files against), and the storage containers the Developer designates.",
+    color: "geekblue",
+  },
+  {
+    value: "viewer",
+    label: "Encoder",
+    description: "UCDS only, within the year containers assigned. No storage access.",
+    color: "green",
+  },
+];
+
+/** Kept for accounts that already hold it; not offered for new ones. */
+export const LEGACY_TYPES = [
+  { value: "admin", label: "Administrator (legacy)", description: "UCDS, ERMS and administration. Reassign to one of the four types.", color: "gold" },
+];
+
+const ALL = [...ACCOUNT_TYPES, ...LEGACY_TYPES];
+
+export const accountType = (permission) =>
+  ALL.find((t) => t.value === String(permission || "").toLowerCase()) || {
+    value: String(permission || ""),
+    label: permission || "Unknown",
+    description: "",
+    color: "default",
+  };
+
+export const accountTypeLabel = (permission) => accountType(permission).label;
+
+/** Types that may hold storage containers at all. */
+export const STORAGE_TYPES = new Set(["developer", "planning", "records", "admin"]);

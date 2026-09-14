@@ -474,7 +474,7 @@ const SystemCalendar = ({ theme }) => {
     }
   };
 
-  const measureTextWidth = (text, font = "14px Poppins") => {
+  const measureTextWidth = (text, font = "14px system-ui, sans-serif") => {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     context.font = font;
@@ -604,7 +604,7 @@ const SystemCalendar = ({ theme }) => {
         return (
           <div className="section-incharge-container">
             {sections.map((section, index) => {
-              const textWidth = measureTextWidth(section, "10px Poppins"); // Match font-size from CSS
+              const textWidth = measureTextWidth(section, "10px system-ui, sans-serif"); // Match font-size from CSS
               const backgroundColor = sectionBackgroundColor(section); // Base background color
 
               const fontColor = getFontColorForBackground(backgroundColor); // Get contrasting font color

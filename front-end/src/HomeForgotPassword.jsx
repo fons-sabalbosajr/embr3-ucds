@@ -1,97 +1,102 @@
 import React, { useState } from "react";
-import { Form, Input, Button, ConfigProvider } from "antd";
-import { message } from "./shared/feedback";
+import { Form, Input, Button, Result } from "antd";
+import { MailOutlined } from "@ant-design/icons";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import "./login.css";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
-import AuthBrand from "./components/AuthBrand";
+import AuthShell, { AuthError } from "./components/AuthShell";
 
 const HomeForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [sentTo, setSentTo] = useState(null);
 
-  const handleResetRequest = async (values) => {
+  const handleResetRequest = async ({ email }) => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = await axios.post(`${API_BASE_URL}/request-password-reset`, {
-        email: values.email,  // Ensure you're sending the correct field
+        email: email.trim(),
       });
-  
       if (response.data.status === "success") {
-        message.success("A password reset link has been sent to your email.");
+        setSentTo(email.trim());
       } else {
-        message.error(response.data.message || "Reset request failed.");
+        setError(response.data.message || "The reset link could not be sent.");
       }
-    } catch (error) {
-      console.error("Reset password error:", error);
-      message.error("Something went wrong. Try again later.");
+    } catch (err) {
+      console.error("Reset password error:", err);
+      setError(err.response?.data?.error || "Something went wrong. Please try again later.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (sentTo) {
+    return (
+      <AuthShell>
+        <Result
+          status="success"
+          icon={<MailOutlined />}
+          title="Check your inbox"
+          subTitle={
+            <>
+              If <strong>{sentTo}</strong> is registered to an account, a link to choose a new
+              password is on its way. The link works for one hour. If it does not arrive, check
+              your spam folder or try again.
+            </>
+          }
+          extra={
+            <Link to={ROUTES.login}>
+              <Button type="primary" size="large">
+                Back to sign in
+              </Button>
+            </Link>
+          }
+        />
+      </AuthShell>
+    );
+  }
 
   return (
-    <ConfigProvider theme={{}}>
-      <div className="background-login">
-        <div className="animated-circles-container">
-          {[...Array(10)].map((_, i) => (
-            <div key={i} className="circle"></div>
-          ))}
-        </div>
-        <div className="login-form-wrapper">
-          <div className="login-card">
-            <div className="login-logo-container">
-              <AuthBrand size="md" />
-            </div>
-            <div className="login-title-container">
-              <p className="login-title-main">
-                ENVIRONMENTAL MANAGEMENT BUREAU REGION III
-              </p>
-              <p className="login-title-sub">
-                Universe Centralized Database System
-              </p>
-              <h3 className="form-title" style={{marginTop: "15px", color: "var(--grad-clr1)"}}>
-                Forgot Password
-              </h3>
-            </div>
+    <AuthShell
+      title="Forgot your password?"
+      intro="Enter the email address registered to your account and we will send you a link to choose a new one."
+      footer={
+        <>
+          Remembered it? <Link to={ROUTES.login}>Back to sign in</Link>
+        </>
+      }
+    >
+      <AuthError>{error}</AuthError>
 
-            <Form onFinish={handleResetRequest} layout="vertical">
-              <Form.Item
-                name="email"
-                label="Registered Email Address"
-                rules={[
-                  { required: true, message: "Please enter your registered email." },
-                  { type: "email", message: "Enter a valid email address." },
-                ]}
-              >
-                <Input placeholder="Enter your email" size="large" />
-              </Form.Item>
+      <Form onFinish={handleResetRequest} layout="vertical" requiredMark={false}>
+        <Form.Item
+          name="email"
+          label="Registered email address"
+          rules={[
+            { required: true, message: "Enter your registered email address." },
+            { type: "email", message: "Enter a valid email address." },
+          ]}
+        >
+          <Input
+            size="large"
+            prefix={<MailOutlined />}
+            placeholder="name@denr.gov.ph"
+            autoComplete="email"
+            inputMode="email"
+            autoFocus
+          />
+        </Form.Item>
 
-              <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  block
-                  size="large"
-                  loading={isLoading}
-                >
-                  {isLoading ? "Sending Reset Link..." : "Send Reset Link"}
-                </Button>
-              </Form.Item>
-
-              <Form.Item style={{marginBottom: 0}}>
-                <Link to={ROUTES.login}>
-                  <Button block size="large">Back to Login</Button>
-                </Link>
-              </Form.Item>
-            </Form>
-          </div>
-        </div>
-      </div>
-    </ConfigProvider>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
+            {isLoading ? "Sending…" : "Send reset link"}
+          </Button>
+        </Form.Item>
+      </Form>
+    </AuthShell>
   );
 };
 
-export default HomeForgotPassword; // Renamed export to match filename convention if intended
+export default HomeForgotPassword;

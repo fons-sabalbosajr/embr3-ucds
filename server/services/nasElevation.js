@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-const nodemailer = require('nodemailer');
 const templates = require('./mailTemplates');
+const mailer = require('./mailer');
 
 // ---------------------------------------------------------------------------
 // Step-up authentication for administrative NAS operations.
@@ -55,17 +55,7 @@ function codesMatch(a, b) {
 
 const hashCode = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
 
-function transporter() {
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    tls: { rejectUnauthorized: false },
-  });
-}
-
-const mailConfigured = () => Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+const mailConfigured = () => mailer.isConfigured();
 
 /**
  * The address registered on the account, read from the database.
@@ -142,18 +132,14 @@ async function requestCode(req, user) {
   };
 
   try {
-    const mail = templates.nasVerificationCode({ code, minutes: CODE_TTL_MS / 60000 });
-    await transporter().sendMail({
-      from: { name: templates.PRODUCT, address: process.env.EMAIL_USER },
+    await mailer.send({
       to: email,
-      subject: mail.subject,
-      text: mail.text,
-      html: mail.html,
+      ...templates.nasVerificationCode({ code, minutes: CODE_TTL_MS / 60000 }),
+      throwOnError: true,
     });
   } catch (err) {
     delete req.session.nasElevation;
-    // The SMTP error text can carry the account and host; log it, do not return it.
-    console.error('NAS elevation: could not send verification code:', err.message);
+    // The mailer has already logged the SMTP detail; nothing of it is returned.
     return {
       ok: false,
       status: 502,

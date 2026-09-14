@@ -2,9 +2,9 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { authenticateSession } = require('../middleware/auth');
+const { authenticateSession, requireDeveloper, requireRole } = require('../middleware/auth');
 const { logActivity } = require('../middleware/activityLog');
-const { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity } = require('../controllers/usersController');
+const { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, setUserType, listUserTypes, deleteUser } = require('../controllers/usersController');
 
 const router = express.Router();
 
@@ -45,8 +45,17 @@ router.get('/api/online_users', authenticateSession, getOnlineUsers);
 router.get('/api/recent-activity', authenticateSession, getRecentActivity);
 
 // Permissions updates and removal
-router.patch('/api/users/:email/permissions', authenticateSession, updateUserPermissionsByEmail);
-router.patch('/api/users/:email/province-permissions', authenticateSession, updateProvincePermissionsByEmail);
+// Changing what another account may do is an administrator's act. These two
+// were session-only, which let any signed-in user grant themselves anything.
+const accountManagers = [authenticateSession, requireRole('developer', 'admin')];
+router.patch('/api/users/:email/permissions', accountManagers, updateUserPermissionsByEmail);
+router.patch('/api/users/:email/province-permissions', accountManagers, updateProvincePermissionsByEmail);
+
+// The account type — Developer, Planning Admin, Records Admin, Encoder — is
+// the Developer's to set.
+router.get('/api/users/types', authenticateSession, listUserTypes);
+router.put('/api/users/:id/type', authenticateSession, requireDeveloper, logActivity, setUserType);
+router.delete('/api/users/:id', authenticateSession, requireDeveloper, logActivity, deleteUser);
 router.delete('/api/remove-user/:id', authenticateSession, removeSignUpUser);
 
 module.exports = router;

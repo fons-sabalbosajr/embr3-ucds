@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, ConfigProvider, Drawer, FloatButton, theme } from "antd";
+import { Button, Drawer, FloatButton } from "antd";
 import {
   BulbFilled,
   BulbOutlined,
@@ -14,6 +14,7 @@ import {
   ArrowRightOutlined,
 } from "@ant-design/icons";
 import AuthBrand from "./components/AuthBrand";
+import { useTheme } from "./theme/ThemeProvider";
 import embLogo from "./assets/emblogo.svg";
 import databaseImage from "./assets/picbghome.png";
 import announcement from "./assets/announcement.png";
@@ -56,12 +57,15 @@ const MODULES = [
 
 const Landing = () => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // The same theme as the rest of the application. This page used to keep a
+  // private light/dark flag and its own ConfigProvider with a fixed green
+  // primary, so the choice was lost on navigation and the buttons here did
+  // not match the ones a click later.
+  const { isDark: isDarkMode, toggleMode: toggleTheme } = useTheme();
   const width = useWindowWidth();
   const isMobile = width <= 768;
 
   const toggleMenu = () => setMenuOpen((prev) => !prev);
-  const toggleTheme = () => setIsDarkMode((prev) => !prev);
 
   const navLinks = (
     <>
@@ -84,16 +88,7 @@ const Landing = () => {
   );
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: {
-          colorPrimary: isDarkMode ? "#9ddf85" : "#548547",
-          fontFamily: "Poppins, sans-serif",
-          borderRadius: 8,
-        },
-      }}
-    >
+    <>
       <div className={`ucds-landing ${isDarkMode ? "dark-theme" : "light-theme"}`}>
         <header className="ucds-header">
           <div className="ucds-brand">
@@ -261,7 +256,9 @@ const Landing = () => {
               will be notified for approval.
             </p>
             <Link to={ROUTES.login}>
-              <Button size="large">Proceed to log in</Button>
+              <Button type="primary" size="large">
+                Proceed to log in
+              </Button>
             </Link>
           </div>
         </section>
@@ -292,18 +289,14 @@ const Landing = () => {
         </footer>
 
         <FloatButton
+          type="primary"
           icon={isDarkMode ? <BulbFilled /> : <BulbOutlined />}
-          tooltip={isDarkMode ? "Light Theme" : "Dark Theme"}
+          tooltip={isDarkMode ? "Light theme" : "Dark theme"}
           onClick={toggleTheme}
-          style={{
-            right: 24,
-            bottom: 24,
-            backgroundColor: isDarkMode ? "#9ddf85" : "#548547",
-            color: isDarkMode ? "#141414" : "#fff",
-          }}
+          style={{ right: 24, bottom: 24 }}
         />
       </div>
-    </ConfigProvider>
+    </>
   );
 };
 

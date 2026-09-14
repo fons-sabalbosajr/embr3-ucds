@@ -62,9 +62,21 @@
   gap: 10px;
 }
 
+/* Type scale for the accounts screen: title 18/600, column heads 12/600 with
+   a little tracking, names 13/600, secondary lines 12/400, meta 11/400.
+   Nothing lighter than 400 — the 9px/300 "last active" line was illegible. */
+.account-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+}
+
+.card .ant-table-thead > tr > th,
 .table-header {
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   text-align: center;
 }
 
@@ -81,13 +93,15 @@
 }
 
 .user-fullname {
-  font-weight: 500;
+  font-weight: 600;
   font-size: 13px;
+  line-height: 1.3;
 }
 
 .user-last-active {
-  font-size: 9px;
-  opacity: 0.7;
+  font-size: 11px;
+  line-height: 1.3;
+  opacity: 0.75;
 }
 
 .active-now {
@@ -96,7 +110,7 @@
 
 .active-ago {
   color: #888;
-  font-weight: 300;
+  font-weight: 400;
 }
 
 
@@ -104,6 +118,8 @@
 .user-email,
 .user-position {
   font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
   text-align: left;
   display: block;
 }
@@ -112,7 +128,7 @@
 .permission-tag {
   border-radius: 5px;
   padding: 2px 10px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -201,20 +217,10 @@
   font-size: 12px;
 }
 
-/* Small pagination style override */
-.ant-pagination {
-  font-size: 11px;
-}
-
-.ant-pagination-item,
-.ant-pagination-prev,
-.ant-pagination-next,
-.ant-pagination-jump-prev,
-.ant-pagination-jump-next {
-  min-width: 24px !important;
-  height: 24px !important;
-  line-height: 24px !important;
-  font-size: 11px;
+/* Compact pagination, scoped to this screen. It used to apply to every
+   table in the application. */
+.card .ant-pagination {
+  font-size: 12px;
 }
 
 .seagreen-btn {

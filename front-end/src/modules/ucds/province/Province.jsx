@@ -1,3 +1,4 @@
+import MonitoringPlanFilters, { EMPTY_FILTERS, matchesFilters } from "./MonitoringPlanFilters";
 import React, {
   useContext,
   useEffect,
@@ -38,6 +39,7 @@ import {
   ExclamationCircleOutlined, // For expired indicator
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
+import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
 import ProvinceModal from "./ProvinceModal";
 import Highlighter from "react-highlight-words";
 import Swal from "sweetalert2";
@@ -74,6 +76,17 @@ const Province = ({ theme, currentUser }) => {
     useContext(DataContext);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  // The page size the register opens with comes from Universe Central DB
+  // settings and follows a change the moment it is saved; the selector on
+  // the screen still changes it for this visit.
+  const { settings: ucdsSettings } = useUcdsSettings();
+  const registerPageSize = ucdsSettings?.register?.pageSize;
+  useEffect(() => {
+    if (registerPageSize) {
+      setPageSize(registerPageSize);
+      setCurrentPage(1);
+    }
+  }, [registerPageSize]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]); // For table row selection
   const displayProvinceName = formatProvinceNameForDisplay(provinceName);
   const [tags, setTags] = useState([]);
@@ -96,6 +109,9 @@ const Province = ({ theme, currentUser }) => {
   const [searchedColumn, setSearchedColumn] = useState("");
   const [searchText, setSearchText] = useState("");
   const [dateRange, setDateRange] = useState(null); // Initialize as null for clarity
+  // Structured filters (industry, municipality, permits, NOV, …). Combined
+  // with the keyword tags and evaluated client-side over the province rows.
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [filteredData, setFilteredData] = useState(originalData);
   const [sectionCounts, setSectionCounts] = useState({});
   const [isDateRangeApplied, setIsDateRangeApplied] = useState(false);
@@ -250,6 +266,9 @@ const Province = ({ theme, currentUser }) => {
         return false;
       }
 
+      // 1b. Structured filters, all of which must hold.
+      if (!matchesFilters(record, filters)) return false;
+
       // 2. Keyword Filters (tags and inputValue)
       // If no active keyword filters after date filter, the record passes
       if (tags.length === 0 && !inputValue) {
@@ -290,7 +309,7 @@ const Province = ({ theme, currentUser }) => {
 
       return false; // Fallback, should be covered by above conditions
     });
-  }, [originalData, dateRange, tags, inputValue]);
+  }, [originalData, dateRange, tags, inputValue, filters]);
 
   useEffect(() => {
     // This useEffect is responsible for updating filteredData and sectionCounts
@@ -2097,14 +2116,29 @@ const Province = ({ theme, currentUser }) => {
                       size="small"
                     >
                       <AntSelect.Option value={10}>10 / page</AntSelect.Option>
+                      <AntSelect.Option value={25}>25 / page</AntSelect.Option>
                       <AntSelect.Option value={50}>50 / page</AntSelect.Option>
                       <AntSelect.Option value={100}>
                         100 / page
                       </AntSelect.Option>
+                      <AntSelect.Option value={200}>200 / page</AntSelect.Option>
                     </AntSelect>
                   </div>
                 )}
               </div>
+            </div>
+            {/* Structured filters, under the keyword row. They combine with
+                the keywords and with each other. */}
+            <div style={{ marginTop: 8 }}>
+              <MonitoringPlanFilters
+                rows={originalData || []}
+                value={filters}
+                onChange={(next) => {
+                  setFilters(next);
+                  setCurrentPage(1);
+                }}
+                showDateRange={canAccessRangePicker}
+              />
             </div>
           </div>
 

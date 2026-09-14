@@ -1,16 +1,17 @@
 const bcrypt = require('bcrypt');
-const nodemailer = require('nodemailer');
-const path = require('path');
 const crypto = require('crypto');
 const { ObjectId } = require('../config/db');
 const { connectToMongo } = require('../config/db');
-const { allowedOrigins } = require('../config/cors');
+const mailer = require('../services/mailer');
+const templates = require('../services/mailTemplates');
 const {
   roleOf,
+  ROLE_LABELS,
   domainsOf,
   capabilitiesOf,
   authorizedYears,
 } = require('../services/authorization');
+const storageAccess = require('../services/storageAccess');
 const { userProvinceAccess, userProvinceKeys } = require('../services/provinces');
 
 /**
@@ -57,7 +58,33 @@ async function register(req, res) {
     const existingUser = await collections.signUp.findOne({ email });
     if (existingUser) return res.status(400).json({ error: 'Email already exists' });
 
-    const result = await collections.signUp.insertOne({ name, division, position, email, status: 'pending' });
+    const result = await collections.signUp.insertOne({
+      name,
+      division,
+      position,
+      email,
+      status: 'pending',
+      requestedAt: new Date(),
+    });
+
+    // The request is recorded whether or not the mail goes out: an SMTP
+    // problem should not turn away a registrant, and the request is still
+    // visible under Sign-up Requests. Both sends run together and neither is
+    // awaited before answering.
+    const origin = mailer.publicOrigin();
+    const notifyAdmin = mailer.send({
+      to: mailer.adminAddress(),
+      ...templates.registrationReceived({
+        name,
+        division,
+        position,
+        email,
+        reviewUrl: `${origin}/universe/admin/users`,
+      }),
+    });
+    const acknowledge = mailer.send({ to: email, ...templates.registrationAcknowledged({ name }) });
+    Promise.all([notifyAdmin, acknowledge]).catch(() => {});
+
     return res.status(201).json({ status: 'User registration submitted for approval', userId: result.insertedId });
   } catch (error) {
     console.error('Error during registration:', error.message);
@@ -66,11 +93,21 @@ async function register(req, res) {
 }
 
 async function login(req, res) {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
+  const login = String(req.body?.username || '').trim();
+  const { password } = req.body || {};
+  if (!login || !password) return res.status(400).json({ error: 'Username and password are required.' });
   try {
     const { collections } = await connectToMongo();
-    const user = await collections.users.findOne({ username });
+    // Either the username or the email address on the account, matched
+    // case-insensitively: "ASabalbosa" and "Name@Gmail.com" both sign in.
+    // Both fields are unique regardless of case, so this cannot pick the
+    // wrong account. Password recovery is addressed by email, and people then
+    // try to sign in with it; refusing that was the commonest "my new
+    // password does not work".
+    const user = await collections.users.findOne(
+      { $or: [{ username: login }, { email: login }] },
+      { collation: { locale: 'en', strength: 2 } }
+    );
     if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
 
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -94,7 +131,7 @@ async function login(req, res) {
       { upsert: true }
     );
 
-    await collections.users.updateOne({ username }, { $set: { status: 'online' } });
+    await collections.users.updateOne({ _id: user._id }, { $set: { status: 'online' } });
 
     return res.status(200).json({ status: 'success', ...buildSessionPayload(user) });
   } catch (error) {
@@ -103,84 +140,62 @@ async function login(req, res) {
   }
 }
 
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Account recovery, step one: email a single-use link.
+ *
+ * The answer is the same whether or not the address is on file. It used to be
+ * 404 "User not found", which let anyone with the public form check which
+ * addresses have accounts. It also used to return the reset link — and so the
+ * token — in the JSON body, which made the email step optional for anyone who
+ * could type an address into the form.
+ */
 async function requestPasswordReset(req, res) {
-  const { email } = req.body;
+  const email = String(req.body?.email || '').trim();
   if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+  const accepted = () =>
+    res.status(200).json({
+      status: 'success',
+      message: 'If that address is registered, a reset link has been sent to it.',
+    });
+
   try {
     const { collections } = await connectToMongo();
     const user = await collections.users.findOne({ email });
-    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (!user) return accepted();
 
-    const resetToken = crypto.randomBytes(20).toString('hex');
+    if (!mailer.isConfigured()) {
+      return res.status(503).json({
+        error: 'Email is not configured on the server, so a reset link cannot be sent. Contact your system administrator.',
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
     await collections.users.updateOne(
-      { email },
-      { $set: { resetToken, resetTokenExpiration: Date.now() + 3600000 } }
+      { _id: user._id },
+      { $set: { resetToken, resetTokenExpiration: Date.now() + RESET_TOKEN_TTL_MS } }
     );
 
-    // Point at whichever front-end origin this deployment serves. Falls back to
-    // the first allowed CORS origin so the link is never hardcoded to localhost.
-    const clientUrl = (process.env.CLIENT_URL || process.env.SERVER_URL || allowedOrigins[0] || 'http://localhost:5173')
-      .replace(/\/+$/, '');
-    const resetLink = `${clientUrl}/universe-central-database-system/reset-password?token=${resetToken}`;
-
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-      tls: { rejectUnauthorized: false },
+    const resetLink = `${mailer.publicOrigin()}/universe-central-database-system/reset-password?token=${resetToken}`;
+    await mailer.send({
+      to: user.email,
+      ...templates.passwordReset({
+        name: user.name,
+        username: user.username,
+        resetLink,
+        minutes: RESET_TOKEN_TTL_MS / 60000,
+      }),
+      throwOnError: true,
     });
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: 'Password Reset Request',
-      html: `
-        <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
-              .container { max-width: 600px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
-              .header { text-align: center; margin-bottom: 20px; }
-              .header img { width: 100px; height: 100px; }
-              .content { font-size: 16px; color: #333; line-height: 1.6; }
-              .content p { margin-bottom: 10px; }
-              .reset-link { display: inline-block; background-color: #ccc; color: white; padding: 10px 20px; font-size: 16px; border-radius: 5px; text-decoration: none; margin-top: 20px; }
-              .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #888; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header"><img src="cid:logo" alt="Logo" /></div>
-              <div class="content">
-                <p>Hello ${user.name},</p>
-                <p>We received a request to reset your password. Please click the button below to reset your password.</p>
-                <a href="${resetLink}" class="reset-link">Reset Your Password</a>
-                <p>If you did not request a password reset, please ignore this email.</p>
-              </div>
-              <div class="footer">
-                <p>Environmental Management Bureau Region III</p>
-                <p>Universe Central Database System</p>
-              </div>
-            </div>
-          </body>
-        </html>
-      `,
-      attachments: [
-        {
-          filename: 'UCDSInformation.png',
-          path: path.join(__dirname, '..', 'assets', 'UCDSInformation.png'),
-          cid: 'logo',
-          contentDisposition: 'inline',
-          encoding: 'base64',
-        },
-      ],
-    };
-
-    await transporter.sendMail(mailOptions);
-    return res.status(200).json({ message: 'Password reset email sent successfully.', status: 'success', resetLink });
+    return accepted();
   } catch (error) {
-    console.error('Error during password reset request:', error);
+    console.error('Error during password reset request:', error.message);
+    if (error.code === 'MAIL_SEND_FAILED' || error.code === 'MAIL_NOT_CONFIGURED') {
+      return res.status(502).json({ error: 'The reset email could not be sent. Please try again later.' });
+    }
     return res.status(500).json({ error: 'An error occurred.' });
   }
 }
@@ -193,13 +208,28 @@ async function resetPassword(req, res) {
     const user = await collections.users.findOne({ resetToken: token, resetTokenExpiration: { $gt: Date.now() } });
     if (!user) return res.status(400).json({ error: 'Invalid or expired token.' });
 
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: 'The new password must be at least 8 characters.' });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await collections.users.updateOne(
       { _id: user._id },
       { $set: { password: hashedPassword }, $unset: { resetToken: '', resetTokenExpiration: '' } }
     );
 
-    return res.status(200).json({ message: 'Password reset successful.' });
+    // A courtesy notice, so a reset the owner did not make is noticed. Not
+    // awaited: the password is already changed and the response should say so.
+    if (user.email) {
+      mailer
+        .send({ to: user.email, ...templates.passwordChanged({ name: user.name }) })
+        .catch(() => {});
+    }
+
+    // The username goes back so the sign-in page can be prefilled with it.
+    // The reset was addressed by email, and people who reset a password have
+    // often forgotten which account it belongs to.
+    return res.status(200).json({ message: 'Password reset successful.', username: user.username });
   } catch (error) {
     console.error('Error during password reset:', error);
     return res.status(500).json({ error: 'An error occurred during password reset.' });
@@ -268,9 +298,14 @@ async function me(req, res) {
         avatar: u.avatar,
       },
       role: u.role || roleOf(u),
+      roleLabel: ROLE_LABELS[u.role || roleOf(u)],
       permission: u.permission,
       domains: domainsOf(u),
       capabilities: capabilitiesOf(u),
+      // Storage containers the Developer has shared with this account, by key
+      // and label. Read from the account now, so a designation made a moment
+      // ago is already here.
+      storageContainers: await storageAccess.grantedContainers(u),
       provinceAccess: userProvinceAccess(u),
       provinces: userProvinceKeys(u),
       assignedYears: u.assignedYears || [],

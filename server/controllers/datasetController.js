@@ -1,0 +1,180 @@
+const datasets = require('../services/datasetService');
+const { principalOf } = require('../middleware/auth');
+const { authorizedYears, hasCapability, isDeveloper } = require('../services/authorization');
+const settings = require('../services/ucdsSettings');
+
+// ---------------------------------------------------------------------------
+// UCDS datasets — the yearly spreadsheets, served as tables.
+//
+// Every row route is year-scoped by resolveYearContext: the year is
+// req.activeYear from the session, never from the request, so a URL for
+// another year's rows answers with that year's nothing. The registry route is
+// the exception — the sidebar needs every year the account may enter at once
+// — and it returns names only.
+// ---------------------------------------------------------------------------
+
+/** For the sidebar: each authorized year with its datasets. */
+async function registry(req, res, next) {
+  try {
+    const years = await authorizedYears(principalOf(req));
+    res.json({ years: await datasets.registryFor(years) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** The active year's datasets, with import state. */
+async function listForActiveYear(req, res, next) {
+  try {
+    const [entry] = await datasets.registryFor([req.activeYear]);
+    res.json({ year: req.activeYear, datasets: entry?.datasets || [] });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function describe(req, res, next) {
+  try {
+    const d = await datasets.describe(req.activeYear, req.params.key);
+    if (!d) return res.status(404).json({ code: 'DATASET_NOT_FOUND', message: 'No such dataset for this year.' });
+    return res.json({ year: req.activeYear, dataset: d });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function rowsPage(req, res, next) {
+  try {
+    const { sheet, page, pageSize, q, sortBy, sortDir } = req.query;
+    res.json(await datasets.listRows(req.activeYear, req.params.key, { sheet, page, pageSize, q, sortBy, sortDir }));
+  } catch (error) {
+    next(error);
+  }
+}
+
+const canEdit = (req) => hasCapability(principalOf(req), 'canManageData');
+
+/** Editing can be switched off for everyone from Universe Central DB settings. */
+async function editingAllowed(req, res) {
+  if (!canEdit(req)) {
+    res.status(403).json({ message: 'Your account cannot change data.' });
+    return false;
+  }
+  if ((await settings.read()).datasets.editing === false) {
+    res.status(403).json({ code: 'EDITING_OFF', message: 'Dataset editing is switched off in Universe Central DB settings.' });
+    return false;
+  }
+  return true;
+}
+
+async function createRow(req, res, next) {
+  try {
+    if (!(await editingAllowed(req, res))) return undefined;
+    const r = await datasets.addRow(req.activeYear, req.params.key, req.body?.sheet, req.body?.data, principalOf(req));
+    return r.ok ? res.status(201).json(r) : res.status(r.status).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function updateRow(req, res, next) {
+  try {
+    if (!(await editingAllowed(req, res))) return undefined;
+    const r = await datasets.updateRow(req.activeYear, req.params.key, req.params.id, req.body?.data, principalOf(req));
+    return r.ok ? res.json(r) : res.status(r.status).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function createColumn(req, res, next) {
+  try {
+    if (!(await editingAllowed(req, res))) return undefined;
+    const r = await datasets.addColumn(req.activeYear, req.params.key, req.body?.sheet, req.body?.name, principalOf(req));
+    return r.ok ? res.status(201).json(r) : res.status(r.status).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function deleteRow(req, res, next) {
+  try {
+    if (!(await editingAllowed(req, res))) return undefined;
+    const r = await datasets.deleteRow(req.activeYear, req.params.key, req.params.id);
+    return r.ok ? res.json(r) : res.status(r.status).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Developer only: (re)load the spreadsheet into the table. */
+async function importDataset(req, res, next) {
+  try {
+    if (!isDeveloper(principalOf(req))) return res.status(403).json({ message: 'Developer access required' });
+    const r = await datasets.importDataset(req.activeYear, req.params.key, principalOf(req));
+    return r.ok ? res.json(r) : res.status(r.status).json(r);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function exportCsv(req, res, next) {
+  try {
+    if ((await settings.read()).datasets.export === false) {
+      return res.status(403).json({ code: 'EXPORT_OFF', message: 'Export is switched off in Universe Central DB settings.' });
+    }
+    const d = await datasets.describe(req.activeYear, req.params.key);
+    if (!d || !d.imported) return res.status(404).json({ message: 'Nothing to export: the dataset has not been imported.' });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${req.activeYear}-${req.params.key}.csv"`);
+    res.write('﻿');
+    for await (const chunk of datasets.exportCsv(req.activeYear, req.params.key, req.query.sheet)) res.write(chunk);
+    return res.end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** GET /api/ucds/settings — effective settings, for every UCDS screen. */
+async function getSettings(req, res, next) {
+  try {
+    res.json(await settings.read());
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** PUT /api/ucds/settings — Developer or Administrator. */
+async function putSettings(req, res, next) {
+  try {
+    res.json(await settings.save(req.body || {}, principalOf(req)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/ucds/datasets/import-year — Developer only. Imports one or all
+ * of a year's spreadsheets without switching the session's container, for the
+ * Data Management tab. The year must be one the caller may enter.
+ */
+async function importForYear(req, res, next) {
+  try {
+    const user = principalOf(req);
+    if (!isDeveloper(user)) return res.status(403).json({ message: 'Developer access required' });
+    const year = Number(req.body?.year);
+    if (!(await authorizedYears(user)).includes(year)) return res.status(403).json({ message: 'That year container is not available to you.' });
+    const [entry] = await datasets.registryFor([year]);
+    const wanted = req.body?.key ? [String(req.body.key)] : (entry?.datasets || []).filter((d) => d.kind === 'table').map((d) => d.key);
+    const results = [];
+    for (const key of wanted) {
+      const r = await datasets.importDataset(year, key, user);
+      results.push({ key, ok: r.ok, rowCount: r.rowCount || 0, message: r.message || null });
+    }
+    return res.json({ year, results });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { getSettings, putSettings, importForYear, registry, listForActiveYear, describe, rowsPage, createRow, createColumn, updateRow, deleteRow, importDataset, exportCsv };

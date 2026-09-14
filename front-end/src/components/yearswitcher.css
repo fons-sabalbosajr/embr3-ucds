@@ -1,19 +1,8 @@
+/* Sizing, fill and hover come from .header-control rules in index.css so
+   the switcher matches the bell and the theme toggle beside it. */
 .yearswitcher {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px 3px 4px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.16s ease, border-color 0.16s ease;
-}
-
-.yearswitcher:hover {
-  background: rgba(84, 133, 71, 0.1);
-  border-color: rgba(84, 133, 71, 0.35);
 }
 
 .yearswitcher:focus-visible {
@@ -35,16 +24,11 @@
 
 .yearswitcher-caret {
   font-size: 10px;
-  color: #6b7a71;
 }
 
-.yearswitcher.dark:hover {
-  background: rgba(157, 223, 133, 0.14);
-  border-color: rgba(157, 223, 133, 0.4);
-}
-
-.yearswitcher.dark .yearswitcher-caret {
-  color: #a8b3ac;
+.yearswitcher .yearswitcher-caret {
+  color: inherit;
+  opacity: 0.8;
 }
 
 /* Dropdown contents */

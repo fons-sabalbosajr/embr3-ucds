@@ -26,6 +26,33 @@ const ROLES = {
 
 const ROLE_VALUES = new Set(Object.values(ROLES));
 
+/**
+ * How each role is named on screen, and what it is for. The stored values
+ * above are unchanged — accounts keep working — only the words are new:
+ * "viewer" was never a good name for the people who do the encoding.
+ *
+ * `admin` is kept for the accounts that already hold it; new accounts get
+ * one of the other four.
+ */
+const ROLE_LABELS = {
+  [ROLES.DEVELOPER]: 'Developer',
+  [ROLES.ADMIN]: 'Administrator',
+  [ROLES.PLANNING]: 'Planning Admin',
+  [ROLES.RECORDS]: 'Records Admin',
+  [ROLES.VIEWER]: 'Encoder',
+};
+
+const ROLE_DESCRIPTIONS = {
+  [ROLES.DEVELOPER]: 'Everything: UCDS, ERMS, administration, the NAS and every storage container.',
+  [ROLES.ADMIN]: 'Legacy: UCDS, ERMS and administration. Reassign to one of the other types.',
+  [ROLES.PLANNING]: 'UCDS, and the storage containers the Developer designates.',
+  [ROLES.RECORDS]: 'ERMS (and the register it files against), and the storage containers the Developer designates.',
+  [ROLES.VIEWER]: 'UCDS only, within the year containers assigned. No storage access.',
+};
+
+/** The types offered when creating or reassigning an account. */
+const ASSIGNABLE_ROLES = [ROLES.DEVELOPER, ROLES.PLANNING, ROLES.RECORDS, ROLES.VIEWER];
+
 const DOMAINS = {
   UCDS: 'ucds',
   ERMS: 'erms',
@@ -137,7 +164,9 @@ const hasCapability = (user, key) => capabilitiesOf(user)[key] === true;
  * configured" and must fail closed.
  */
 async function authorizedYears(user) {
-  const active = await yearService.listYearNumbers();
+  // Hidden containers are offered to nobody; Year Configuration lists them
+  // through the admin route instead.
+  const active = (await yearService.listYears()).filter((y) => y.hidden !== true).map((y) => y.year);
   if (canAccessAllYears(user)) return active;
 
   const assigned = Array.isArray(user?.assignedYears)
@@ -180,9 +209,47 @@ function authorizedProvinces(user, container) {
   return containerScope.filter((k) => userScope.includes(k));
 }
 
+// --- Storage containers ------------------------------------------------------
+
+/**
+ * Storage containers this user may open, given every container that exists.
+ *
+ * The Developer opens all of them. Everyone else opens exactly what the
+ * Developer designated on their account (`nasContainers`), which is the whole
+ * point: staff never hold a share credential, and the NAS is shared to them
+ * inside the application, container by container.
+ *
+ * An account with no `nasContainers` at all predates the field. A Records
+ * Admin from before then keeps the records container — that is what their
+ * role always opened — and everyone else gets nothing, so absence fails
+ * closed rather than open.
+ */
+function nasContainersOf(user, allKeys = []) {
+  const keys = Array.isArray(allKeys) ? allKeys.map(String) : [];
+  if (isDeveloper(user)) return keys;
+  // Encoders work in UCDS only; the NAS is not part of that job, whatever a
+  // stale designation on the account says.
+  if (roleOf(user) === ROLES.VIEWER) return [];
+
+  if (Array.isArray(user?.nasContainers)) {
+    const wanted = new Set(user.nasContainers.map((k) => String(k).trim().toLowerCase()));
+    return keys.filter((k) => wanted.has(k));
+  }
+  if (roleOf(user) === ROLES.RECORDS) return keys.filter((k) => k === 'records');
+  return [];
+}
+
+const canOpenContainer = (user, key, allKeys) =>
+  nasContainersOf(user, allKeys).includes(String(key || '').toLowerCase());
+
 module.exports = {
   ROLES,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+  ASSIGNABLE_ROLES,
   DOMAINS,
+  nasContainersOf,
+  canOpenContainer,
   CAPABILITY_KEYS,
   DEFAULT_DOMAINS,
   roleOf,

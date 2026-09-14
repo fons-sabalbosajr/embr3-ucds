@@ -1,0 +1,246 @@
+/* The frame around the public account pages. Colours come in as variables
+   from AuthShell.jsx, which reads them off Ant Design's live tokens, so there
+   is no second palette here to fall out of step with the theme. */
+
+.auth-shell {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  overflow: hidden;
+  /* The Bureau's building, under the navigation gradient. The surfaces are
+     fixed across themes and derived from the accent, so the backdrop is the
+     same identity as the shell behind it; the photo shows through at roughly
+     a fifth so it reads as texture rather than competing with the card. */
+  background:
+    radial-gradient(ellipse at 20% 15%, color-mix(in srgb, var(--eu-header-bg, #1f242c) 78%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 85% 90%, color-mix(in srgb, var(--eu-accent, #2f7ecb) 40%, transparent) 0%, transparent 55%),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--eu-sider-bg, #161a20) 88%, transparent) 0%,
+      color-mix(in srgb, var(--eu-sider-bg, #161a20) 76%, transparent) 100%
+    ),
+    url("../assets/bgemb-hero.webp") center / cover no-repeat;
+  color: var(--auth-text);
+}
+
+/* ---- Backdrop ---- */
+
+.auth-shell-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.auth-shell-circle {
+  position: absolute;
+  bottom: -160px;
+  display: block;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  animation: auth-float 25s linear infinite;
+}
+
+@keyframes auth-float {
+  0% { transform: translateY(0); opacity: 0; }
+  50% { opacity: 0.6; }
+  100% { transform: translateY(-110vh); opacity: 0; }
+}
+
+.auth-shell-circle:nth-child(1) { left: 25%; width: 80px; height: 80px; }
+.auth-shell-circle:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
+.auth-shell-circle:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
+.auth-shell-circle:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-duration: 18s; }
+.auth-shell-circle:nth-child(5) { left: 65%; width: 20px; height: 20px; }
+.auth-shell-circle:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; background: rgba(255, 255, 255, 0.05); }
+.auth-shell-circle:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; background: rgba(255, 255, 255, 0.06); }
+.auth-shell-circle:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
+.auth-shell-circle:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; background: rgba(255, 255, 255, 0.1); }
+.auth-shell-circle:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-duration: 11s; background: rgba(255, 255, 255, 0.05); }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell-circle {
+    animation: none;
+    opacity: 0.25;
+  }
+}
+
+/* ---- Card ---- */
+
+.auth-shell-main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.auth-card {
+  position: relative;
+  width: 100%;
+  max-width: var(--auth-width, 420px);
+  padding: 32px 36px 28px;
+  background: var(--auth-card-bg);
+  border: 1px solid var(--auth-card-border);
+  border-radius: var(--auth-radius, 12px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.auth-card-theme {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: var(--auth-text-soft);
+}
+
+.auth-card-head {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.auth-card-brand {
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.auth-card-brand:hover {
+  color: inherit;
+}
+
+/* Smaller seals than the landing hero: the card is the point, the seals are
+   the letterhead. */
+.auth-card-brand .auth-brand-marks img {
+  height: 44px;
+}
+
+.auth-card-brand .auth-brand-marks {
+  gap: 10px;
+}
+
+.auth-card-brand .auth-brand {
+  gap: 8px;
+}
+
+.auth-card-brand .auth-brand-agency {
+  font-size: 10.5px;
+}
+
+.auth-card-brand .auth-brand-region {
+  font-size: 9.5px;
+}
+
+.auth-card-product {
+  margin: 14px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--auth-text);
+}
+
+.auth-card-tagline {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--auth-text-soft);
+}
+
+.auth-card-title {
+  margin: 18px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--auth-text);
+}
+
+.auth-card-intro {
+  max-width: 40ch;
+  margin: 6px auto 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--auth-text-soft);
+}
+
+.auth-card-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--auth-error-border);
+  border-radius: 8px;
+  background: var(--auth-error-bg);
+  color: var(--auth-error-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Ant Design's Form.Item already spaces fields; only the trailing gap is
+   trimmed so the card does not end in empty space. */
+.auth-card-body .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.auth-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.auth-card-links {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--auth-text-soft);
+}
+
+/* Router links are plain anchors; without this they render in the browser's
+   default blue, which disappears on the dark card. */
+.auth-card-links a,
+.auth-card-foot a {
+  color: var(--auth-link);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.auth-card-links a:hover,
+.auth-card-foot a:hover {
+  color: var(--auth-link-hover);
+  text-decoration: underline;
+}
+
+.auth-card-foot {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--auth-card-border);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--auth-text-faint);
+}
+
+.auth-shell-note {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 480px) {
+  .auth-shell {
+    padding: 20px 14px;
+  }
+
+  .auth-card {
+    padding: 26px 20px 22px;
+  }
+
+  .auth-card-product {
+    font-size: 18px;
+  }
+}

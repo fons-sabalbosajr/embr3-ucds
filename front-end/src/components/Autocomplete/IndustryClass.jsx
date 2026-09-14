@@ -224,7 +224,6 @@ const IndustryClass = ({
         components: {
           AutoComplete: {
             optionFontSize: 10,
-            colorTextPlaceholder: theme === "dark" ? "#aaa" : "#555",
             fontSize: "11px",
             boxShadow: "none",
           },

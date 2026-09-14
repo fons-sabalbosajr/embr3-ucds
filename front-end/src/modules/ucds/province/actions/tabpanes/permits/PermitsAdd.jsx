@@ -57,7 +57,6 @@ const PermitsAdd = ({ isEditing }) => {
                   components: {
                     AutoComplete: {
                       optionFontSize: 10,
-                      colorTextPlaceholder: "#555",
                       fontSize: "11px",
                       boxShadow: "none",
                     },
@@ -206,7 +205,6 @@ const PermitsAdd = ({ isEditing }) => {
                   components: {
                     AutoComplete: {
                       optionFontSize: 10,
-                      colorTextPlaceholder: "#555",
                       fontSize: "11px",
                       boxShadow: "none",
                     },

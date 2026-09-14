@@ -1,4 +1,4 @@
-import { Avatar, Input, Select, Button, Tabs, Table, Progress, ConfigProvider } from "antd";
+import { Avatar, Input, Button, Tabs, Table, Progress, Tag } from "antd";
 import { message } from "../../../shared/feedback";
 import "./useraccountmodal.css";
 import { UserOutlined, CameraOutlined } from "@ant-design/icons";
@@ -6,8 +6,8 @@ import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import axios from "axios";
 import AvatarSelectionModal from "../../../components/AvatarSelectionModalProfile";
+import { accountType } from "../../../shared/accountTypes";
 import AvatarWithName from "../../../components/AvatarwithName";
-import NiceAvatar from "react-nice-avatar";
 import CryptoJS from "crypto-js";
 import { API_BASE_URL } from "../../../config/api";
 
@@ -163,7 +163,6 @@ const UserAccountModal = ({ userHandle, user, onClose }) => {
   };
 
 
-  const avatarProps = editableUser?.avatar;
 
   const recentChangesColumns = [
     {
@@ -284,28 +283,12 @@ const UserAccountModal = ({ userHandle, user, onClose }) => {
               onChange={(e) => handleChange("region", e.target.value)}
               className="input-label"
             />
-            <p className="label-user">Permission:</p>
-            <ConfigProvider
-              theme={{
-                components: {
-                  Select: {
-                    fontSize: 11,
-                  },
-                },
-              }}
-            >
-              <Select
-                value={editableUser ? editableUser.permission : "user"}
-                className="select-permission"
-                disabled={!isEditing}
-                onChange={(value) => handleChange("permission", value)}
-              >
-                <Select.Option value="viewer">Viewer</Select.Option>
-                <Select.Option value="contributor">Contributor</Select.Option>
-                <Select.Option value="admin">Admin</Select.Option>
-                <Select.Option value="developer">Developer</Select.Option>
-              </Select>
-            </ConfigProvider>
+            <p className="label-user">Account type:</p>
+            {/* Read-only here. The type is set by the Developer under Edit Access,
+                which also designates storage containers. */}
+            <Tag color={accountType(editableUser?.permission).color} style={{ marginTop: 4 }}>
+              {accountType(editableUser?.permission).label}
+            </Tag>
           </div>
         </div>
       </div>

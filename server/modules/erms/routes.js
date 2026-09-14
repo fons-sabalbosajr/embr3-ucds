@@ -13,6 +13,8 @@ const { REPORT_KEYS } = require('./services/reportService');
 
 // Read: authenticated and entitled to the ERMS domain.
 const ermsAccess = [authenticateSession, requireDomain(DOMAINS.ERMS)];
+// Whole-collection aggregations: a few a minute per person is normal use.
+const { expensiveLimiter } = require('../../config/security');
 
 /**
  * Write: the same, plus the capability that already means "may modify data".
@@ -160,7 +162,7 @@ const reportQuery = z.object({
 
 // --- routes ----------------------------------------------------------------
 
-router.get('/api/erms/dashboard', ermsAccess, ctrl.dashboard);
+router.get('/api/erms/dashboard', ermsAccess, expensiveLimiter, ctrl.dashboard);
 router.get('/api/erms/filter-options', ermsAccess, ctrl.filterOptions);
 
 router.get('/api/erms/records', ermsAccess, validate(listQuery, 'query'), ctrl.listRecords);
@@ -240,6 +242,7 @@ router.get('/api/erms/disposal-due', ermsAccess, ctrl.disposalDue);
 router.get(
   '/api/erms/reports/:key',
   ermsAccess,
+  expensiveLimiter,
   validate(z.object({ key: z.enum(REPORT_KEYS) }), 'params'),
   validate(reportQuery, 'query'),
   ctrl.runReport

@@ -64,7 +64,6 @@ const PCO_Name = ({ isEditing }) => {
         components: {
           AutoComplete: {
             optionFontSize: 10,
-            colorTextPlaceholder: "#555",
             fontSize: "11px",
             boxShadow: "none",
           },

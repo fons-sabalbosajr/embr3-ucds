@@ -15,7 +15,6 @@ const PermitSource = ({ value, disabled, onChange, theme = "light" }) => { // Ad
         components: {
           AutoComplete: {
             optionFontSize: 11, // Smaller option font size
-            colorTextPlaceholder: theme === 'dark' ? "rgba(255,255,255,0.45)" : "#555", // Dynamic placeholder
             // fontSize for AutoComplete component itself, direct Input styling will be more specific for the field
             boxShadow: "none",
           },

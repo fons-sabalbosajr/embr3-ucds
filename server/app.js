@@ -31,6 +31,8 @@ const {
   sessionCookieOptions,
   assertSessionSecret,
   securityHeaders,
+  apiLimiter,
+  expensiveLimiter,
   warnAboutCookieConfig,
   warnAboutEnvFormatting,
 } = require("./config/security");
@@ -87,7 +89,16 @@ require("./middleware/auth").assertAuthNotBypassed();
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json());
+// JSON responses from the register are large and highly compressible; gzip
+// cuts them roughly five-fold on the wire, which matters more than the CPU it
+// costs when hundreds of people open the same screen.
+app.use(require("compression")());
+// A bulk update of the register is the biggest legitimate body. Anything
+// larger is a mistake or an attack, and parsing it would cost memory first.
+app.use(express.json({ limit: "2mb" }));
+// General per-account budget for the API; the expensive tier is applied per
+// route where a request scans or aggregates a whole collection.
+app.use(["/api", "/ucds", "/ucds-data", "/check-data", "/archive-data"], apiLimiter);
 
 app.use(authRoutes);
 app.use(postingRoutes);
@@ -101,6 +112,7 @@ app.use(nasRoutes);
 app.use(healthRoutes);
 app.use(developerRoutes);
 app.use(yearRoutes);
+app.use(require("./routes/datasetRoutes"));
 app.use(orgUnitRoutes);
 
 // Cross-domain routes. The establishment→records panel lives here rather than

@@ -315,6 +315,10 @@ async function updateActivityLog(req, res) {
     const { id } = req.params;
     const payload = req.body || {};
     delete payload._id;
+    // NAS audit entries are the security record of who read what on the
+    // share; they are not editable, by anyone, from anywhere.
+    const current = await collections.activityLogs.findOne({ _id: new ObjectId(id) }, { projection: { domain: 1 } });
+    if (current?.domain === 'nas') return res.status(403).json({ message: 'NAS audit entries cannot be edited.' });
     const result = await collections.activityLogs.findOneAndUpdate(
       { _id: new ObjectId(id) },
       { $set: payload },
@@ -332,6 +336,8 @@ async function deleteActivityLog(req, res) {
   try {
     await connectToMongo();
     const { id } = req.params;
+    const target = await collections.activityLogs.findOne({ _id: new ObjectId(id) }, { projection: { domain: 1 } });
+    if (target?.domain === 'nas') return res.status(403).json({ message: 'NAS audit entries cannot be deleted.' });
     const del = await collections.activityLogs.deleteOne({ _id: new ObjectId(id) });
     if (!del.deletedCount) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });

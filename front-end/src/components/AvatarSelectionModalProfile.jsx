@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { Modal, Upload, Button, Avatar } from "antd";
 import { message } from "../shared/feedback";
-import { UploadOutlined } from "@ant-design/icons";
+import { UploadOutlined, UserOutlined } from "@ant-design/icons";
 
 // Generate a default avatar using UI Avatars
-const DEFAULT_AVATAR_URL =
-  "https://ui-avatars.com/api/?name=A&background=random&color=fff&size=100";
 
 const AvatarSelectionModalProfile = ({ visible, onCancel, onUpload }) => {
   const [photo, setPhoto] = useState(null); // State for storing the uploaded avatar preview
@@ -88,7 +86,11 @@ const AvatarSelectionModalProfile = ({ visible, onCancel, onUpload }) => {
       ]}
     >
       <div style={{ marginTop: 16, textAlign: "center" }}>
-        <Avatar src={photo ? photo.url : DEFAULT_AVATAR_URL} size={100} />
+        {photo ? (
+          <Avatar src={photo.url} size={100} />
+        ) : (
+          <Avatar size={100} icon={<UserOutlined />} />
+        )}
       </div>
     </Modal>
   );

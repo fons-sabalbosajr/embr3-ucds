@@ -2,6 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 const { connectToMongo, collections } = require('../config/db');
+const mailer = require('../services/mailer');
+const templates = require('../services/mailTemplates');
 
 // Ensure uploads directory exists (shared with server static mount)
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -92,7 +94,24 @@ async function createUser(req, res) {
 
     const insertResult = await collections.users.insertOne(newUser);
     if (insertResult.acknowledged && insertResult.insertedId) {
-      return res.status(201).json({ message: 'User created successfully', user: newUser });
+      // The credentials go out from here, with the plaintext password the
+      // administrator just generated. The browser used to send this through
+      // EmailJS after the fact — and, being unconfigured, silently did not —
+      // while still telling the administrator the email had gone. The response
+      // now says whether it actually did, so the administrator can pass the
+      // details on by hand if it did not.
+      const emailSent = await mailer.send({
+        to: email,
+        ...templates.accountApproved({
+          name,
+          username,
+          password,
+          loginUrl: `${mailer.publicOrigin()}/universe-central-database-system/login`,
+        }),
+      });
+
+      const { password: _hash, ...safeUser } = newUser;
+      return res.status(201).json({ message: 'User created successfully', user: safeUser, emailSent });
     }
 
     return res.status(500).json({ error: 'Failed to create user' });
@@ -143,6 +162,105 @@ async function updateUserById(req, res) {
   }
 }
 
+/**
+ * PUT /api/users/:id/type — set the account type. Developer only.
+ *
+ * The type decides which modules an account enters, so an explicit `domains`
+ * override from an earlier scheme is cleared with it: the new type's defaults
+ * apply, and the Access tab is where storage containers are designated.
+ */
+async function setUserType(req, res) {
+  const { ASSIGNABLE_ROLES, ROLE_LABELS } = require('../services/authorization');
+  try {
+    await connectToMongo();
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
+    const permission = String(req.body?.permission || '').trim().toLowerCase();
+    if (!ASSIGNABLE_ROLES.includes(permission)) {
+      return res.status(400).json({
+        error: `Type must be one of: ${ASSIGNABLE_ROLES.map((r) => ROLE_LABELS[r]).join(', ')}.`,
+      });
+    }
+    const actor = req.session?.user;
+    if (actor && String(actor.userId) === String(id) && permission !== 'developer') {
+      return res.status(400).json({ error: 'You cannot remove your own developer access.' });
+    }
+    const result = await collections.users.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: { permission, typeUpdatedAt: new Date(), typeUpdatedBy: actor?.username || 'unknown' },
+        $unset: { domains: '' },
+      }
+    );
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
+    return res.json({ message: 'Account type updated', permission, label: ROLE_LABELS[permission] });
+  } catch (error) {
+    console.error('Error setting user type:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+/**
+ * DELETE /api/users/:id — remove an account and what belongs to it.
+ *
+ * Goes with the account: its sessions (so it is signed out everywhere at
+ * once), its login-status row, its sign-up request, its storage PIN, and its
+ * uploaded photo. Stays: the audit trail. app-logs and ucds-log entries record
+ * what was done to the register and by whom; removing them would make the
+ * register's history lie, and a deleted account is exactly the case an
+ * auditor asks about. The entries keep the username as written.
+ *
+ * Developer only, never yourself, and never the last developer.
+ */
+async function deleteUser(req, res) {
+  try {
+    await connectToMongo();
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
+    const actor = req.session?.user;
+    if (actor && String(actor.userId) === String(id)) {
+      return res.status(400).json({ error: 'You cannot delete your own account.' });
+    }
+    const user = await collections.users.findOne({ _id: new ObjectId(id) });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (String(user.permission).toLowerCase() === 'developer') {
+      const developers = await collections.users.countDocuments({ permission: 'developer' });
+      if (developers <= 1) return res.status(400).json({ error: 'This is the last Developer account; it cannot be deleted.' });
+    }
+
+    const db = require('../config/db').getDb();
+    const removed = {};
+    removed.sessions = (await db.collection('sessions').deleteMany({ 'session.user.userId': String(user._id) })).deletedCount;
+    removed.loginStatus = (await collections.loginStatus.deleteMany({ $or: [{ userId: user._id }, { username: user.username }] })).deletedCount;
+    removed.signUp = user.email ? (await collections.signUp.deleteMany({ email: user.email })).deletedCount : 0;
+    removed.storagePin = (await db.collection('app-config').deleteOne({ _id: `nas-pin:${user._id}` })).deletedCount;
+    if (typeof user.avatar === 'string' && user.avatar.startsWith('/uploads/')) {
+      const file = path.join(uploadsDir, path.basename(user.avatar));
+      try {
+        fs.unlinkSync(file);
+        removed.photo = 1;
+      } catch {
+        removed.photo = 0;
+      }
+    }
+    await collections.users.deleteOne({ _id: user._id });
+
+    return res.json({ message: 'Account deleted', username: user.username, removed });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+/** GET /api/users/types — the assignable types with their descriptions. */
+function listUserTypes(req, res) {
+  const { ASSIGNABLE_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLES } = require('../services/authorization');
+  return res.json({
+    types: ASSIGNABLE_ROLES.map((value) => ({ value, label: ROLE_LABELS[value], description: ROLE_DESCRIPTIONS[value] })),
+    legacy: [{ value: ROLES.ADMIN, label: ROLE_LABELS[ROLES.ADMIN], description: ROLE_DESCRIPTIONS[ROLES.ADMIN] }],
+  });
+}
+
 // PUT /api/profile/update/:id — profile update (self)
 async function updateProfile(req, res) {
   try {
@@ -178,7 +296,7 @@ async function updateSignupStatus(req, res) {
   }
 }
 
-module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus };
+module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, setUserType, listUserTypes, deleteUser };
  
 // ---- Additional Users GET endpoints migrated from server.js ----
 async function getUsers(req, res) {
