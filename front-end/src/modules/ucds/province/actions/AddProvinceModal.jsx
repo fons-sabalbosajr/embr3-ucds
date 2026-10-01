@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Tabs, Spin, Button, Tooltip } from "antd";
 import Swal from "sweetalert2";
-import CryptoJS from "crypto-js";
+import { fetchCurrentUser } from "../../../../api/universeService";
 import GenInfoAdd from "./tabpanes/geninfo/GenInfoAdd";
 import FocalPersonAdd from "./tabpanes/focalperson/FocalPersonAdd";
 import PermitsAdd from "./tabpanes/permits/PermitsAdd";
@@ -24,26 +24,13 @@ const AddProvinceModal = ({ visible, onCancel, onCreate }) => {
   const [permitsData, setPermitsData] = useState({});
   const [legalData, setLegalData] = useState({});
 
-  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
   const [currentUser, setCurrentUser] = useState("");
 
-  const decryptData = (encryptedData) => {
-    if (!encryptedData) return ""; // Return empty if no data
-    try {
-      const bytes = CryptoJS.AES.decrypt(encryptedData, encryptionKey);
-      return bytes.toString(CryptoJS.enc.Utf8);
-    } catch (error) {
-      console.error("Decryption error:", error);
-      return "";
-    }
-  };
-
+  // Who is encoding: from the session, not from anything kept in the browser.
   useEffect(() => {
-    const encryptedUsername = localStorage.getItem("username");
-
-    if (encryptedUsername) {
-      setCurrentUser(decryptData(encryptedUsername));
-    }
+    fetchCurrentUser()
+      .then((me) => setCurrentUser(me?.user?.username || ""))
+      .catch(() => setCurrentUser(""));
   }, []);
 
   useEffect(() => {

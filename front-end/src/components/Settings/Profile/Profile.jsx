@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getItem, setItem } from "../../../shared/secureStorage";
 import { Row, Col, Button, Input, Typography, Progress, Skeleton, Empty } from "antd";
 import { message } from "../../../shared/feedback";
 import {
@@ -6,7 +7,6 @@ import {
   UploadOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
-import CryptoJS from "crypto-js";
 import "./profile.css";
 import { fetchUserDetails, uploadUserPhoto } from "../../../api/userService";
 import { API_BASE_URL } from "../../../config/api";
@@ -21,44 +21,29 @@ const Profile = ({ username }) => {
   const [uploading, setUploading] = useState(false);
   const [showUploadButtons, setShowUploadButtons] = useState(false);
 
-  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
-
-  // Load from localStorage
+  // A cached copy of the profile, through secureStorage, so the dialog opens
+  // at once while the fresh copy is fetched.
   useEffect(() => {
-    const encrypted = localStorage.getItem("ucds_user_profile");
-    if (encrypted && encryptionKey) {
-      try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, encryptionKey);
-        const decrypted = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-        if (decrypted && decrypted.username === username) {
-          setUserData(decrypted);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.warn("Failed to decrypt user profile from cache.");
-      }
+    const cached = getItem("ucds_user_profile", null);
+    if (cached && cached.username === username) {
+      setUserData(cached);
+      setLoading(false);
     }
-  }, [username, encryptionKey]);
+  }, [username]);
 
   const fetchUserData = useCallback(async () => {
     setFetching(true);
     try {
       const data = await fetchUserDetails(username);
       setUserData(data);
-      if (encryptionKey) {
-        const encrypted = CryptoJS.AES.encrypt(
-          JSON.stringify(data),
-          encryptionKey
-        ).toString();
-        localStorage.setItem("ucds_user_profile", encrypted);
-      }
+      setItem("ucds_user_profile", data);
     } catch (error) {
       message.error("Error fetching user details.");
     } finally {
       setLoading(false);
       setFetching(false);
     }
-  }, [username, encryptionKey]);
+  }, [username]);
 
   useEffect(() => {
     fetchUserData();
@@ -81,13 +66,7 @@ const Profile = ({ username }) => {
     try {
       const updatedUser = await uploadUserPhoto(username, photo.file);
       setUserData(updatedUser);
-      if (encryptionKey) {
-        const encrypted = CryptoJS.AES.encrypt(
-          JSON.stringify(updatedUser),
-          encryptionKey
-        ).toString();
-        localStorage.setItem("ucds_user_profile", encrypted);
-      }
+      setItem("ucds_user_profile", updatedUser);
       message.success("Profile photo updated successfully!");
       setPhoto(null);
       setShowUploadButtons(false);

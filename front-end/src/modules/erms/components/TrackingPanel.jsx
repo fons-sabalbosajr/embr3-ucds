@@ -15,12 +15,17 @@ import {
   Timeline,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { DesktopOutlined, PlusOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { addTracking, describeApiError } from "../api/ermsService";
 
 // Custody history. Append-only — there is no edit or delete, here or in the
 // API. A mistake is corrected by recording a correction.
+//
+// Two sources on one timeline: the movements recorded here, and the desktop
+// system's own log for the record (who viewed, modified, requested or
+// uploaded its file, from its SQL tables). The desktop entries are marked as
+// such and cannot be added to — that system is closed.
 
 const ACTION_COLOR = {
   received: "green",
@@ -31,13 +36,30 @@ const ACTION_COLOR = {
   forwarded: "orange",
   borrowed: "volcano",
   corrected: "default",
+  "legacy-uploaded": "blue",
+  "legacy-modified": "gold",
+  "legacy-replaced": "gold",
+  "legacy-attached": "blue",
+  "legacy-requested": "purple",
+  "legacy-viewed": "default",
+  "legacy-other": "default",
 };
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "Everything" },
+  { value: "custody", label: "Movements recorded here" },
+  { value: "legacy", label: "Desktop system log" },
+];
 
 const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrite }) => {
   const { message } = AntdApp.useApp();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [source, setSource] = useState("all");
   const [form] = Form.useForm();
+
+  const legacyCount = tracking.filter((t) => t.source === "legacy").length;
+  const shown = tracking.filter((t) => source === "all" || (t.source || "custody") === source);
 
   const mutation = useMutation({
     mutationFn: addTracking,
@@ -66,14 +88,28 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
 
   return (
     <Card
-      title="Tracking"
+      title={
+        <Space size={8}>
+          <span>Tracking</span>
+          {legacyCount > 0 && (
+            <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: "normal" }}>
+              <DesktopOutlined /> {legacyCount} from the desktop system
+            </Typography.Text>
+          )}
+        </Space>
+      }
       size="small"
       extra={
-        canWrite && (
-          <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            Record a movement
-          </Button>
-        )
+        <Space size={8}>
+          {legacyCount > 0 && (
+            <Select size="small" value={source} onChange={setSource} options={SOURCE_OPTIONS} style={{ width: 210 }} />
+          )}
+          {canWrite && (
+            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+              Record a movement
+            </Button>
+          )}
+        </Space>
       }
     >
       {custody && (
@@ -90,19 +126,26 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
         />
       )}
 
-      {tracking.length === 0 ? (
+      {shown.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="No movements recorded for this record yet"
+          description={source === "legacy" ? "The desktop system has no log for this record" : "No movements recorded for this record yet"}
         />
       ) : (
         <Timeline
-          items={tracking.map((t) => ({
+          items={shown.map((t, i) => ({
+            key: t._id || `${t.source}-${i}`,
             color: ACTION_COLOR[t.action] || "gray",
+            dot: t.source === "legacy" ? <DesktopOutlined style={{ fontSize: 12 }} /> : undefined,
             children: (
               <Space direction="vertical" size={0}>
-                <Space size={6}>
+                <Space size={6} wrap>
                   <Tag color={ACTION_COLOR[t.action]}>{t.actionLabel}</Tag>
+                  {t.source === "legacy" && (
+                    <Tag style={{ marginInlineEnd: 0 }} icon={<DesktopOutlined />}>
+                      desktop system
+                    </Tag>
+                  )}
                   {t.toParty && <Typography.Text strong>{t.toParty}</Typography.Text>}
                 </Space>
                 {t.purpose && <Typography.Text>{t.purpose}</Typography.Text>}
@@ -113,7 +156,9 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
                   </Typography.Text>
                 )}
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {new Date(t.createdAt).toLocaleString()} · {t.createdBy}
+                  {t.createdAt ? new Date(t.createdAt).toLocaleString() : t.createdAtRaw || "date unknown"} · {t.createdBy}
+                  {t.loginAs ? ` (${t.loginAs})` : ""}
+                  {t.ipAddress ? ` · ${t.ipAddress}` : ""}
                 </Typography.Text>
               </Space>
             ),

@@ -4,6 +4,8 @@ const { authenticateSession, requireDeveloper } = require('../middleware/auth');
 const { requireElevation } = require('../services/nasElevation');
 const { requireNasActive } = require('../services/nasActivation');
 const { requireContainerAccess } = require('../services/storageAccess');
+const { logActivity } = require('../middleware/activityLog');
+const { expensiveLimiter } = require('../config/security');
 const {
   requireNasConfig,
   getConfig,
@@ -16,6 +18,12 @@ const {
   setAccess,
   myContainers,
   auditLog,
+  auditSummary,
+  getAvailability,
+  setAvailability,
+  getBridge,
+  setBridge,
+  probeBridge,
   reportFilesInventory,
   reportFilesMove,
   reportFilesRemove,
@@ -26,6 +34,7 @@ const {
   deleteContainer,
   containerHistory,
   browse,
+  search,
   readByPath,
   activationStatus,
   setActivation,
@@ -122,6 +131,19 @@ router.delete('/api/nas/report-files/database', sensitive, reportFilesRemove);
 // account's type; it names containers by key and label, never a host.
 // The audit trail. Elevated, like the configuration it records changes to.
 router.get('/api/nas/audit', developerOnly, requireElevation, auditLog);
+// The same trail rolled up into counts for the Activity charts.
+router.get('/api/nas/audit/summary', developerOnly, requireElevation, auditSummary);
+
+// Availability: the master switch and the weekday schedule. Reading needs a
+// developer; changing it is as sensitive as the configuration it gates.
+router.get('/api/nas/availability', developerOnly, requireElevation, getAvailability);
+router.put('/api/nas/availability', developerOnly, requireElevation, logActivity, setAvailability);
+
+// The bridge server the shares are reached through: its address, and whether
+// it answers right now. Same sensitivity as the availability settings.
+router.get('/api/nas/bridge', developerOnly, requireElevation, getBridge);
+router.put('/api/nas/bridge', developerOnly, requireElevation, logActivity, setBridge);
+router.post('/api/nas/bridge/probe', developerOnly, requireElevation, probeBridge);
 
 router.get('/api/nas/access', developerOnly, listAccess);
 router.put('/api/nas/access/:userId', developerOnly, setAccess);
@@ -130,6 +152,7 @@ router.put('/api/nas/access/:userId', developerOnly, setAccess);
 // every guard available: a session, the developer role, a configured share,
 // and an emailed code.
 router.get('/api/nas/browse', sensitive, browse);
+router.get('/api/nas/search', sensitive, expensiveLimiter, search);
 router.get('/api/nas/file', sensitive, readByPath);
 
 // Shared storage, for everyone the Developer has designated a container to.
@@ -144,6 +167,7 @@ router.get('/api/nas/file', sensitive, readByPath);
 const shared = [authenticateSession, requireNasActive];
 router.get('/api/storage/containers', authenticateSession, myContainers);
 router.get('/api/storage/browse', shared, requireContainerAccess, browse);
+router.get('/api/storage/search', shared, requireContainerAccess, expensiveLimiter, search);
 router.get('/api/storage/file', shared, requireContainerAccess, readByPath);
 
 // GET /api/nas/view-pdf is gone. It accepted a caller-supplied path with only

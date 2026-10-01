@@ -1,11 +1,13 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const { authenticateSession, requireDomain } = require('../../middleware/auth');
-const { DOMAINS, capabilitiesOf } = require('../../services/authorization');
+const { DOMAINS, capabilitiesOf, isErmsEndUser, ermsUnitOf, ERMS_UNIT_VALUES } = require('../../services/authorization');
 const { principalOf } = require('../../middleware/auth');
 const { validate, z } = require('../../shared/middleware/validate');
 const { requireNasActive } = require('../../services/nasActivation');
 const ctrl = require('./controllers/recordController');
+const unitCtrl = require('./controllers/unitController');
 const { PERMIT_TYPES } = require('./services/recordService');
 const { ACTION_CODES } = require('./services/trackingService');
 const { STATUSES } = require('./services/archiveService');
@@ -27,7 +29,11 @@ const { expensiveLimiter } = require('../../config/security');
 function requireErmsWrite(req, res, next) {
   const user = principalOf(req);
   if (!user) return res.status(401).json({ message: 'User not authenticated' });
-  if (capabilitiesOf(user).canManageData !== true) {
+  // Filing records is the Records Unit's own work: its ERMS Users write here
+  // whether or not they hold the UCDS capability, as they did in the desktop
+  // system. Everyone else needs canManageData as before.
+  const recordsUnitStaff = isErmsEndUser(user) && ermsUnitOf(user) === 'records';
+  if (capabilitiesOf(user).canManageData !== true && !recordsUnitStaff) {
     return res.status(403).json({
       code: 'CAPABILITY_REQUIRED',
       message: 'You do not have permission to modify records.',
@@ -37,6 +43,24 @@ function requireErmsWrite(req, res, next) {
 }
 
 const ermsWrite = [...ermsAccess, requireErmsWrite];
+
+// Configuration: the admin domain, held by the Developer and Administrator.
+const ermsAdmin = [authenticateSession, requireDomain(DOMAINS.ADMIN)];
+
+// Uploads arrive as multipart and are held in memory until filed on the
+// share (streaming to a UNC path through multer's disk storage would mean a
+// temp file on the server and a second copy). The hard cap here is the
+// ceiling; the configured limit (ERMS Config > Upload) is checked after.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 256 * 1024 * 1024, files: 1 },
+});
+const uploadOne = (req, res, next) =>
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ code: 'FILE_TOO_LARGE', message: 'Files are limited to 256 MB.' });
+    return res.status(400).json({ code: 'BAD_UPLOAD', message: err.message || 'The upload could not be read.' });
+  });
 
 // --- shared field shapes ----------------------------------------------------
 
@@ -78,6 +102,10 @@ const createSchema = z.object({
       filePath: optional(1000),
       sharePath: optional(1000),
       fileClass: optional(40),
+      // The project folder chosen on the form (see the folder picker).
+      folder: optional(120),
+      // A folder inside the project folder (replacing the type folder).
+      subfolder: optional(120),
     })
     .optional(),
 });
@@ -164,9 +192,132 @@ const reportQuery = z.object({
 
 router.get('/api/erms/dashboard', ermsAccess, expensiveLimiter, ctrl.dashboard);
 router.get('/api/erms/filter-options', ermsAccess, ctrl.filterOptions);
+// The desktop system's menus (project types, statuses, addresses), for the forms.
+router.get(
+  '/api/erms/lookups',
+  ermsAccess,
+  validate(z.object({ province: z.enum(PROVINCE_KEYS).optional() }), 'query'),
+  ctrl.getLookups
+);
 
 router.get('/api/erms/records', ermsAccess, validate(listQuery, 'query'), ctrl.listRecords);
 router.post('/api/erms/records', ermsWrite, validate(createSchema), ctrl.createRecord);
+
+// Create a record and file its scan in one multipart request: `payload`
+// (JSON, the createSchema shape) and `file`. The payload is parsed here so
+// the same schema checks it.
+function validateMultipartPayload(req, res, next) {
+  let parsed;
+  try {
+    parsed = JSON.parse(req.body?.payload || '{}');
+  } catch {
+    return res.status(400).json({ code: 'BAD_PAYLOAD', message: 'The record could not be read.' });
+  }
+  const result = createSchema.safeParse(parsed);
+  if (!result.success) {
+    return res.status(400).json({
+      code: 'VALIDATION',
+      message: 'Some fields need attention.',
+      errors: result.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
+    });
+  }
+  req.validatedPayload = result.data;
+  return next();
+}
+router.get('/api/erms/records/next-serial', ermsWrite, ctrl.nextSerial);
+// The unit's duplicate rules (Settings › ERMS): what the form warns about,
+// and the permit numbers filed more than once.
+router.get(
+  '/api/erms/records/duplicates',
+  ermsAccess,
+  validate(z.object({ permitNumber: z.string().trim().max(120).optional(), fileName: z.string().trim().max(400).optional(), exclude: z.string().trim().max(60).optional() }), 'query'),
+  ctrl.duplicateCheck
+);
+router.get('/api/erms/records/duplicate-groups', ermsAccess, expensiveLimiter, ctrl.duplicateGroups);
+router.post('/api/erms/records/upload', ermsWrite, requireNasActive, uploadOne, validateMultipartPayload, ctrl.uploadRecord);
+router.post(
+  '/api/erms/records/:serialNo/upload',
+  ermsWrite,
+  requireNasActive,
+  validate(serialParam, 'params'),
+  uploadOne,
+  ctrl.attachRecordFile
+);
+
+// --- the units: Legal Services and Laboratory --------------------------------------
+
+const unitParam = z.object({ unit: z.enum(ERMS_UNIT_VALUES) });
+const unitSerialParam = z.object({ unit: z.enum(ERMS_UNIT_VALUES), serialNo: z.string().trim().min(3).max(80) });
+const unitListQuery = z.object({
+  docType: z.string().trim().max(40).optional(),
+  province: z.string().trim().max(40).optional(),
+  docketNo: z.string().trim().max(80).optional(),
+  missingFile: z.coerce.boolean().optional(),
+  search: z.string().trim().max(200).optional(),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  sortBy: z.string().trim().max(40).optional(),
+  sortDir: z.coerce.number().int().optional(),
+});
+const unitUpdateSchema = z.object({
+  province: z.enum(PROVINCE_KEYS).optional(),
+  fields: z.record(z.any()).optional(),
+}).refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update.' });
+
+// The folder picker on the upload forms (see unitController): the project
+// folders at the filing level for a province and date; make one; remove an
+// empty one. `:unit` here includes 'records'.
+const folderUnitParam = z.object({ unit: z.enum(ERMS_UNIT_VALUES) });
+const folderLevelQuery = z.object({
+  province: z.enum(PROVINCE_KEYS).optional(),
+  date: z.string().trim().max(40).optional(),
+  // With `folder`, the level is that project folder: its subfolders are listed, made, removed.
+  folder: z.string().trim().max(120).optional(),
+  // What the form would derive the folder from (the project title, the
+  // company), so the listing can say what the default folder would be.
+  hint: z.string().trim().max(300).optional(),
+});
+const folderBody = folderLevelQuery.extend({ name: z.string().trim().min(1).max(120) });
+router.get('/api/erms/units/:unit/folders', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(folderLevelQuery, 'query'), unitCtrl.listFolders);
+router.post('/api/erms/units/:unit/folders', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(folderBody), unitCtrl.createFolder);
+router.delete('/api/erms/units/:unit/folders', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(folderBody), unitCtrl.deleteFolder);
+
+// The unit's own settings (Settings › ERMS) and its log history.
+router.get('/api/erms/units/:unit/settings', ermsAccess, validate(folderUnitParam, 'params'), unitCtrl.getSettings);
+router.put('/api/erms/units/:unit/settings', ermsAccess, validate(folderUnitParam, 'params'), unitCtrl.saveSettings);
+router.post('/api/erms/units/:unit/settings/reset', ermsAccess, validate(folderUnitParam, 'params'), unitCtrl.resetSettings);
+router.get('/api/erms/units/:unit/duplicate-groups', ermsAccess, validate(folderUnitParam, 'params'), expensiveLimiter, unitCtrl.unitDuplicateGroups);
+router.get(
+  '/api/erms/units/:unit/duplicates',
+  ermsAccess,
+  validate(folderUnitParam, 'params'),
+  validate(z.object({ fileName: z.string().trim().max(400).optional() }), 'query'),
+  unitCtrl.unitDuplicateCheck
+);
+router.get(
+  '/api/erms/units/:unit/activity',
+  ermsAccess,
+  validate(folderUnitParam, 'params'),
+  validate(z.object({ q: z.string().trim().max(120).optional(), limit: z.coerce.number().int().min(1).max(500).optional() }), 'query'),
+  unitCtrl.unitActivity
+);
+
+router.get('/api/erms/units', ermsAccess, unitCtrl.myUnits);
+router.get('/api/erms/units/:unit/dashboard', ermsAccess, validate(unitParam, 'params'), expensiveLimiter, unitCtrl.unitDashboard);
+router.get('/api/erms/units/:unit/documents', ermsAccess, validate(unitParam, 'params'), validate(unitListQuery, 'query'), unitCtrl.listDocuments);
+router.post('/api/erms/units/:unit/documents', ermsAccess, requireNasActive, validate(unitParam, 'params'), uploadOne, unitCtrl.createDocument);
+router.get('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.getDocument);
+router.patch('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), validate(unitUpdateSchema), unitCtrl.updateDocument);
+router.get('/api/erms/units/:unit/documents/:serialNo/file', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), unitCtrl.getDocumentFileInfo);
+router.get('/api/erms/units/:unit/documents/:serialNo/file/preview', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), unitCtrl.viewDocumentFile);
+
+// --- configuration (Admin Settings > ERMS Config) ------------------------------------
+
+router.get('/api/erms/config', ermsAdmin, unitCtrl.getConfig);
+router.put('/api/erms/config', ermsAdmin, unitCtrl.saveConfig);
+router.post('/api/erms/config/reset', ermsAdmin, unitCtrl.resetConfig);
+router.get('/api/erms/config/lookups/:kind', ermsAdmin, validate(z.object({ kind: z.string().regex(/^[a-z][a-z-]{1,40}$/) }), 'params'), unitCtrl.getLookup);
+router.put('/api/erms/config/lookups/:kind', ermsAdmin, validate(z.object({ kind: z.string().regex(/^[a-z][a-z-]{1,40}$/) }), 'params'), unitCtrl.saveLookup);
 router.get('/api/erms/records/:serialNo', ermsAccess, validate(serialParam, 'params'), ctrl.getRecord);
 router.patch(
   '/api/erms/records/:serialNo',
@@ -180,6 +331,12 @@ router.patch(
 // stored path is looked up server-side, so there is no caller input that could
 // name a different file. ermsAccess carries the province scope, so a clerk who
 // cannot read the record cannot read its document.
+//
+// View only. There is no download route: the office's rule is that scans are
+// read in the application, by the Records Unit or by whoever the Records Unit
+// has approved for that record (see services/accessRequestService.js). The
+// controller enforces the approval; a request that fails it gets 403
+// APPROVAL_REQUIRED with the state of the caller's own request.
 router.get(
   '/api/erms/records/:serialNo/file',
   ermsAccess,
@@ -194,12 +351,51 @@ router.get(
   validate(serialParam, 'params'),
   ctrl.viewRecordFile
 );
-router.get(
-  '/api/erms/records/:serialNo/file/download',
+
+// Asking for, and deciding on, document access. Asking needs only ERMS
+// access (and province scope on the record); deciding is refused in the
+// service to anyone but the Records Unit.
+const accessRequestSchema = z.object({ reason: optional(500), full: z.coerce.boolean().optional() });
+const accessDecisionSchema = z.object({
+  decision: z.enum(['approved', 'denied']),
+  durationHours: z.coerce.number().int().optional(),
+  note: optional(500),
+  // Every page, rather than the first few the unit's viewing rule allows.
+  fullAccess: z.coerce.boolean().optional(),
+});
+const requestIdParam = z.object({ id: z.string().regex(/^[a-f0-9]{24}$/i) });
+
+router.post(
+  '/api/erms/records/:serialNo/access-request',
   ermsAccess,
-  requireNasActive,
   validate(serialParam, 'params'),
-  ctrl.downloadRecordFile
+  validate(accessRequestSchema),
+  ctrl.requestDocumentAccess
+);
+// Sharing: the Records Unit opens a document for a named person — the same
+// approval a request would end in, granted without the asking.
+router.get('/api/erms/share/people', ermsAccess, validate(z.object({ q: z.string().trim().max(120).optional() }), 'query'), ctrl.sharePeople);
+router.post(
+  '/api/erms/records/:serialNo/share',
+  ermsAccess,
+  validate(serialParam, 'params'),
+  validate(z.object({ userId: z.string().regex(/^[a-f0-9]{24}$/i), durationHours: z.coerce.number().int().optional(), note: optional(500), fullAccess: z.coerce.boolean().optional() })),
+  ctrl.shareDocument
+);
+router.get('/api/erms/access-requests', ermsAccess, ctrl.listAccessRequests);
+router.patch(
+  '/api/erms/access-requests/:id',
+  ermsAccess,
+  validate(requestIdParam, 'params'),
+  validate(accessDecisionSchema),
+  ctrl.decideAccessRequest
+);
+router.post(
+  '/api/erms/access-requests/:id/revoke',
+  ermsAccess,
+  validate(requestIdParam, 'params'),
+  validate(z.object({ note: optional(500) })),
+  ctrl.revokeAccessRequest
 );
 
 // Tracking is append-only: no PATCH, no DELETE. A mistake is corrected by

@@ -111,6 +111,8 @@ function setupSocket(server, allowedOrigins) { // Accept allowedOrigins as a par
       mbuManager.leave(socket, io, "disconnect");
     });
   });
+  // The NAS bridge monitor pushes availability changes through it.
+  return io;
 }
 
 module.exports = { setupSocket }; // Export setupSocket

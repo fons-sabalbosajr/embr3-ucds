@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ConfigProvider, theme as antdTheme } from "antd";
+import { API_BASE_URL } from "../config/api";
 import { getPreference, setPreference } from "../shared/preferences";
 
 // ---------------------------------------------------------------------------
@@ -28,11 +29,19 @@ const APPEARANCE_KEY = "eu-appearance";
 /** Accents chosen to stay legible against both algorithms. */
 export const ACCENTS = [
   { key: "blue", label: "Blue", color: "#2f7ecb" },
-  { key: "green", label: "Green", color: "#3f8f4f" },
+  { key: "ocean", label: "Ocean", color: "#1d6fa5" },
   { key: "teal", label: "Teal", color: "#177f83" },
+  { key: "green", label: "Green", color: "#3f8f4f" },
+  { key: "forest", label: "Forest", color: "#2f6b3a" },
   { key: "indigo", label: "Indigo", color: "#4f56c4" },
+  { key: "violet", label: "Violet", color: "#6d4bc7" },
   { key: "plum", label: "Plum", color: "#8b4a9c" },
+  { key: "rose", label: "Rose", color: "#b8386b" },
+  { key: "crimson", label: "Crimson", color: "#b3261e" },
+  { key: "ember", label: "Ember", color: "#c2531b" },
   { key: "amber", label: "Amber", color: "#a8710f" },
+  { key: "slate", label: "Slate", color: "#4d6275" },
+  { key: "graphite", label: "Graphite", color: "#3c4148" },
 ];
 
 export const DENSITIES = [
@@ -43,7 +52,42 @@ export const DENSITIES = [
   { key: "relaxed", label: "Relaxed", fontSize: 15, controlHeight: 36 },
 ];
 
-const DEFAULTS = { accent: "blue", density: "comfortable", tintedSider: true };
+/** How the sidebar and header take the accent. */
+export const NAV_STYLES = [
+  { key: "tinted", label: "Tinted", description: "Deep navy washed with the accent — the default." },
+  { key: "deep", label: "Deep", description: "Near-black with a hint of the accent; the quietest." },
+  { key: "vivid", label: "Vivid", description: "The accent itself, darkened just enough to read on." },
+  { key: "neutral", label: "Neutral", description: "Plain charcoal, no tint." },
+  { key: "graphite", label: "Graphite", description: "Warm dark grey with a soft accent line." },
+];
+
+/** Corner rounding across buttons, cards, inputs and tables. */
+export const RADII = [
+  { key: "sharp", label: "Sharp", radius: 4 },
+  { key: "rounded", label: "Rounded", radius: 8 },
+  { key: "round", label: "Round", radius: 12 },
+];
+
+/** The content background behind cards and tables. */
+export const SURFACES = [
+  { key: "plain", label: "Plain", description: "Neutral grey (light) or near-black (dark)." },
+  { key: "soft", label: "Soft", description: "A faint wash of the accent." },
+  { key: "warm", label: "Warm", description: "Slightly warm paper tone." },
+  { key: "cool", label: "Cool", description: "Slightly cool, bluish tone." },
+];
+
+const DEFAULTS = {
+  accent: "blue",
+  // A custom accent, as a hex colour, wins over `accent` when set.
+  accentHex: null,
+  density: "comfortable",
+  tintedSider: true,
+  navStyle: "tinted",
+  radius: "rounded",
+  surface: "plain",
+};
+
+const HEX = /^#[0-9a-f]{6}$/i;
 
 const readAppearance = () => {
   try {
@@ -83,19 +127,44 @@ function mix(a, b, amount) {
  */
 const NAVY = "#0d1522";
 
-function navigationSurfaces(accent, tinted) {
-  if (!tinted) {
-    // Neutral navigation for anyone who does not want the tint. Still fixed
-    // across themes, for the same reason.
-    return { sider: "#161a20", header: "#1f242c", text: "#e8ecf2" };
+function navigationSurfaces(accent, style) {
+  switch (style) {
+    case "neutral":
+      // Plain navigation for anyone who does not want the tint. Still fixed
+      // across themes, for the same reason.
+      return { sider: "#161a20", header: "#1f242c", text: "#e8ecf2" };
+    case "deep":
+      return { sider: mix(accent, "#07090d", 0.9), header: mix(accent, "#07090d", 0.72), text: "#eef2f8" };
+    case "vivid":
+      // The accent itself, darkened so white type and the selected item (in
+      // the pure accent) still stand out from it.
+      return { sider: mix(accent, "#000000", 0.42), header: mix(accent, "#000000", 0.22), text: "#ffffff" };
+    case "graphite":
+      return { sider: "#24262b", header: mix(accent, "#2c2f35", 0.7), text: "#eceef2" };
+    default:
+      return {
+        // Far enough apart to read as two surfaces at a glance. At 0.78/0.62
+        // the step was there but too subtle to see without looking for it.
+        sider: mix(accent, NAVY, 0.82),
+        header: mix(accent, NAVY, 0.52),
+        text: "#eef2f8",
+      };
   }
-  return {
-    // Far enough apart to read as two surfaces at a glance. At 0.78/0.62 the
-    // step was there but too subtle to see without looking for it.
-    sider: mix(accent, NAVY, 0.82),
-    header: mix(accent, NAVY, 0.52),
-    text: "#eef2f8",
-  };
+}
+
+/** The content background for a surface choice, per mode. */
+function contentSurface(accent, surface, isDark) {
+  const base = isDark ? "#0f1115" : "#f3f5f8";
+  switch (surface) {
+    case "soft":
+      return mix(base, accent, isDark ? 0.08 : 0.06);
+    case "warm":
+      return mix(base, isDark ? "#3a2f22" : "#f7efe3", isDark ? 0.35 : 0.6);
+    case "cool":
+      return mix(base, isDark ? "#1d2838" : "#e7eef8", isDark ? 0.4 : 0.6);
+    default:
+      return null; // the algorithm's own
+  }
 }
 
 const ThemeContext = createContext(null);
@@ -105,6 +174,14 @@ export const useTheme = () => {
   if (!ctx) throw new Error("useTheme must be used inside ThemeProvider");
   return ctx;
 };
+
+// ---------------------------------------------------------------------------
+// The look follows the person, not the device. Once signed in, the account's
+// stored theme is applied here and every later change is written back
+// (PUT /api/profile/theme). The browser copy in localStorage is what the
+// sign-in pages use, where there is no account to ask yet, and what a
+// returning person sees for the instant before /api/auth/me answers.
+// ---------------------------------------------------------------------------
 
 export const ThemeProvider = ({ children }) => {
   const [mode, setModeState] = useState(() => {
@@ -148,13 +225,86 @@ export const ThemeProvider = ({ children }) => {
     setPreference(APPEARANCE_KEY, JSON.stringify(DEFAULTS));
   }, []);
 
+  // Account sync. `bound` is set once /api/auth/me has answered for a signed-in
+  // person; until then nothing is written back, so the sign-in pages' toggle
+  // stays a device preference.
+  const bound = useRef(false);
+  const saveTimer = useRef(null);
+  const skipNextSave = useRef(false);
+
+  const bindAccount = useCallback((theme) => {
+    bound.current = true;
+    if (theme && typeof theme === "object") {
+      skipNextSave.current = true;
+      if (theme.mode === "light" || theme.mode === "dark") {
+        setModeState(theme.mode);
+        setPreference(THEME_KEY, theme.mode);
+      }
+      const patch = {};
+      if (typeof theme.accent === "string") patch.accent = theme.accent;
+      if (theme.accentHex === null || (typeof theme.accentHex === "string" && HEX.test(theme.accentHex))) patch.accentHex = theme.accentHex;
+      if (typeof theme.density === "string") patch.density = theme.density;
+      if (typeof theme.tintedSider === "boolean") patch.tintedSider = theme.tintedSider;
+      if (typeof theme.navStyle === "string") patch.navStyle = theme.navStyle;
+      if (typeof theme.radius === "string") patch.radius = theme.radius;
+      if (typeof theme.surface === "string") patch.surface = theme.surface;
+      if (Object.keys(patch).length) {
+        setAppearanceState((current) => {
+          const next = { ...current, ...patch };
+          setPreference(APPEARANCE_KEY, JSON.stringify(next));
+          return next;
+        });
+      }
+    }
+  }, []);
+
+  const unbindAccount = useCallback(() => {
+    bound.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!bound.current) return undefined;
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return undefined;
+    }
+    // A short debounce: the accent picker fires on every click.
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      fetch(`${API_BASE_URL}/api/profile/theme`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme: {
+            mode,
+            accent: appearance.accent,
+            accentHex: HEX.test(appearance.accentHex || "") ? appearance.accentHex : null,
+            density: appearance.density,
+            tintedSider: appearance.tintedSider !== false,
+            navStyle: appearance.navStyle,
+            radius: appearance.radius,
+            surface: appearance.surface,
+          },
+        }),
+      }).catch(() => {});
+    }, 600);
+    return () => clearTimeout(saveTimer.current);
+  }, [mode, appearance]);
+
   const isDark = mode === "dark";
-  const accent = (ACCENTS.find((a) => a.key === appearance.accent) || ACCENTS[0]).color;
+  const accent = HEX.test(appearance.accentHex || "")
+    ? appearance.accentHex.toLowerCase()
+    : (ACCENTS.find((a) => a.key === appearance.accent) || ACCENTS[0]).color;
   const density = DENSITIES.find((d) => d.key === appearance.density) || DENSITIES[0];
-  const nav = useMemo(
-    () => navigationSurfaces(accent, appearance.tintedSider !== false),
-    [accent, appearance.tintedSider]
-  );
+  // `navStyle` supersedes the older tintedSider switch; an account that only
+  // saved the switch still gets what it chose.
+  const navStyle = NAV_STYLES.some((s) => s.key === appearance.navStyle)
+    ? appearance.navStyle
+    : appearance.tintedSider === false ? "neutral" : "tinted";
+  const radius = (RADII.find((r) => r.key === appearance.radius) || RADII[1]).radius;
+  const surfaceBg = useMemo(() => contentSurface(accent, appearance.surface, isDark), [accent, appearance.surface, isDark]);
+  const nav = useMemo(() => navigationSurfaces(accent, navStyle), [accent, navStyle]);
 
   // Published as CSS variables so stylesheets follow the accent instead of
   // pinning their own colours — which is what made the header and sider ignore
@@ -168,7 +318,10 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty("--eu-nav-text", nav.text);
     root.style.setProperty("--eu-accent", accent);
     root.style.setProperty("--highlight-color", accent);
-  }, [nav, accent]);
+    root.style.setProperty("--eu-radius", `${radius}px`);
+    if (surfaceBg) root.style.setProperty("--eu-surface-bg", surfaceBg);
+    else root.style.removeProperty("--eu-surface-bg");
+  }, [nav, accent, radius, surfaceBg]);
 
   const themeConfig = useMemo(
     () => ({
@@ -177,9 +330,10 @@ export const ThemeProvider = ({ children }) => {
         // Only what the algorithm cannot decide for us.
         colorPrimary: accent,
         colorInfo: accent,
-        borderRadius: 8,
+        borderRadius: radius,
         fontSize: density.fontSize,
         controlHeight: density.controlHeight,
+        ...(surfaceBg ? { colorBgLayout: surfaceBg } : {}),
         // Ant Design's own stack: the system face on every platform, no web
         // font to download and no Poppins to fall back from.
         fontFamily:
@@ -196,7 +350,7 @@ export const ThemeProvider = ({ children }) => {
           triggerColor: nav.text,
         },
         Menu: {
-          itemBorderRadius: 6,
+          itemBorderRadius: Math.max(radius - 2, 2),
           darkItemBg: "transparent",
           // Expanded submenu panels sit a shade below the sider so the
           // hierarchy (section > year > dataset) reads at a glance.
@@ -210,13 +364,13 @@ export const ThemeProvider = ({ children }) => {
           // room to stay legible against it.
           itemHeight: density.controlHeight + 4,
         },
-        Button: { borderRadius: 6, paddingInline: 14, fontWeight: 500 },
-        Card: { borderRadiusLG: 12 },
-        Modal: { borderRadiusLG: 12 },
-        Table: { borderRadius: 8 },
+        Button: { borderRadius: Math.max(radius - 2, 2), paddingInline: 14, fontWeight: 500 },
+        Card: { borderRadiusLG: radius + 4 },
+        Modal: { borderRadiusLG: radius + 4 },
+        Table: { borderRadius: radius },
       },
     }),
-    [isDark, accent, density, nav]
+    [isDark, accent, density, nav, radius, surfaceBg]
   );
 
   const value = useMemo(
@@ -231,8 +385,14 @@ export const ThemeProvider = ({ children }) => {
       accentColor: accent,
       accents: ACCENTS,
       densities: DENSITIES,
+      navStyles: NAV_STYLES,
+      navStyle,
+      radii: RADII,
+      surfaces: SURFACES,
+      bindAccount,
+      unbindAccount,
     }),
-    [mode, isDark, setMode, toggleMode, appearance, setAppearance, resetAppearance, accent]
+    [mode, isDark, setMode, toggleMode, appearance, setAppearance, resetAppearance, accent, navStyle, bindAccount, unbindAccount]
   );
 
   return (

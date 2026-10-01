@@ -1,330 +1,291 @@
-import { Avatar, Input, Button, Tabs, Table, Progress, Tag } from "antd";
-import { message } from "../../../shared/feedback";
-import "./useraccountmodal.css";
-import { UserOutlined, CameraOutlined } from "@ant-design/icons";
-import { useState, useEffect } from "react";
-import Swal from "sweetalert2";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Button, Descriptions, Form, Input, Space, Table, Tabs, Tag, Typography } from "antd";
+import { EditOutlined, SaveOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import axios from "axios";
-import AvatarSelectionModal from "../../../components/AvatarSelectionModalProfile";
-import { accountType } from "../../../shared/accountTypes";
+import dayjs from "dayjs";
+import { message } from "../../../shared/feedback";
 import AvatarWithName from "../../../components/AvatarwithName";
-import CryptoJS from "crypto-js";
+import { accountType } from "../../../shared/accountTypes";
 import { API_BASE_URL } from "../../../config/api";
+import "./useraccountmodal.css";
 
-const { TabPane } = Tabs;
+const { Text, Title } = Typography;
 
-const UserAccountModal = ({ userHandle, user, onClose }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editableUser, setEditableUser] = useState(
-    user ? { ...user, avatar: user.avatar || null } : null
-  );
-  const [originalUser, setOriginalUser] = useState({ ...user });
-  const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [newAvatarUrl, setNewAvatarUrl] = useState(null); // To store new avatar URL
-  const [loading, setLoading] = useState(false);
+// ---------------------------------------------------------------------------
+// Account Details: who this person is, and a plain summary of what their
+// account can reach. Identity fields are edited here; everything under
+// "Access" is set from the User Permission dialog (Edit Access), which
+// carries the checks — this view only reports it.
+// ---------------------------------------------------------------------------
 
-  const fetchUserData = async (username = editableUser?.username) => {
-    if (!username) return null;
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/users?username=${username}`
-      );
-      if (response.data && response.data.length > 0) {
-        return response.data[0];
-      }
-      return null;
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-      return null;
-    }
-  };
+const PROVINCES = [
+  ["aurora", "Aurora"],
+  ["bataan", "Bataan"],
+  ["bulacan", "Bulacan"],
+  ["nuevaEcija", "Nueva Ecija"],
+  ["pampanga", "Pampanga"],
+  ["tarlac", "Tarlac"],
+  ["zambales", "Zambales"],
+];
 
-  // Handler for uploading avatar
-  const handleAvatarChange = (info) => {
-    if (info.file.status === "uploading") {
-      setUploading(true);
-    }
-    if (info.file.status === "done") {
-      message.success(`${info.file.name} file uploaded successfully`);
-      setNewAvatarUrl(info.file.response?.url); // Assuming the response contains the new avatar URL
-      setUploading(false);
-    } else if (info.file.status === "error") {
-      message.error(`${info.file.name} file upload failed.`);
-      setUploading(false);
-    }
-  };
+const CAPABILITIES = [
+  ["canManageData", "Add, edit and delete data"],
+  ["canGenerateData", "Generate reports"],
+  ["canViewDataHistory", "View data history"],
+  ["canAccessRangePicker", "Date range picker"],
+  ["canViewAdminPanel", "Admin panel"],
+];
 
-  const handleSave = async () => {
-    try {
-      // Show loading indicator
-      Swal.fire({
-        title: "Saving...",
-        text: "Please wait while we update the user info.",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
-  
-      let updatedUserData = { ...editableUser };
-  
-      if (newAvatarUrl) {
-        updatedUserData.avatar = newAvatarUrl;
-      }
-  
-      const response = await axios.put(
-        `${API_BASE_URL}/api/users/${editableUser._id}`,
-        updatedUserData,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-  
-      Swal.close(); // Close loading indicator after response
-  
-      if (response.status === 200 && response.data) {
-        setOriginalUser({ ...updatedUserData });
-        setIsEditing(false);
-        Swal.fire({
-          title: "Success!",
-          text: "User information updated successfully!",
-          icon: "success",
-          confirmButtonText: "OK",
-        });
-      } else {
-        Swal.fire({
-          title: "Error!",
-          text: "Failed to update user information. Please try again.",
-          icon: "error",
-          confirmButtonText: "OK",
-        });
-        const refreshed = await fetchUserData();
-        if (refreshed) setEditableUser(refreshed);
-      }
-    } catch (error) {
-      Swal.close(); // Close loading if error occurs
-      console.error(
-        "Error updating user:",
-        error.response ? error.response.data : error
-      );
-      Swal.fire({
-        title: "Error!",
-        text: error.response
-          ? error.response.data.error
-          : "Failed to update user information. Please try again.",
-        icon: "error",
-        confirmButtonText: "OK",
-      });
-    }
-  };
-  
+const CONTAINER_LABELS = { records: "Records", legal: "Legal", laboratory: "Laboratory", "clearance-permitting": "Clearance and Permitting" };
 
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
+const DOMAIN_LABELS = { ucds: "UCDS", erms: "ERMS", admin: "Administration" };
+const DEFAULT_DOMAINS = {
+  developer: ["ucds", "erms", "admin"],
+  admin: ["ucds", "erms", "admin"],
+  records: ["erms", "ucds"],
+  planning: ["ucds"],
+  viewer: ["ucds"],
+};
 
-  const handleCancel = () => {
-    if (isEditing) {
-      Swal.fire({
-        title: "Cancel Editing",
-        text: "Are you sure you want to cancel editing? Your changes will be discarded.",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Yes",
-        cancelButtonText: "No",
-      }).then((result) => {
-        if (result.isConfirmed) {
-          setIsEditing(false);
-          setEditableUser({ ...originalUser });
-        }
-      });
-    } else {
-      onClose?.();
-    }
-  };
-
-  const handleAvatarModal = () => {
-    setIsAvatarModalVisible(true);
-  };
-
-  const handleAvatarModalClose = () => {
-    setIsAvatarModalVisible(false);
-  };
-
-  const handleChange = (field, value) => {
-    setEditableUser({
-      ...editableUser,
-      [field]: value,
-    });
-  };
-
-
-
-  const recentChangesColumns = [
-    {
-      title: "Date",
-      dataIndex: "date",
-    },
-    {
-      title: "Change",
-      dataIndex: "change",
-    },
-  ];
-
-  const encodedDataColumns = [
-    {
-      title: "Key",
-      dataIndex: "key",
-    },
-    {
-      title: "Value",
-      dataIndex: "value",
-    },
-  ];
+const UserAccountModal = ({ user, onClose, onSaved }) => {
+  const [form] = Form.useForm();
+  const [current, setCurrent] = useState(user);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [logs, setLogs] = useState({ items: [], loading: true, forbidden: false });
 
   useEffect(() => {
-    if (userHandle) {
-      const encryptedUsername = localStorage.getItem("encryptedUsername");
-      if (encryptedUsername) {
-        const bytes = CryptoJS.AES.decrypt(
-          encryptedUsername,
-          import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY // Ensure this is available in your environment
-        );
-        const decryptedUsername = bytes.toString(CryptoJS.enc.Utf8);
+    setCurrent(user);
+  }, [user]);
 
-        setLoading(true);
-        fetchUserData(decryptedUsername)
-          .then((userData) => {
-            setEditableUser(userData);
-            setOriginalUser(userData); // Keep original data for comparison
-          })
-          .catch((error) => {
-            console.error("Error fetching user data:", error);
-          })
-          .finally(() => {
-            setLoading(false);
-          });
-      }
+  // Recent activity for this person, from the application log. Developers
+  // may read it; for anyone else the tab just says so.
+  const loadLogs = useCallback(async () => {
+    if (!user?.username) return;
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/dev/activity-logs`, { params: { username: user.username, limit: 25 }, withCredentials: true });
+      setLogs({ items: res.data?.items || [], loading: false, forbidden: false });
+    } catch (err) {
+      setLogs({ items: [], loading: false, forbidden: err?.response?.status === 403 || err?.response?.status === 401 });
     }
-  }, [userHandle]);
+  }, [user?.username]);
 
-  if (!user) return null;
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
- return (
-    <div className="profile-container">
-      <div className="profile-top-section">
-        <div className="avatar-container">
-          {editableUser ? (
-            <AvatarWithName userHandle={editableUser.username} size="100px" />
+  const type = accountType(current?.permission);
+  const domains = useMemo(() => {
+    const explicit = Array.isArray(current?.domains) && current.domains.length ? current.domains : null;
+    return explicit || DEFAULT_DOMAINS[String(current?.permission || "viewer").toLowerCase()] || ["ucds"];
+  }, [current]);
+  const developer = String(current?.permission || "").toLowerCase() === "developer";
+  const provinceScope = PROVINCES.filter(([k]) => current?.[k] && current[k] !== "none");
+  const capabilities = CAPABILITIES.filter(([k]) => developer || current?.[k] === true || current?.capabilities?.[k] === true);
+
+  const startEdit = () => {
+    form.setFieldsValue({
+      empid: current?.empid || "",
+      name: current?.name || "",
+      email: current?.email || "",
+      division: current?.division || "",
+      designation: current?.designation === "n/a" ? "" : current?.designation || "",
+      office: current?.office === "n/a" ? "" : current?.office || "",
+      region: current?.region === "n/a" ? "" : current?.region || "",
+    });
+    setEditing(true);
+  };
+
+  const save = async (values) => {
+    setSaving(true);
+    try {
+      const body = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]));
+      await axios.put(`${API_BASE_URL}/api/users/${current._id}`, body, { withCredentials: true });
+      const next = { ...current, ...body };
+      setCurrent(next);
+      setEditing(false);
+      message.success("Account details saved.");
+      onSaved?.(next);
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Could not save the account details.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!current) return null;
+
+  const identity = (
+    <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered labelStyle={{ width: 140 }}>
+      <Descriptions.Item label="Employee ID">{current.empid || <Text type="secondary">—</Text>}</Descriptions.Item>
+      <Descriptions.Item label="Username">
+        <Text code>{current.username}</Text>
+      </Descriptions.Item>
+      <Descriptions.Item label="Email">{current.email}</Descriptions.Item>
+      <Descriptions.Item label="Division / Section">{current.division || <Text type="secondary">—</Text>}</Descriptions.Item>
+      <Descriptions.Item label="Designation">{current.designation && current.designation !== "n/a" ? current.designation : <Text type="secondary">—</Text>}</Descriptions.Item>
+      <Descriptions.Item label="Office">{current.office && current.office !== "n/a" ? current.office : <Text type="secondary">—</Text>}</Descriptions.Item>
+      <Descriptions.Item label="Region">{current.region && current.region !== "n/a" ? current.region : <Text type="secondary">—</Text>}</Descriptions.Item>
+      <Descriptions.Item label="Status">
+        <Tag color={current.status === "online" ? "green" : "default"}>{current.status || "offline"}</Tag>
+      </Descriptions.Item>
+    </Descriptions>
+  );
+
+  const editForm = (
+    <Form form={form} layout="vertical" onFinish={save} className="account-edit-form">
+      <div className="account-edit-grid">
+        <Form.Item name="empid" label="Employee ID">
+          <Input maxLength={40} />
+        </Form.Item>
+        <Form.Item name="name" label="Full name" rules={[{ required: true, message: "Enter the person's name." }]}>
+          <Input maxLength={120} />
+        </Form.Item>
+        <Form.Item name="email" label="Email" rules={[{ required: true, type: "email", message: "Enter a valid email address." }]}>
+          <Input maxLength={160} />
+        </Form.Item>
+        <Form.Item name="division" label="Division / Section" rules={[{ required: true, message: "Enter the division or section." }]}>
+          <Input maxLength={120} />
+        </Form.Item>
+        <Form.Item name="designation" label="Designation">
+          <Input maxLength={120} />
+        </Form.Item>
+        <Form.Item name="office" label="Office">
+          <Input maxLength={120} />
+        </Form.Item>
+        <Form.Item name="region" label="Region">
+          <Input maxLength={40} />
+        </Form.Item>
+      </div>
+    </Form>
+  );
+
+  const access = (
+    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Alert
+        type="info"
+        showIcon
+        icon={<SafetyCertificateOutlined />}
+        message="What this account can reach"
+        description="Set from Edit Access on the User Accounts table. Shown here as the server applies it."
+      />
+      <Descriptions column={1} size="small" bordered labelStyle={{ width: 180 }}>
+        <Descriptions.Item label="Account type">
+          <Space>
+            <Tag color={type.color}>{type.label}</Tag>
+            <Text type="secondary">{type.description}</Text>
+          </Space>
+        </Descriptions.Item>
+        <Descriptions.Item label="Modules">
+          {domains.map((d) => (
+            <Tag key={d}>{DOMAIN_LABELS[d] || d}</Tag>
+          ))}
+        </Descriptions.Item>
+        <Descriptions.Item label="Year containers">
+          {developer ? (
+            <Text type="secondary">every active year</Text>
+          ) : Array.isArray(current.assignedYears) && current.assignedYears.length ? (
+            [...current.assignedYears].sort().map((y) => <Tag key={y}>{y}</Tag>)
           ) : (
-            <Avatar
-              size={100}
-              icon={<UserOutlined />}
-              style={{ verticalAlign: "middle" }}
-            />
+            <Text type="warning">none assigned — cannot enter UCDS</Text>
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label="Storage containers">
+          {developer ? (
+            <Text type="secondary">every container</Text>
+          ) : String(current.permission).toLowerCase() === "viewer" ? (
+            <Text type="secondary">none — Encoders have no storage</Text>
+          ) : Array.isArray(current.nasContainers) && current.nasContainers.length ? (
+            current.nasContainers.map((k) => <Tag key={k}>{CONTAINER_LABELS[k] || k}</Tag>)
+          ) : String(current.permission).toLowerCase() === "records" ? (
+            <Tag>Records (default)</Tag>
+          ) : (
+            <Text type="secondary">none designated</Text>
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label="Province scope">
+          {developer || String(current.permission).toLowerCase() === "admin" ? (
+            <Text type="secondary">all provinces</Text>
+          ) : provinceScope.length ? (
+            provinceScope.map(([k, label]) => (
+              <Tag key={k} color={current[k] === "readWrite" ? "blue" : "default"}>
+                {label} · {current[k] === "readWrite" ? "read / write" : "view"}
+              </Tag>
+            ))
+          ) : (
+            <Text type="warning">no province — sees no register rows</Text>
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label="Capabilities">
+          {capabilities.length ? capabilities.map(([k, label]) => <Tag key={k}>{label}</Tag>) : <Text type="secondary">read only</Text>}
+        </Descriptions.Item>
+      </Descriptions>
+    </Space>
+  );
+
+  const activity = logs.forbidden ? (
+    <Alert type="info" showIcon message="Only a Developer can read the activity log." />
+  ) : (
+    <Table
+      size="small"
+      rowKey={(r) => r._id}
+      loading={logs.loading}
+      dataSource={logs.items}
+      pagination={{ defaultPageSize: 8, size: "small" }}
+      locale={{ emptyText: "No activity recorded for this account yet." }}
+      columns={[
+        { title: "When", dataIndex: "timestamp", width: 170, render: (v, r) => dayjs(v || r.createdAt || r.date).format("D MMM YYYY, h:mm A") },
+        { title: "Action", dataIndex: "actionLabel", render: (v, r) => v || r.operation || r.message || "—" },
+        { title: "Where", dataIndex: "path", width: 220, ellipsis: true, render: (v, r) => (r.domain === "nas" ? "storage" : v || "—") },
+      ]}
+    />
+  );
+
+  return (
+    <div className="account-modal">
+      <div className="account-hero">
+        <AvatarWithName userHandle={current.username} size="72px" />
+        <div className="account-hero-text">
+          <Title level={4} style={{ margin: 0 }}>
+            {current.name}
+          </Title>
+          <Space size={6} wrap>
+            <Text type="secondary">@{current.username}</Text>
+            <Tag color={type.color}>{type.label}</Tag>
+            {current.isDemo && <Tag color="gold">demo</Tag>}
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {current.division}
+            {current.designation && current.designation !== "n/a" ? ` · ${current.designation}` : ""}
+          </Text>
+        </div>
+        <div className="account-hero-actions">
+          {editing ? (
+            <Space>
+              <Button onClick={() => setEditing(false)}>Cancel</Button>
+              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => form.submit()}>
+                Save
+              </Button>
+            </Space>
+          ) : (
+            <Space>
+              <Button icon={<EditOutlined />} onClick={startEdit}>
+                Edit details
+              </Button>
+              <Button onClick={onClose}>Close</Button>
+            </Space>
           )}
         </div>
-
-        <div className="user-info-columns-container">
-          <div className="user-info-column">
-            <p className="label-user">Employee ID:</p>
-            <Input
-              placeholder="Employee ID"
-              value={editableUser ? editableUser.empid : ""}
-              onChange={(e) => handleChange("empid", e.target.value)}
-              className="input-label"
-            />
-            <p className="label-user">Name:</p>
-            <Input
-              placeholder="Enter Name"
-              value={editableUser ? editableUser.name : ""}
-              onChange={(e) => handleChange("name", e.target.value)}
-              className="input-label"
-            />
-            <p className="label-user">Division/Section:</p>
-            <Input
-              placeholder="Enter Division/Section"
-              value={editableUser ? editableUser.division : ""}
-              onChange={(e) => handleChange("division", e.target.value)}
-              className="input-label"
-            />
-            <p className="label-user">Designation:</p>
-            <Input
-              placeholder="Enter Designation"
-              value={editableUser ? editableUser.designation : ""}
-              onChange={(e) => handleChange("designation", e.target.value)}
-              className="input-label"
-            />
-          </div>
-
-          <div className="user-info-column">
-            <p className="label-user">Email Address:</p>
-            <Input
-              placeholder="Enter Email Address"
-              value={editableUser ? editableUser.email : ""}
-              onChange={(e) => handleChange("email", e.target.value)}
-              className="input-label"
-            />
-            <p className="label-user">Office:</p>
-            <Input
-              placeholder="Enter Office"
-              value={editableUser ? editableUser.office : ""}
-              onChange={(e) => handleChange("office", e.target.value)}
-              className="input-label"
-            />
-            <p className="label-user">Region:</p>
-            <Input
-              placeholder="Enter Region"
-              value={editableUser ? editableUser.region : ""}
-              onChange={(e) => handleChange("region", e.target.value)}
-              className="input-label"
-            />
-            <p className="label-user">Account type:</p>
-            {/* Read-only here. The type is set by the Developer under Edit Access,
-                which also designates storage containers. */}
-            <Tag color={accountType(editableUser?.permission).color} style={{ marginTop: 4 }}>
-              {accountType(editableUser?.permission).label}
-            </Tag>
-          </div>
-        </div>
       </div>
 
-      <div className="tab-container">
-        <Tabs defaultActiveKey="1" tabBarStyle={{ marginBottom: 0 }}>
-          <TabPane tab="Recent Changes" key="1">
-            <Table
-              columns={recentChangesColumns}
-              dataSource={[]} // Add your data source here
-            />
-          </TabPane>
-          <TabPane tab="Encoded Data" key="2">
-            <Table
-              columns={encodedDataColumns}
-              dataSource={[]} // Add your data source here
-            />
-          </TabPane>
-        </Tabs>
-
-        <div className="modal-footer-container">
-          {uploading && <Progress percent={uploadProgress} status="active" />}
-          <div className="button-group">
-            <Button
-              type={isEditing ? "primary" : "default"}
-              onClick={isEditing ? handleSave : handleEdit}
-              className="button-save"
-            >
-              {isEditing ? "Save" : "Edit"}
-            </Button>
-            <Button onClick={handleCancel} className="button-cancel">
-              {isEditing ? "Cancel" : "Close"}
-            </Button>
-          </div>
-        </div>
-      </div>
+      <Tabs
+        defaultActiveKey="details"
+        items={[
+          { key: "details", label: "Details", children: editing ? editForm : identity },
+          { key: "access", label: "Access", children: access },
+          { key: "activity", label: "Recent activity", children: activity },
+        ]}
+      />
     </div>
   );
 };

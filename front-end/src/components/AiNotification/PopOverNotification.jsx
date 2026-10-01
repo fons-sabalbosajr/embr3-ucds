@@ -15,7 +15,6 @@ import {
   CaretRightFilled,
   CaretLeftFilled,
   SettingOutlined,
-  LoadingOutlined,
 } from "@ant-design/icons";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
 // Known boundary debt: a shared notification popover opens a UCDS screen.
@@ -620,38 +619,13 @@ const NotificationsPopover = ({
       >
         {/* Wrap trigger in a native element so Popover can attach a ref without findDOMNode */}
         <span style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+          {/* Ant Design's own badge: red pill, white count, overflow at 99+,
+              nothing while the counts are still being worked out. */}
           <Badge
-            count={
-              isLoading || isProcessingNotifications || isProcessingWarnings ? (
-                <LoadingOutlined
-                  style={{
-                    fontSize: "8px",
-                    color: "white",
-                    backgroundColor: "green",
-                    borderRadius: "50%",
-                    padding: "5px",
-                    marginRight: "10px",
-                  }}
-                />
-              ) : (
-                groupedKeys.length + processedComputedWarnings.length
-              )
-            }
-            offset={[0, 4]}
-            size="small"
-            style={{
-              fontSize: "8px",
-              padding: "1px",
-              marginRight: "10px",
-              backgroundColor:
-                isLoading || isProcessingNotifications || isProcessingWarnings
-                  ? theme === "dark"
-                    ? "#444"
-                    : "#d9d9d9"
-                  : groupedKeys.length + processedComputedWarnings.length > 0
-                  ? "green"
-                  : "#d9d9d9",
-            }}
+            count={isLoading || isProcessingNotifications || isProcessingWarnings ? 0 : groupedKeys.length + processedComputedWarnings.length}
+            overflowCount={99}
+            offset={[-4, 4]}
+            title={`${groupedKeys.length + processedComputedWarnings.length} notification(s)`}
           >
             <button type="button" aria-label="Notifications" className="header-control" style={{ cursor: "pointer" }}>
               <BellOutlined style={{ fontSize: 16 }} />

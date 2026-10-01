@@ -37,9 +37,18 @@ const LIST_PROJECTION = {
   'permit.label': 1,
   'permit.number': 1,
   'permit.dateApproved': 1,
+  'permit.dateAmended': 1,
+  'permit.processSource': 1,
+  'project.type': 1,
+  'project.otherType': 1,
+  remarks: 1,
   'location.province': 1,
   'location.provinceLabel': 1,
   'location.city': 1,
+  // The register shows the full address, and its Edit button opens the
+  // form on the row without fetching the record first.
+  'location.barangay': 1,
+  'location.street': 1,
   'document.fileName': 1,
   'document.fileClass': 1,
   'document.uploadedAt': 1,
@@ -233,6 +242,25 @@ async function nextSerialNo() {
     throw new Error('Could not allocate a serial number.');
   }
   return `FSN-${String(seq).padStart(7, '0')}`;
+}
+
+/**
+ * The serial the next record will get, without taking it. Shown on the
+ * upload form, as the desktop system showed the next FSN; the number is
+ * only claimed when the record is saved, so two people looking at the form
+ * see the same next number and only the first to save gets it.
+ */
+async function peekSerialNo() {
+  await connectToMongo();
+  const counter = await sequences().findOne({ _id: 'serialNo' });
+  let seq;
+  if (counter && typeof counter.seq === 'number') {
+    seq = counter.seq;
+  } else {
+    const [highest] = await collection().find({ serialNo: /^FSN-\d+$/ }).sort({ serialNo: -1 }).limit(1).toArray();
+    seq = highest ? Number(String(highest.serialNo).replace(/\D/g, '')) : 0;
+  }
+  return `FSN-${String(seq + 1).padStart(7, '0')}`;
 }
 
 /**
@@ -486,6 +514,7 @@ module.exports = {
   filterOptions,
   // writes
   nextSerialNo,
+  peekSerialNo,
   createRecord,
   updateRecord,
   resolveUcdsRef,

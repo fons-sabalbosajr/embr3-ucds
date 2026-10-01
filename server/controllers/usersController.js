@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const { connectToMongo, collections } = require('../config/db');
 const mailer = require('../services/mailer');
 const templates = require('../services/mailTemplates');
+const { principalOf } = require('../middleware/auth');
 
 // Ensure uploads directory exists (shared with server static mount)
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -106,7 +107,7 @@ async function createUser(req, res) {
           name,
           username,
           password,
-          loginUrl: `${mailer.publicOrigin()}/universe-central-database-system/login`,
+          loginUrl: `${mailer.publicOrigin()}/e-universe/login`,
         }),
       });
 
@@ -128,6 +129,14 @@ const { ObjectId } = require('../config/db');
 // so echoing a stale hash here would silently revert a password reset. Password
 // changes go through the reset flow, which hashes properly.
 const PROTECTED_USER_FIELDS = ['_id', 'password', 'resetToken', 'resetTokenExpiration'];
+// Access is granted through its own routes (type, containers, years,
+// capabilities, provinces), each with its own check. A details edit must not
+// be a back door to any of them.
+const ACCESS_FIELDS = [
+  'permission', 'domains', 'capabilities', 'nasContainers', 'assignedYears', 'isDemo', 'ermsUnit',
+  'canAccessRangePicker', 'canGenerateData', 'canManageData', 'canViewAdminPanel', 'canViewDataHistory',
+  'aurora', 'bataan', 'bulacan', 'nuevaEcija', 'pampanga', 'tarlac', 'zambales',
+];
 
 // Never send credential material to a client. Applied to every user read so a
 // hash cannot be round-tripped back into an update.
@@ -148,6 +157,7 @@ async function updateUserById(req, res) {
     const { avatar } = req.body;
     const updatedUser = stripProtectedFields(req.body);
     delete updatedUser.avatar;
+    for (const field of ACCESS_FIELDS) delete updatedUser[field];
     const updateOperation = { $set: updatedUser };
     if (avatar) updateOperation.$set.avatar = avatar;
     if (Object.keys(updateOperation.$set).length === 0) {
@@ -196,6 +206,38 @@ async function setUserType(req, res) {
     return res.json({ message: 'Account type updated', permission, label: ROLE_LABELS[permission] });
   } catch (error) {
     console.error('Error setting user type:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+/**
+ * PUT /api/users/:id/erms-unit — the ERMS unit ("System") an account works
+ * in: records, legal or laboratory. Developer only, like the type. The unit
+ * decides which documents the person sees and which storage container holds
+ * them; it applies on their next request.
+ */
+async function setUserErmsUnit(req, res) {
+  const { ERMS_UNIT_VALUES, ERMS_UNIT_LABELS } = require('../services/authorization');
+  try {
+    await connectToMongo();
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
+    const raw = req.body?.ermsUnit;
+    const unit = raw === null || raw === '' ? null : String(raw).trim().toLowerCase();
+    if (unit !== null && !ERMS_UNIT_VALUES.includes(unit)) {
+      return res.status(400).json({ error: `System must be one of: ${ERMS_UNIT_VALUES.map((u) => ERMS_UNIT_LABELS[u]).join(', ')}.` });
+    }
+    const actor = req.session?.user;
+    const result = await collections.users.updateOne(
+      { _id: new ObjectId(id) },
+      unit
+        ? { $set: { ermsUnit: unit, ermsUnitUpdatedAt: new Date(), ermsUnitUpdatedBy: actor?.username || 'unknown' } }
+        : { $unset: { ermsUnit: '' }, $set: { ermsUnitUpdatedAt: new Date(), ermsUnitUpdatedBy: actor?.username || 'unknown' } }
+    );
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
+    return res.json({ message: 'ERMS system updated', ermsUnit: unit, label: unit ? ERMS_UNIT_LABELS[unit] : null });
+  } catch (error) {
+    console.error('Error setting ERMS unit:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 }
@@ -254,20 +296,31 @@ async function deleteUser(req, res) {
 
 /** GET /api/users/types — the assignable types with their descriptions. */
 function listUserTypes(req, res) {
-  const { ASSIGNABLE_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLES } = require('../services/authorization');
+  const { ASSIGNABLE_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLES, ERMS_UNIT_VALUES, ERMS_UNIT_LABELS } = require('../services/authorization');
   return res.json({
     types: ASSIGNABLE_ROLES.map((value) => ({ value, label: ROLE_LABELS[value], description: ROLE_DESCRIPTIONS[value] })),
     legacy: [{ value: ROLES.ADMIN, label: ROLE_LABELS[ROLES.ADMIN], description: ROLE_DESCRIPTIONS[ROLES.ADMIN] }],
+    ermsUnits: ERMS_UNIT_VALUES.map((value) => ({ value, label: ERMS_UNIT_LABELS[value] })),
   });
 }
 
 // PUT /api/profile/update/:id — profile update (self)
+// What a person may change about themselves. Everything else on the account
+// — type, years, containers, capabilities, provinces, email — is an
+// administrator's decision with its own route.
+const SELF_EDITABLE_FIELDS = ['name', 'division', 'designation', 'office', 'region', 'empid', 'contactNumber', 'bio'];
+
 async function updateProfile(req, res) {
   try {
     await connectToMongo();
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
-    const updatedUser = stripProtectedFields(req.body);
+    const me = principalOf(req);
+    if (String(me?.userId) !== String(id)) return res.status(403).json({ error: 'You can only edit your own profile.' });
+    const updatedUser = {};
+    for (const field of SELF_EDITABLE_FIELDS) {
+      if (req.body?.[field] !== undefined) updatedUser[field] = String(req.body[field]).slice(0, 200);
+    }
     if (Object.keys(updatedUser).length === 0) {
       return res.json({ message: 'Nothing to update' });
     }
@@ -296,7 +349,72 @@ async function updateSignupStatus(req, res) {
   }
 }
 
-module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, setUserType, listUserTypes, deleteUser };
+/**
+ * PUT /api/users/:id/years — the year containers an account may enter.
+ * Developer or Administrator. Years must exist as containers; Developers and
+ * Administrators enter every year regardless, so the list is kept but moot
+ * for them.
+ */
+async function setUserYears(req, res) {
+  try {
+    await connectToMongo();
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
+    const wanted = Array.isArray(req.body?.years) ? [...new Set(req.body.years.map(Number).filter(Number.isInteger))] : null;
+    if (!wanted) return res.status(400).json({ error: 'Send { years: [2025, 2026] }' });
+    const known = (await collections.yearContainers.find({}, { projection: { year: 1 } }).toArray()).map((y) => y.year);
+    const unknown = wanted.filter((y) => !known.includes(y));
+    if (unknown.length) return res.status(400).json({ error: `No year container for ${unknown.join(', ')}.` });
+    const years = [...wanted].sort((a, b) => a - b);
+    const result = await collections.users.updateOne({ _id: new ObjectId(id) }, { $set: { assignedYears: years } });
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
+    return res.json({ assignedYears: years });
+  } catch (error) {
+    console.error('Error assigning years:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+/**
+ * PUT /api/profile/theme — the signed-in person's own look: light or dark,
+ * the accent, the density, the tinted sider. Stored on the account so it
+ * follows them to any device; the browser keeps a copy for the sign-in
+ * pages, which have no account to ask yet.
+ */
+const THEME_MODES = new Set(['light', 'dark']);
+const THEME_ACCENTS = new Set(['forest', 'ocean', 'slate', 'plum', 'ember', 'teal', 'indigo', 'crimson', 'amber', 'graphite', 'blue', 'green', 'purple', 'red', 'orange', 'gray', 'default']);
+const THEME_DENSITIES = new Set(['comfortable', 'compact', 'relaxed']);
+
+async function setMyTheme(req, res) {
+  try {
+    await connectToMongo();
+    const me = principalOf(req);
+    const t = req.body?.theme || req.body || {};
+    const theme = {};
+    if (THEME_MODES.has(t.mode)) theme.mode = t.mode;
+    if (typeof t.accent === 'string' && /^[a-z][a-z0-9-]{1,30}$/.test(t.accent)) theme.accent = t.accent;
+    if (THEME_DENSITIES.has(t.density)) theme.density = t.density;
+    if (typeof t.tintedSider === 'boolean') theme.tintedSider = t.tintedSider;
+    // The richer appearance (see front-end ThemeProvider): a custom accent,
+    // the navigation style, corner radius and content surface.
+    if (t.accentHex === null) theme.accentHex = null;
+    else if (typeof t.accentHex === 'string' && /^#[0-9a-f]{6}$/i.test(t.accentHex)) theme.accentHex = t.accentHex.toLowerCase();
+    if (['tinted', 'neutral', 'deep', 'vivid', 'graphite'].includes(t.navStyle)) theme.navStyle = t.navStyle;
+    if (['sharp', 'rounded', 'round'].includes(t.radius)) theme.radius = t.radius;
+    if (['plain', 'soft', 'warm', 'cool'].includes(t.surface)) theme.surface = t.surface;
+    if (!Object.keys(theme).length) return res.status(400).json({ error: 'Nothing to save.' });
+    const set = Object.fromEntries(Object.entries(theme).map(([k, v]) => [`preferences.theme.${k}`, v]));
+    await collections.users.updateOne({ _id: new ObjectId(me.userId) }, { $set: set });
+    const doc = await collections.users.findOne({ _id: new ObjectId(me.userId) }, { projection: { 'preferences.theme': 1 } });
+    return res.json({ theme: doc?.preferences?.theme || theme });
+  } catch (error) {
+    console.error('Error saving theme:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+void THEME_ACCENTS;
+
+module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme };
  
 // ---- Additional Users GET endpoints migrated from server.js ----
 async function getUsers(req, res) {

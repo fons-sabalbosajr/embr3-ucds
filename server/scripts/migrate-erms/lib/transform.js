@@ -1,4 +1,4 @@
-const { clean, parseDate, parseNumber } = require('./source');
+const { clean, cleanProjectType, parseDate, parseNumber } = require('./source');
 const { PROVINCES } = require('../../../services/provinces');
 
 // ---------------------------------------------------------------------------
@@ -115,8 +115,8 @@ function transformRow(row, index) {
     },
 
     project: {
-      type: clean(row.Project_Type),
-      otherType: clean(row.Other_Project_Type),
+      type: cleanProjectType(row.Project_Type),
+      otherType: cleanProjectType(row.Other_Project_Type),
     },
 
     location: {

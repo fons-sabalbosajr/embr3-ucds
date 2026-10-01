@@ -77,7 +77,11 @@ beforeAll(async () => {
   await collections.users.deleteMany({ username: { $in: USERNAMES } });
   await collections.users.insertMany([
     base(WRITER, { password, capabilities: caps(true) }),
-    base(READER, { password, capabilities: caps(false) }),
+    // Holds the ERMS domain without being Records Unit staff: a Planning
+    // Admin given ERMS. Records Unit staff (an ERMS User whose System is
+    // Records) write their own unit's records without the capability, as in
+    // the desktop system; everyone else needs canManageData.
+    base(READER, { password, permission: 'planning', domains: ['erms', 'ucds'], capabilities: caps(false) }),
   ]);
 }, 60000);
 

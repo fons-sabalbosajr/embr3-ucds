@@ -1,64 +1,51 @@
-.profile-container {
-  display: flex;
-  flex-direction: column; /* Stack top section and tabs vertically */
-  gap: 24px; /* Gap between top section and tabs */
-}
+/* Account Details dialog: a header strip with the person, then tabs. */
 
-.profile-top-section {
-  display: flex;
-  align-items: flex-start; /* Align avatar and info columns at the top */
-  gap: 24px; /* Gap between avatar and info columns container */
-  width: 100%;
-}
-
-.avatar-container {
-  min-width: 120px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start; /* Align avatar to the top */
-  padding-top: 20px; /* Optional: Add some padding if needed */
-}
-
-.user-info-columns-container {
-  display: flex;
-  flex: 1; /* Allow this container to take remaining space */
-  gap: 24px; /* Gap between the two user-info-column */
-}
-
-.user-info-column {
-  flex: 1;
-  min-width: 200px;
-}
-
-.input-label {
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-.label-user {
-  font-weight: 400;
-  font-size: 12px;
-}
-
-.select-permission {
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-.tab-container {
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.modal-footer-container {
+.account-modal {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  gap: 8px;
 }
 
-.button-group {
+.account-hero {
   display: flex;
-  gap: 12px;
-  margin-top: 12px;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+.account-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.account-hero-actions {
+  flex: 0 0 auto;
+}
+
+.account-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.account-edit-grid .ant-form-item {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .account-hero {
+    flex-wrap: wrap;
+  }
+
+  .account-hero-actions {
+    width: 100%;
+  }
+
+  .account-edit-grid {
+    grid-template-columns: 1fr;
+  }
 }

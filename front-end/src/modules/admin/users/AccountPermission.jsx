@@ -1,402 +1,281 @@
-import React, { useState, useEffect } from "react";
-import { Table, Switch, Row, Col, Button, Tabs, Avatar, Tag } from "antd";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Button, Checkbox, Space, Switch, Table, Tabs, Tag, Typography } from "antd";
 import { message } from "../../../shared/feedback";
 import {
-  EyeOutlined,
+  CalendarOutlined,
   DatabaseOutlined,
-  InfoCircleFilled,
-  HistoryOutlined,
   ExportOutlined,
+  HistoryOutlined,
+  SafetyCertificateOutlined,
   SearchOutlined,
-  UserAddOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
-import Swal from "sweetalert2";
 import AvatarWithName from "../../../components/AvatarwithName";
 import AccountTypePanel from "./AccountTypePanel";
 import { accountType } from "../../../shared/accountTypes";
 import "./accountpermission.css";
 import { API_BASE_URL } from "../../../config/api";
 
-const { TabPane } = Tabs;
+const { Text, Paragraph } = Typography;
 
-const AccountPermission = ({
-  visible,
-  onClose,
-  onPermissionsUpdate,
-  userData,
-}) => {
-  const { name, email, permission, avatar } = userData;
-  const [avatarData, setAvatarData] = useState(null);
-  const getPermissionStyle = (permission) => {
-    let bgColor = "#d9d9d9"; // default gray
-    let textColor = "#fff";
+// ---------------------------------------------------------------------------
+// User Permission: everything that decides what an account reaches.
+//
+//   Type & Storage    the account type, and the NAS containers designated to
+//                     it (Developer only) — AccountTypePanel
+//   Year containers   which years the account may enter; an Encoder with no
+//                     year cannot open UCDS at all
+//   Access Settings   the named capabilities the server enforces
+//   Monitoring Plan   province scope on the register: view, or read and write
+//
+// The server is the authority on all four; this dialog edits and explains.
+// ---------------------------------------------------------------------------
 
-    switch (permission.toLowerCase()) {
-      case "viewer":
-        bgColor = "#379777"; // Dark Gray
-        break;
-      case "contributor":
-        bgColor = "#F4CE14"; // Dark Blue
-        break;
-      case "admin":
-        bgColor = "#102E50"; // Dark Charcoal
-        break;
-      case "developer":
-        bgColor = "#3A3960"; // Dark Purple
-        break;
-      default:
-        bgColor = "#f0f0f0";
+const CAPABILITIES = [
+  {
+    key: "canManageData",
+    name: "Manage data",
+    description: "Add, edit and delete rows in the Monitoring Plan and in every imported dataset of the years assigned. Still subject to the Universe Central DB editing switch and to the province scope below.",
+    icon: <DatabaseOutlined />,
+  },
+  {
+    key: "canGenerateData",
+    name: "Generate reports",
+    description: "Produce ICIR and other generated reports from register records. The PDFs are filed in the Records container.",
+    icon: <ExportOutlined />,
+  },
+  {
+    key: "canViewDataHistory",
+    name: "Data history",
+    description: "See the history of changes behind a record, and who else is viewing a province right now.",
+    icon: <HistoryOutlined />,
+  },
+  {
+    key: "canAccessRangePicker",
+    name: "Date range filter",
+    description: "Filter the dashboard and register by a date range instead of the current year only.",
+    icon: <SearchOutlined />,
+  },
+  {
+    key: "canViewAdminPanel",
+    name: "Admin panel",
+    description: "Show the Admin Settings menu. Only accounts whose type includes administration (Developer, legacy Administrator) can actually open it; for others this flag does nothing.",
+    icon: <SettingOutlined />,
+  },
+];
+
+const PROVINCES = [
+  { key: "aurora", name: "Aurora" },
+  { key: "bataan", name: "Bataan" },
+  { key: "bulacan", name: "Bulacan" },
+  { key: "nuevaEcija", name: "Nueva Ecija" },
+  { key: "pampanga", name: "Pampanga" },
+  { key: "tarlac", name: "Tarlac" },
+  { key: "zambales", name: "Zambales" },
+];
+
+const AccountPermission = ({ onClose, onPermissionsUpdate, userData }) => {
+  const [me, setMe] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [years, setYears] = useState([]);
+  const [caps, setCaps] = useState({});
+  const [provinces, setProvinces] = useState({});
+  const [assignedYears, setAssignedYears] = useState([]);
+  const [saved, setSaved] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!userData?.username) return;
+    try {
+      const [usersRes, yearsRes, meRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/users`, { params: { username: userData.username }, withCredentials: true }),
+        axios.get(`${API_BASE_URL}/api/admin/years`, { withCredentials: true }).catch(() => ({ data: { years: [] } })),
+        axios.get(`${API_BASE_URL}/api/auth/me`, { withCredentials: true }).catch(() => ({ data: null })),
+      ]);
+      const current = (usersRes.data || [])[0];
+      if (!current) {
+        message.error("User not found");
+        return;
+      }
+      setAccount(current);
+      setMe(meRes.data);
+      setYears((yearsRes.data?.years || []).sort((a, b) => a.year - b.year));
+      const c = Object.fromEntries(CAPABILITIES.map(({ key }) => [key, current[key] === true || current.capabilities?.[key] === true]));
+      const p = Object.fromEntries(PROVINCES.map(({ key }) => [key, current[key] === "readWrite" ? "readWrite" : current[key] === "view" ? "view" : "none"]));
+      const y = Array.isArray(current.assignedYears) ? current.assignedYears.map(Number) : [];
+      setCaps(c);
+      setProvinces(p);
+      setAssignedYears(y);
+      setSaved({ caps: c, provinces: p, years: [...y].sort() });
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      message.error("Error fetching user data");
     }
-
-    return {
-      backgroundColor: bgColor,
-      color: textColor,
-      padding: "2px 8px",
-      borderRadius: "4px",
-      fontWeight: 500,
-      fontSize: "12px",
-      textTransform: "capitalize",
-      display: "inline-block",
-      minWidth: "80px",
-      textAlign: "center",
-    };
-  };
-  const [accessList, setAccessList] = useState([
-    {
-      key: "canViewAdminPanel",
-      accessName: "Admin Panel",
-      description: "Grants access to the administrative features.",
-      icon: <EyeOutlined />,
-      isGranted: false,
-    },
-    {
-      key: "canViewDataHistory",
-      accessName: "Data History Actions",
-      description: "Allows user to edit data history.",
-      icon: <HistoryOutlined />,
-      isGranted: false,
-    },
-    {
-      key: "canManageData",
-      accessName: "Manage Data",
-      description: "Allows user to manage and edit data.",
-      icon: <DatabaseOutlined />,
-      isGranted: false,
-    },
-    {
-      key: "canGenerateData",
-      accessName: "Generate Data",
-      description: "Allows user to generate and edit data.",
-      icon: <ExportOutlined />,
-      isGranted: false,
-    },
-    {
-      key: "canAccessRangePicker",
-      accessName: "Access RangePicker",
-      description: "Grants access to the date range selection feature.",
-      icon: <SearchOutlined />,
-      isGranted: false,
-    },
-  ]);
-  const [initialAccessList, setInitialAccessList] = useState([]);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [provinceAccessList, setProvinceAccessList] = useState([
-    { key: "aurora", name: "Aurora", canView: false, canReadWrite: false, isAllowAll: false },
-    { key: "bataan", name: "Bataan", canView: false, canReadWrite: false, isAllowAll: false },
-    { key: "bulacan", name: "Bulacan", canView: false, canReadWrite: false, isAllowAll: false },
-    { key: "nuevaEcija", name: "Nueva Ecija", canView: false, canReadWrite: false, isAllowAll: false },
-    { key: "pampanga", name: "Pampanga", canView: false, canReadWrite: false, isAllowAll: false },
-    { key: "tarlac", name: "Tarlac", canView: false, canReadWrite: false, isAllowAll: false },
-    { key: "zambales", name: "Zambales", canView: false, canReadWrite: false, isAllowAll: false },
-  ]);
-  const [initialProvinceAccessList, setInitialProvinceAccessList] = useState(
-    []
-  );
+  }, [userData?.username]);
 
   useEffect(() => {
-    if (!userData || !userData.username) {
-      console.error("Username not provided in userData:", userData);
-      return;
-    }
-  
-    const fetchUserAvatarAndAccess = async () => {
-      try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/users?username=${userData.username}`
-        );
-  
-        const users = response.data;
-        const currentUser = users[0];
-  
-        if (!currentUser) {
-          message.error("User not found");
-          return;
-        }
-  
-        // Set avatar
-        setAvatarData(currentUser.avatar || null);
-  
-        // Update Main Access List
-        const updatedAccess = accessList.map((item) => ({
-          ...item,
-          isGranted: !!currentUser[item.key],
-        }));
-        setAccessList(updatedAccess);
-        setInitialAccessList([...updatedAccess]);
-  
-        // Update Province Access List
-        const updatedProvinceAccess = provinceAccessList.map((provinceItem) => {
-          const permissionString = currentUser[provinceItem.key]; // e.g., "view", "readWrite", "none"
-          let canView = false;
-          let canReadWrite = false;
-          // isAllowAll is generally a UI concept for setting both, so initialize to false
-          // unless your backend specifically sends an "allowAll" state.
-          // For now, we'll derive it based on readWrite.
+    load();
+  }, [load]);
 
-          if (permissionString === "readWrite") {
-            canView = true;
-            canReadWrite = true;
-          } else if (permissionString === "view") {
-            canView = true;
-            canReadWrite = false;
-          }
-          // If "none" or undefined, both remain false
-
-          return {
-            ...provinceItem,
-            canView: canView,
-            canReadWrite: canReadWrite,
-            isAllowAll: false, // isAllowAll is primarily a UI control, initialize to false
-          };
-        });
-        setProvinceAccessList(updatedProvinceAccess);
-        setInitialProvinceAccessList(JSON.parse(JSON.stringify(updatedProvinceAccess))); // Deep copy
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-        message.error("Error fetching user data");
-      }
-    };
-  
-    fetchUserAvatarAndAccess();
-    // dependency: only rerun if username changes
-  }, [userData?.username]);
-  
-
-  const toggleAccess = (key) => {
-    setAccessList((prevList) => {
-      const updatedList = prevList.map((item) =>
-        item.key === key ? { ...item, isGranted: !item.isGranted } : item
-      );
-      checkForChanges(updatedList);
-      return updatedList;
-    });
-  };
-  
-  const toggleProvinceAccess = (key, type, value) => {
-    setProvinceAccessList((prevList) => {
-      const newList = prevList.map((item) => {
-        if (item.key === key) {
-          const newItem = { ...item };
-          if (type === 'allowAll') {
-            newItem.isAllowAll = value;
-            if (value) { // AllowAll turned ON
-              newItem.canView = true;
-              newItem.canReadWrite = true;
-            }
-            // If AllowAll is turned OFF, canView and canReadWrite retain their state,
-            // and their switches become enabled for individual toggling.
-          } else if (type === 'readWrite') {
-            newItem.canReadWrite = value;
-            if (value) { // ReadWrite turned ON
-              newItem.canView = true; // Force view ON
-            }
-          } else if (type === 'view') {
-            newItem.canView = value;
-            if (!value) { // View turned OFF
-              newItem.canReadWrite = false; // Force readWrite OFF if view is off
-            }
-          }
-          return newItem;
-        }
-        return item;
-      });
-      checkForProvinceChanges(newList);
-      return newList;
-    });
-  };
-  
-
-  const checkForChanges = (updatedList) => {
-    const isChanged = updatedList.some((item, index) => {
-      const initialItem = initialAccessList[index];
-      return initialItem && item.isGranted !== initialItem.isGranted; // Compare with initial state
-    });
-    //console.log("Has Changes:", isChanged); // Log if there are changes
-    setHasChanges(isChanged); // Update hasChanges based on comparison
-  };
-
-  const checkForProvinceChanges = (updatedList) => {
-    const isChanged = updatedList.some((item, index) => {
-      const initialItem = initialProvinceAccessList[index];
-      return initialItem && (
-        item.canView !== initialItem.canView ||
-        item.canReadWrite !== initialItem.canReadWrite ||
-        item.isAllowAll !== initialItem.isAllowAll
-      );
-    });
-    setHasChanges(isChanged);
-  };
-
-  const applyChanges = async () => {
-    const updatedPermissions = accessList.reduce((acc, item) => {
-      acc[item.key] = item.isGranted;
-      return acc;
-    }, {});
-
-    const provincePermissionsPayload = provinceAccessList.reduce(
-      (acc, item) => {
-        let permissionValue = 'none';
-        if (item.isAllowAll || item.canReadWrite) {
-          permissionValue = 'readWrite';
-        } else if (item.canView) {
-          permissionValue = 'view';
-        }
-        acc[item.key] = permissionValue;
-        return acc;
-      }, {}
+  const dirty = useMemo(() => {
+    if (!saved) return false;
+    return (
+      JSON.stringify(caps) !== JSON.stringify(saved.caps) ||
+      JSON.stringify(provinces) !== JSON.stringify(saved.provinces) ||
+      JSON.stringify([...assignedYears].sort()) !== JSON.stringify(saved.years)
     );
+  }, [caps, provinces, assignedYears, saved]);
 
-    const result = await Swal.fire({
-      title: "Are you sure?",
-      text: "You are about to apply these changes!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Yes, apply changes!",
-    });
+  const canEdit = me?.role === "developer" || me?.role === "admin";
+  const type = accountType(account?.permission || userData.permission);
+  const allYears = ["developer", "admin"].includes(String(account?.permission || "").toLowerCase());
+  const isEncoder = String(account?.permission || "").toLowerCase() === "viewer";
 
-    if (result.isConfirmed) {
-      try {
-        // Send permissions to the main permissions endpoint
-        await axios.patch(
-          `${API_BASE_URL}/api/users/${userData.email}/permissions`,
-          updatedPermissions
-        );
-
-        // Send province permissions to the province permissions endpoint
-        await axios.patch(
-          `${API_BASE_URL}/api/users/${userData.email}/province-permissions`,
-          provincePermissionsPayload
-        );
-
-        await Swal.fire({
-          icon: "success",
-          title: "Success!",
-          text: "User  permissions updated successfully.",
-          confirmButtonText: "OK",
-        });
-
-        setHasChanges(false);
-        if (onPermissionsUpdate) {
-          onPermissionsUpdate();
-        }
-        // Update initial states to reflect saved changes for both access lists
-        setInitialAccessList(JSON.parse(JSON.stringify(accessList)));
-        setInitialProvinceAccessList(JSON.parse(JSON.stringify(provinceAccessList)));
-      } catch (error) {
-        await Swal.fire({
-          icon: "error",
-          title: "Error!",
-          text: "Error updating user permissions.",
-          confirmButtonText: "Try Again",
-        });
-        console.error("Error updating permissions:", error);
+  const save = async () => {
+    setSaving(true);
+    try {
+      if (JSON.stringify(caps) !== JSON.stringify(saved.caps)) {
+        await axios.patch(`${API_BASE_URL}/api/users/${encodeURIComponent(account.email)}/permissions`, caps, { withCredentials: true });
       }
+      if (JSON.stringify(provinces) !== JSON.stringify(saved.provinces)) {
+        await axios.patch(`${API_BASE_URL}/api/users/${encodeURIComponent(account.email)}/province-permissions`, provinces, { withCredentials: true });
+      }
+      if (JSON.stringify([...assignedYears].sort()) !== JSON.stringify(saved.years)) {
+        await axios.put(`${API_BASE_URL}/api/users/${account._id}/years`, { years: assignedYears }, { withCredentials: true });
+      }
+      setSaved({ caps, provinces, years: [...assignedYears].sort() });
+      message.success("Access saved. It applies on the person's next request.");
+      onPermissionsUpdate?.();
+    } catch (error) {
+      message.error(error?.response?.data?.error || "Could not save the access settings.");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const isInitialState = () => {
-    const accessChanged = accessList.some((item, index) => {
-      const initialItem = initialAccessList[index];
-      return initialItem && item.isGranted !== initialItem.isGranted;
-    });
+  const setProvince = (key, level) => setProvinces((p) => ({ ...p, [key]: level }));
 
-    const provinceChanged = provinceAccessList.some((item, index) => {
-      const initialItem = initialProvinceAccessList[index];
-      if (!initialItem) return true; 
-      return item.canView !== initialItem.canView ||
-             item.canReadWrite !== initialItem.canReadWrite ||
-             item.isAllowAll !== initialItem.isAllowAll;
-    });
-
-    return !accessChanged && !provinceChanged; // Return true if neither has changed
-  };
-
-  const accessColumns = [
+  const capabilityColumns = [
     {
-      title: "Access",
-      dataIndex: "accessName",
-      key: "access",
-      width: 300,
-      align: "center",
-      render: (text, record) => (
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <div className="icon-container">{record.icon}</div>
+      title: "Capability",
+      dataIndex: "name",
+      render: (name, r) => (
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div className="icon-container">{r.icon}</div>
           <div className="access-details">
-            <strong>{record.accessName}</strong>
-            <p style={{ margin: 0, color: "#888" }}>{record.description}</p>
+            <strong>{name}</strong>
+            <p style={{ margin: 0 }}>
+              <Text type="secondary">{r.description}</Text>
+            </p>
           </div>
         </div>
       ),
     },
     {
       title: "Granted",
-      dataIndex: "isGranted",
-      key: "isGranted",
+      key: "granted",
+      width: 90,
       align: "center",
-      render: (isGranted, record) => (
-        <Switch
-          checked={isGranted}
-          onChange={() => toggleAccess(record.key)}
-          size="small"
-        />
-      ),
+      render: (_, r) => <Switch size="small" checked={caps[r.key] === true} disabled={!canEdit} onChange={(v) => setCaps((c) => ({ ...c, [r.key]: v }))} />,
     },
   ];
 
   const provinceColumns = [
+    { title: "Province", dataIndex: "name" },
     {
-      title: "Province",
-      dataIndex: "name",
-      key: "name",
-      align: "left",
+      title: "Scope",
+      key: "scope",
+      width: 320,
+      render: (_, r) => (
+        <Space>
+          {[
+            ["none", "No access"],
+            ["view", "View"],
+            ["readWrite", "Read and write"],
+          ].map(([level, label]) => (
+            <Tag.CheckableTag key={level} checked={provinces[r.key] === level} onChange={() => canEdit && setProvince(r.key, level)}>
+              {label}
+            </Tag.CheckableTag>
+          ))}
+        </Space>
+      ),
+    },
+  ];
+
+  const thisYear = new Date().getFullYear();
+
+  const items = [
+    {
+      key: "type",
+      label: "Type & Storage",
+      children: <AccountTypePanel userId={userData._id} permission={account?.permission || userData.permission} nasContainers={account?.nasContainers ?? userData.nasContainers} ermsUnit={account?.ermsUnit ?? userData.ermsUnit ?? null} onChanged={() => { load(); onPermissionsUpdate?.(); }} />,
     },
     {
-      title: "Viewing",
-      key: "view",
-      align: "center",
-      render: (text, record) => (
-        <Switch
-          checked={record.canView}
-          disabled={record.isAllowAll} // Only disable if AllowAll is on. Read/Write will force View ON via logic.
-          onChange={(checked) => toggleProvinceAccess(record.key, 'view', checked)}
-          size="small"
-        />
+      key: "years",
+      label: "Year containers",
+      children: (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {allYears ? (
+            <Alert type="info" showIcon icon={<CalendarOutlined />} message={`${type.label} accounts enter every active year container.`} />
+          ) : (
+            <>
+              <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                The years this account may pick at sign-in and switch to from the header. {isEncoder ? "An Encoder with no year cannot open UCDS at all." : "Hidden and archived years are never offered, whatever is ticked here."}
+              </Paragraph>
+              <Checkbox.Group
+                value={assignedYears}
+                disabled={!canEdit}
+                onChange={(v) => setAssignedYears(v.map(Number))}
+                options={years.map((y) => ({
+                  value: y.year,
+                  label: (
+                    <Space size={4}>
+                      {y.year}
+                      {y.year === thisYear && <Tag color="processing" style={{ marginInlineEnd: 0 }}>current</Tag>}
+                      {y.status !== "active" && <Tag style={{ marginInlineEnd: 0 }}>{y.status}</Tag>}
+                      {y.hidden && <Tag style={{ marginInlineEnd: 0 }}>hidden</Tag>}
+                      {y.locked && <Tag color="red" style={{ marginInlineEnd: 0 }}>locked</Tag>}
+                    </Space>
+                  ),
+                }))}
+                className="year-checkboxes"
+              />
+              {!assignedYears.length && <Alert type="warning" showIcon message="No year assigned — this account cannot enter UCDS." />}
+            </>
+          )}
+        </Space>
       ),
     },
     {
-      title: "Read and Write",
-      key: "readWrite",
-      align: "center",
-      render: (text, record) => (
-        <Switch
-          checked={record.canReadWrite}
-          disabled={record.isAllowAll} // Disabled if AllowAll is on
-          onChange={(checked) => toggleProvinceAccess(record.key, 'readWrite', checked)}
-          size="small"
-        />
+      key: "capabilities",
+      label: "Access Settings",
+      children: (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {String(account?.permission || "").toLowerCase() === "developer" && (
+            <Alert type="info" showIcon message="A Developer holds every capability; these switches are not consulted for them." />
+          )}
+          <Table dataSource={CAPABILITIES} columns={capabilityColumns} pagination={false} rowKey="key" size="small" showHeader={false} />
+        </Space>
+      ),
+    },
+    {
+      key: "provinces",
+      label: "Monitoring Plan Access",
+      children: (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            Which provinces of the register this account sees, within each year container&rsquo;s own province list. <b>View</b> reads the rows; <b>Read and write</b> also lets Manage data act on them. Developers and Administrators see every province.
+          </Paragraph>
+          <Table dataSource={PROVINCES} columns={provinceColumns} pagination={false} rowKey="key" size="small" />
+          {canEdit && (
+            <Space>
+              <Button size="small" onClick={() => setProvinces(Object.fromEntries(PROVINCES.map((p) => [p.key, "readWrite"])))}>All read and write</Button>
+              <Button size="small" onClick={() => setProvinces(Object.fromEntries(PROVINCES.map((p) => [p.key, "view"])))}>All view</Button>
+              <Button size="small" onClick={() => setProvinces(Object.fromEntries(PROVINCES.map((p) => [p.key, "none"])))}>Clear</Button>
+            </Space>
+          )}
+        </Space>
       ),
     },
   ];
@@ -405,12 +284,8 @@ const AccountPermission = ({
     <div className="account-permission-container">
       <div className="user-info">
         <div className="avatar-section">
-          <AvatarWithName userHandle={userData.username} size="100px" />
-          <span
-            className={`status-dot ${
-              userData.status === "online" ? "online" : "offline"
-            }`}
-          ></span>
+          <AvatarWithName userHandle={userData.username} size="72px" />
+          <span className={`status-dot ${userData.status === "online" ? "online" : "offline"}`} />
         </div>
         <div className="user-details">
           <p className="user-name-details">
@@ -418,55 +293,23 @@ const AccountPermission = ({
           </p>
           <p className="user-email-details">{userData.email}</p>
           <p className="user-permission-details">
-            <Tag color={accountType(userData.permission).color}>{accountType(userData.permission).label}</Tag>
+            <Tag color={type.color}>{type.label}</Tag>
+            {account?.isDemo && <Tag color="gold">demo</Tag>}
           </p>
         </div>
       </div>
 
-      <div className="note-section">
-        <InfoCircleFilled style={{ fontSize: "24px", color: "#1890ff" }} />
-        <p className="note-label">
-          This form allows you to manage the permissions for the user. Toggle
-          the switches to grant or revoke access to various features within the
-          application.
-        </p>
-      </div>
+      {!canEdit && me && (
+        <Alert type="info" showIcon icon={<SafetyCertificateOutlined />} message="Only a Developer or Administrator can change access. Shown read-only." />
+      )}
 
-      <Tabs defaultActiveKey="type">
-        <TabPane tab="Type & Storage" key="type">
-          <AccountTypePanel
-            userId={userData._id}
-            permission={userData.permission}
-            nasContainers={userData.nasContainers}
-            onChanged={() => onPermissionsUpdate?.()}
-          />
-        </TabPane>
-        <TabPane tab="Access Settings" key="1">
-          <Table
-            dataSource={accessList}
-            columns={accessColumns}
-            pagination={false}
-          />
-        </TabPane>
-        <TabPane tab="Monitoring Plan Access" key="2">
-          <Table
-            dataSource={provinceAccessList}
-            columns={provinceColumns}
-            pagination={false}
-          />
-        </TabPane>
-      </Tabs>
+      <Tabs defaultActiveKey="type" items={items} />
 
       <div className="footer-actions">
-        <Button
-          type="primary"
-          onClick={applyChanges}
-          disabled={isInitialState()}
-          style={{ marginRight: "8px" }}
-        >
-          Save Changes
+        <Button type="primary" onClick={save} loading={saving} disabled={!dirty || !canEdit} style={{ marginRight: 8 }}>
+          Save changes
         </Button>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{dirty ? "Cancel" : "Close"}</Button>
       </div>
     </div>
   );

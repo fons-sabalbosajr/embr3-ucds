@@ -63,6 +63,12 @@ const router = createBrowserRouter(
       <Route path='/register' element={<RedirectTo to={ROUTES.register} />} />
       <Route path='/forgot-password' element={<RedirectTo to={ROUTES.forgotPassword} />} />
       <Route path='/reset-password' element={<RedirectTo to={ROUTES.resetPassword} />} />
+      {/* The public site used to live under /universe-central-database-system. */}
+      <Route path='/universe-central-database-system' element={<RedirectTo to={ROUTES.landing} />} />
+      <Route path='/universe-central-database-system/login' element={<RedirectTo to={ROUTES.login} />} />
+      <Route path='/universe-central-database-system/register' element={<RedirectTo to={ROUTES.register} />} />
+      <Route path='/universe-central-database-system/forgot-password' element={<RedirectTo to={ROUTES.forgotPassword} />} />
+      <Route path='/universe-central-database-system/reset-password' element={<RedirectTo to={ROUTES.resetPassword} />} />
 
       {/* Authenticated: choose a year container, then enter the application */}
       <Route element={<ProtectedRoute />}>

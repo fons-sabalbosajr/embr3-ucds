@@ -238,7 +238,7 @@ const ArchiveBoxes = () => {
           loading={isLoading}
           columns={columns}
           dataSource={boxes}
-          pagination={{ pageSize: 20, hideOnSinglePage: true }}
+          pagination={{ defaultPageSize: 20, hideOnSinglePage: true }}
           scroll={{ x: "max-content" }}
           locale={{ emptyText: "No boxes yet" }}
         />
@@ -301,7 +301,7 @@ const ArchiveBoxes = () => {
           size="small"
           loading={loadingContents}
           dataSource={contents}
-          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          pagination={{ defaultPageSize: 10, hideOnSinglePage: true }}
           columns={[
             {
               title: "Serial",

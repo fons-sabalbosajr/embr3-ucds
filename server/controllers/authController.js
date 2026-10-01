@@ -10,9 +10,15 @@ const {
   domainsOf,
   capabilitiesOf,
   authorizedYears,
+  canAccessAllYears,
+  ermsUnitOf,
+  ermsUnitsOf,
+  isErmsEndUser,
+  ERMS_UNIT_LABELS,
 } = require('../services/authorization');
 const storageAccess = require('../services/storageAccess');
 const { userProvinceAccess, userProvinceKeys } = require('../services/provinces');
+const { tokenFor, beginFreshSession, COOKIE_NAME } = require('../middleware/sessionToken');
 
 /**
  * The session principal.
@@ -39,6 +45,8 @@ function buildSessionPayload(user) {
     provinceAccess,
     assignedYears: Array.isArray(user.assignedYears) ? user.assignedYears.map(Number) : [],
     avatar: user.avatar,
+    // The ERMS unit ("System") this account works in; see authorization.js.
+    ermsUnit: ermsUnitOf(user),
 
     // Legacy flat fields. Existing consumers (checkAuth, authorizedProvinces)
     // still read these; they are kept in step with the structured values above
@@ -48,15 +56,32 @@ function buildSessionPayload(user) {
   };
 }
 
+// A request-access field: trimmed, tags stripped, bounded. The values are
+// shown to an administrator and mailed back, so nothing markup-like gets in.
+const cleanField = (v, max) => String(v ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 async function register(req, res) {
-  const { name, division, position, email } = req.body;
+  const name = cleanField(req.body?.name, 120);
+  const division = cleanField(req.body?.division, 120);
+  const position = cleanField(req.body?.position, 120);
+  const email = cleanField(req.body?.email, 160).toLowerCase();
   if (!name || !division || !position || !email) {
     return res.status(400).json({ error: 'Name, division/section, position, and email are required' });
   }
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
   try {
     const { collections } = await connectToMongo();
-    const existingUser = await collections.signUp.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: 'Email already exists' });
+    // One request per address, and none for an address that already has an
+    // account — but the answer is the same either way, so the form cannot be
+    // used to find out which addresses are registered.
+    const [pending, existingAccount] = await Promise.all([
+      collections.signUp.findOne({ email, status: 'pending' }),
+      collections.users.findOne({ email }, { collation: { locale: 'en', strength: 2 }, projection: { _id: 1 } }),
+    ]);
+    if (pending || existingAccount) {
+      return res.status(201).json({ status: 'User registration submitted for approval' });
+    }
 
     const result = await collections.signUp.insertOne({
       name,
@@ -65,6 +90,7 @@ async function register(req, res) {
       email,
       status: 'pending',
       requestedAt: new Date(),
+      requestedFrom: req.ip || null,
     });
 
     // The request is recorded whether or not the mail goes out: an SMTP
@@ -113,9 +139,32 @@ async function login(req, res) {
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) return res.status(401).json({ error: 'Invalid username or password.' });
 
+    // A new session for this sign-in. The one the request arrived with may be
+    // another tab's (tabs share the cookie) and is left as it is.
+    beginFreshSession(req);
     req.session.user = buildSessionPayload(user);
-    // A fresh sign-in always starts at the year container picker.
+    // A fresh sign-in starts at the year container picker — except for the
+    // Developer and Administrator, who hold every year, and for ERMS Users,
+    // whose work is not year-scoped at all: they land in the current year
+    // (or the latest open one) and never see the picker.
     delete req.session.activeYear;
+    if (canAccessAllYears(user) || isErmsEndUser(user)) {
+      const yearService = require('../services/yearService');
+      let candidates = (await authorizedYears(user)).filter(Boolean).sort((a, b) => b - a);
+      // An ERMS User with no year assigned still needs one in the session for
+      // the register they may read alongside; any open container will do.
+      if (!candidates.length && isErmsEndUser(user)) {
+        candidates = (await yearService.listYears()).filter((y) => y.hidden !== true).map((y) => y.year).sort((a, b) => b - a);
+      }
+      const thisYear = new Date().getFullYear();
+      const ordered = [thisYear, ...candidates.filter((y) => y !== thisYear)];
+      for (const y of ordered) {
+        if (candidates.includes(y) && (await yearService.isSelectableYear(y))) {
+          req.session.activeYear = y;
+          break;
+        }
+      }
+    }
 
     await collections.loginStatus.updateOne(
       { userId: user._id },
@@ -133,7 +182,14 @@ async function login(req, res) {
 
     await collections.users.updateOne({ _id: user._id }, { $set: { status: 'online' } });
 
-    return res.status(200).json({ status: 'success', ...buildSessionPayload(user) });
+    return res.status(200).json({
+      status: 'success',
+      ...buildSessionPayload(user),
+      activeYear: req.session.activeYear || null,
+      theme: user.preferences?.theme || null,
+      // This tab's own reference to the session it just opened.
+      sessionToken: tokenFor(req),
+    });
   } catch (error) {
     console.error('Error during login:', error);
     return res.status(500).json({ error: 'An unexpected error occurred.' });
@@ -178,7 +234,7 @@ async function requestPasswordReset(req, res) {
       { $set: { resetToken, resetTokenExpiration: Date.now() + RESET_TOKEN_TTL_MS } }
     );
 
-    const resetLink = `${mailer.publicOrigin()}/universe-central-database-system/reset-password?token=${resetToken}`;
+    const resetLink = `${mailer.publicOrigin()}/e-universe/reset-password?token=${resetToken}`;
     await mailer.send({
       to: user.email,
       ...templates.passwordReset({
@@ -285,8 +341,22 @@ async function me(req, res) {
     return res.status(401).json({ message: 'User not authenticated' });
   }
 
-  const u = req.session.user;
   try {
+    const { collections } = await connectToMongo();
+    // The session carries a snapshot of the account taken at sign-in. This
+    // is called on every load of the application, so it is where a change
+    // an administrator made since — a province granted, a capability, the
+    // unit — is brought into the session, rather than waiting for the next
+    // sign-in. An account that no longer exists ends the session.
+    if (req.session.user.userId && ObjectId.isValid(String(req.session.user.userId))) {
+      const account = await collections.users.findOne({ _id: new ObjectId(String(req.session.user.userId)) });
+      if (!account) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      req.session.user = buildSessionPayload(account);
+    }
+    const u = req.session.user;
     return res.status(200).json({
       status: 'Success',
       user: {
@@ -302,6 +372,9 @@ async function me(req, res) {
       permission: u.permission,
       domains: domainsOf(u),
       capabilities: capabilitiesOf(u),
+      // So a tab that arrived on the cookie alone can pin itself to this
+      // session and stay this account whatever other tabs do.
+      sessionToken: tokenFor(req),
       // Storage containers the Developer has shared with this account, by key
       // and label. Read from the account now, so a designation made a moment
       // ago is already here.
@@ -311,6 +384,24 @@ async function me(req, res) {
       assignedYears: u.assignedYears || [],
       authorizedYears: await authorizedYears(u),
       activeYear: req.session.activeYear || null,
+      // The ERMS unit ("System") on the account, read now so a change made by
+      // the Developer a moment ago is already here; and every unit this
+      // person may see (one for an ERMS User, all three for a Developer).
+      ...(await (async () => {
+        const account = await collections.users.findOne({ _id: new ObjectId(u.userId) }, { projection: { ermsUnit: 1, permission: 1 } });
+        const merged = { ...u, ermsUnit: account?.ermsUnit ?? u.ermsUnit, permission: account?.permission ?? u.permission };
+        const unit = ermsUnitOf(merged);
+        return {
+          ermsUnit: unit,
+          ermsUnitLabel: unit ? ERMS_UNIT_LABELS[unit] : null,
+          ermsUnits: ermsUnitsOf(merged),
+          // No year container to choose: the shell hides the year switcher.
+          skipYearSelect: isErmsEndUser(merged),
+        };
+      })()),
+      // The look this person chose, kept on the account so it follows them
+      // to any device (see PUT /api/profile/theme).
+      theme: (await collections.users.findOne({ _id: new ObjectId(u.userId) }, { projection: { 'preferences.theme': 1 } }))?.preferences?.theme || null,
     });
   } catch (error) {
     console.error('Error building /api/auth/me:', error);
@@ -328,9 +419,13 @@ async function logout(req, res) {
       { userId: new ObjectId(userId) },
       { $set: { isLoggedIn: false, logoutTime } }
     );
+    // The cookie is cleared only when it names the session being ended. A tab
+    // signing out by its own token leaves a cookie that belongs to another
+    // tab's sign-in alone.
+    const clearCookie = !req.sessionToken || req.sessionToken.matchesCookie;
     req.session.destroy((err) => {
       if (err) return res.status(500).json({ message: 'Failed to destroy session' });
-      res.clearCookie('connect.sid');
+      if (clearCookie) res.clearCookie(COOKIE_NAME);
       res.status(200).json({ message: 'Logout successful' });
     });
   } catch (error) {

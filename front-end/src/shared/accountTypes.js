@@ -22,8 +22,8 @@ export const ACCOUNT_TYPES = [
   },
   {
     value: "records",
-    label: "Records Admin",
-    description: "ERMS (and the register it files against), and the storage containers the Developer designates.",
+    label: "ERMS User",
+    description: "ERMS for one unit — Records, Legal Services or Laboratory — set as the System on the account, with that unit's storage container. No year container to choose.",
     color: "geekblue",
   },
   {

@@ -1,5 +1,5 @@
 import React, { lazy, Suspense,  useState, useEffect, useCallback } from "react";
-import { Layout, Button, Spin, Popover, List } from "antd";
+import { Layout, Button, Spin, Popover, List, Tag } from "antd";
 import { message } from "./shared/feedback";
 import { useTheme } from "./theme/ThemeProvider";
 import {
@@ -29,7 +29,13 @@ const ErmsDashboard = lazy(() => import("./modules/erms/pages/ErmsDashboard"));
 const RecordsList = lazy(() => import("./modules/erms/pages/RecordsList"));
 const RecordDetail = lazy(() => import("./modules/erms/pages/RecordDetail"));
 const ArchiveBoxes = lazy(() => import("./modules/erms/pages/ArchiveBoxes"));
-const ErmsReports = lazy(() => import("./modules/erms/pages/ErmsReports"));
+const AccessRequests = lazy(() => import("./modules/erms/pages/AccessRequests"));
+const UnitDashboard = lazy(() => import("./modules/erms/units/UnitDashboard"));
+const UnitDocuments = lazy(() => import("./modules/erms/units/UnitDocuments"));
+const UnitDocumentDetail = lazy(() => import("./modules/erms/units/UnitDocumentDetail"));
+const ErmsConfig = lazy(() => import("./modules/admin/erms/ErmsConfig"));
+const ErmsSettings = lazy(() => import("./modules/erms/pages/ErmsSettings"));
+const CustomItemPage = lazy(() => import("./modules/ucds/custom/CustomItemPage"));
 const Report = Admin;
 const Posting = lazy(() => import("./modules/admin/posting/Posting"));
 import ActivityLog from "./components/ActivityLog/ActivityLog";
@@ -43,6 +49,7 @@ import Z_CustomSpinner from "./Z_CustomSpinner";
 import YearSwitcher from "./components/YearSwitcher";
 import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
+import NasStatusBanner from "./components/NasStatusBanner";
 import moment from "moment";
 
 const StorageConfig = lazy(() => import("./modules/admin/developer/StorageConfig"));
@@ -52,6 +59,8 @@ import DomainGuard from "./auth/DomainGuard";
 import NotFound from "./shared/components/NotFound";
 import ContentLoading from "./shared/components/ContentLoading";
 import { useYear } from "./context/YearContext";
+import { accountType } from "./shared/accountTypes";
+import { getSessionToken, setSessionToken, clearSessionToken } from "./shared/sessionToken";
 import RoleGuard from "./auth/RoleGuard";
 import Forbidden from "./shared/components/Forbidden";
 const OrgUnits = lazy(() => import("./modules/admin/OrgUnits"));
@@ -74,7 +83,7 @@ const Universe = () => {
   // The mode, its persistence and the Ant Design tokens all live in
   // ThemeProvider, so the login and year-selection screens share them rather
   // than rendering in Ant Design's defaults.
-  const { mode: theme, toggleMode: toggleTheme } = useTheme();
+  const { mode: theme, toggleMode: toggleTheme, bindAccount, unbindAccount } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const { activeYear } = useYear();
   // Named capability flags, replacing the positional boolean array this used to
@@ -85,6 +94,9 @@ const Universe = () => {
   const [domains, setDomains] = useState([]);
   const [storageContainers, setStorageContainers] = useState([]);
   const [provinces, setProvinces] = useState([]);
+  // The ERMS unit ("System") on the account, the units this person may see,
+  // and whether the year container picker is skipped for them.
+  const [erms, setErms] = useState({ unit: null, units: [], skipYearSelect: false });
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -95,6 +107,7 @@ const Universe = () => {
   const [userProvinceStringPermissions, setUserProvinceStringPermissions] =
     useState({});
   const [userRole, setUserRole] = useState(""); // New state for the user's role string
+  const [accountOpen, setAccountOpen] = useState(false);
   const [now, setNow] = useState(moment());
 
   // backendUrl is now imported from universeService
@@ -128,9 +141,16 @@ const Universe = () => {
       setDomains(data.domains || []);
       setStorageContainers(data.storageContainers || []);
       setProvinces(data.provinces || []);
+      setErms({ unit: data.ermsUnit || null, units: data.ermsUnits || [], skipYearSelect: data.skipYearSelect === true });
       setUserRole(data.role || "viewer");
       setUserHandle(data.user?.username);
       setDivision(data.user?.division || "");
+      // A tab opened fresh has no token of its own and arrived here on the
+      // cookie — the browser's most recent sign-in. Pin it to that session
+      // now, so it stays this account whatever other tabs sign in as.
+      if (!getSessionToken() && data.sessionToken) setSessionToken(data.sessionToken);
+      // The look stored on the account, and from here on every change goes back to it.
+      bindAccount(data.theme || null);
 
       // 'none' | 'view' | 'readWrite' per province, straight from the server.
       const access = data.provinceAccess || {};
@@ -174,6 +194,12 @@ const Universe = () => {
   // Define fetchDataIssues outside of useEffect, memoized with useCallback
   const fetchDataIssues = useCallback(async () => {
     if (!auth) return; // Ensure auth is true before fetching
+    // The issues are the register's; an ERMS User has no UCDS domain and
+    // would only be refused (and told "error") for asking.
+    if (!domains.includes("ucds")) {
+      setNotifications([]);
+      return;
+    }
     setIsLoading(true); // Set loading for notifications
     try {
       const dataIssuesPayload = await fetchDataValidationIssues(); // Assuming this returns the actual data object like { issues: ... }
@@ -236,7 +262,7 @@ const Universe = () => {
     } finally {
       setIsLoading(false); // Clear loading for notifications
     }
-  }, [auth, setIsLoading, setNotifications]); // backendUrl removed as it's not directly used here
+  }, [auth, domains, setIsLoading, setNotifications]); // backendUrl removed as it's not directly used here
 
   useEffect(() => {
     if (!auth) return; // Only fetch if authenticated
@@ -284,21 +310,22 @@ const Universe = () => {
   // ThemeProvider now, so there is one place that decides what the theme is.
 
   const handleLogout = async () => {
+    // End this tab's session on the server first: the request carries this
+    // tab's token, which is what names the session to end, so the token must
+    // still be here when it goes out. Bounded, so a stalled request cannot
+    // hold the tab; the client signs out either way.
+    await Promise.race([
+      logoutUserService().catch((err) => console.error("Logout API call failed:", err)),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
+    clearSessionToken();
+    unbindAccount();
     // Clear session material but keep this device's display preferences.
     // This used to be localStorage.clear(), which also threw away the chosen
     // theme and the dismissed "Toggle Theme" hint — so both came back on the
     // next sign-in and looked like settings that did not work.
     clearSessionStorageKeepingPreferences();
     window.location.replace("/login");
-
-    // Optionally, notify the backend (this runs in the background)
-    try {
-      await logoutUserService(); // Use service
-    } catch (err) {
-      // Even if the backend fails, the user is logged out on the client
-      console.error("Logout API call failed:", err);
-      // Optionally log error
-    }
   };
 
   const handleDismissHint = () => {
@@ -336,6 +363,9 @@ const Universe = () => {
     storageContainers,
     provinces,
     provinceStringPermissions: userProvinceStringPermissions,
+    ermsUnit: erms.unit,
+    ermsUnits: erms.units,
+    skipYearSelect: erms.skipYearSelect,
   };
 
   return (
@@ -359,10 +389,16 @@ const Universe = () => {
                   >
                     <span className="user-name" style={{ whiteSpace: "nowrap" }}>
                       {now.format("MMMM DD, YYYY hh:mm A")} | {name} | {division}
+                      <Tag color={accountType(userRole).color} className="header-role" title="Account type">
+                        {accountType(userRole).label}
+                      </Tag>
                     </span>
 
-                    {/* Which year container this session is operating in. */}
-                    <YearSwitcher theme={theme} />
+                    {/* Which year container this session is operating in.
+                        Not for ERMS Users: nothing they do is year-scoped,
+                        so the server picked one at sign-in and there is
+                        nothing to switch. */}
+                    {!erms.skipYearSelect && <YearSwitcher theme={theme} />}
 
                     <NotificationsPopover
                       theme={theme}
@@ -373,54 +409,19 @@ const Universe = () => {
                       refreshNotifications={fetchDataIssues} // Pass the refresh handler
                     />
 
-                    <Popover
-                      content={
-                        <UserPopover
-                          name={name}
-                          handleLogout={handleLogout}
-                          toggleTheme={toggleTheme}
-                          userHandle={userHandle}
-                          userData={currentUser}
-                          theme={theme}
-                        />
-                      }
-                      trigger="click"
-                      placement="bottomRight"
-                    >
-                      <div className="avatar-header">
-                        <AvatarWithName userHandle={userHandle} />
-                      </div>
-                    </Popover>
-
+                    {/* Theme first, then the account: the avatar closes the row,
+                        as it does in most applications people already use. */}
                     <Popover
                       open={showThemeHint}
                       title="Toggle Theme"
                       content={
-                        <div
-                          style={{
-                            maxWidth: 220,
-                            fontSize: "12px",
-                            padding: "4px 0",
-                          }}
-                        >
-                          <p style={{ marginBottom: 8 }}>
-                            Click to switch between light and dark mode.
-                          </p>
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "flex-end",
-                              gap: 6,
-                            }}
-                          >
+                        <div style={{ maxWidth: 220, fontSize: "12px", padding: "4px 0" }}>
+                          <p style={{ marginBottom: 8 }}>Click to switch between light and dark mode.</p>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                             <Button size="small" onClick={handleDismissHint}>
                               Dismiss
                             </Button>
-                            <Button
-                              size="small"
-                              type="primary"
-                              onClick={handleDontShowAgainHint}
-                            >
+                            <Button size="small" type="primary" onClick={handleDontShowAgainHint}>
                               Don’t Show Again
                             </Button>
                           </div>
@@ -433,18 +434,40 @@ const Universe = () => {
                         className="theme-button"
                         type="text"
                         onClick={toggleTheme}
-                        icon={
-                          theme === "dark" ? (
-                            <SunOutlined style={{ fontSize: 15 }} />
-                          ) : (
-                            <MoonOutlined style={{ fontSize: 15 }} />
-                          )
-                        }
+                        aria-label="Toggle theme"
+                        icon={theme === "dark" ? <SunOutlined style={{ fontSize: 15 }} /> : <MoonOutlined style={{ fontSize: 15 }} />}
                       />
+                    </Popover>
+
+                    <Popover
+                      open={accountOpen}
+                      onOpenChange={setAccountOpen}
+                      content={
+                        <UserPopover
+                          name={name}
+                          handleLogout={handleLogout}
+                          userHandle={userHandle}
+                          userData={currentUser}
+                          division={division}
+                          role={userRole}
+                          onNavigate={() => setAccountOpen(false)}
+                        />
+                      }
+                      trigger="click"
+                      placement="bottomRight"
+                      overlayClassName="eu-account-popover"
+                    >
+                      <div className="avatar-header" role="button" aria-label="Account menu" tabIndex={0}>
+                        <AvatarWithName userHandle={userHandle} />
+                      </div>
                     </Popover>
                   </div>
                 </div>
               </Header>
+
+              {/* Under the header on every screen: the NAS is not connected,
+                  and the rest of the application still is. */}
+              <NasStatusBanner />
 
               <Content className="content-container">
                 {/* Heavy screens are separate chunks, fetched on first visit:
@@ -463,11 +486,15 @@ const Universe = () => {
                     element={
                       <Navigate
                         to={
-                          domains.includes("ucds")
-                            ? "dashboard"
-                            : domains.includes("erms")
-                              ? "erms/dashboard"
-                              : "dashboard"
+                          // An ERMS User lands in their own unit; anyone else
+                          // with UCDS lands on the planning dashboard.
+                          erms.skipYearSelect && erms.unit
+                            ? erms.unit === "records" ? "erms/dashboard" : `erms/${erms.unit}/dashboard`
+                            : domains.includes("ucds")
+                              ? "dashboard"
+                              : domains.includes("erms")
+                                ? erms.unit && erms.unit !== "records" ? `erms/${erms.unit}/dashboard` : "erms/dashboard"
+                                : "dashboard"
                         }
                         replace
                       />
@@ -613,14 +640,46 @@ const Universe = () => {
                     <Route path="erms/records" element={<RecordsList />} />
                     <Route path="erms/records/:serialNo" element={<RecordDetail />} />
                     <Route path="erms/archive" element={<ArchiveBoxes />} />
-                    <Route path="erms/reports" element={<ErmsReports />} />
-                    <Route path="erms" element={<Navigate to="/universe/erms/dashboard" replace />} />
+                    {/* Reports were removed from the menu; a bookmark lands on the dashboard. */}
+                    <Route path="erms/reports" element={<Navigate to="/universe/erms/dashboard" replace />} />
+                    <Route path="erms/access-requests" element={<AccessRequests />} />
+                    {/* The Legal Services and Laboratory units. Which units
+                        the person may see is decided by the server; the
+                        screens explain when one is not theirs. */}
+                    <Route path="erms/:unit/dashboard" element={<UnitDashboard />} />
+                    <Route path="erms/:unit/documents" element={<UnitDocuments />} />
+                    <Route path="erms/:unit/documents/:serialNo" element={<UnitDocumentDetail />} />
+                    <Route
+                      path="erms"
+                      element={
+                        <Navigate
+                          to={erms.unit && erms.unit !== "records" ? `/universe/erms/${erms.unit}/dashboard` : "/universe/erms/dashboard"}
+                          replace
+                        />
+                      }
+                    />
                   </Route>
+
+                  {/* ERMS configuration: the units, their document types and
+                      forms, the filing layout and the menus. Admin domain. */}
+                  <Route
+                    path="admin/erms-config"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <ErmsConfig />
+                      </DomainGuard>
+                    }
+                  />
 
                   {/* Universe Central DB settings: read by every UCDS account,
                       changed by a Developer or Administrator (enforced by the API). */}
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
                     <Route path="settings/ucds" element={<UcdsSettings />} />
+                  </Route>
+                  {/* A unit's working rules, set by its own staff. */}
+                  <Route element={<DomainGuard domain="erms" user={currentUser} />}>
+                    <Route path="settings/erms" element={<ErmsSettings />} />
+                    <Route path="settings/erms/:section" element={<ErmsSettings />} />
                   </Route>
                   <Route
                     path="settings/general"
@@ -686,6 +745,8 @@ const Universe = () => {
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
                   {/* The year folder's spreadsheets, one screen for all of them. */}
                   <Route path="datasets/:key" element={<DatasetPage />} />
+                  {/* Items people added to the year's menu: folders and their own tables. */}
+                  <Route path="custom/:id" element={<CustomItemPage />} />
                   <Route path="report" element={<Report theme={theme} />} />
                   <Route
                     path="posting"

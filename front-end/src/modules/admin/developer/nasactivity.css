@@ -1,0 +1,53 @@
+/* The activity chart draws itself in: lines sweep left to right, the areas
+   beneath them fade up, the markers pop last. Off for people who asked their
+   system for less motion. */
+
+.eu-activity-line {
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: eu-activity-draw 1.1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.eu-activity-area {
+  opacity: 0;
+  transform-origin: bottom;
+  animation: eu-activity-rise 0.9s ease-out 0.35s forwards;
+}
+
+.eu-activity-marks {
+  opacity: 0;
+  animation: eu-activity-pop 0.4s ease-out 1s forwards;
+}
+
+@keyframes eu-activity-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes eu-activity-rise {
+  from {
+    opacity: 0;
+    transform: scaleY(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes eu-activity-pop {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eu-activity-line,
+  .eu-activity-area,
+  .eu-activity-marks {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}

@@ -6,11 +6,14 @@ import { loginUser } from "./api/authService";
 import { ROUTES } from "./config/routes";
 import { API_BASE_URL } from "./config/api";
 import AuthShell, { AuthError } from "./components/AuthShell";
+import { setSessionToken } from "./shared/sessionToken";
+import { useYear } from "./context/YearContext";
 
 const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const { refresh: refreshYears } = useYear();
   // Set by the reset-password page after a successful reset.
   const presetUsername = useLocation().state?.username || "";
 
@@ -20,11 +23,9 @@ const Login = () => {
     try {
       const responseData = await loginUser(username.trim(), password);
       if (responseData.status === "success") {
-        // The server accepted the password; make sure the browser kept the
-        // session before moving on. It does not when the app is opened by a
-        // different host than the API (localhost vs the LAN address, say):
-        // the cookie is cross-site and dropped, and the next screen would
-        // bounce back here with a bare "unauthorized". Say what happened.
+        // This tab is now this account, whatever the browser's other tabs do
+        // (see shared/sessionToken). Set before the check below so it is sent.
+        setSessionToken(responseData.sessionToken || null);
         const check = await fetch(`${API_BASE_URL}/auth-check`, { credentials: "include" }).catch(() => null);
         if (!check || check.status === 401) {
           setError(
@@ -32,9 +33,17 @@ const Login = () => {
           );
           return;
         }
-        // A year container must be chosen before the application opens; the
-        // server clears any previous selection on sign-in.
-        navigate(ROUTES.selectYear);
+        // A year container must be chosen before the application opens. The
+        // server picks one for accounts that hold every year (Developer,
+        // Administrator), who then go straight in and switch from the header.
+        if (responseData.activeYear) {
+          // The year context last asked while signed out; let it learn the
+          // container the server chose before the guard looks at it.
+          await refreshYears();
+          navigate(ROUTES.app);
+        } else {
+          navigate(ROUTES.selectYear);
+        }
       } else {
         setError("Sign-in failed. Check your username and password.");
       }

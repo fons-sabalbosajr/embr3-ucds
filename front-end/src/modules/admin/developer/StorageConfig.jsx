@@ -4,7 +4,6 @@ import { useSearchParams } from "react-router-dom";
 import { message } from "../../../shared/feedback";
 import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
-import NasConnectionCard from "./NasConnectionCard";
 import NasHistoryCard from "./NasHistoryCard";
 import NasActivationCard from "./NasActivationCard";
 import NasPinCard from "./NasPinCard";
@@ -14,6 +13,8 @@ import NasAccessCard from "./NasAccessCard";
 import NasDiagnosticsCard from "./NasDiagnosticsCard";
 import NasAuditCard from "./NasAuditCard";
 import NasReportFilesCard from "./NasReportFilesCard";
+import NasAvailabilityCard from "./NasAvailabilityCard";
+import NasActivityCard from "./NasActivityCard";
 
 const { Text, Paragraph } = Typography;
 
@@ -54,9 +55,9 @@ const StorageConfig = () => {
   const [pinEntry, setPinEntry] = useState("");
   const [forceEmail, setForceEmail] = useState(false);
   const [params, setParams] = useSearchParams();
-  const tab = ["connection", "containers", "access", "explorer", "reports", "diagnostics", "audit"].includes(params.get("tab"))
+  const tab = ["containers", "access", "explorer", "reports", "diagnostics", "activity"].includes(params.get("tab"))
     ? params.get("tab")
-    : "connection";
+    : "containers";
 
   const loadConfig = useCallback(async () => {
     const res = await api("/api/nas/config");
@@ -279,42 +280,37 @@ const StorageConfig = () => {
     );
   }
 
-  // Four tabs rather than one long column. Connection and Access are
-  // deliberately separate: how the backend authenticates to the share is a
-  // different question from whether the application is currently permitted to
-  // use it, and changing a password should not silently turn access on.
+  // Six tabs. Containers holds every connection (Records included) and when
+  // they are offered; Access decides who opens what; Activity is the charts
+  // and the log they are drawn from.
   const tabs = [
-    {
-      key: "connection",
-      label: "Records connection",
-      children: (
-        <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          <Alert
-            type="info"
-            showIcon
-            message="This is the Records container"
-            description="ERMS documents resolve against it, and the NAS_* variables in server/.env describe it when nothing is stored here. The Legal, Laboratory and any other shares are managed under Containers; who may open each is set under Access."
-          />
-          <NasConnectionCard onSaved={() => setTestResult(null)} />
-        </Space>
-      ),
-    },
     {
       key: "containers",
       label: "Containers",
-      children: <NasContainersCard onChanged={() => setTestResult(null)} />,
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          {/* <Alert
+            type="info"
+            showIcon
+            message="The four containers, and when they are offered"
+            description="Records is the container ERMS documents resolve against; Legal, Laboratory and Clearance and Permitting are the others. Each has its own share and account. Below the table: the bridge server the shares are reached through, one switch for all of them, and the weekday schedule."
+          /> */}
+          <NasContainersCard onChanged={() => setTestResult(null)} />
+          <NasAvailabilityCard />
+        </Space>
+      ),
     },
     {
       key: "access",
       label: "Access",
       children: (
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          <Alert
+          {/* <Alert
             type="info"
             showIcon
             message="How the NAS reaches staff"
             description="Two switches, both yours. Activation turns document access on for everyone for a set window. The table decides which containers each Planning or Records admin may open in that window; Encoders never have storage. Nobody but you holds a share credential."
-          />
+          /> */}
           <NasActivationCard />
           <NasAccessCard refreshKey={testResult} />
           <NasPinCard />
@@ -409,9 +405,14 @@ const StorageConfig = () => {
       ),
     },
     {
-      key: "audit",
-      label: "Audit Log",
-      children: <NasAuditCard />,
+      key: "activity",
+      label: "Activity",
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <NasActivityCard />
+          <NasAuditCard />
+        </Space>
+      ),
     },
   ];
 

@@ -5,6 +5,7 @@ import { DatabaseOutlined, LockOutlined, LogoutOutlined } from "@ant-design/icon
 import AuthBrand from "./components/AuthBrand";
 import { useYear } from "./context/YearContext";
 import { logoutUserService } from "./api/universeService";
+import { clearSessionToken } from "./shared/sessionToken";
 import { ROUTES } from "./config/routes";
 import "./yearselect.css";
 
@@ -48,6 +49,8 @@ const YearSelect = () => {
     } catch {
       /* signing out locally regardless */
     }
+    // After the request: it carried this tab's token to name the session.
+    clearSessionToken();
     navigate(ROUTES.login, { replace: true });
   };
 

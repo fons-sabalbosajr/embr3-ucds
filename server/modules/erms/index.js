@@ -1,6 +1,8 @@
 const recordService = require('./services/recordService');
 const trackingService = require('./services/trackingService');
 const archiveService = require('./services/archiveService');
+const accessRequestService = require('./services/accessRequestService');
+const unitDocumentService = require('./services/unitDocumentService');
 
 // ---------------------------------------------------------------------------
 // The ERMS module's public face.
@@ -16,6 +18,8 @@ const isEnabled = () => process.env.ERMS_MODULE_ENABLED === 'true';
 async function ensureIndexes() {
   await trackingService.ensureIndexes();
   await archiveService.ensureIndexes();
+  await accessRequestService.ensureIndexes();
+  await unitDocumentService.ensureIndexes();
 }
 
 module.exports = {

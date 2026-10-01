@@ -21,7 +21,7 @@ async function accountOf(user) {
   await connectToMongo();
   return collections.users.findOne(
     { _id: new ObjectId(String(user.userId)) },
-    { projection: { permission: 1, nasContainers: 1, username: 1, name: 1 } }
+    { projection: { permission: 1, nasContainers: 1, ermsUnit: 1, username: 1, name: 1 } }
   );
 }
 
@@ -32,6 +32,22 @@ function enabledContainers() {
     .map((key) => nas.describeConfig(key))
     .filter((c) => c.configured && c.enabled)
     .map((c) => ({ key: c.key, label: c.label || c.key }));
+}
+
+/**
+ * The principal with the account's current type, unit and containers laid
+ * over the session snapshot — for checks that must follow a change the
+ * Developer made a moment ago rather than wait for the next sign-in.
+ */
+async function freshPrincipal(user) {
+  const account = await accountOf(user);
+  if (!account) return user;
+  return {
+    ...user,
+    permission: account.permission ?? user?.permission,
+    ermsUnit: account.ermsUnit ?? null,
+    nasContainers: account.nasContainers ?? user?.nasContainers,
+  };
 }
 
 /** Containers this user may open right now. */
@@ -120,4 +136,4 @@ async function setGrants(userId, keys, actor) {
   return { ok: true, nasContainers: clean };
 }
 
-module.exports = { grantedContainers, requireContainerAccess, accessTable, setGrants, enabledContainers };
+module.exports = { grantedContainers, requireContainerAccess, accessTable, setGrants, enabledContainers, freshPrincipal };

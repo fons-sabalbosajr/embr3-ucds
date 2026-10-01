@@ -43,10 +43,10 @@ describe('domainsOf', () => {
   it('defaults by role', () => {
     expect(domainsOf({ permission: 'developer' })).toEqual(['ucds', 'erms', 'admin']);
     expect(domainsOf({ permission: 'admin' })).toEqual(['ucds', 'erms', 'admin']);
-    // Records holds UCDS as well since the standalone Records menu was
-    // removed: Monitoring Plan is a UCDS screen and it is the only workspace
-    // a clerk has left. Reading, not writing — canManageData still gates that.
-    expect(domainsOf({ permission: 'records' })).toEqual(['erms', 'ucds']);
+    // An ERMS User holds ERMS only: the Universe Central DB is the Planning
+    // Unit's, and each ERMS unit has its own screens. The register lookup on
+    // the record form reads UCDS through the ERMS module's own route.
+    expect(domainsOf({ permission: 'records' })).toEqual(['erms']);
     expect(domainsOf({ permission: 'planning' })).toEqual(['ucds']);
   });
 
@@ -62,7 +62,7 @@ describe('domainsOf', () => {
   it('ignores unknown domain names rather than trusting them', () => {
     expect(domainsOf({ permission: 'viewer', domains: ['erms', 'nonsense'] })).toEqual(['erms']);
     // An array of only junk is empty, so the role default applies.
-    expect(domainsOf({ permission: 'records', domains: ['nonsense'] })).toEqual(['erms', 'ucds']);
+    expect(domainsOf({ permission: 'records', domains: ['nonsense'] })).toEqual(['erms']);
   });
 
   it('normalises case and removes duplicates', () => {
@@ -72,8 +72,10 @@ describe('domainsOf', () => {
   it('gates the domain boundary', () => {
     const records = { permission: 'records' };
     expect(hasDomain(records, DOMAINS.ERMS)).toBe(true);
-    expect(hasDomain(records, DOMAINS.UCDS)).toBe(true);
+    expect(hasDomain(records, DOMAINS.UCDS)).toBe(false);
     expect(hasDomain(records, DOMAINS.ADMIN)).toBe(false);
+    // Widened explicitly by an administrator when a specific account needs it.
+    expect(hasDomain({ permission: 'records', domains: ['erms', 'ucds'] }, DOMAINS.UCDS)).toBe(true);
   });
 });
 

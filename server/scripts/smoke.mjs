@@ -196,12 +196,12 @@ async function seedAccounts(db) {
   return names;
 }
 
-// The public site lives under /universe-central-database-system, so a naive
+// The public site lives under /e-universe, so a naive
 // /\/universe/ test matches the login page too. These have to be precise or a
 // failed sign-in reads as a success and every screen "passes" as the login form.
-const ON_LOGIN = /\/universe-central-database-system\/login/;
+const ON_LOGIN = /\/e-universe\/login/;
 const ON_PICKER = /\/select-year/;
-// Must not match the public site at /universe-central-database-system, so the
+// Must not match the public site at /e-universe, so the
 // segment has to end here — either a slash or the end of the path.
 const IN_APP = /\/universe(\/|$|\?)/;
 
@@ -215,7 +215,7 @@ const whereIs = (page) => {
 
 /** Sign in through the real form, then pick a year container. Throws if either fails. */
 async function signIn(page, username) {
-  await page.goto(`${BASE}/universe-central-database-system/login`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/e-universe/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('input', { timeout: 20000 });
 
   await page.locator('input').first().fill(username);
@@ -224,7 +224,7 @@ async function signIn(page, username) {
 
   // Leaving the login page is the only proof the credentials were accepted.
   await page
-    .waitForFunction(() => !/\/universe-central-database-system\/login/.test(location.href), null, {
+    .waitForFunction(() => !/\/e-universe\/login/.test(location.href), null, {
       timeout: 25000,
     })
     .catch(() => {});

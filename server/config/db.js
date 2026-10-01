@@ -10,6 +10,12 @@ if (!mongoUri) {
 // connections per cluster (500 on M0), and every Node process shares this one
 // client, so 50 leaves room for a second instance and the session store.
 // Idle connections are released so a quiet evening does not hold 50 open.
+// The SRV/TXT records and the shard hostnames resolve over TCP when the
+// network drops UDP DNS (see config/dns.js); `lookup` is what the driver's
+// sockets use for the hostnames.
+const { configureDns, resilientLookup } = require('./dns');
+configureDns();
+
 const client = new MongoClient(mongoUri, {
   ssl: true,
   maxPoolSize: Number(process.env.MONGO_MAX_POOL) || 50,
@@ -17,6 +23,7 @@ const client = new MongoClient(mongoUri, {
   maxIdleTimeMS: 60_000,
   serverSelectionTimeoutMS: 10_000,
   compressors: ['zstd', 'snappy', 'zlib'],
+  lookup: resilientLookup,
 });
 
 let db; // universe-db

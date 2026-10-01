@@ -59,6 +59,12 @@ async function evaluate(now = new Date()) {
   if (!nas.nasConfig().enabled) {
     return { active: false, reason: 'disabled-by-environment' };
   }
+  // Whether the NAS is offered at all today — the master switch and the
+  // weekday schedule under Storage > Availability — before the window.
+  const offered = await require('./nasAvailability').evaluate(now);
+  if (!offered.available) {
+    return { active: false, reason: offered.reason, message: offered.message, nextOpensAt: offered.nextOpensAt || null };
+  }
 
   const state = await readState();
   if (!state.enabled) {
@@ -149,12 +155,18 @@ async function requireNasActive(req, res, next) {
       disabled: 'Document access is currently switched off.',
       'not-yet': 'Document access is scheduled to start later.',
       expired: 'The document access window has expired.',
+      'master-off': 'The NAS is switched off for everyone.',
+      'outside-schedule': 'NAS files are not available at this time.',
+      'bridge-offline': 'The server that connects to the NAS is switched off right now.',
+      'nas-offline': 'The NAS is not answering through the bridge server right now.',
     };
     return res.status(503).json({
       code: 'NAS_INACTIVE',
       reason: state.reason,
-      message: messages[state.reason] || 'Document access is unavailable.',
+      // The schedule carries its own sentence, written by the Developer.
+      message: state.message || messages[state.reason] || 'Document access is unavailable.',
       endsAt: state.endsAt || null,
+      nextOpensAt: state.nextOpensAt || null,
     });
   } catch (error) {
     return next(error);

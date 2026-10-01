@@ -216,7 +216,7 @@ const OrgUnits = () => {
         loading={isLoading}
         dataSource={orgUnits}
         columns={columns}
-        pagination={{ pageSize: 20, hideOnSinglePage: true }}
+        pagination={{ defaultPageSize: 20, hideOnSinglePage: true }}
         scroll={{ x: "max-content" }}
       />
 

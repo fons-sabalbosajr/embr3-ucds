@@ -1,9 +1,13 @@
+import { getItem, setItem, clearExcept } from "./secureStorage";
+
 // ---------------------------------------------------------------------------
 // Per-device display preferences.
 //
 // These describe how this browser shows the application — theme, accent, a
-// dismissed hint. They are not session data: they identify nobody, grant
-// nothing, and are useless to anyone who reads them.
+// dismissed hint, the explorer's view. They are not session data: they
+// identify nobody, grant nothing, and are useless to anyone who reads them.
+// They are still stored through secureStorage like everything else, so the
+// browser's storage panel shows nothing legible.
 //
 // They are kept separate because signing out used to call localStorage.clear(),
 // which took the chosen theme and the dismissed "Toggle Theme" hint with it.
@@ -12,19 +16,7 @@
 // survive.
 // ---------------------------------------------------------------------------
 
-export const PREFERENCE_KEYS = [
-  'ucds-theme',
-  'hideThemeHint',
-  'eu-appearance',
-];
-
-const read = (key) => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
+export const PREFERENCE_KEYS = ["ucds-theme", "hideThemeHint", "eu-appearance", "eu-explorer-view"];
 
 /**
  * Clear everything except the display preferences.
@@ -34,25 +26,14 @@ const read = (key) => {
  * that backwards is how session data survives a sign-out.
  */
 export function clearSessionStorageKeepingPreferences() {
-  const keep = PREFERENCE_KEYS.map((key) => [key, read(key)]).filter(
-    ([, value]) => value !== null
-  );
-  try {
-    localStorage.clear();
-    for (const [key, value] of keep) localStorage.setItem(key, value);
-  } catch {
-    // A browser with storage disabled has nothing to clear or keep.
-  }
+  clearExcept(PREFERENCE_KEYS);
 }
 
-export const getPreference = (key, fallback = null) => read(key) ?? fallback;
+export const getPreference = (key, fallback = null) => {
+  const value = getItem(key, null);
+  return value === null || value === undefined ? fallback : String(value);
+};
 
 export function setPreference(key, value) {
-  try {
-    if (value === null || value === undefined) localStorage.removeItem(key);
-    else localStorage.setItem(key, String(value));
-  } catch {
-    // Ignored: a preference that cannot be saved is a lost convenience, not a
-    // failure worth interrupting anyone for.
-  }
+  setItem(key, value === null || value === undefined ? null : String(value));
 }

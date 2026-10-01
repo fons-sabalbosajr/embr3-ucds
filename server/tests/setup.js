@@ -37,6 +37,11 @@ beforeAll(async () => {
     const db = (await import('../config/db.js')).default;
     await db.connectToMongo();
     snapshot = await db.getDb().collection(PROTECTED_COLLECTION).find({}).toArray();
+    // The units' working rules (Settings › ERMS) are enforced by the API —
+    // required fields, refused duplicates — so a rule a clerk switched on
+    // would fail tests that file minimal records. Every run starts from the
+    // defaults; the snapshot above puts the real settings back afterwards.
+    await db.getDb().collection(PROTECTED_COLLECTION).deleteOne({ _id: 'erms-unit-settings' });
   } catch {
     // No database in this environment; nothing to protect.
     snapshot = null;

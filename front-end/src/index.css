@@ -256,18 +256,71 @@ body {
 */
 
 
-/* Optional: Custom Scrollbar Styling */
-.table-responsive-wrapper::-webkit-scrollbar {
-  height: 8px; /* Adjust height of the horizontal scrollbar */
+
+/* The account type beside the name in the header, so two accounts open in
+   one browser are told apart at a glance. */
+.header-role {
+  margin-left: 8px;
+  margin-right: 0;
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 6px;
 }
-.table-responsive-wrapper::-webkit-scrollbar-thumb {
-  background: #c1c1c1; /* Color of the scrollbar thumb */
-  border-radius: 10px;
+
+/* Storage containers while the NAS is withheld: still readable, plainly not live. */
+.eu-containers-off .ant-table-tbody > tr > td {
+  opacity: 0.6;
 }
-.table-responsive-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8; /* Color on hover */
+
+/* ========== Scrollbars ==========
+   One thin scrollbar everywhere, coloured from the theme: the thumb is a
+   translucent ink so it reads on any surface (a card, the sider, a modal)
+   in either mode, and fills in on hover. Firefox takes the two-property
+   form; WebKit takes the pseudo-elements. The old per-table grey bars are
+   overridden by these. */
+:root {
+  --eu-scroll-thumb: rgba(15, 23, 42, 0.28);
+  --eu-scroll-thumb-hover: rgba(15, 23, 42, 0.5);
+  --eu-scroll-track: transparent;
 }
-.table-responsive-wrapper::-webkit-scrollbar-track {
-  background: #f1f1f1; /* Color of the scrollbar track */
-  border-radius: 10px;
+
+body[data-theme="dark"] {
+  --eu-scroll-thumb: rgba(226, 232, 240, 0.26);
+  --eu-scroll-thumb-hover: rgba(226, 232, 240, 0.48);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--eu-scroll-thumb) var(--eu-scroll-track);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--eu-scroll-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--eu-scroll-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--eu-scroll-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* The sider is always a dark surface, whatever the reading theme. */
+.ant-layout-sider,
+.ant-layout-sider * {
+  --eu-scroll-thumb: rgba(232, 236, 242, 0.28);
+  --eu-scroll-thumb-hover: rgba(232, 236, 242, 0.5);
 }

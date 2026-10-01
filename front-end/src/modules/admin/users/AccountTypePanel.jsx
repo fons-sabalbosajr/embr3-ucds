@@ -20,28 +20,36 @@ const { Text, Paragraph } = Typography;
 const api = (path, options = {}) =>
   fetch(`${API_BASE_URL}${path}`, { credentials: "include", ...options });
 
-const AccountTypePanel = ({ userId, permission, nasContainers, onChanged }) => {
+// An ERMS User from before the System field existed is a Records Unit user.
+const unitOf = (permission, ermsUnit) => ermsUnit || (String(permission || "").toLowerCase() === "records" ? "records" : null);
+
+const AccountTypePanel = ({ userId, permission, nasContainers, ermsUnit, onChanged }) => {
   const [me, setMe] = useState(null);
   const [containers, setContainers] = useState([]);
+  const [unitOptions, setUnitOptions] = useState([]);
   const [type, setType] = useState(String(permission || "viewer").toLowerCase());
   const [grants, setGrants] = useState(Array.isArray(nasContainers) ? nasContainers : []);
+  const [unit, setUnit] = useState(unitOf(permission, ermsUnit));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     setType(String(permission || "viewer").toLowerCase());
     setGrants(Array.isArray(nasContainers) ? nasContainers : []);
-  }, [permission, nasContainers, userId]);
+    setUnit(unitOf(permission, ermsUnit));
+  }, [permission, nasContainers, ermsUnit, userId]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [meRes, listRes] = await Promise.all([api("/api/auth/me"), api("/api/storage/containers")]);
+        const [meRes, listRes, typesRes] = await Promise.all([api("/api/auth/me"), api("/api/storage/containers"), api("/api/users/types")]);
         const meBody = await meRes.json().catch(() => ({}));
         const listBody = await listRes.json().catch(() => ({}));
+        const typesBody = await typesRes.json().catch(() => ({}));
         if (cancelled) return;
         setMe(meBody);
+        setUnitOptions(Array.isArray(typesBody.ermsUnits) ? typesBody.ermsUnits : []);
         // For a Developer this is every enabled container; for anyone else it
         // is only what they hold, which is all they need to see here.
         setContainers(Array.isArray(listBody.containers) ? listBody.containers : []);
@@ -61,11 +69,27 @@ const AccountTypePanel = ({ userId, permission, nasContainers, onChanged }) => {
   const typeChanged = type !== String(permission || "viewer").toLowerCase();
   const grantsChanged =
     JSON.stringify([...grants].sort()) !== JSON.stringify([...(Array.isArray(nasContainers) ? nasContainers : [])].sort());
+  // The System applies to ERMS Users; for any other type it is cleared.
+  const isErmsUser = type === "records";
+  const wantedUnit = isErmsUser ? unit || "records" : null;
+  const unitChanged = wantedUnit !== unitOf(permission, ermsUnit);
 
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
+      if (unitChanged) {
+        const res = await api(`/api/users/${encodeURIComponent(userId)}/erms-unit`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ermsUnit: wantedUnit }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(body.error || body.message || "Could not set the ERMS system.");
+          return;
+        }
+      }
       if (typeChanged) {
         const res = await api(`/api/users/${encodeURIComponent(userId)}/type`, {
           method: "PUT",
@@ -91,7 +115,7 @@ const AccountTypePanel = ({ userId, permission, nasContainers, onChanged }) => {
         }
       }
       message.success("Account type and storage access saved. It applies on their next request; a type change applies at their next sign-in.");
-      onChanged?.({ permission: type, nasContainers: canHoldStorage ? grants : [] });
+      onChanged?.({ permission: type, nasContainers: canHoldStorage ? grants : [], ermsUnit: wantedUnit });
     } finally {
       setSaving(false);
     }
@@ -139,6 +163,26 @@ const AccountTypePanel = ({ userId, permission, nasContainers, onChanged }) => {
         )}
       </div>
 
+      {isErmsUser && (
+        <div>
+          <Text strong>System</Text>
+          <div style={{ marginTop: 6 }}>
+            <Select
+              value={unit || "records"}
+              onChange={setUnit}
+              disabled={!isDeveloper}
+              options={(unitOptions.length ? unitOptions : [{ value: "records", label: "Records Unit" }, { value: "legal", label: "Legal Services Unit" }, { value: "laboratory", label: "Laboratory Unit" }]).map((u) => ({ value: u.value, label: u.label }))}
+              style={{ width: 260 }}
+            />
+          </div>
+          <Paragraph type="secondary" style={{ marginTop: 6, marginBottom: 0 }}>
+            The desktop ERMS was three subsystems — Records, Legal Services, Laboratory — each with its
+            own documents and its own share. An ERMS User belongs to one of them: they see that unit's
+            documents, file into that unit's container, and never choose a year container.
+          </Paragraph>
+        </div>
+      )}
+
       <div>
         <Text strong>Storage containers shared with this account</Text>
         <div style={{ marginTop: 6 }}>
@@ -172,10 +216,10 @@ const AccountTypePanel = ({ userId, permission, nasContainers, onChanged }) => {
           type="primary"
           icon={<SaveOutlined />}
           loading={saving}
-          disabled={!typeChanged && !grantsChanged}
+          disabled={!typeChanged && !grantsChanged && !unitChanged}
           onClick={save}
         >
-          Save type and storage access
+          Save type, system and storage access
         </Button>
       )}
     </Space>

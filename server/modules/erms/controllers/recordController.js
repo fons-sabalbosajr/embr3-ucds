@@ -2,14 +2,96 @@ const recordService = require('../services/recordService');
 const trackingService = require('../services/trackingService');
 const archiveService = require('../services/archiveService');
 const reportService = require('../services/reportService');
+const accessRequests = require('../services/accessRequestService');
+const lookups = require('../services/lookupService');
+const filing = require('../services/filingService');
+const config = require('../services/configService');
 const audit = require('../../../shared/services/audit');
 const { principalOf } = require('../../../middleware/auth');
-const { canAccessAllYears, isDeveloper, DOMAINS } = require('../../../services/authorization');
+const { canAccessAllYears, isDeveloper, roleOf, ROLE_LABELS, DOMAINS } = require('../../../services/authorization');
+const { connectToMongo, ObjectId } = require('../../../config/db');
 const { userProvinceKeys, userWritableProvinceKeys } = require('../../../services/provinces');
 const { notFoundError } = require('../../../shared/middleware/errorHandler');
 const nas = require('../../../services/nasStorage');
 const storageAccess = require('../../../services/storageAccess');
 const { recordFileEvent } = require('../../../services/nasAudit');
+const unitSettings = require('../services/unitSettingsService');
+const { PDFDocument } = require('pdf-lib');
+
+// --- the Records Unit's own settings, where the API enforces them -----------------
+//
+// See services/unitSettingsService.js. The record form reads the same
+// settings to warn early; these checks are what actually refuse.
+
+/** Records on file that share this permit number or file name (excluding one serial). */
+async function findDuplicates({ permitNumber, fileName, exclude }, scope) {
+  const { getDb } = require('../../../config/db');
+  const or = [];
+  if (permitNumber) or.push({ 'permit.number': permitNumber });
+  if (fileName) or.push({ 'document.fileName': fileName });
+  if (!or.length) return [];
+  const filter = { $or: or };
+  if (exclude) filter.serialNo = { $ne: exclude };
+  if (Array.isArray(scope)) filter['location.province'] = { $in: scope };
+  return getDb()
+    .collection('erms-records')
+    .find(filter, { projection: { serialNo: 1, proponentName: 1, projectTitle: 1, 'permit.number': 1, 'permit.type': 1, 'permit.label': 1, 'document.fileName': 1, 'document.uploadedAt': 1, 'location.province': 1 } })
+    .limit(20)
+    .toArray();
+}
+
+/**
+ * What the unit's settings say about a record about to be saved: required
+ * fields missing, and a permit number the unit refuses to file twice.
+ * Returns null when the record may go ahead, else a 4xx body.
+ */
+async function checkAgainstSettings(payload, { exclude } = {}) {
+  const cfg = await unitSettings.forUnit('records');
+  const errors = [];
+  if (cfg.dataQuality.requirePermitNumber && !payload.permit?.number) errors.push({ field: 'permit.number', message: 'The permit number is required.' });
+  if (cfg.dataQuality.requireDateApproved && !payload.permit?.dateApproved) errors.push({ field: 'permit.dateApproved', message: 'The date approved is required.' });
+  if (cfg.dataQuality.requireProjectType && !payload.project?.type) errors.push({ field: 'project.type', message: 'The project type is required.' });
+  if (errors.length) return { status: 400, body: { code: 'VALIDATION', message: 'Some fields need attention.', errors } };
+
+  if (cfg.duplicates.blockOnPermitNumber && payload.permit?.number) {
+    const dupes = await findDuplicates({ permitNumber: payload.permit.number, exclude }, null);
+    if (dupes.length) {
+      return {
+        status: 409,
+        body: { code: 'DUPLICATE_PERMIT', message: `Permit number ${payload.permit.number} is already filed as ${dupes.map((d) => d.serialNo).join(', ')}.`, duplicates: dupes },
+      };
+    }
+  }
+  return null;
+}
+
+/** The classification an upload gets when the form named none. */
+async function withDefaultClassification(payload) {
+  if (payload.document?.fileClass) return payload;
+  const cfg = await unitSettings.forUnit('records');
+  return { ...payload, document: { ...(payload.document || {}), fileClass: cfg.privacy.defaultClassification } };
+}
+
+/**
+ * How much of a document this viewer sees. The unit's own staff see it all
+ * unless the unit applied the limit to itself; someone viewing by approval
+ * sees the first N pages, the rest withheld.
+ */
+async function viewingRules(user, permission = null) {
+  const cfg = await unitSettings.forUnit('records');
+  const own = accessRequests.isRecordsUnit(user);
+  // An approval the Records Unit marked "every page" lifts the limit for
+  // the person it names.
+  const fullAccess = permission?.request?.fullAccess === true;
+  const limited = cfg.pdfViewing.previewPageLimit > 0 && (!own || cfg.pdfViewing.applyToUnit) && !fullAccess;
+  return {
+    pageLimit: limited ? cfg.pdfViewing.previewPageLimit : 0,
+    blurWithheldPages: cfg.pdfViewing.blurWithheldPages,
+    hideToolbar: cfg.pdfViewing.hideToolbar,
+    watermark: cfg.privacy.watermarkViewer ? `${user?.name || user?.username || 'viewer'} · ${new Date().toLocaleDateString()}` : null,
+    logViews: cfg.auditing.logViews,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Province scope for the acting user, or null when unrestricted.
@@ -58,7 +140,12 @@ function withoutInternalPaths(record, user) {
 
 async function listRecords(req, res, next) {
   try {
-    res.json(await recordService.listRecords(req.query, readScope(req)));
+    const result = await recordService.listRecords(req.query, readScope(req));
+    // Searches are written to the trail only when the unit asked for it.
+    if (req.query.search && (await unitSettings.forUnit('records')).auditing.logSearches) {
+      await audit.record(req, { domain: DOMAINS.ERMS, action: 'search', label: 'library searched', collection: recordService.RECORDS, changes: { search: req.query.search, hits: result.total }, includeBody: false });
+    }
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -71,7 +158,8 @@ async function getRecord(req, res, next) {
 
     const [attachments, tracking, custody] = await Promise.all([
       record.isAttachment ? [] : recordService.listAttachments(record.serialNo),
-      trackingService.listForRecord(record.serialNo),
+      // With the record: the desktop system's own log entries are read in.
+      trackingService.listForRecord(record.serialNo, record),
       trackingService.currentCustody(record.serialNo),
     ]);
 
@@ -107,7 +195,38 @@ async function resolveRecordFile(req, res) {
   // Admin from before that field existed keeps the records container. Checked
   // against the account document, so revoking it takes effect at once.
   const containerKey = String(record.document?.container || nas.RECORDS_KEY).toLowerCase();
-  const granted = await storageAccess.grantedContainers(principalOf(req));
+
+  // Who may open it: the Records Unit, or someone the Records Unit has
+  // approved for this record and this period. Everyone else is told how to
+  // ask, and the refusal is in the audit trail like any other.
+  const permission = await accessRequests.viewPermission(principalOf(req), record.serialNo);
+  if (!permission.allowed) {
+    await recordFileEvent(req, {
+      operation: 'document-read',
+      serialNo: record.serialNo,
+      containerKey,
+      fileName: record.document?.fileName,
+      success: false,
+      detail: `approval-${permission.reason}`,
+    });
+    res.status(403).json({
+      code: 'APPROVAL_REQUIRED',
+      reason: permission.reason,
+      request: permission.request,
+      message:
+        permission.reason === 'pending'
+          ? 'Your request to view this document is waiting for the Records Unit.'
+          : 'Viewing this document needs the approval of the Records Unit. Send a request from this record.',
+    });
+    return null;
+  }
+
+  // The Records Unit's approval is the grant for the person it names: a
+  // Planning Admin or an Encoder is never designated a container (the NAS is
+  // not their job), and the approval opens exactly one record's document
+  // for a period. The container designation applies to everyone who views
+  // by right rather than by approval.
+  const granted = permission.reason === 'approved' ? [{ key: containerKey }] : await storageAccess.grantedContainers(principalOf(req));
   if (!granted.some((c) => c.key === containerKey)) {
     await recordFileEvent(req, {
       operation: 'document-read',
@@ -150,7 +269,7 @@ async function resolveRecordFile(req, res) {
     return null;
   }
 
-  return { record, file };
+  return { record, file, permission };
 }
 
 /** Metadata only — lets the UI show size and type without fetching the file. */
@@ -158,7 +277,8 @@ async function getRecordFileInfo(req, res, next) {
   try {
     const resolved = await resolveRecordFile(req, res);
     if (!resolved) return undefined;
-    const { record, file } = resolved;
+    const { record, file, permission } = resolved;
+    const viewing = await viewingRules(principalOf(req), permission);
     return res.json({
       serialNo: record.serialNo,
       fileName: file.fileName,
@@ -167,6 +287,13 @@ async function getRecordFileInfo(req, res, next) {
       previewable: file.previewable,
       modifiedAt: file.modifiedAt,
       fileClass: record.document?.fileClass || null,
+      // View-only for everyone; the approval, when that is what lets this
+      // person in, so the screen can show when it lapses.
+      downloadable: false,
+      access: { reason: permission.reason, expiresAt: permission.request?.expiresAt || null, fullAccess: permission.request?.fullAccess === true, fullAccessRequested: permission.request?.fullAccessRequested === true && permission.request?.status === 'pending' },
+      // How the viewer shows it: a page limit for people outside the unit,
+      // blurred placeholders for the withheld pages, a watermark.
+      viewing: { pageLimit: viewing.pageLimit, blurWithheldPages: viewing.blurWithheldPages, hideToolbar: viewing.hideToolbar, watermark: viewing.watermark },
     });
   } catch (error) {
     return next(error);
@@ -174,18 +301,25 @@ async function getRecordFileInfo(req, res, next) {
 }
 
 /**
- * Stream the document.
+ * Stream the document, inline only.
+ *
+ * There is no download: the office's rule is that scans are viewed in the
+ * application and not handed over as files. The response is always
+ * `inline`, and the viewer is asked not to offer a save button. A browser
+ * cannot be prevented from saving what it shows; what this does is remove
+ * the invitation and keep every view in the audit trail.
  *
  * Streamed rather than read into memory: these are scans, some are large, and
  * buffering them would put the whole file in the server's heap per concurrent
  * reader. Range requests are honoured so a PDF viewer can page through a large
  * document without pulling all of it.
  */
-async function streamRecordFile(req, res, next, { disposition }) {
+async function viewRecordFile(req, res, next) {
   try {
     const resolved = await resolveRecordFile(req, res);
     if (!resolved) return undefined;
-    const { record, file } = resolved;
+    const { record, file, permission } = resolved;
+    const viewing = await viewingRules(principalOf(req), permission);
 
     // The stored name can contain commas, quotes and non-ASCII; both forms are
     // sent so every browser gets one it can parse.
@@ -193,13 +327,49 @@ async function streamRecordFile(req, res, next, { disposition }) {
     res.setHeader('Content-Type', file.contentType);
     res.setHeader(
       'Content-Disposition',
-      `${disposition}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`
+      `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`
     );
-    res.setHeader('Accept-Ranges', 'bytes');
     // Documents are not public and must not be cached by an intermediary.
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
+    // A page limit for this viewer: the PDF is cut to its first N pages
+    // here, so the withheld pages never leave the server. The page counts
+    // travel in headers so the viewer can show what was withheld, blurred.
+    if (viewing.pageLimit > 0 && file.contentType === 'application/pdf') {
+      const whole = await new Promise((resolve, reject) => {
+        const chunks = [];
+        nas.openStream(file.resolved).on('data', (c) => chunks.push(c)).on('end', () => resolve(Buffer.concat(chunks))).on('error', reject);
+      });
+      let out = whole;
+      let total = null;
+      try {
+        const src = await PDFDocument.load(whole, { ignoreEncryption: true });
+        total = src.getPageCount();
+        if (total > viewing.pageLimit) {
+          const cut = await PDFDocument.create();
+          const pages = await cut.copyPages(src, Array.from({ length: viewing.pageLimit }, (_, i) => i));
+          for (const p of pages) cut.addPage(p);
+          out = Buffer.from(await cut.save());
+        }
+      } catch (err) {
+        // A PDF pdf-lib cannot read is served whole rather than not at all;
+        // the viewer then knows no page count and applies no limit.
+        console.warn('PDF page limit not applied:', err.message);
+      }
+      res.setHeader('Access-Control-Expose-Headers', 'X-Document-Pages, X-Document-Pages-Shown');
+      if (total !== null) {
+        res.setHeader('X-Document-Pages', String(total));
+        res.setHeader('X-Document-Pages-Shown', String(Math.min(total, viewing.pageLimit)));
+      }
+      res.setHeader('Content-Length', out.length);
+      if (viewing.logViews) {
+        await recordFileEvent(req, { operation: 'document-view', serialNo: record.serialNo, fileName: file.fileName, success: true, bytes: out.length, detail: total !== null && total > viewing.pageLimit ? `limited to ${viewing.pageLimit} of ${total} pages` : null });
+      }
+      return res.end(out);
+    }
+
+    res.setHeader('Accept-Ranges', 'bytes');
     const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
     let options;
     if (range && file.size > 0) {
@@ -217,13 +387,18 @@ async function streamRecordFile(req, res, next, { disposition }) {
       res.setHeader('Content-Length', file.size);
     }
 
-    await recordFileEvent(req, {
-      operation: disposition === 'attachment' ? 'document-download' : 'document-view',
-      serialNo: record.serialNo,
-      fileName: file.fileName,
-      success: true,
-      bytes: file.size,
-    });
+    // A range request is one read of the same document by the same viewer,
+    // paged through: only the first request (no range, or from byte 0) is
+    // written to the trail, and only when the unit logs views at all.
+    if (viewing.logViews && (!range || range[1] === '' || range[1] === '0')) {
+      await recordFileEvent(req, {
+        operation: 'document-view',
+        serialNo: record.serialNo,
+        fileName: file.fileName,
+        success: true,
+        bytes: file.size,
+      });
+    }
 
     const stream = nas.openStream(file.resolved, options);
     stream.on('error', (err) => {
@@ -239,13 +414,379 @@ async function streamRecordFile(req, res, next, { disposition }) {
   }
 }
 
-const viewRecordFile = (req, res, next) => streamRecordFile(req, res, next, { disposition: 'inline' });
-const downloadRecordFile = (req, res, next) =>
-  streamRecordFile(req, res, next, { disposition: 'attachment' });
+/** The serial the next record will get — shown on the upload form, claimed on save. */
+async function nextSerial(req, res, next) {
+  try {
+    res.json({ serialNo: await recordService.peekSerialNo() });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// --- uploads -------------------------------------------------------------------------
+//
+// The desktop system's upload: fill in the record, choose the scan, and the
+// file is filed on the Records share under province / years / project /
+// permit-type folder (see filingService), the record is numbered and saved.
+// Here it is one multipart request: `payload` (the record, as JSON — the
+// same shape POST /api/erms/records takes) and `file`.
+
+/** The Records unit's filing rules and the permit type's folder. */
+async function fileRecordScan(payload, upload) {
+  const unitCfg = await config.unit('records');
+  const docType = unitCfg?.docTypes.find((t) => t.code === payload.permit?.type) || unitCfg?.docTypes.find((t) => t.code === 'other') || null;
+  return filing.file('records', docType, {
+    province: payload.location?.province,
+    projectTitle: payload.projectTitle,
+    proponentName: payload.proponentName,
+    permit: payload.permit || {},
+    // The project folder (and subfolder) the clerk chose, when they did.
+    folder: payload.document?.folder || null,
+    subfolder: payload.document?.subfolder || null,
+  }, upload);
+}
+
+const uploadFailure = (res, filed) =>
+  res.status(['NO_FILE', 'FILE_TYPE', 'FILE_TOO_LARGE'].includes(filed.code) ? 400 : 502).json({ code: filed.code, message: filed.message });
+
+/** Create a record and file its scan in one go. */
+async function uploadRecord(req, res, next) {
+  try {
+    const payload = await withDefaultClassification(req.validatedPayload);
+    const refused = await checkAgainstSettings(payload);
+    if (refused) return res.status(refused.status).json(refused.body);
+    const filed = await fileRecordScan(payload, req.file);
+    if (!filed.ok) return uploadFailure(res, filed);
+
+    const doc = await recordService.createRecord(
+      { ...payload, document: { ...(payload.document || {}), ...filed.document } },
+      actor(req)
+    );
+    await recordFileEvent(req, {
+      operation: 'document-upload',
+      serialNo: doc.serialNo,
+      containerKey: 'records',
+      fileName: filed.document.fileName,
+      success: true,
+      bytes: filed.document.size,
+      detail: `records/${doc.permit?.type}`,
+    });
+    await audit.record(req, {
+      domain: DOMAINS.ERMS,
+      action: 'create',
+      label: 'record created with scan',
+      collection: 'erms-records',
+      documentId: doc.serialNo,
+      changes: { fileName: filed.document.fileName, sharePath: filed.document.sharePath },
+      includeBody: false,
+    });
+    return res.status(201).json({ record: withoutInternalPaths(doc, principalOf(req)) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * File a scan against a record. Three cases, chosen by `replace`:
+ *
+ *   (absent)    the record has no scan yet — or its scan is not on the share
+ *   'missing'   the same, said explicitly
+ *   'keep'      re-upload: the new scan replaces the record's document; the
+ *               old file stays on the share
+ *   'delete'    re-upload, and the old file is removed from the share once
+ *               the new one is safely written
+ *
+ * A record that has a scan on the share is not silently overwritten: without
+ * `replace` the answer is 409, and the form asks which of the two the clerk
+ * wants. Either way the old file is written to the audit trail by name.
+ */
+async function attachRecordFile(req, res, next) {
+  try {
+    const record = await recordService.getRecord(req.params.serialNo, readScope(req));
+    if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+
+    const replace = String(req.body?.replace || '');
+    const container = String(record.document?.container || nas.RECORDS_KEY);
+    const stored = record.document?.sharePath || record.document?.filePath;
+    let existing = null;
+    if (stored) {
+      const found = await nas.statFile(stored, container);
+      if (found.ok) {
+        if (!['keep', 'delete'].includes(replace)) {
+          return res.status(409).json({ code: 'HAS_DOCUMENT', message: 'This record already has a scan on the share. Choose whether to keep or delete it when re-uploading.' });
+        }
+        existing = found;
+      }
+    }
+
+    // The folder picker's choice, if the clerk made one for the re-upload.
+    const folder = nas.safeName(req.body?.folder, 120) || null;
+    const subfolder = nas.safeName(req.body?.subfolder, 120) || null;
+    const filed = await fileRecordScan({ ...record, document: { ...(record.document || {}), folder, subfolder } }, req.file);
+    if (!filed.ok) return uploadFailure(res, filed);
+
+    const { after: updated } = await recordService.updateRecord(
+      record.serialNo,
+      { document: { ...filed.document, uploadedAt: new Date(), uploadedBy: principalOf(req)?.username || 'unknown' } },
+      actor(req)
+    );
+    await recordFileEvent(req, {
+      operation: 'document-upload',
+      serialNo: record.serialNo,
+      containerKey: container,
+      fileName: filed.document.fileName,
+      success: true,
+      bytes: filed.document.size,
+      detail: existing ? `records/${record.permit?.type} (re-uploaded, replacing ${existing.fileName})` : `records/${record.permit?.type} (attached)`,
+    });
+
+    // The old file goes only after the new one is written and the record
+    // points at it, so a failure part-way leaves the record whole.
+    let oldFile = null;
+    if (existing && replace === 'delete') {
+      const removed = await nas.removeFile(container, stored);
+      oldFile = { fileName: existing.fileName, deleted: removed.ok, reason: removed.ok ? null : removed.reason };
+      await recordFileEvent(req, {
+        operation: 'document-delete',
+        serialNo: record.serialNo,
+        containerKey: container,
+        fileName: existing.fileName,
+        success: removed.ok,
+        bytes: removed.size,
+        detail: removed.ok ? 'replaced by re-upload' : `could not delete: ${removed.reason}`,
+      });
+    } else if (existing) {
+      oldFile = { fileName: existing.fileName, deleted: false, reason: 'kept' };
+    }
+
+    await audit.record(req, {
+      domain: DOMAINS.ERMS,
+      action: 'update',
+      label: existing ? 'scan re-uploaded' : 'scan filed against record',
+      collection: 'erms-records',
+      documentId: record.serialNo,
+      changes: { fileName: filed.document.fileName, sharePath: filed.document.sharePath, previous: oldFile },
+      includeBody: false,
+    });
+    return res.json({ record: withoutInternalPaths(updated, principalOf(req)), previous: oldFile });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- lookups (the desktop system's menus) -------------------------------------
+
+/**
+ * The menus the forms offer. The address tables are large (3,218 barangays),
+ * so they are served per province when one is asked for; the rest come whole.
+ */
+async function getLookups(req, res, next) {
+  try {
+    const lists = await lookups.all();
+    const province = String(req.query.province || '').trim() || null;
+    const { cities, barangays } = await lookups.addresses(province);
+    const pick = (kind) => lists[kind]?.items || [];
+    res.json({
+      projectTypes: pick('project-types'),
+      documentStatuses: pick('document-statuses'),
+      documentTypes: pick('document-types'),
+      legalStatuses: pick('legal-statuses'),
+      legalOfficers: pick('legal-officers'),
+      caseHandlers: pick('case-handlers'),
+      natureOfBusiness: pick('nature-of-business'),
+      labParameters: pick('lab-parameters'),
+      provinces: pick('provinces'),
+      cities,
+      barangays,
+      importedAt: lists['project-types']?.importedAt || null,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// --- document access requests ----------------------------------------------
+
+/** Ask the Records Unit to open one record's document for the caller. */
+async function requestDocumentAccess(req, res, next) {
+  try {
+    // The record must be readable by this person at all — province scope —
+    // before they may ask for its document.
+    const record = await recordService.getRecord(req.params.serialNo, readScope(req));
+    if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+    const result = await accessRequests.create(record.serialNo, principalOf(req), req.body || {});
+    if (result.created) {
+      await audit.record(req, {
+        domain: DOMAINS.ERMS,
+        action: 'access-request',
+        label: 'document access requested',
+        collection: accessRequests.COLLECTION,
+        documentId: result.request.id,
+        changes: { serialNo: record.serialNo, reason: result.request.reason },
+      });
+    }
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Share a record's document with a named person (Records Unit): an approval
+ * granted without a request. The recipient is read from the users
+ * collection now, so the share names the account as it is today.
+ */
+async function shareDocument(req, res, next) {
+  try {
+    const record = await recordService.getRecord(req.params.serialNo, readScope(req));
+    if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+    const { collections } = await connectToMongo();
+    const target = ObjectId.isValid(String(req.body?.userId || ''))
+      ? await collections.users.findOne({ _id: new ObjectId(String(req.body.userId)) }, { projection: { username: 1, name: 1, division: 1, permission: 1 } })
+      : null;
+    if (!target) return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'No account with that id.' });
+    const result = await accessRequests.share(record.serialNo, principalOf(req), { ...target, userId: String(target._id) }, req.body || {});
+    if (result.created && (await unitSettings.forUnit('records')).auditing.logShares) {
+      await audit.record(req, {
+        domain: DOMAINS.ERMS,
+        action: 'access-decision',
+        label: 'document shared',
+        collection: accessRequests.COLLECTION,
+        documentId: result.request.id,
+        changes: { serialNo: record.serialNo, with: target.username, expiresAt: result.request.expiresAt },
+      });
+    }
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** People a document can be shared with: any account but the caller's own. Records Unit only. */
+async function sharePeople(req, res, next) {
+  try {
+    const user = principalOf(req);
+    if (!accessRequests.isRecordsUnit(user)) return res.status(403).json({ code: 'RECORDS_UNIT_ONLY', message: 'Only the Records Unit shares documents.' });
+    const q = String(req.query.q || '').trim();
+    const { collections } = await connectToMongo();
+    const filter = { username: { $ne: user.username } };
+    if (q) {
+      const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ name: rx }, { username: rx }, { division: rx }, { email: rx }];
+    }
+    const people = await collections.users
+      .find(filter, { projection: { username: 1, name: 1, division: 1, permission: 1 } })
+      .sort({ name: 1 })
+      .limit(25)
+      .toArray();
+    res.json({
+      people: people.map((p) => ({ userId: String(p._id), username: p.username, name: p.name, division: p.division || null, roleLabel: ROLE_LABELS[roleOf(p)] })),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Records already filed with this permit number or file name — for the form's warning. */
+async function duplicateCheck(req, res, next) {
+  try {
+    const cfg = await unitSettings.forUnit('records');
+    const { permitNumber, fileName, exclude } = req.query;
+    const duplicates = await findDuplicates(
+      { permitNumber: cfg.duplicates.warnOnPermitNumber || cfg.duplicates.blockOnPermitNumber ? permitNumber : null, fileName: cfg.duplicates.warnOnFileName ? fileName : null, exclude },
+      readScope(req)
+    );
+    res.json({ duplicates, blocks: cfg.duplicates.blockOnPermitNumber && duplicates.some((d) => permitNumber && d.permit?.number === permitNumber) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Permit numbers filed more than once, for the settings screen's duplicates tab. */
+async function duplicateGroups(req, res, next) {
+  try {
+    const { getDb } = require('../../../config/db');
+    const scope = readScope(req);
+    const match = { 'permit.number': { $nin: [null, '', 'n/a', 'N/A'] } };
+    if (Array.isArray(scope)) match['location.province'] = { $in: scope };
+    const groups = await getDb()
+      .collection('erms-records')
+      .aggregate([
+        { $match: match },
+        { $group: { _id: '$permit.number', count: { $sum: 1 }, serials: { $push: '$serialNo' }, proponents: { $addToSet: '$proponentName' }, types: { $addToSet: '$permit.type' } } },
+        { $match: { count: { $gt: 1 } } },
+        { $sort: { count: -1, _id: 1 } },
+        { $limit: 300 },
+      ])
+      .toArray();
+    res.json({ groups: groups.map((g) => ({ permitNumber: g._id, count: g.count, serials: g.serials, proponents: g.proponents, types: g.types })) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** The inbox: everything for the Records Unit, one's own for anyone else. */
+async function listAccessRequests(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const [requests, pending] = await Promise.all([
+      accessRequests.list(user, req.query),
+      accessRequests.pendingCount(user),
+    ]);
+    res.json({
+      requests,
+      pending,
+      canDecide: accessRequests.isRecordsUnit(user),
+      durations: accessRequests.DURATION_HOURS,
+      defaultDuration: accessRequests.DEFAULT_DURATION_HOURS,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Approve or decline (Records Unit). */
+async function decideAccessRequest(req, res, next) {
+  try {
+    const request = await accessRequests.decide(req.params.id, principalOf(req), req.body || {});
+    await audit.record(req, {
+      domain: DOMAINS.ERMS,
+      action: 'access-decision',
+      label: `document access ${request.status}`,
+      collection: accessRequests.COLLECTION,
+      documentId: request.id,
+      changes: { serialNo: request.serialNo, for: request.requestedBy?.username, status: request.status, expiresAt: request.expiresAt },
+    });
+    res.json({ request });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Take an approval back early (Records Unit). */
+async function revokeAccessRequest(req, res, next) {
+  try {
+    const request = await accessRequests.revoke(req.params.id, principalOf(req), req.body || {});
+    await audit.record(req, {
+      domain: DOMAINS.ERMS,
+      action: 'access-decision',
+      label: 'document access revoked',
+      collection: accessRequests.COLLECTION,
+      documentId: request.id,
+      changes: { serialNo: request.serialNo, for: request.requestedBy?.username, status: request.status },
+    });
+    res.json({ request });
+  } catch (error) {
+    next(error);
+  }
+}
 
 async function createRecord(req, res, next) {
   try {
-    const doc = await recordService.createRecord(req.body, actor(req));
+    const payload = await withDefaultClassification(req.body);
+    const refused = await checkAgainstSettings(payload);
+    if (refused) return res.status(refused.status).json(refused.body);
+    const doc = await recordService.createRecord(payload, actor(req));
     await audit.record(req, {
       domain: DOMAINS.ERMS,
       action: 'Create Record',
@@ -261,6 +802,17 @@ async function createRecord(req, res, next) {
 
 async function updateRecord(req, res, next) {
   try {
+    // Only the duplicate rule applies to an edit: a required field left
+    // empty on a migrated record is fixed from here, not refused.
+    if (req.body?.permit?.number) {
+      const cfg = await unitSettings.forUnit('records');
+      if (cfg.duplicates.blockOnPermitNumber) {
+        const dupes = await findDuplicates({ permitNumber: req.body.permit.number, exclude: req.params.serialNo }, null);
+        if (dupes.length) {
+          return res.status(409).json({ code: 'DUPLICATE_PERMIT', message: `Permit number ${req.body.permit.number} is already filed as ${dupes.map((d) => d.serialNo).join(', ')}.`, duplicates: dupes });
+        }
+      }
+    }
     const { before, after } = await recordService.updateRecord(
       req.params.serialNo,
       req.body,
@@ -311,6 +863,7 @@ async function filterOptions(req, res, next) {
       })),
       // What this user may do, so the UI does not offer actions the API refuses.
       writableProvinces: writeScope(req),
+      canShare: accessRequests.isRecordsUnit(principalOf(req)),
     });
   } catch (error) {
     next(error);
@@ -324,7 +877,7 @@ async function listTracking(req, res, next) {
     const record = await recordService.getRecord(req.params.serialNo, readScope(req));
     if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
     res.json({
-      tracking: await trackingService.listForRecord(req.params.serialNo),
+      tracking: await trackingService.listForRecord(req.params.serialNo, record),
       custody: await trackingService.currentCustody(req.params.serialNo),
     });
   } catch (error) {
@@ -475,7 +1028,18 @@ module.exports = {
   getRecord,
   getRecordFileInfo,
   viewRecordFile,
-  downloadRecordFile,
+  uploadRecord,
+  attachRecordFile,
+  nextSerial,
+  getLookups,
+  requestDocumentAccess,
+  shareDocument,
+  sharePeople,
+  duplicateCheck,
+  duplicateGroups,
+  listAccessRequests,
+  decideAccessRequest,
+  revokeAccessRequest,
   createRecord,
   updateRecord,
   nextSerial,

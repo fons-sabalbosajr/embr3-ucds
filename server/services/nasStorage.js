@@ -412,6 +412,76 @@ const openStream = (resolved, options = {}) =>
  * Connectivity check for Developer Settings. Lists the share root, which is
  * the cheapest operation that proves credentials and reachability together.
  */
+/**
+ * Find files and folders whose name contains `query`, under `relativePath`,
+ * walking subfolders breadth-first. Bounded three ways — depth, results, and
+ * wall-clock — because a share can be enormous and SMB over a bridge is
+ * slow: the explorer would rather show "200 matches, search a narrower
+ * folder" than hang. Names only; nothing is opened.
+ */
+async function searchDirectory(relativePath = '', query = '', container = RECORDS_KEY, { maxDepth = 5, maxResults = 200, budgetMs = 12000 } = {}) {
+  const cfg = nasConfig(container);
+  if (!cfg) return { ok: false, reason: 'not-configured' };
+  if (!cfg.enabled) return { ok: false, reason: 'disabled' };
+  const needle = String(query || '').trim().toLowerCase();
+  if (needle.length < 2) return { ok: false, reason: 'query-too-short' };
+
+  const clean = String(relativePath || '').replace(/^[\\/]+/, '');
+  const startTarget = clean ? resolveSharePath(clean, container) : cfg.base;
+  if (!startTarget) return { ok: false, reason: 'invalid-path' };
+
+  const started = Date.now();
+  const results = [];
+  const queue = [{ target: startTarget, rel: clean.replace(/[\\/]+$/, ''), depth: 0 }];
+  let scanned = 0;
+  let truncated = false;
+
+  while (queue.length) {
+    if (Date.now() - started > budgetMs || results.length >= maxResults) {
+      truncated = true;
+      break;
+    }
+    const { target, rel, depth } = queue.shift();
+    let dirents;
+    try {
+      dirents = await fsp.readdir(toLongPath(target), { withFileTypes: true });
+    } catch (err) {
+      if (depth === 0) {
+        if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return { ok: false, reason: 'missing' };
+        if (err.code === 'EACCES' || err.code === 'EPERM') return { ok: false, reason: 'denied' };
+        return { ok: false, reason: 'unreachable', detail: err.code };
+      }
+      continue; // a subfolder we cannot read is skipped, not fatal
+    }
+    scanned += 1;
+    for (const d of dirents) {
+      const isDir = d.isDirectory();
+      const childRel = rel ? `${rel}\\${d.name}` : d.name;
+      if (d.name.toLowerCase().includes(needle)) {
+        const entry = { name: d.name, type: isDir ? 'directory' : 'file', path: childRel, folder: rel };
+        if (!isDir) {
+          entry.contentType = contentTypeFor(d.name);
+          entry.previewable = canPreview(d.name);
+          try {
+            const st = await fsp.stat(toLongPath(path.win32.join(target, d.name)));
+            entry.size = st.size;
+            entry.modifiedAt = st.mtime;
+          } catch {
+            entry.size = null;
+          }
+        }
+        results.push(entry);
+        if (results.length >= maxResults) break;
+      }
+      if (isDir && depth < maxDepth && !d.name.startsWith('#') && !d.name.startsWith('@')) {
+        queue.push({ target: path.win32.join(target, d.name), rel: childRel, depth: depth + 1 });
+      }
+    }
+  }
+
+  return { ok: true, query: needle, path: clean, results, scannedFolders: scanned, truncated, ms: Date.now() - started };
+}
+
 async function testConnection(container = RECORDS_KEY) {
   const cfg = nasConfig(container);
   if (!cfg) {
@@ -493,8 +563,164 @@ function warnAboutNasConfig() {
   });
 }
 
+// --- writing ---------------------------------------------------------------------
+
+/** A file or folder name the share will accept, with nothing that changes meaning. */
+function safeName(input, max = 150) {
+  const cleaned = String(input || '')
+    .replace(/[<>:"|?* -\\/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/g, '');
+  return cleaned.slice(0, max) || null;
+}
+
+/**
+ * Write an uploaded file into a container, under a share-relative directory.
+ *
+ * The directory goes through the same resolveSharePath() as every read, so
+ * ".." and drive letters are refused and containment is re-checked after
+ * resolution. Missing folders are created — the legacy layout files by
+ * province, year and project, most of which will not exist for a new
+ * upload. An existing file is never overwritten: a name clash gets " (2)",
+ * " (3)" …, because a scan filed twice is two scans, not one replaced.
+ *
+ * Returns { ok, sharePath, resolved, fileName, size } or { ok: false, reason }.
+ */
+async function writeFile(container, relativeDir, fileName, buffer) {
+  const cfg = nasConfig(container);
+  if (!cfg) return { ok: false, reason: 'not-configured' };
+  if (!cfg.enabled) return { ok: false, reason: 'disabled' };
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return { ok: false, reason: 'empty' };
+
+  const name = safeName(fileName);
+  if (!name) return { ok: false, reason: 'bad-name' };
+  const dirRelative = safeRelativePath(relativeDir);
+  if (!dirRelative) return { ok: false, reason: 'invalid-path' };
+  const dir = resolveSharePath(dirRelative, container);
+  if (!dir) return { ok: false, reason: 'invalid-path' };
+
+  try {
+    await fsp.mkdir(toLongPath(dir), { recursive: true });
+    const ext = path.win32.extname(name);
+    const stem = name.slice(0, name.length - ext.length);
+    let candidate = name;
+    for (let n = 2; n < 1000; n += 1) {
+      const target = path.win32.join(dir, candidate);
+      try {
+        // 'wx' fails when the file exists — the check and the create are one
+        // step, so two uploads of the same name cannot both win.
+        const handle = await fsp.open(toLongPath(target), 'wx');
+        try {
+          await handle.writeFile(buffer);
+        } finally {
+          await handle.close();
+        }
+        return {
+          ok: true,
+          resolved: target,
+          sharePath: `${dirRelative}\\${candidate}`,
+          fileName: candidate,
+          size: buffer.length,
+          contentType: contentTypeFor(candidate),
+        };
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+        candidate = `${stem} (${n})${ext}`;
+      }
+    }
+    return { ok: false, reason: 'too-many-copies' };
+  } catch (err) {
+    if (err.code === 'EACCES' || err.code === 'EPERM') return { ok: false, reason: 'denied', detail: err.code };
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return { ok: false, reason: 'missing', detail: err.code };
+    return { ok: false, reason: 'unreachable', detail: err.code || err.message };
+  }
+}
+
+/**
+ * Make a folder inside a container (the folder picker's "new folder").
+ * Parents are created as needed; an existing folder is not an error, so two
+ * clerks making the same project folder both succeed.
+ */
+async function createDirectory(container, relativeDir) {
+  const cfg = nasConfig(container);
+  if (!cfg) return { ok: false, reason: 'not-configured' };
+  if (!cfg.enabled) return { ok: false, reason: 'disabled' };
+  const dirRelative = safeRelativePath(relativeDir);
+  if (!dirRelative) return { ok: false, reason: 'invalid-path' };
+  const dir = resolveSharePath(dirRelative, container);
+  if (!dir) return { ok: false, reason: 'invalid-path' };
+  try {
+    await fsp.mkdir(toLongPath(dir), { recursive: true });
+    return { ok: true, sharePath: dirRelative };
+  } catch (err) {
+    if (err.code === 'EEXIST') return { ok: true, sharePath: dirRelative, existed: true };
+    if (err.code === 'EACCES' || err.code === 'EPERM') return { ok: false, reason: 'denied', detail: err.code };
+    return { ok: false, reason: 'unreachable', detail: err.code || err.message };
+  }
+}
+
+/**
+ * Delete one file from a container — for a scan replaced by a re-upload,
+ * when the clerk chose not to keep the old one. Nothing else in the
+ * application deletes a document; the caller records the deletion in the
+ * audit trail.
+ */
+async function removeFile(container, storedPath) {
+  const cfg = nasConfig(container);
+  if (!cfg) return { ok: false, reason: 'not-configured' };
+  if (!cfg.enabled) return { ok: false, reason: 'disabled' };
+  const resolved = resolveSharePath(storedPath, container);
+  if (!resolved) return { ok: false, reason: 'invalid-path' };
+  try {
+    const stat = await fsp.stat(toLongPath(resolved));
+    if (!stat.isFile()) return { ok: false, reason: 'not-a-file' };
+    await fsp.unlink(toLongPath(resolved));
+    return { ok: true, sharePath: safeRelativePath(storedPath), size: stat.size };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { ok: false, reason: 'missing' };
+    if (err.code === 'EACCES' || err.code === 'EPERM') return { ok: false, reason: 'denied', detail: err.code };
+    return { ok: false, reason: 'unreachable', detail: err.code || err.message };
+  }
+}
+
+/**
+ * Remove an empty folder. Only an empty one: a folder with anything in it —
+ * a scan the desktop system filed, a subfolder — is refused with
+ * 'not-empty', because nothing on the share is deleted from the application
+ * except a folder somebody just made by mistake.
+ */
+async function removeDirectory(container, relativeDir) {
+  const cfg = nasConfig(container);
+  if (!cfg) return { ok: false, reason: 'not-configured' };
+  if (!cfg.enabled) return { ok: false, reason: 'disabled' };
+  const dirRelative = safeRelativePath(relativeDir);
+  if (!dirRelative) return { ok: false, reason: 'invalid-path' };
+  const dir = resolveSharePath(dirRelative, container);
+  if (!dir) return { ok: false, reason: 'invalid-path' };
+  // Never the container's base itself.
+  const trim = (p) => String(p).toLowerCase().replace(/[\\/]+$/, '');
+  if (trim(dir) === trim(cfg.base)) return { ok: false, reason: 'invalid-path' };
+  try {
+    await fsp.rmdir(toLongPath(dir));
+    return { ok: true, sharePath: dirRelative };
+  } catch (err) {
+    if (err.code === 'ENOTEMPTY' || err.code === 'EEXIST') return { ok: false, reason: 'not-empty' };
+    if (err.code === 'ENOENT') return { ok: false, reason: 'missing' };
+    if (err.code === 'ENOTDIR') return { ok: false, reason: 'not-a-directory' };
+    if (err.code === 'EACCES' || err.code === 'EPERM') return { ok: false, reason: 'denied', detail: err.code };
+    return { ok: false, reason: 'unreachable', detail: err.code || err.message };
+  }
+}
+
 module.exports = {
   RECORDS_KEY,
+  safeName,
+  writeFile,
+  removeFile,
+  createDirectory,
+  removeDirectory,
+  searchDirectory,
   containerKeys,
   nasConfig,
   refreshConfig,

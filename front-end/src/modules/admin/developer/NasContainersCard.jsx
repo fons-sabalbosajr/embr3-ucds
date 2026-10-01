@@ -23,6 +23,8 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { API_BASE_URL } from "../../../config/api";
+import { DisconnectOutlined } from "@ant-design/icons";
+import { initializeSocket, getSocket } from "../../../api/socketService";
 import { message } from "../../../shared/feedback";
 
 const { Text, Paragraph } = Typography;
@@ -60,6 +62,10 @@ const NasContainersCard = ({ onChanged }) => {
   const [form] = Form.useForm();
   const [list, setList] = useState([]);
   const [secretsAvailable, setSecretsAvailable] = useState(true);
+  // Whether the NAS is offered right now — the master switch, the schedule,
+  // the bridge and the activation window together. Comes with the list, and
+  // is refreshed whenever the server announces a change.
+  const [availability, setAvailability] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // null = closed, {} = new, {key} = edit
@@ -78,6 +84,7 @@ const NasContainersCard = ({ onChanged }) => {
       }
       setList(body.containers || []);
       setSecretsAvailable(body.secretsAvailable !== false);
+      setAvailability(body.availability || null);
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -87,7 +94,22 @@ const NasContainersCard = ({ onChanged }) => {
 
   useEffect(() => {
     load();
+    const socket = getSocket() || initializeSocket();
+    const onAvailability = () => load();
+    socket?.on("nas:availability", onAvailability);
+    return () => socket?.off("nas:availability", onAvailability);
   }, [load]);
+
+  const offered = availability ? availability.available : true;
+  const OFF_REASONS = {
+    "master-off": "switched off for everyone (Availability → All containers)",
+    "outside-schedule": "outside the schedule (Availability → Schedule)",
+    "bridge-offline": "the bridge server is not answering",
+    "nas-offline": "the NAS is not connected",
+    disabled: "document access is switched off (Access → Activation)",
+    expired: "the activation window has expired (Access → Activation)",
+    "not-yet": "the activation window has not started (Access → Activation)",
+  };
 
   const openNew = () => {
     form.resetFields();
@@ -279,6 +301,21 @@ const NasContainersCard = ({ onChanged }) => {
         ),
     },
     {
+      title: "Status",
+      key: "status",
+      width: 110,
+      render: (_, c) =>
+        c.incoming ? (
+          <Tag color="gold">incoming</Tag>
+        ) : !c.enabled ? (
+          <Tag>off</Tag>
+        ) : offered ? (
+          <Tag color="green">online</Tag>
+        ) : (
+          <Tag color="red">not offered</Tag>
+        ),
+    },
+    {
       title: "On",
       key: "enabled",
       width: 100,
@@ -333,9 +370,26 @@ const NasContainersCard = ({ onChanged }) => {
         />
       )}
 
+      {availability && !offered && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<DisconnectOutlined />}
+          message="The NAS is off or not connected — every container is withheld"
+          description={
+            <>
+              Reason: {OFF_REASONS[availability.reason] || availability.reason || "unavailable"}.
+              {availability.message ? <> Staff see: “{availability.message}”</> : null}
+              {availability.nextOpensAt ? <> Next opens {new Date(availability.nextOpensAt).toLocaleString()}.</> : null}
+            </>
+          }
+        />
+      )}
+
       <Card
         title="Storage containers"
         size="small"
+        className={availability && !offered ? "eu-containers-off" : undefined}
         extra={
           <Space>
             <Button size="small" icon={<ReloadOutlined />} onClick={load}>

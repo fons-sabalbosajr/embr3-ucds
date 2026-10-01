@@ -11,6 +11,9 @@ import {
   CaretRightOutlined,
   FolderOpenOutlined,
   FileProtectOutlined,
+  AuditOutlined,
+  CloudUploadOutlined,
+  ExperimentOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -30,6 +33,7 @@ import {
   // onSocketDisconnect, // If needed
 } from "../api/socketService"; // Import socket service
 import Logo from "./Logo";
+import MenuItemModal from "./MenuItemModal";
 import { useYear } from "../context/YearContext";
 import { API_BASE_URL } from "../config/api";
 import "./sidemenu.css";
@@ -68,6 +72,14 @@ const SideMenu = ({ theme, currentUser }) => {
   // Central DB tree. The registry is names only and is fetched once.
   const { years: yearContainers, activeYear, selectYear } = useYear();
   const [datasetRegistry, setDatasetRegistry] = useState({});
+  // Items people added to a year's branch: folders and their own tables,
+  // under the year or under the Monitoring Plan folder. Flat per year; the
+  // tree is built while rendering.
+  const [customItems, setCustomItems] = useState({});
+  const [canManageMenu, setCanManageMenu] = useState(false);
+  const [menuItemsVersion, setMenuItemsVersion] = useState(0);
+  // The add/rename dialog: { year, item?, parent? }.
+  const [itemDialog, setItemDialog] = useState(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -96,18 +108,38 @@ const SideMenu = ({ theme, currentUser }) => {
   const role = currentUser?.permission ?? currentUser?.role;
   const isDeveloper = role === "developer";
   const hasErms = domains.includes("erms");
+  // The ERMS units this person may see (see /api/auth/me). Absent on an
+  // older session: a Developer sees all three, an ERMS User the Records unit.
+  const ermsUnits = Array.isArray(currentUser?.ermsUnits) && currentUser.ermsUnits.length
+    ? currentUser.ermsUnits
+    : isDeveloper ? ["records", "legal", "laboratory"] : role === "records" ? ["records"] : [];
   const visibleProvinces = PROVINCE_MENU.filter((p) =>
     grantedProvinces.includes(p.key)
   ).map((p) => p.value);
 
+  // The main Dashboard: the planning dashboard for anyone with the Universe
+  // Central DB, otherwise the person's ERMS unit dashboard — a Records clerk
+  // has no planning dashboard to see, so theirs is the first item rather
+  // than an entry inside the ERMS section.
+  const ermsHome = ermsUnits.includes("records") || !ermsUnits.length
+    ? "/universe/erms/dashboard"
+    : `/universe/erms/${ermsUnits[0]}/dashboard`;
+  const mainDashboard = hasUcds ? "/universe/dashboard" : hasErms ? ermsHome : null;
+  // Whether a unit's own Dashboard entry is already the main one above.
+  const unitDashboardIsMain = (path) => mainDashboard === path;
+
   useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith("/universe/dashboard")) {
+    if (path.startsWith("/universe/dashboard") || (mainDashboard && path === mainDashboard)) {
       setOpenKeys([]);
     } else if (path.startsWith("/universe/province/") || path.startsWith("/universe/datasets/")) {
       setOpenKeys(["ucds-db", `year-${activeYear}`]);
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
+    } else if (path.startsWith("/universe/erms/legal")) {
+      setOpenKeys(["erms-legal"]);
+    } else if (path.startsWith("/universe/erms/laboratory")) {
+      setOpenKeys(["erms-laboratory"]);
     } else if (path.startsWith("/universe/erms/")) {
       setOpenKeys(["erms"]);
     } else if (path.startsWith("/universe/settings/")) {
@@ -120,7 +152,7 @@ const SideMenu = ({ theme, currentUser }) => {
     } else {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
-  }, [location.pathname, activeYear]);
+  }, [location.pathname, activeYear, mainDashboard]);
 
   useEffect(() => {
     if (!hasUcds) return undefined;
@@ -138,6 +170,99 @@ const SideMenu = ({ theme, currentUser }) => {
       cancelled = true;
     };
   }, [hasUcds]);
+
+  useEffect(() => {
+    if (!hasUcds) return undefined;
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/ucds/menu-items`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { years: [] }))
+      .then((body) => {
+        if (cancelled) return;
+        const map = {};
+        for (const y of body.years || []) map[y.year] = y.items || [];
+        setCustomItems(map);
+        setCanManageMenu(body.canManage === true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [hasUcds, menuItemsVersion]);
+
+  const refreshMenuItems = () => setMenuItemsVersion((v) => v + 1);
+
+  // Open the dialog for a year: the server only changes the active year's
+  // items, so another year is selected first (the content remounts under it).
+  const addItem = async (year, parent) => {
+    if (year !== activeYear) {
+      try {
+        await selectYear(year);
+        clearCache?.();
+      } catch {
+        navigate("/select-year");
+        return;
+      }
+    }
+    setItemDialog({ year, parent });
+  };
+
+  const removeItem = async (year, item) => {
+    if (year !== activeYear) await selectYear(year).catch(() => null);
+    const res = await fetch(`${API_BASE_URL}/api/ucds/menu-items/${item.id}`, { method: "DELETE", credentials: "include" });
+    if (res.ok) refreshMenuItems();
+  };
+
+  // A user-added item as a menu entry: a folder holds its children (and can
+  // take more), a table opens its page. Hover shows the actions to whoever
+  // may manage the menu; a click on them must not toggle the folder.
+  const itemActions = (year, item) => {
+    if (!canManageMenu) return null;
+    const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
+    return (
+      <span className="menu-item-actions" onClick={stop}>
+        {item.kind === "folder" && (
+          <Tooltip title="Add inside">
+            <button type="button" className="menu-item-action" aria-label="Add inside" onClick={() => addItem(year, item.id)}>+</button>
+          </Tooltip>
+        )}
+        <Tooltip title="Rename or move">
+          <button type="button" className="menu-item-action" aria-label="Rename" onClick={async () => { if (year !== activeYear) await selectYear(year).catch(() => null); setItemDialog({ year, item }); }}>✎</button>
+        </Tooltip>
+        <Tooltip title={item.kind === "folder" ? "Remove folder and its contents" : "Remove"}>
+          <button type="button" className="menu-item-action is-danger" aria-label="Remove" onClick={() => removeItem(year, item)}>×</button>
+        </Tooltip>
+      </span>
+    );
+  };
+
+  const customEntries = (year, parent, isActive) =>
+    (customItems[year] || [])
+      .filter((i) => i.parent === parent)
+      .map((item) =>
+        item.kind === "folder"
+          ? {
+              key: `custom-${item.id}`,
+              className: "custom-folder",
+              label: (
+                <div className="menu-label-wrapper submenu-item-label custom-item">
+                  <span className="custom-item-name">{item.label}</span>
+                  {itemActions(year, item)}
+                </div>
+              ),
+              children: customEntries(year, item.id, isActive),
+            }
+          : {
+              key: isActive ? `/universe/custom/${item.id}` : `y${year}/custom/${item.id}`,
+              className: "custom-table",
+              onClick: () => openInYear(year, `/universe/custom/${item.id}`),
+              label: (
+                <div className="menu-label-wrapper submenu-item-label custom-item">
+                  <span className="custom-item-name">{item.label}</span>
+                  {itemActions(year, item)}
+                </div>
+              ),
+            }
+      );
 
   // Every dataset lives in one year container, and the server reads the year
   // from the session. Picking something under another year selects that
@@ -340,12 +465,23 @@ const SideMenu = ({ theme, currentUser }) => {
   );
 
   const menuItems = [
-    {
-      key: "/universe/dashboard",
+    mainDashboard && {
+      key: mainDashboard,
       icon: <DashboardFilled />,
       label: (
         <div className="menu-label-wrapper main">
-          <Link to="/universe/dashboard">Dashboard</Link>
+          <Link to={mainDashboard}>Dashboard</Link>
+        </div>
+      ),
+    },
+    // The Records Unit's main job, one click from anywhere: the desktop
+    // system's upload, as its own entry rather than inside the ERMS section.
+    hasErms && ermsUnits.includes("records") && {
+      key: "/universe/erms/records?new=1",
+      icon: <CloudUploadOutlined />,
+      label: (
+        <div className="menu-label-wrapper main">
+          <Link to="/universe/erms/records?new=1">Upload record</Link>
         </div>
       ),
     },
@@ -370,25 +506,45 @@ const SideMenu = ({ theme, currentUser }) => {
           const isActive = y.year === activeYear;
           const datasets = datasetRegistry[y.year] || [];
           const tables = datasets.filter((d) => d.kind !== "monitoring-plan");
+          const addButton = (parent, title) =>
+            canManageMenu ? (
+              <span className="menu-item-actions" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
+                <Tooltip title={title}>
+                  <button type="button" className="menu-item-action" aria-label={title} onClick={() => addItem(y.year, parent)}>+</button>
+                </Tooltip>
+              </span>
+            ) : null;
           const children = open
             ? [
                 {
                   key: `year-${y.year}-monitoring`,
-                  label: <div className="menu-label-wrapper submenu-item-label">Monitoring Plan</div>,
-                  children: visibleProvinces.map((province) => ({
-                    key: isActive ? `/universe/province/${province}` : `y${y.year}/province/${province}`,
-                    onClick: () => openInYear(y.year, `/universe/province/${province}`),
-                    label: isActive ? (
-                      <LabelWithAvatars
-                        to={`/universe/province/${province}`}
-                        label={province}
-                        viewers={provinceViewers[province] || []}
-                      />
-                    ) : (
-                      <div className="menu-label-wrapper submenu-item-label">{province}</div>
-                    ),
-                  })),
+                  // Its own background, so the register's folder stands out
+                  // from the year's other entries (see sidemenu.css).
+                  className: "monitoring-folder",
+                  label: (
+                    <div className="menu-label-wrapper submenu-item-label custom-item">
+                      <span className="custom-item-name">Monitoring Plan</span>
+                      {addButton("monitoring", "Add an item under Monitoring Plan")}
+                    </div>
+                  ),
+                  children: [
+                    ...visibleProvinces.map((province) => ({
+                      key: isActive ? `/universe/province/${province}` : `y${y.year}/province/${province}`,
+                      onClick: () => openInYear(y.year, `/universe/province/${province}`),
+                      label: isActive ? (
+                        <LabelWithAvatars
+                          to={`/universe/province/${province}`}
+                          label={province}
+                          viewers={provinceViewers[province] || []}
+                        />
+                      ) : (
+                        <div className="menu-label-wrapper submenu-item-label">{province}</div>
+                      ),
+                    })),
+                    ...customEntries(y.year, "monitoring", isActive),
+                  ],
                 },
+                ...customEntries(y.year, "root", isActive),
                 ...tables.map((d) => ({
                   key: isActive ? `/universe/datasets/${d.key}` : `y${y.year}/datasets/${d.key}`,
                   onClick: () => openInYear(y.year, `/universe/datasets/${d.key}`),
@@ -412,27 +568,31 @@ const SideMenu = ({ theme, currentUser }) => {
                 {/* The active container carries a pulsing indicator before the
                     year, in the accent, rather than a tag fighting the caret. */}
                 {isActive && <span className="year-active-dot" aria-label="active container" />}
-                <span>{y.year}</span>
+                <span className="custom-item-name">{y.year}</span>
+                {open && addButton("root", `Add an item to ${y.year}`)}
               </div>
             ),
             children,
           };
         }),
     },
-    // Records (ERMS). Visible to anyone holding the ERMS domain — the Developer
-    // and Records Admins — independent of the UCDS capability flags. The
-    // route keys and API namespace stay "erms", which nobody outside the code
-    // sees; the label is what the work is called.
-    hasErms && {
+    // ERMS, one section per unit the person may see: their own for an ERMS
+    // User, all three for the Developer. The route keys and API namespace
+    // stay "erms", which nobody outside the code sees.
+    hasErms && ermsUnits.includes("records") && {
       key: "erms",
       icon: <FileProtectOutlined />,
-      label: <div className="menu-label-wrapper main">Dashboard ERMS</div>,
+      label: <div className="menu-label-wrapper main">ERMS · Records</div>,
       children: [
-        ["dashboard", "Dashboard"],
-        ["records", "Records register"],
-        ["archive", "Archive boxes"],
-        ["reports", "Reports"],
-      ].map(([path, label]) => ({
+        // The unit's dashboard, unless it is already the main Dashboard above.
+        // (Upload record is a main entry of its own, above.)
+        !unitDashboardIsMain("/universe/erms/dashboard") && ["dashboard", "Dashboard"],
+        // The library is the register: every document, by its FSN.
+        ["records", "Document Library"],
+        // The Records Unit's inbox; for everyone else, their own requests.
+        ["access-requests", "Document Requests"],
+        ["archive", "Archive Boxes"],
+      ].filter(Boolean).map(([path, label]) => ({
         key: `/universe/erms/${path}`,
         label: (
           <div className="menu-label-wrapper submenu-item-label">
@@ -440,6 +600,36 @@ const SideMenu = ({ theme, currentUser }) => {
           </div>
         ),
       })),
+    },
+    ...["legal", "laboratory"]
+      .filter((u) => hasErms && ermsUnits.includes(u))
+      .map((u) => ({
+        key: `erms-${u}`,
+        icon: u === "legal" ? <AuditOutlined /> : <ExperimentOutlined />,
+        label: <div className="menu-label-wrapper main">ERMS · {u === "legal" ? "Legal" : "Laboratory"}</div>,
+        children: [
+          !unitDashboardIsMain(`/universe/erms/${u}/dashboard`) && ["dashboard", "Dashboard"],
+          ["documents?upload=1", "File a document"],
+          ["documents", "Documents"],
+        ].filter(Boolean).map(([path, label]) => ({
+          key: `/universe/erms/${u}/${path}`,
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to={`/universe/erms/${u}/${path}`}>{label}</Link>
+            </div>
+          ),
+        })),
+      })),
+    // Anyone with the ERMS domain but no unit yet (a Planning Admin who was
+    // given ERMS) still reaches their document requests.
+    hasErms && !ermsUnits.length && {
+      key: "erms",
+      icon: <FileProtectOutlined />,
+      label: <div className="menu-label-wrapper main">ERMS</div>,
+      children: [
+        { key: "/universe/erms/records", label: <div className="menu-label-wrapper submenu-item-label"><Link to="/universe/erms/records">Document Library</Link></div> },
+        { key: "/universe/erms/access-requests", label: <div className="menu-label-wrapper submenu-item-label"><Link to="/universe/erms/access-requests">Document Requests</Link></div> },
+      ],
     },
     storageContainers.length > 0 && {
       key: "/universe/storage",
@@ -484,6 +674,26 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
+        // The unit's own rules, one entry each — data quality, duplicates,
+        // privacy, PDF viewing, auditing, log history. Read by the unit, set
+        // by its staff. (Legal and Laboratory get the same entries.)
+        ...(hasErms && ermsUnits.length > 0
+          ? [
+              ["data", "Data Quality"],
+              ["duplicates", "Duplicates"],
+              ["privacy", "Data Privacy"],
+              ["pdf", "PDF Viewing"],
+              ["audit", "Tracing & Auditing"],
+              ["log", "Log History"],
+            ].map(([section, label]) => ({
+              key: `/universe/settings/erms/${section}`,
+              label: (
+                <div className="menu-label-wrapper submenu-item-label">
+                  <Link to={`/universe/settings/erms/${section}`}>{label}</Link>
+                </div>
+              ),
+            }))
+          : []),
       ].filter(Boolean),
     },
     hasAdmin && canViewAdminPanel && {
@@ -532,6 +742,16 @@ const SideMenu = ({ theme, currentUser }) => {
           label: (
             <div className="menu-label-wrapper submenu-item-label">
               <Link to="/universe/admin/system">System</Link>
+            </div>
+          ),
+        },
+        // Everything ERMS is configured with: the units, their document
+        // types and forms, the filing layout on the shares, the menus.
+        {
+          key: "/universe/admin/erms-config",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/erms-config">ERMS Config</Link>
             </div>
           ),
         },
@@ -629,6 +849,20 @@ const SideMenu = ({ theme, currentUser }) => {
           if (key.startsWith("/universe/province/")) {
             const province = key.split("/").pop();
             handleProvinceSelect(province);
+          }
+        }}
+      />
+      <MenuItemModal
+        open={Boolean(itemDialog)}
+        year={itemDialog?.year}
+        item={itemDialog?.item}
+        parent={itemDialog?.parent}
+        folders={(customItems[itemDialog?.year] || []).filter((i) => i.kind === "folder")}
+        onClose={(saved) => {
+          setItemDialog(null);
+          if (saved) {
+            refreshMenuItems();
+            setOpenKeys((keys) => [...new Set([...keys, "ucds-db", `year-${saved.year}`, ...(saved.parent === "monitoring" ? [`year-${saved.year}-monitoring`] : [])])]);
           }
         }}
       />

@@ -1,0 +1,395 @@
+/* The NAS explorer, in the shape of the Windows 10 File Explorer. Colours
+   come from the Ant Design tokens the component sets as --x-* variables, so
+   it follows the theme and the accent like everything else. */
+
+.eu-explorer {
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  border: 1px solid var(--x-line);
+  border-radius: var(--x-radius);
+  background: var(--x-bg);
+  color: var(--x-ink);
+  overflow: hidden;
+}
+
+/* ---------- title bar ---------- */
+.eu-explorer-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--x-bg-alt);
+  border-bottom: 1px solid var(--x-line);
+  font-size: 13px;
+}
+
+.eu-explorer-titlebar-path {
+  margin-left: 4px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- address row ---------- */
+.eu-explorer-address {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--x-line);
+}
+
+.eu-explorer-addressbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  margin: 0 6px;
+  padding: 0 6px;
+  border: 1px solid var(--x-line);
+  border-radius: 3px;
+  background: var(--x-bg);
+  cursor: text;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.eu-explorer-crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.eu-explorer-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.eu-explorer-crumb:hover {
+  background: var(--x-hover);
+}
+
+.eu-explorer-crumb-sep {
+  color: var(--x-muted);
+  padding: 0 2px;
+}
+
+.eu-explorer-search {
+  width: 220px;
+  flex: 0 0 auto;
+}
+
+.eu-explorer-alert {
+  margin: 8px 8px 0;
+}
+
+/* ---------- body: nav | content | details ---------- */
+.eu-explorer-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.eu-explorer-nav {
+  flex: 0 0 200px;
+  border-right: 1px solid var(--x-line);
+  padding: 8px 0;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.eu-explorer-nav-heading {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--x-muted);
+}
+
+.eu-explorer-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.eu-explorer-nav-item.is-folder {
+  padding-left: 24px;
+}
+
+.eu-explorer-nav-item:hover {
+  background: var(--x-hover);
+}
+
+.eu-explorer-nav-item.is-current {
+  background: var(--x-select);
+  border-left-color: var(--x-select-line);
+}
+
+.eu-explorer-nav-item.is-off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.eu-explorer-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eu-explorer-nav-off {
+  font-size: 10px;
+  color: var(--x-muted);
+}
+
+.eu-explorer-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.eu-explorer-loading {
+  display: flex;
+  justify-content: center;
+  padding: 64px 0;
+}
+
+/* details view */
+.eu-explorer-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+  user-select: none;
+}
+
+.eu-explorer-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--x-bg);
+  text-align: left;
+  font-weight: 400;
+  color: var(--x-muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--x-line);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.eu-explorer-table td {
+  padding: 4px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eu-explorer-table .anticon {
+  margin-right: 8px;
+  font-size: 16px;
+  vertical-align: -3px;
+}
+
+.eu-explorer-table .col-date {
+  width: 140px;
+}
+
+.eu-explorer-table .col-type {
+  width: 140px;
+}
+
+.eu-explorer-table .col-size {
+  width: 84px;
+  text-align: right;
+}
+
+.eu-explorer-row {
+  cursor: default;
+  outline: none;
+}
+
+.eu-explorer-row:hover {
+  background: var(--x-hover);
+}
+
+.eu-explorer-row.is-selected,
+.eu-explorer-row.is-selected:hover {
+  background: var(--x-select);
+  box-shadow: inset 0 0 0 1px var(--x-select-line);
+}
+
+/* search results */
+.eu-explorer-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--x-muted);
+  border-bottom: 1px solid var(--x-line);
+  background: var(--x-bg-alt);
+}
+
+.eu-explorer-searchbar span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eu-explorer-table .col-folder {
+  width: 220px;
+}
+
+.eu-explorer-folder-link {
+  color: var(--x-muted);
+  cursor: pointer;
+}
+
+.eu-explorer-folder-link:hover {
+  text-decoration: underline;
+  color: var(--x-ink);
+}
+
+/* large icons view */
+.eu-explorer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+  padding: 12px;
+  user-select: none;
+}
+
+.eu-explorer-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 6px 8px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  cursor: default;
+  outline: none;
+  text-align: center;
+}
+
+.eu-explorer-tile:hover {
+  background: var(--x-hover);
+}
+
+.eu-explorer-tile.is-selected {
+  background: var(--x-select);
+  border-color: var(--x-select-line);
+}
+
+.eu-explorer-tile-name {
+  font-size: 12px;
+  line-height: 1.25;
+  max-height: 2.5em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* details pane */
+.eu-explorer-details {
+  flex: 0 0 240px;
+  border-left: 1px solid var(--x-line);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  overflow-y: auto;
+}
+
+.eu-explorer-details-icon {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.eu-explorer-details-name {
+  overflow-wrap: anywhere;
+}
+
+.eu-explorer-details-list {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  font-size: 12px;
+}
+
+.eu-explorer-details-list dt {
+  color: var(--x-muted);
+}
+
+.eu-explorer-details-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.eu-explorer-details-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.eu-explorer-details-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 48px;
+  text-align: center;
+  color: var(--x-muted);
+}
+
+/* ---------- status bar ---------- */
+.eu-explorer-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 10px;
+  border-top: 1px solid var(--x-line);
+  background: var(--x-bg-alt);
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.eu-explorer-status-right .ant-btn.is-on {
+  background: var(--x-select);
+  color: var(--x-ink);
+}
+
+@media (max-width: 900px) {
+  .eu-explorer-details {
+    display: none;
+  }
+
+  .eu-explorer-nav {
+    flex-basis: 150px;
+  }
+
+  .eu-explorer-search {
+    width: 140px;
+  }
+
+  .eu-explorer-table .col-type,
+  .eu-explorer-table .col-date {
+    display: none;
+  }
+}

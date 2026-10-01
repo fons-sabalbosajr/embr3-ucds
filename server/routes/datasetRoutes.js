@@ -36,6 +36,15 @@ router.post('/api/ucds/datasets/:key/columns', scoped, logActivity, ctrl.createC
 router.put('/api/ucds/datasets/:key/rows/:id', scoped, logActivity, ctrl.updateRow);
 router.delete('/api/ucds/datasets/:key/rows/:id', scoped, logActivity, ctrl.deleteRow);
 
+// Items people add to the year's branch of the menu: folders, and tables of
+// their own (see services/menuItems.js). Listed for every year the account
+// may enter; changed only in the active year, with the Manage Data capability.
+router.get('/api/ucds/menu-items', ucds, ctrl.listMenuItems);
+router.get('/api/ucds/menu-items/:id', scoped, ctrl.getMenuItem);
+router.post('/api/ucds/menu-items', scoped, ctrl.requireMenuEdit, logActivity, ctrl.createMenuItem);
+router.patch('/api/ucds/menu-items/:id', scoped, ctrl.requireMenuEdit, logActivity, ctrl.updateMenuItem);
+router.delete('/api/ucds/menu-items/:id', scoped, ctrl.requireMenuEdit, logActivity, ctrl.deleteMenuItem);
+
 // Reading a whole spreadsheet or streaming a whole dataset is the expensive
 // tier: a few a minute per person, not a few a second.
 router.post('/api/ucds/datasets/:key/import', scoped, expensiveLimiter, logActivity, ctrl.importDataset);

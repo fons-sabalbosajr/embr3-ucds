@@ -2,7 +2,7 @@
 // without hunting through components. The authenticated application lives
 // under /universe and is unaffected by this prefix.
 
-export const SITE_BASE = "/universe-central-database-system";
+export const SITE_BASE = "/e-universe";
 
 export const ROUTES = {
   landing: SITE_BASE,

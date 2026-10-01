@@ -11,7 +11,7 @@ import Permit from "./tabpanes/PermitsInfo/Permits";
 import Legal from "./tabpanes/LegalInfo/LegalUnit";
 import MBU from "./tabpanes/MBUInfo/MBUnit";
 import ProvTransactionLog from "./tabpanes/TransactionLog/ProvTransaction";
-import CryptoJS from "crypto-js";
+import { getItem, setItem } from "../../../shared/secureStorage";
 import ICIR from "./reports/icir/ICIR";
 import IC from "./reports/ic/formIC";
 import CIC from "./reports/cic/formCIC";
@@ -47,7 +47,6 @@ const ProvinceModal = ({
   const [activeTab, setActiveTab] = useState("1");
   const [isLogChecked, setIsLogChecked] = useState({});
   const [previousRecord, setPreviousRecord] = useState(null);
-  const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
 
   useEffect(() => {
     if (record && record.sort_key) {
@@ -68,31 +67,15 @@ const ProvinceModal = ({
     }
   }, [record]);
 
-  // Load the checked log state from localStorage
+  // Whether the log checkbox was ticked last time, through secureStorage.
   useEffect(() => {
-    const storedValue = localStorage.getItem("isLogChecked");
-    if (storedValue) {
-      try {
-        const decryptedBytes = CryptoJS.AES.decrypt(storedValue, encryptionKey);
-        const decryptedValue = decryptedBytes.toString(CryptoJS.enc.Utf8);
-        setIsLogChecked(JSON.parse(decryptedValue)); // Set the state with the decrypted value
-      } catch (error) {
-        console.error("Error decrypting isLogChecked:", error);
-      }
-    }
-  }, [encryptionKey]);
+    const stored = getItem("isLogChecked", null);
+    if (typeof stored === "boolean") setIsLogChecked(stored);
+  }, []);
 
   useEffect(() => {
-    try {
-      const encryptedValue = CryptoJS.AES.encrypt(
-        JSON.stringify(isLogChecked),
-        encryptionKey
-      ).toString();
-      localStorage.setItem("isLogChecked", encryptedValue);
-    } catch (error) {
-      console.error("Error encrypting isLogChecked:", error);
-    }
-  }, [isLogChecked, encryptionKey]);
+    setItem("isLogChecked", Boolean(isLogChecked));
+  }, [isLogChecked]);
 
   useEffect(() => {
     if (record && JSON.stringify(record) !== JSON.stringify(previousRecord)) {

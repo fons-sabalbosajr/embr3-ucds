@@ -203,7 +203,7 @@ const DuplicatesData = () => {
           loading={loading}
           columns={columns}
           dataSource={filtered}
-          pagination={{ pageSize: 20, showSizeChanger: true, size: "small" }}
+          pagination={{ defaultPageSize: 20, showSizeChanger: true, size: "small" }}
           scroll={{ x: 720 }}
           locale={{
             emptyText: (

@@ -241,8 +241,100 @@
 
 /* ========== Active year ========== */
 .year-label {
+  display: flex;
+  align-items: center;
   justify-content: flex-start;
   gap: 8px;
+  width: 100%;
+}
+
+/* ========== Monitoring Plan folder ==========
+   The register's folder carries its own background — a wash of the accent
+   over the folder title and a fainter one over its open panel — so it reads
+   as the one fixed thing under a year, beside the spreadsheets and the items
+   people add. */
+.side-menu-list .ant-menu-submenu.monitoring-folder > .ant-menu-submenu-title {
+  background: color-mix(in srgb, var(--eu-accent, #2f7ecb) 26%, transparent) !important;
+  border-left: 3px solid var(--eu-accent, #2f7ecb);
+}
+
+.side-menu-list .ant-menu-submenu.monitoring-folder > .ant-menu-submenu-title:hover {
+  background: color-mix(in srgb, var(--eu-accent, #2f7ecb) 38%, transparent) !important;
+}
+
+.side-menu-list .ant-menu-submenu.monitoring-folder > .ant-menu-sub.ant-menu-inline {
+  background: color-mix(in srgb, var(--eu-accent, #2f7ecb) 12%, transparent) !important;
+  border-left: 3px solid color-mix(in srgb, var(--eu-accent, #2f7ecb) 45%, transparent);
+  border-radius: 0 8px 8px 0;
+  margin: 0 8px 4px;
+}
+
+/* ========== User-added items ==========
+   Folders and tables people add under a year. The actions (add inside,
+   rename, remove) appear on hover for whoever may manage the menu, at the
+   right of the name; they are buttons, not links, so they never navigate. */
+.custom-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.custom-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item-actions {
+  display: none;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  flex: none;
+}
+
+.ant-menu-item:hover .menu-item-actions,
+.ant-menu-submenu-title:hover .menu-item-actions {
+  display: inline-flex;
+}
+
+.menu-item-action {
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 12px;
+  padding: 0;
+  cursor: pointer;
+  text-align: center;
+}
+
+.menu-item-action:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.menu-item-action.is-danger:hover {
+  background: #cf1322;
+  color: #fff;
+}
+
+.side-menu-list .ant-menu-item.custom-table .custom-item-name::before {
+  content: "▦";
+  opacity: 0.6;
+  margin-right: 6px;
+  font-size: 11px;
+}
+
+.side-menu-list .ant-menu-submenu.custom-folder > .ant-menu-submenu-title .custom-item-name::before {
+  content: "▸";
+  opacity: 0.6;
+  margin-right: 6px;
 }
 
 .year-label.is-active {
@@ -271,4 +363,30 @@
 
 @media (prefers-reduced-motion: reduce) {
   .year-active-dot { animation: none; }
+}
+
+/* ========== Collapsed ========== */
+/* With the sider at 68px the wrapped labels above would stack into a tall
+   column beside each icon. Collapsed, only the icon remains: the label is
+   removed from layout entirely and every item is one square, centred. */
+.side-menu-list.ant-menu-inline-collapsed .ant-menu-item,
+.side-menu-list.ant-menu-inline-collapsed .ant-menu-submenu-title {
+  height: 44px !important;
+  min-height: 0 !important;
+  margin: 4px 8px;
+  padding: 0 !important;
+  justify-content: center;
+}
+
+.side-menu-list.ant-menu-inline-collapsed .ant-menu-title-content,
+.side-menu-list.ant-menu-inline-collapsed .menu-label-wrapper,
+.side-menu-list.ant-menu-inline-collapsed .ant-menu-submenu-arrow {
+  display: none !important;
+}
+
+.side-menu-list.ant-menu-inline-collapsed .ant-menu-item .anticon,
+.side-menu-list.ant-menu-inline-collapsed .ant-menu-submenu-title .anticon {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1;
 }

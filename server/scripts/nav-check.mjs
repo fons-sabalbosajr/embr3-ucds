@@ -51,13 +51,13 @@ const check = (name, ok, note) => {
 };
 
 async function signIn(page, username) {
-  await page.goto(`${BASE}/universe-central-database-system/login`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/e-universe/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('input', { timeout: 20000 });
   await page.locator('input').first().fill(username);
   await page.locator('input[type="password"]').fill(PASSWORD);
   await page.getByRole('button', { name: /^login$/i }).first().click();
   await page.waitForFunction(
-    () => !/\/universe-central-database-system\/login/.test(location.href),
+    () => !/\/e-universe\/login/.test(location.href),
     null,
     { timeout: 25000 }
   );

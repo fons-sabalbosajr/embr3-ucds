@@ -38,7 +38,7 @@ const ROLE_LABELS = {
   [ROLES.DEVELOPER]: 'Developer',
   [ROLES.ADMIN]: 'Administrator',
   [ROLES.PLANNING]: 'Planning Admin',
-  [ROLES.RECORDS]: 'Records Admin',
+  [ROLES.RECORDS]: 'ERMS User',
   [ROLES.VIEWER]: 'Encoder',
 };
 
@@ -46,9 +46,59 @@ const ROLE_DESCRIPTIONS = {
   [ROLES.DEVELOPER]: 'Everything: UCDS, ERMS, administration, the NAS and every storage container.',
   [ROLES.ADMIN]: 'Legacy: UCDS, ERMS and administration. Reassign to one of the other types.',
   [ROLES.PLANNING]: 'UCDS, and the storage containers the Developer designates.',
-  [ROLES.RECORDS]: 'ERMS (and the register it files against), and the storage containers the Developer designates.',
+  [ROLES.RECORDS]: 'ERMS for one unit — Records, Legal Services or Laboratory — set as the System on the account, with that unit\'s storage container. No year container to choose.',
   [ROLES.VIEWER]: 'UCDS only, within the year containers assigned. No storage access.',
 };
+
+// --- ERMS units ---------------------------------------------------------------
+//
+// The desktop ERMS was three subsystems, one per unit, each with its own
+// database and its own NAS share. An ERMS User belongs to exactly one of
+// them — the "System" on the account — and sees that unit's documents and
+// nothing of the other two. The Developer (and the legacy Administrator)
+// sees all three. The unit's key is also its storage container's key.
+
+const ERMS_UNITS = {
+  RECORDS: 'records',
+  LEGAL: 'legal',
+  LABORATORY: 'laboratory',
+};
+const ERMS_UNIT_VALUES = Object.values(ERMS_UNITS);
+const ERMS_UNIT_LABELS = {
+  [ERMS_UNITS.RECORDS]: 'Records Unit',
+  [ERMS_UNITS.LEGAL]: 'Legal Services Unit',
+  [ERMS_UNITS.LABORATORY]: 'Laboratory Unit',
+};
+
+/**
+ * The one unit this account works in, or null for an account that sees all
+ * of them (Developer, legacy Administrator) or none (an Encoder).
+ *
+ * An ERMS User from before the field existed is a Records Unit user: that is
+ * what the role always was.
+ */
+function ermsUnitOf(user) {
+  const raw = String(user?.ermsUnit || '').trim().toLowerCase();
+  if (ERMS_UNIT_VALUES.includes(raw)) return raw;
+  return roleOf(user) === ROLES.RECORDS ? ERMS_UNITS.RECORDS : null;
+}
+
+/** The units this account may see: one for an ERMS User, all for a Developer/Administrator. */
+function ermsUnitsOf(user) {
+  if (canAccessAllYears(user)) return [...ERMS_UNIT_VALUES];
+  const one = ermsUnitOf(user);
+  return one ? [one] : [];
+}
+
+/** Whether `user` may see `unit`'s documents at all. */
+const canSeeErmsUnit = (user, unit) => ermsUnitsOf(user).includes(String(unit || '').toLowerCase());
+
+/**
+ * An ERMS end user: someone whose work is a unit's documents, not the
+ * register. They are spared the year container picker — nothing they do is
+ * year-scoped — and land in their unit directly.
+ */
+const isErmsEndUser = (user) => roleOf(user) === ROLES.RECORDS;
 
 /** The types offered when creating or reassigning an account. */
 const ASSIGNABLE_ROLES = [ROLES.DEVELOPER, ROLES.PLANNING, ROLES.RECORDS, ROLES.VIEWER];
@@ -70,13 +120,13 @@ const DOMAIN_VALUES = new Set(Object.values(DOMAINS));
 const DEFAULT_DOMAINS = {
   [ROLES.DEVELOPER]: [DOMAINS.UCDS, DOMAINS.ERMS, DOMAINS.ADMIN],
   [ROLES.ADMIN]: [DOMAINS.UCDS, DOMAINS.ERMS, DOMAINS.ADMIN],
-  // Records staff hold UCDS as well as ERMS. Their own menu was removed when
-  // records were folded into the Monitoring Plan, and Monitoring Plan is a
-  // UCDS screen — without this a Records clerk signs in to an empty
-  // application. It grants *reading* the register, not writing it:
-  // canManageData still gates every write, and province scope still decides
-  // which records they see at all.
-  [ROLES.RECORDS]: [DOMAINS.ERMS, DOMAINS.UCDS],
+  // ERMS Users hold ERMS only. The Universe Central DB is the Planning
+  // Unit's; an ERMS User has their unit's own screens (dashboard, register
+  // or documents, upload). The register lookup on the record form reads
+  // UCDS through the ERMS module's own route, so no UCDS entitlement is
+  // needed for it. An administrator can still widen a specific account by
+  // setting `domains` on it.
+  [ROLES.RECORDS]: [DOMAINS.ERMS],
   [ROLES.PLANNING]: [DOMAINS.UCDS],
   [ROLES.VIEWER]: [DOMAINS.UCDS],
 };
@@ -231,11 +281,18 @@ function nasContainersOf(user, allKeys = []) {
   // stale designation on the account says.
   if (roleOf(user) === ROLES.VIEWER) return [];
 
-  if (Array.isArray(user?.nasContainers)) {
+  if (Array.isArray(user?.nasContainers) && user.nasContainers.length) {
     const wanted = new Set(user.nasContainers.map((k) => String(k).trim().toLowerCase()));
+    // An ERMS User always holds their own unit's container as well: the
+    // unit's documents live there, and a designation cannot take that away.
+    const own = ermsUnitOf(user);
+    if (own && roleOf(user) === ROLES.RECORDS) wanted.add(own);
     return keys.filter((k) => wanted.has(k));
   }
-  if (roleOf(user) === ROLES.RECORDS) return keys.filter((k) => k === 'records');
+  if (roleOf(user) === ROLES.RECORDS) {
+    const own = ermsUnitOf(user);
+    return keys.filter((k) => k === own);
+  }
   return [];
 }
 
@@ -248,6 +305,13 @@ module.exports = {
   ROLE_DESCRIPTIONS,
   ASSIGNABLE_ROLES,
   DOMAINS,
+  ERMS_UNITS,
+  ERMS_UNIT_VALUES,
+  ERMS_UNIT_LABELS,
+  ermsUnitOf,
+  ermsUnitsOf,
+  canSeeErmsUnit,
+  isErmsEndUser,
   nasContainersOf,
   canOpenContainer,
   CAPABILITY_KEYS,

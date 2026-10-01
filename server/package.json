@@ -33,6 +33,7 @@
     "compression": "^1.7.5",
     "connect-mongo": "^5.1.0",
     "cookie-parser": "^1.4.7",
+    "cookie-signature": "1.0.7",
     "cors": "^2.8.6",
     "csv-parse": "^7.0.2",
     "dayjs": "^1.11.23",

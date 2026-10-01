@@ -4,7 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { authenticateSession, requireDeveloper, requireRole } = require('../middleware/auth');
 const { logActivity } = require('../middleware/activityLog');
-const { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, setUserType, listUserTypes, deleteUser } = require('../controllers/usersController');
+const { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme } = require('../controllers/usersController');
 
 const router = express.Router();
 
@@ -24,20 +24,26 @@ const upload = multer({ storage });
 
 // Legacy paths preserved
 router.post('/api/users/update', authenticateSession, upload.single('photo'), updateUserAvatar);
-router.post('/api/newusers', authenticateSession, upload.single('avatar'), logActivity, createUser);
+// Creating accounts, and everything about sign-up requests, is for account
+// managers. These used to need only a session.
+const managers = [authenticateSession, requireRole('developer', 'admin')];
+router.post('/api/newusers', managers, upload.single('avatar'), logActivity, createUser);
 
 // PUTs migrated from server.js
-router.put('/api/users/:id', logActivity, authenticateSession, updateUserById);
+// Account details are edited by account managers only; the type, storage
+// containers, years and capabilities have their own routes below.
+router.put('/api/users/:id', authenticateSession, requireRole('developer', 'admin'), logActivity, updateUserById);
 router.put('/api/profile/update/:id', logActivity, authenticateSession, updateProfile);
-router.put('/api/status/:id', logActivity, authenticateSession, updateSignupStatus);
+router.put('/api/status/:id', managers, logActivity, updateSignupStatus);
+router.put('/api/profile/theme', authenticateSession, setMyTheme);
 
 // GETs migrated from server.js
 router.get('/api/users', authenticateSession, getUsers);
 router.get('/api/user/details', authenticateSession, getUserDetails);
 router.get('/api/login-status', authenticateSession, getLoginStatus);
-router.get('/api/sign-up', authenticateSession, getSignUps);
+router.get('/api/sign-up', managers, getSignUps);
 router.get('/api/user/avatar', authenticateSession, getUserAvatar);
-router.get('/api/generate-password', authenticateSession, generatePassword);
+router.get('/api/generate-password', managers, generatePassword);
 
 // Additional endpoints migrated from server.js
 router.get('/current-user', authenticateSession, getCurrentUser);
@@ -50,12 +56,16 @@ router.get('/api/recent-activity', authenticateSession, getRecentActivity);
 const accountManagers = [authenticateSession, requireRole('developer', 'admin')];
 router.patch('/api/users/:email/permissions', accountManagers, updateUserPermissionsByEmail);
 router.patch('/api/users/:email/province-permissions', accountManagers, updateProvincePermissionsByEmail);
+// The year containers an account may enter (Encoders and admins alike).
+router.put('/api/users/:id/years', accountManagers, logActivity, setUserYears);
 
 // The account type — Developer, Planning Admin, Records Admin, Encoder — is
 // the Developer's to set.
 router.get('/api/users/types', authenticateSession, listUserTypes);
 router.put('/api/users/:id/type', authenticateSession, requireDeveloper, logActivity, setUserType);
+// The ERMS unit ("System") an account works in. Developer only, like the type.
+router.put('/api/users/:id/erms-unit', authenticateSession, requireDeveloper, logActivity, setUserErmsUnit);
 router.delete('/api/users/:id', authenticateSession, requireDeveloper, logActivity, deleteUser);
-router.delete('/api/remove-user/:id', authenticateSession, removeSignUpUser);
+router.delete('/api/remove-user/:id', managers, logActivity, removeSignUpUser);
 
 module.exports = router;

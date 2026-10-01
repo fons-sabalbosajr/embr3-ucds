@@ -16,9 +16,11 @@ const corsOptions = {
     "Accept",
     "Cookie",
     "Set-Cookie",
+    // This tab's session (see middleware/sessionToken.js).
+    "X-Session-Token",
   ],
   credentials: true,
-  exposedHeaders: ["Set-Cookie"],
+  exposedHeaders: ["Set-Cookie", "X-Session-Token"],
   preflightContinue: false,
 };
 

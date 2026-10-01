@@ -28,6 +28,7 @@ import { fetchCurrentUser } from "../../../api/universeService";
 import { useYear } from "../../../context/YearContext";
 import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
 import { API_BASE_URL } from "../../../config/api";
+import { withSessionToken } from "../../../shared/sessionToken";
 import ErrorCard from "../../../shared/components/ErrorCard";
 import ContentLoading from "../../../shared/components/ContentLoading";
 
@@ -330,7 +331,7 @@ const DatasetPage = () => {
               <Button
                 size="small"
                 icon={<DownloadOutlined />}
-                href={`${API_BASE_URL}/api/ucds/datasets/${encodeURIComponent(key)}/export.csv${sheet ? `?sheet=${encodeURIComponent(sheet)}` : ""}`}
+                href={withSessionToken(`${API_BASE_URL}/api/ucds/datasets/${encodeURIComponent(key)}/export.csv${sheet ? `?sheet=${encodeURIComponent(sheet)}` : ""}`)}
               >
                 Export CSV
               </Button>

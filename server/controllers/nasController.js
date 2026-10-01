@@ -7,6 +7,8 @@ const credentials = require('../services/nasCredentials');
 const containers = require('../services/nasContainers');
 const storageAccess = require('../services/storageAccess');
 const reportFiles = require('../services/reportFiles');
+const availability = require('../services/nasAvailability');
+const bridge = require('../services/nasBridge');
 
 // ---------------------------------------------------------------------------
 // NAS (SMB) storage access — administrative surface.
@@ -212,6 +214,11 @@ async function myContainers(req, res, next) {
     const active = await activation.evaluate();
     return res.json({
       active: active.active === true,
+      // Why not, in the Developer's own words when it is the schedule, so the
+      // Storage screen can say "weekdays only" instead of "off".
+      reason: active.reason || null,
+      message: active.message || null,
+      nextOpensAt: active.nextOpensAt || null,
       containers: await storageAccess.grantedContainers(principalOf(req)),
     });
   } catch (error) {
@@ -263,7 +270,17 @@ async function reportFilesRemove(req, res, next) {
 /** Every container, as a screen may see it. Never a password. */
 async function listContainers(req, res, next) {
   try {
-    return res.json(await containers.list());
+    // Whether the NAS is offered right now — the master switch, the
+    // schedule, the bridge and the activation window together — travels
+    // with the list, so the Containers screen can say "off" for all of them
+    // at once and why.
+    const [list, now] = await Promise.all([containers.list(), activation.evaluate()]);
+    const offered = now.active === true;
+    return res.json({
+      ...list,
+      availability: { available: offered, reason: now.reason || null, message: now.message || null, nextOpensAt: now.nextOpensAt || null },
+      containers: list.containers.map((c) => ({ ...c, online: offered && c.enabled === true })),
+    });
   } catch (error) {
     return next(error);
   }
@@ -411,6 +428,40 @@ async function browse(req, res) {
   return res.json(result);
 }
 
+/** Search names under a folder of a container, for the explorer's search box. */
+async function search(req, res, next) {
+  try {
+    const requested = req.query.path || '';
+    const key = req.container?.key || containerOf(req);
+    const result = await nas.searchDirectory(requested, req.query.q || '', key);
+
+    await recordFileEvent(req, {
+      operation: req.container ? 'storage-search' : 'nas-search',
+      containerKey: key,
+      fileName: requested || '(root)',
+      success: result.ok === true,
+      detail: result.ok ? `"${result.query}": ${result.results.length} match(es) in ${result.scannedFolders} folder(s)${result.truncated ? ', truncated' : ''}` : result.reason,
+    });
+
+    if (!result.ok) {
+      const statuses = {
+        'query-too-short': [400, 'QUERY_TOO_SHORT', 'Type at least two characters.'],
+        'not-configured': [503, 'NAS_NOT_CONFIGURED', 'That container is not configured.'],
+        disabled: [503, 'NAS_DISABLED', 'That container is switched off.'],
+        'invalid-path': [400, 'BAD_PATH', 'That path is not inside the container.'],
+        missing: [404, 'NOT_FOUND', 'No such folder in the container.'],
+        denied: [502, 'NAS_DENIED', 'The server is not permitted to read that folder.'],
+        unreachable: [502, 'NAS_UNREACHABLE', 'The container could not be reached.'],
+      };
+      const [status, code, message] = statuses[result.reason] || [502, 'NAS_ERROR', 'Could not search that folder.'];
+      return res.status(status).json({ code, message });
+    }
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 /** Stream one file from the explorer, by share-relative path. */
 async function readByPath(req, res, next) {
   try {
@@ -432,7 +483,9 @@ async function readByPath(req, res, next) {
     }
 
     const safeName = file.fileName.replace(/["\\]/g, '_');
-    const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+    // Staff view, never download: /api/storage/file (req.container set) is
+    // always inline. Only the Developer's elevated explorer may save a file.
+    const disposition = req.query.download === '1' && !req.container ? 'attachment' : 'inline';
     res.setHeader('Content-Type', file.contentType);
     res.setHeader(
       'Content-Disposition',
@@ -628,8 +681,130 @@ async function auditLog(req, res, next) {
   }
 }
 
+// --- availability (master switch + schedule) ---------------------------------
+
+async function getAvailability(req, res, next) {
+  try {
+    const [config, now] = await Promise.all([availability.read(), availability.evaluate()]);
+    return res.json({ ...config, now, scheduleText: availability.describeSchedule(config.schedule) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function setAvailability(req, res, next) {
+  try {
+    const r = await availability.save(req.body || {}, principalOf(req));
+    if (!r.ok) return res.status(r.status || 400).json(r);
+    await recordFileEvent(req, {
+      operation: 'nas-availability-set',
+      success: true,
+      detail: r.changed.length ? r.changed.join('; ') : 'no change',
+    });
+    const now = await availability.evaluate();
+    // Every open Storage screen hears about it at once.
+    bridge.broadcast();
+    return res.json({ ...r.config, now, scheduleText: availability.describeSchedule(r.config.schedule), changed: r.changed });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- the NAS bridge (the office server the shares are reached through) --------
+
+async function getBridge(req, res, next) {
+  try {
+    return res.json({ ...(await bridge.read()), status: await bridge.status() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function setBridge(req, res, next) {
+  try {
+    const r = await bridge.save(req.body || {}, principalOf(req));
+    if (!r.ok) return res.status(r.status || 400).json(r);
+    await recordFileEvent(req, {
+      operation: 'nas-bridge-set',
+      success: true,
+      detail: r.changed.length ? r.changed.join('; ') : 'no change',
+    });
+    return res.json({ ...r.config, status: await bridge.status(), changed: r.changed });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Run one probe now, for the "Check now" button. */
+async function probeBridge(req, res, next) {
+  try {
+    const status = await bridge.probe();
+    return res.json({ status, now: await activation.evaluate() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// --- activity summary (for the charts) ---------------------------------------
+
+/**
+ * The audit trail rolled up for the Activity tab: per day, per operation,
+ * per container, per person and per hour of day, over the last N days.
+ * Counts only — no paths, no hosts, nothing that is not already in the log.
+ */
+async function auditSummary(req, res, next) {
+  try {
+    const { getDb } = require('../config/db');
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    since.setHours(0, 0, 0, 0);
+    const col = getDb().collection('app-logs');
+    const match = { domain: 'nas', timestamp: { $gte: since } };
+    const tz = availability.TIME_ZONE;
+    const group = (idExpr, extra = {}) => [
+      { $match: match },
+      { $group: { _id: idExpr, total: { $sum: 1 }, failed: { $sum: { $cond: [{ $eq: ['$success', false] }, 1, 0] } }, bytes: { $sum: { $ifNull: ['$bytes', 0] } }, ...extra } },
+    ];
+    const [byDay, byOperation, byContainer, byUser, byHour, totals] = await Promise.all([
+      col.aggregate([...group({ $dateToString: { format: '%Y-%m-%d', date: '$timestamp', timezone: tz } }), { $sort: { _id: 1 } }]).toArray(),
+      col.aggregate([...group('$operation'), { $sort: { total: -1 } }]).toArray(),
+      col.aggregate([...group('$container'), { $sort: { total: -1 } }]).toArray(),
+      col.aggregate([...group('$username'), { $sort: { total: -1 } }, { $limit: 10 }]).toArray(),
+      col.aggregate([...group({ $hour: { date: '$timestamp', timezone: tz } }), { $sort: { _id: 1 } }]).toArray(),
+      col.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: 1 }, failed: { $sum: { $cond: [{ $eq: ['$success', false] }, 1, 0] } }, bytes: { $sum: { $ifNull: ['$bytes', 0] } }, users: { $addToSet: '$username' } } }]).toArray(),
+    ]);
+    const shape = (rows, key = 'key') => rows.map((r) => ({ [key]: r._id ?? null, total: r.total, failed: r.failed, ok: r.total - r.failed, bytes: r.bytes }));
+    const t = totals[0] || { total: 0, failed: 0, bytes: 0, users: [] };
+    // Every calendar day in the range, in the office time zone, so the chart
+    // draws the quiet days too and its keys match the grouped ones exactly.
+    const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    const dayKeys = [];
+    for (let i = days - 1; i >= 0; i -= 1) dayKeys.push(dayOf.format(new Date(Date.now() - i * 24 * 60 * 60 * 1000)));
+    return res.json({
+      days,
+      since: since.toISOString(),
+      dayKeys,
+      timeZone: tz,
+      totals: { total: t.total, failed: t.failed, ok: t.total - t.failed, bytes: t.bytes, users: (t.users || []).filter(Boolean).length },
+      byDay: shape(byDay, 'day'),
+      byOperation: shape(byOperation, 'operation'),
+      byContainer: shape(byContainer, 'container'),
+      byUser: shape(byUser, 'username'),
+      byHour: shape(byHour, 'hour'),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   requireNasConfig,
+  getAvailability,
+  setAvailability,
+  getBridge,
+  setBridge,
+  probeBridge,
+  auditSummary,
   getConfig,
   saveConfig,
   resetConfig,
@@ -650,6 +825,7 @@ module.exports = {
   deleteContainer,
   containerHistory,
   browse,
+  search,
   readByPath,
   activationStatus,
   setActivation,

@@ -1,138 +1,114 @@
-import React, { useState, useEffect } from "react";
-import { Avatar, Typography, Menu, Modal } from "antd";
+import React, { useEffect, useState } from "react";
+import { Button, Divider, Modal, Segmented, Space, Tag, Typography } from "antd";
 import {
-  UserOutlined,
-  SettingOutlined,
-  QuestionCircleOutlined,
   BulbOutlined,
   LogoutOutlined,
+  MoonOutlined,
+  QuestionCircleOutlined,
+  SettingOutlined,
+  SunOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import Profile from "../Settings/Profile/Profile";
 import Help from "../Settings/Help/Help";
 import Suggestion from "../Settings/Suggestion/Suggestion";
+import AvatarWithName from "../AvatarwithName";
+import { accountType } from "../../shared/accountTypes";
+import { useTheme } from "../../theme/ThemeProvider";
 import { fetchUserByUsername } from "../../api/userService";
 import "./popoveruser.css";
 
 const { Text } = Typography;
 
-const UserPopover = ({ name, userHandle, handleLogout, selection, theme }) => {
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [modalContent, setModalContent] = useState("");
-  const [prefetchedUserData, setPrefetchedUserData] = useState(null);
+// ---------------------------------------------------------------------------
+// The account panel behind the avatar: who is signed in (name, handle,
+// account type, division), the appearance switch, the account actions, and
+// sign-out. Kept small on purpose — it is a menu, not a page.
+// ---------------------------------------------------------------------------
+
+const UserPopover = ({ name, userHandle, handleLogout, userData, division, role, onNavigate }) => {
+  const [modal, setModal] = useState(null); // 'profile' | 'help' | 'feature'
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const { mode, setMode } = useTheme();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const getModalWidth = () => {
-    if (modalContent === "help") return 700;
-    if (modalContent === "feature") return 600;
-    if (modalContent === "profile") {
-      return windowWidth <= 1080 ? 600 : 400;
-    }
-    return 400;
+  const modalWidth = modal === "help" ? 700 : modal === "feature" ? 600 : windowWidth <= 1080 ? 600 : 420;
+  const type = accountType(role || userData?.role || userData?.permission);
+
+  const go = (path) => {
+    onNavigate?.();
+    navigate(path);
   };
 
-  const showModal = (content) => {
-    setModalContent(content);
-    setIsModalVisible(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalVisible(false);
-  };
-
-  const renderModalContent = () => {
-    switch (modalContent) {
-      case "profile":
-        return <Profile name={name} username={userHandle} />; // Pass name and username
-      case "help":
-        return <Help name={name} username={userHandle} theme={theme} />;
-      case "feature":
-        return <Suggestion name={name} username={userHandle} theme={theme} />;
-      default:
-        return null;
-    }
-  };
-
-  const prefetchUserData = () => {
-    fetchUserByUsername(userHandle)
-      .then((user) => setPrefetchedUserData(user))
-      .catch((error) => console.error("Error prefetching user data:", error));
+  const prefetch = () => {
+    fetchUserByUsername(userHandle).catch(() => {});
   };
 
   return (
-    <div
-      style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-    >
-      <div style={{ textAlign: "center" }}>
-        <Text strong className="popover-user-name" style={{ fontSize: "11px" }}>
-          {name}
-        </Text>
+    <div className="eu-account-panel">
+      <div className="eu-account-head">
+        <AvatarWithName userHandle={userHandle} size="48px" />
+        <div className="eu-account-who">
+          <Text strong className="eu-account-name">{name}</Text>
+          <Text type="secondary" className="eu-account-handle">@{userHandle}</Text>
+          <Space size={4} wrap>
+            <Tag color={type.color} style={{ marginInlineEnd: 0 }}>{type.label}</Tag>
+            {userData?.isDemo && <Tag color="gold" style={{ marginInlineEnd: 0 }}>demo</Tag>}
+          </Space>
+          {division && <Text type="secondary" className="eu-account-division">{division}</Text>}
+        </div>
       </div>
-      <Text
-        type="secondary"
-        className="popover-user-handle"
-        style={{ fontSize: "11px" }}
-      >
-        @{userHandle}
-      </Text>
-      <Menu
-        className="popover-user-menu"
-        selectedKeys={[selection]}
-        onClick={({ key }) => {
-          if (key === "logout") {
-            handleLogout();
-          } else {
-            showModal(key);
-          }
-        }}
-        style={{
-          background: "transparent",
-        }}
-        mode="vertical"
-      >
-        <Menu.Item
-          key="profile"
-          icon={<UserOutlined />}
-          onMouseEnter={prefetchUserData}
-        >
-          Profile Setting
-        </Menu.Item>
 
-        <Menu.Item key="help" icon={<QuestionCircleOutlined />}>
+      <div className="eu-account-theme">
+        <Text type="secondary" className="eu-account-label">Appearance</Text>
+        <Segmented
+          block
+          size="small"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "light", label: <span><SunOutlined /> Light</span> },
+            { value: "dark", label: <span><MoonOutlined /> Dark</span> },
+          ]}
+        />
+        <Text type="secondary" className="eu-account-hint">Saved to your account — the same on every device.</Text>
+      </div>
+
+      <Divider className="eu-account-divider" />
+
+      <div className="eu-account-actions">
+        <Button type="text" block icon={<UserOutlined />} onMouseEnter={prefetch} onClick={() => setModal("profile")}>
+          My profile
+        </Button>
+        <Button type="text" block icon={<SettingOutlined />} onClick={() => go("/universe/settings/general")}>
+          Settings
+        </Button>
+        <Button type="text" block icon={<QuestionCircleOutlined />} onClick={() => setModal("help")}>
           Help
-        </Menu.Item>
+        </Button>
+        <Button type="text" block icon={<BulbOutlined />} onClick={() => setModal("feature")}>
+          Suggest a feature
+          <Tag color="volcano" style={{ marginInlineStart: 8, marginInlineEnd: 0 }}>beta</Tag>
+        </Button>
+      </div>
 
-        <Menu.Item key="feature" icon={<BulbOutlined />}>
-          Suggest a feature{" "}
-          <span style={{ color: "red", marginLeft: "5px" }}>Beta</span>
-        </Menu.Item>
+      <Divider className="eu-account-divider" />
 
-        <Menu.Item key="logout" icon={<LogoutOutlined />}>
-          Log Out
-        </Menu.Item>
-      </Menu>
-      
-      <Modal
-        title={
-          modalContent === "profile"
-            ? ""
-            : modalContent === "help"
-            ? ""
-            : modalContent === "feature"
-            ? ""
-            : ""
-        }
-        open={isModalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={getModalWidth()}
-      >
-        {renderModalContent()}
+      <Button block danger icon={<LogoutOutlined />} onClick={handleLogout} className="eu-account-signout">
+        Sign out
+      </Button>
+
+      <Modal open={Boolean(modal)} onCancel={() => setModal(null)} footer={null} width={modalWidth} destroyOnClose>
+        {modal === "profile" && <Profile name={name} username={userHandle} />}
+        {modal === "help" && <Help name={name} username={userHandle} theme={mode} />}
+        {modal === "feature" && <Suggestion name={name} username={userHandle} theme={mode} />}
       </Modal>
     </div>
   );

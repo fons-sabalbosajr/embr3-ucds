@@ -74,6 +74,10 @@ const sessionStore = MongoStore.create({
   ttl: 14 * 24 * 60 * 60,
 });
 
+// A tab that carries its own session token is answered by that session, not
+// the cookie's — one sign-in per tab. See middleware/sessionToken.js.
+const { sessionFromToken, offerSessionToken } = require("./middleware/sessionToken");
+app.use(sessionFromToken);
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -83,10 +87,11 @@ app.use(
     store: sessionStore,
   })
 );
+app.use(offerSessionToken);
 
 require("./middleware/auth").assertAuthNotBypassed();
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors({ origin: allowedOrigins, credentials: true, exposedHeaders: corsOptions.exposedHeaders }));
 app.options("*", cors(corsOptions));
 app.use(cookieParser());
 // JSON responses from the register are large and highly compressible; gzip
@@ -95,7 +100,15 @@ app.use(cookieParser());
 app.use(require("compression")());
 // A bulk update of the register is the biggest legitimate body. Anything
 // larger is a mistake or an attack, and parsing it would cost memory first.
-app.use(express.json({ limit: "2mb" }));
+//
+// Parsed only while the request stream is still readable. A request whose
+// body has already gone — the browser aborted it, a tab closed mid-sign-out,
+// a proxy cut the connection — reaches body-parser with a closed stream, and
+// raw-body answers "stream is not readable" as a 500 on a route that never
+// needed a body (POST /logout was the one seen). Such a request proceeds
+// with an empty body instead, and the route decides what that means.
+const jsonParser = express.json({ limit: "2mb" });
+app.use((req, res, next) => (req.readable ? jsonParser(req, res, next) : next()));
 // General per-account budget for the API; the expensive tier is applied per
 // route where a request scans or aggregates a whole collection.
 app.use(["/api", "/ucds", "/ucds-data", "/check-data", "/archive-data"], apiLimiter);

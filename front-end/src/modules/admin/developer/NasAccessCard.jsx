@@ -177,7 +177,7 @@ const NasAccessCard = ({ refreshKey }) => {
         loading={loading}
         columns={columns}
         dataSource={rows}
-        pagination={{ pageSize: 20, size: "small", hideOnSinglePage: true }}
+        pagination={{ defaultPageSize: 20, size: "small", hideOnSinglePage: true }}
         scroll={{ x: 720 }}
       />
     </Card>

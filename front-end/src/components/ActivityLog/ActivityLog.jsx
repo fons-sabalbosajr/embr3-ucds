@@ -215,7 +215,7 @@ const ActivityLog = ({ theme }) => {
       columns={columns}
       dataSource={filteredLogs}
       rowKey="_id"
-      pagination={{ pageSize: 10 }}
+      pagination={{ defaultPageSize: 10 }}
       className="activitylog-table"
       style={{
         backgroundColor: theme === "dark" ? "#1e1e1e" : "#ffffff",

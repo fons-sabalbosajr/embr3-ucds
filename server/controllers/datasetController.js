@@ -177,4 +177,71 @@ async function importForYear(req, res, next) {
   }
 }
 
-module.exports = { getSettings, putSettings, importForYear, registry, listForActiveYear, describe, rowsPage, createRow, createColumn, updateRow, deleteRow, importDataset, exportCsv };
+// --- user-added menu items (see services/menuItems.js) -----------------------------
+
+const menuItems = require('../services/menuItems');
+const audit = require('../shared/services/audit');
+
+/** Every year the account may enter, with the items people added under each. */
+async function listMenuItems(req, res, next) {
+  try {
+    const years = await authorizedYears(principalOf(req));
+    res.json({ years: await menuItems.forYears(years), canManage: canEdit(req) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getMenuItem(req, res, next) {
+  try {
+    const item = await menuItems.get(req.activeYear, req.params.id);
+    if (!item) return res.status(404).json({ code: 'ITEM_NOT_FOUND', message: 'No such item in this year.' });
+    const [entry] = await menuItems.forYears([req.activeYear]);
+    const children = (entry?.items || []).filter((i) => i.parent === item.id);
+    return res.json({ year: req.activeYear, item, children });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function requireMenuEdit(req, res, next) {
+  if (!canEdit(req)) {
+    return res.status(403).json({ code: 'CAPABILITY_REQUIRED', message: 'Adding items to the menu needs the Manage Data capability.' });
+  }
+  return next();
+}
+
+async function createMenuItem(req, res, next) {
+  try {
+    const item = await menuItems.create(req.activeYear, req.body || {}, principalOf(req));
+    await audit.record(req, { domain: 'ucds', action: 'menu-item-create', label: `menu item added: ${item.label}`, collection: menuItems.COLLECTION, documentId: item.id });
+    res.status(201).json({ item });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateMenuItem(req, res, next) {
+  try {
+    const item = await menuItems.update(req.activeYear, req.params.id, req.body || {}, principalOf(req));
+    await audit.record(req, { domain: 'ucds', action: 'menu-item-update', label: `menu item changed: ${item.label}`, collection: menuItems.COLLECTION, documentId: item.id });
+    res.json({ item });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteMenuItem(req, res, next) {
+  try {
+    const result = await menuItems.remove(req.activeYear, req.params.id);
+    await audit.record(req, { domain: 'ucds', action: 'menu-item-delete', label: `menu item removed: ${result.label} (${result.removed})`, collection: menuItems.COLLECTION, documentId: req.params.id });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = {
+  getSettings, putSettings, importForYear, registry, listForActiveYear, describe, rowsPage, createRow, createColumn, updateRow, deleteRow, importDataset, exportCsv,
+  listMenuItems, getMenuItem, requireMenuEdit, createMenuItem, updateMenuItem, deleteMenuItem,
+};

@@ -892,15 +892,17 @@ const UserAccounts = ({ theme = "dark" }) => {
             />
           </div>
         </div>
+        {/* Its own paging: this used to share the accounts table's handler,
+            so turning a page here moved the accounts list too. */}
         <Table
           columns={columnsSignup}
           dataSource={signUpUsers}
           pagination={{
+            defaultPageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: ["10", "50", "100"],
           }}
           loading={loadingSignUp}
-          onChange={handlePaginationChange}
           rowClassName={rowClassName}
         />
         <SignAccountModal
