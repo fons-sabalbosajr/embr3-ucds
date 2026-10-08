@@ -3,6 +3,9 @@ const trackingService = require('./services/trackingService');
 const archiveService = require('./services/archiveService');
 const accessRequestService = require('./services/accessRequestService');
 const unitDocumentService = require('./services/unitDocumentService');
+const docketService = require('./services/docketService');
+const uploadTallyService = require('./services/uploadTallyService');
+const messageService = require('./services/messageService');
 
 // ---------------------------------------------------------------------------
 // The ERMS module's public face.
@@ -20,6 +23,9 @@ async function ensureIndexes() {
   await archiveService.ensureIndexes();
   await accessRequestService.ensureIndexes();
   await unitDocumentService.ensureIndexes();
+  await docketService.ensureIndexes();
+  await uploadTallyService.ensureIndexes();
+  await messageService.ensureIndexes();
 }
 
 module.exports = {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Card, Col, Empty, Row, Segmented, Space, Statistic, Table, Tooltip, Typography, theme as antdTheme } from "antd";
+import { Line } from "@ant-design/plots";
 import { API_BASE_URL } from "../../../config/api";
 import { useTheme } from "../../../theme/ThemeProvider";
-import "./nasactivity.css";
 
 const { Text } = Typography;
 
@@ -14,9 +14,12 @@ const { Text } = Typography;
 // person. Everything here is a count of audit entries — nothing is read from
 // the share to draw it, and nothing appears that is not already in the log.
 //
-// The charts are plain SVG. Two series only, successful and failed, in a
-// blue/orange pair that stays apart for colour-blind readers; the legend and
-// the hover tooltip carry the numbers, so colour is never the only cue.
+// The per-day chart is Ant Design Charts (@ant-design/plots), as the ERMS
+// dashboards are, so its type sits at the application's sizes whatever the
+// card's width — the hand-drawn SVG before it scaled its 10px labels up with
+// the card. Two series only, successful and failed, in a blue/orange pair
+// that stays apart for colour-blind readers; the legend and the tooltip carry
+// the numbers, so colour is never the only cue.
 // ---------------------------------------------------------------------------
 
 const api = (path) => fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
@@ -72,6 +75,7 @@ const usePalette = () => {
   const { mode } = useTheme();
   const dark = mode === "dark";
   return {
+    dark,
     ok: dark ? "#4d96dc" : "#2f7ecb",
     failed: dark ? "#e0562a" : "#d4380d",
     grid: token.colorBorderSecondary,
@@ -81,92 +85,38 @@ const usePalette = () => {
   };
 };
 
-/** Two lines per day — successful and failed — over a soft area, with a crosshair tooltip. */
+const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
+const SERIES = ["Successful", "Failed"];
+
+/** Two lines per day — successful and failed — with a shared tooltip. */
 const DailyLines = ({ rows, palette }) => {
-  const [hover, setHover] = useState(null);
-  const width = 720;
-  const height = 150;
-  const pad = { top: 10, right: 12, bottom: 24, left: 34 };
-  const innerW = width - pad.left - pad.right;
-  const innerH = height - pad.top - pad.bottom;
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.ok, r.failed)));
-  const n = rows.length;
-  const x = (i) => pad.left + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2);
-  const y = (v) => pad.top + innerH - (v / max) * innerH;
-  const ticks = [0, Math.ceil(max / 2), max];
-  const labelEvery = n > 45 ? 14 : n > 20 ? 7 : n > 10 ? 2 : 1;
-  const lineOf = (key) => rows.map((r, i) => (i === 0 ? "M" : "L") + x(i).toFixed(1) + " " + y(r[key]).toFixed(1)).join(" ");
-  const areaOf = (key) => lineOf(key) + " L" + x(n - 1).toFixed(1) + " " + y(0).toFixed(1) + " L" + x(0).toFixed(1) + " " + y(0).toFixed(1) + " Z";
-  // A new id per mount keeps two charts on one page from sharing gradients.
-  const gid = useMemo(() => "g" + Math.random().toString(36).slice(2, 8), []);
-
+  const data = useMemo(
+    () => rows.flatMap((r) => [
+      { day: r.day, series: "Successful", count: r.ok },
+      { day: r.day, series: "Failed", count: r.failed },
+    ]),
+    [rows]
+  );
   if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No activity in this range." />;
-
-  const onMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const px = ((e.clientX - rect.left) / rect.width) * width;
-    const i = Math.round(((px - pad.left) / innerW) * (n - 1));
-    setHover(Math.min(Math.max(i, 0), n - 1));
-  };
-  const h = hover === null ? null : rows[hover];
-  const tipX = hover === null ? 0 : Math.min(x(hover) + 10, width - 150);
-
   return (
-    <div style={{ overflowX: "auto" }}>
-      <svg
-        key={rows.length + ":" + (rows[0]?.day || "")}
-        className="eu-activity-chart"
-        viewBox={"0 0 " + width + " " + height}
-        width="100%"
-        style={{ minWidth: 420, display: "block" }}
-        role="img"
-        aria-label="NAS activity per day"
-        onMouseMove={onMove}
-        onMouseLeave={() => setHover(null)}
-      >
-        <defs>
-          <linearGradient id={gid + "-ok"} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={palette.ok} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={palette.ok} stopOpacity="0.02" />
-          </linearGradient>
-          <linearGradient id={gid + "-failed"} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={palette.failed} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={palette.failed} stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={pad.left} x2={width - pad.right} y1={y(t)} y2={y(t)} stroke={palette.grid} strokeWidth={1} />
-            <text x={pad.left - 6} y={y(t) + 4} textAnchor="end" fontSize={10} fill={palette.muted}>{t}</text>
-          </g>
-        ))}
-        {rows.map((r, i) =>
-          i % labelEvery === 0 ? (
-            <text key={r.day} x={x(i)} y={height - 7} textAnchor="middle" fontSize={10} fill={palette.muted}>{r.day.slice(5)}</text>
-          ) : null
-        )}
-        <path className="eu-activity-area" d={areaOf("ok")} fill={"url(#" + gid + "-ok)"} />
-        <path className="eu-activity-area" d={areaOf("failed")} fill={"url(#" + gid + "-failed)"} style={{ animationDelay: "120ms" }} />
-        <path className="eu-activity-line" d={lineOf("ok")} fill="none" stroke={palette.ok} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        <path className="eu-activity-line" d={lineOf("failed")} fill="none" stroke={palette.failed} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" style={{ animationDelay: "120ms" }} />
-        {rows.map((r, i) => (r.ok > 0 || r.failed > 0) && (
-          <g key={"m" + r.day} className="eu-activity-marks">
-            {r.ok > 0 && <circle cx={x(i)} cy={y(r.ok)} r={3.5} fill={palette.ok} stroke={palette.surface} strokeWidth={2} />}
-            {r.failed > 0 && <circle cx={x(i)} cy={y(r.failed)} r={3.5} fill={palette.failed} stroke={palette.surface} strokeWidth={2} />}
-          </g>
-        ))}
-        {h && (
-          <g>
-            <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + innerH} stroke={palette.muted} strokeWidth={1} strokeDasharray="3 3" />
-            <circle cx={x(hover)} cy={y(h.ok)} r={5} fill={palette.ok} stroke={palette.surface} strokeWidth={2} />
-            <circle cx={x(hover)} cy={y(h.failed)} r={5} fill={palette.failed} stroke={palette.surface} strokeWidth={2} />
-            <rect x={tipX} y={pad.top} width={140} height={40} rx={4} fill={palette.surface} stroke={palette.grid} />
-            <text x={tipX + 8} y={pad.top + 15} fontSize={11} fill={palette.ink} fontWeight={600}>{h.day}</text>
-            <text x={tipX + 8} y={pad.top + 30} fontSize={11} fill={palette.ink}>{h.ok} successful · {h.failed} failed</text>
-          </g>
-        )}
-      </svg>
-    </div>
+    <Line
+      data={data}
+      xField="day"
+      yField="count"
+      colorField="series"
+      height={240}
+      theme={palette.dark ? "classicDark" : "classic"}
+      scale={{ color: { domain: SERIES, range: [palette.ok, palette.failed] }, y: { nice: true, domainMin: 0 } }}
+      style={{ lineWidth: 2 }}
+      point={{ shapeField: "circle", sizeField: 2.5 }}
+      axis={{
+        x: { title: false, labelFontSize: 11, labelAutoHide: true, labelFormatter: (d) => String(d).slice(5) },
+        y: { title: false, grid: true, labelFontSize: 11, tickCount: 4, labelFormatter: (v) => fmt(v) },
+      }}
+      legend={{ color: { position: "top", layout: { justifyContent: "flex-end" }, itemLabelFontSize: 12 } }}
+      tooltip={{ title: (d) => d.day, items: [{ channel: "y", valueFormatter: (v) => fmt(v) }] }}
+      interaction={{ tooltip: { crosshairs: true } }}
+    />
   );
 };
 
@@ -231,13 +181,6 @@ const HourStrip = ({ rows, palette }) => {
   );
 };
 
-const Legend = ({ palette }) => (
-  <Space size="middle">
-    <Space size={6}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: palette.ok }} /><Text type="secondary" style={{ fontSize: 12 }}>successful</Text></Space>
-    <Space size={6}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: palette.failed }} /><Text type="secondary" style={{ fontSize: 12 }}>failed</Text></Space>
-  </Space>
-);
-
 const NasActivityCard = () => {
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
@@ -300,10 +243,7 @@ const NasActivityCard = () => {
             </Row>
 
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <Text strong>Per day</Text>
-                <Legend palette={palette} />
-              </div>
+              <Text strong style={{ display: "block", marginBottom: 6 }}>Per day</Text>
               <DailyLines rows={daily} palette={palette} />
             </div>
 

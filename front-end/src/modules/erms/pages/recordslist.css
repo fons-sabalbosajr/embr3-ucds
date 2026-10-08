@@ -1,0 +1,11 @@
+/* Document Library: the Project Details cell wraps. Title, proponent and
+   address each on their own line, broken wherever a long word would
+   otherwise push the column wider than the window. */
+.records-project-details {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.4;
+}

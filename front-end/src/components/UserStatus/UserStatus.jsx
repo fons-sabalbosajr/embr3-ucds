@@ -4,6 +4,8 @@ import DefaultAvatar from "../DefaultAvatar";
 import "./userstatus.css";
 import { API_BASE_URL } from "../../config/api";
 import { getOnlineUsers } from "../../api/userService"; // Import the new service
+import visibleInterval from "../../shared/visibleInterval";
+import { initializeSocket, getSocket } from "../../api/socketService";
 
 const UserStatus = ({ theme }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -50,11 +52,20 @@ const UserStatus = ({ theme }) => {
     // Fetch data initially
     fetchOnlineUsers();
 
-    // Set up polling for real-time updates every 10 seconds
-    const intervalId = setInterval(fetchOnlineUsers, 10000);
-
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
+    // In real time: the server announces each sign-in and sign-out (bursts
+    // coalesced into one notice), and the list is fetched again then. The
+    // 5-minute poll is only a fallback for a notice missed while offline, and
+    // stops while the tab is hidden.
+    const socket = getSocket() || initializeSocket();
+    const onPresence = () => fetchOnlineUsers();
+    socket?.on("presence:changed", onPresence);
+    socket?.on("connect", onPresence);
+    const stopPolling = visibleInterval(fetchOnlineUsers, 5 * 60 * 1000);
+    return () => {
+      socket?.off("presence:changed", onPresence);
+      socket?.off("connect", onPresence);
+      stopPolling();
+    };
   }, []);
 
   useEffect(() => {

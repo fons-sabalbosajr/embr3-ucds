@@ -53,6 +53,43 @@ body {
   padding: 15px;
 }
 
+/* In the application shell the content takes whatever height the header,
+   the NAS banner and the footer leave, and scrolls inside it. The generic
+   .ant-layout-content rule below (min-height: 100vh - header) made it taller
+   than that: the footer went below the window, and with the NAS banner
+   showing the bottom 38px of every screen was out of reach. Two classes, so
+   this wins over that rule wherever it sits in the file. */
+.ant-layout-content.content-container {
+  min-height: 0;
+}
+
+/* Under the content, which scrolls on its own: always in view, never in
+   the way. Colours come from the theme (components/AppFooter.jsx). */
+.app-footer.ant-layout-footer {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 20px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.app-footer-right {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* A phone has no room for both halves on one line; the attribution stays. */
+@media (max-width: 600px) {
+  .app-footer-right {
+    display: none;
+  }
+}
+
 .ant-menu-item {
   font-size: 14px;
 }
@@ -323,4 +360,29 @@ body[data-theme="dark"] {
 .ant-layout-sider * {
   --eu-scroll-thumb: rgba(232, 236, 242, 0.28);
   --eu-scroll-thumb-hover: rgba(232, 236, 242, 0.5);
+}
+
+/* ========== View-only documents ==========
+   While a scanned document is open (shared/components/viewOnly.js), printing
+   the page gives a blank sheet with one line, not the scan. Text cannot be
+   selected in the viewer either. */
+.eu-view-only-surface,
+.eu-view-only-surface * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+@media print {
+  body.eu-view-only * {
+    visibility: hidden !important;
+  }
+  body.eu-view-only::after {
+    content: "Scanned documents in E-Universe are view only and cannot be printed.";
+    visibility: visible;
+    position: fixed;
+    top: 40px;
+    left: 40px;
+    font: 16px sans-serif;
+  }
 }

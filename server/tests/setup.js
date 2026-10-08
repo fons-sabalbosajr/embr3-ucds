@@ -9,12 +9,42 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(here, '..', '.env') });
 
 // ---------------------------------------------------------------------------
-// Protect live configuration from the test suite.
+// Never the production database.
 //
-// This suite is deliberately an integration suite: it runs against the real
-// database, because that is the only way to test province scoping, the domain
-// boundary and the year containers honestly. The cost is that a test which
-// writes application configuration changes the running deployment.
+// The suite writes: throwaway accounts, records, settings. It used to do that
+// to `universe-db` itself, so every run touched what staff were working with
+// and a run interrupted halfway could leave it changed. It now runs against
+// its own copy on its own server — TEST_MONGO_URI, a local MongoDB by default
+// — and `npm run test:db:refresh` makes that copy from production.
+//
+// Its own server, not just its own database name: the production cluster is a
+// free tier shared with six other applications and already near its 512 MB
+// cap. A copy there filled it on 6 October 2026 and Atlas blocked writes for
+// every application on the cluster until the copy was dropped.
+//
+// Set here, after .env is read and before config/db.js is first imported, so
+// nothing in .env can carry the suite back to production.
+// ---------------------------------------------------------------------------
+
+// VERA never calls a model from the suite: .env turns the master switch on and
+// holds real keys, so without this a test could spend money. VERA_ENABLED is
+// read before AUTOMATION_AGENT_ENABLED (services/vera/provider.js).
+process.env.VERA_ENABLED = 'false';
+
+const productionUri = process.env.MONGO_URI;
+process.env.MONGO_URI = String(process.env.TEST_MONGO_URI || 'mongodb://127.0.0.1:27017').trim();
+process.env.MONGO_DB_NAME = String(process.env.TEST_MONGO_DB_NAME || 'universe-db-test').trim();
+if (productionUri && process.env.MONGO_URI === productionUri) {
+  throw new Error('TEST_MONGO_URI is the production cluster. The test suite needs its own server.');
+}
+
+// ---------------------------------------------------------------------------
+// Protect configuration from the test suite.
+//
+// This suite is deliberately an integration suite: it runs against a copy of
+// the real data, because that is the only way to test province scoping, the
+// domain boundary and the year containers honestly. A test which writes
+// application configuration still changes the copy for the files after it.
 //
 // That is not hypothetical. A test set the NAS activation window to one hour
 // so it could assert document access, and did not put it back — so every full
@@ -52,6 +82,10 @@ afterAll(async () => {
   if (!snapshot) return;
   try {
     const db = (await import('../config/db.js')).default;
+    // Every test file signs in throwaway "__test_*" accounts and removes them
+    // afterwards, but not the sign-in history each sign-in writes
+    // (services/signInHistory.js). Cleared here once, for all of them.
+    await db.getDb().collection('sign-in-history').deleteMany({ username: /^__test_/ });
     const col = db.getDb().collection(PROTECTED_COLLECTION);
 
     // Put back exactly what was there: restore every captured document and

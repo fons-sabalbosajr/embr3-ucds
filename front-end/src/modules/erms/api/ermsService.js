@@ -1,5 +1,6 @@
 import axios from "axios";
 import { API_BASE } from "../../../config/api";
+import { withSessionToken } from "../../../shared/sessionToken";
 
 const client = axios.create({ baseURL: `${API_BASE}/erms`, withCredentials: true });
 
@@ -53,7 +54,7 @@ export const uploadRecord = async ({ payload, file }) =>
 // to see one live in shared/api/recordDocuments: the establishment panel on
 // the planning screens uses them too. Re-exported so ERMS screens import
 // from one place.
-export { attachRecordFile, recordFileBase, requestDocumentAccess, unitFileBase, describeApiError } from "../../../shared/api/recordDocuments";
+export { attachRecordFile, attachUnitFile, recordFileBase, requestDocumentAccess, unitFileBase, describeApiError } from "../../../shared/api/recordDocuments";
 
 // --- the units: Legal Services and Laboratory --------------------------------------
 
@@ -95,6 +96,41 @@ export const resetUnitSettings = async (unit) => (await client.post(`/units/${un
 export const fetchUnitActivity = async (unit, params) =>
   (await client.get(`/units/${unit}/activity`, { params: pruned(params) })).data;
 export const fetchUnitDuplicateGroups = async (unit) => (await client.get(`/units/${unit}/duplicate-groups`)).data.groups;
+/** Values already on file, for the upload forms' autocomplete: [{ value, count, fill? }]. */
+export const fetchRecordSuggestions = async (field, q) =>
+  (await client.get("/records/suggest", { params: pruned({ field, q }) })).data.items;
+export const fetchUnitSuggestions = async (unit, field, q) =>
+  (await client.get(`/units/${unit}/suggest`, { params: pruned({ field, q }) })).data.items;
+
+// The unit's own menus (Settings › ERMS › Menus).
+export const fetchUnitLookups = async (unit) => (await client.get(`/units/${unit}/lookups`)).data;
+export const saveUnitLookup = async ({ unit, kind, items }) => (await client.put(`/units/${unit}/lookups/${kind}`, { items })).data;
+
+// Docket numbers (Legal): the next one, claiming it, the register.
+export const fetchNextDocket = async ({ province, year }) =>
+  (await client.get("/units/legal/dockets/next", { params: pruned({ province, year }) })).data;
+export const claimDocket = async ({ province, year, note }) =>
+  (await client.post("/units/legal/dockets", pruned({ province, year, note }))).data.docket;
+export const fetchDockets = async (params) => (await client.get("/units/legal/dockets", { params: pruned(params) })).data.dockets;
+
+// The upload tally and the supervisor's check.
+export const fetchUploadTally = async (unit, params) => (await client.get(`/units/${unit}/upload-tally`, { params: pruned(params) })).data;
+// A link the browser follows, so this tab's sign-in travels in the URL (see shared/sessionToken).
+export const uploadTallyCsvUrl = (unit, { from, to }) =>
+  withSessionToken(`${API_BASE}/erms/units/${unit}/upload-tally?${new URLSearchParams(pruned({ from, to, format: "csv" }))}`);
+export const checkUploads = async ({ unit, entries, remarks }) =>
+  (await client.post(`/units/${unit}/upload-tally/checks`, pruned({ entries, remarks }))).data;
+export const uncheckUploads = async ({ unit, date, uploader }) =>
+  (await client.delete(`/units/${unit}/upload-tally/checks`, { data: { date, uploader } })).data;
+
+// The Action Center: messages between ERMS users.
+export const fetchMessages = async (params) => (await client.get("/messages", { params: pruned(params) })).data;
+export const fetchUnreadMessages = async () => (await client.get("/messages/unread")).data.unread;
+export const fetchMessagePeople = async (q) => (await client.get("/messages/people", { params: pruned({ q }) })).data.people;
+export const sendMessage = async (message) => (await client.post("/messages", pruned(message))).data.message;
+export const markMessage = async ({ id, read }) => (await client.patch(`/messages/${id}`, { read })).data.message;
+export const deleteMessage = async (id) => (await client.delete(`/messages/${id}`)).data;
+
 export const checkUnitDuplicates = async (unit, fileName) =>
   (await client.get(`/units/${unit}/duplicates`, { params: pruned({ fileName }) })).data;
 
@@ -168,8 +204,25 @@ export const PERMIT_TYPE_COLOR = {
   "ecc-amended": "gold",
   cnc: "blue",
   "hw-generator": "volcano",
+  pto: "cyan",
+  dp: "geekblue",
+  luc: "lime",
+  coa: "purple",
   other: "default",
 };
+
+/** The permit kinds the Records Unit files, in the order the desktop menu listed them. */
+export const PERMIT_OPTIONS = [
+  { value: "ecc-original", label: "ECC (Original)" },
+  { value: "ecc-amended", label: "ECC (Amended)" },
+  { value: "cnc", label: "Certificate of Non-Coverage" },
+  { value: "hw-generator", label: "HW Generator Registration" },
+  { value: "pto", label: "Permit to Operate" },
+  { value: "dp", label: "Discharge Permit" },
+  { value: "luc", label: "Land Use Conversion" },
+  { value: "coa", label: "Certificate of Accreditation" },
+  { value: "other", label: "Other" },
+];
 
 export const PROVINCE_LABEL = {
   aurora: "Aurora",

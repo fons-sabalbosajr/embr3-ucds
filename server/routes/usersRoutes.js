@@ -4,7 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { authenticateSession, requireDeveloper, requireRole } = require('../middleware/auth');
 const { logActivity } = require('../middleware/activityLog');
-const { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme } = require('../controllers/usersController');
+const { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, getSignInHistory, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme } = require('../controllers/usersController');
 
 const router = express.Router();
 
@@ -49,6 +49,8 @@ router.get('/api/generate-password', managers, generatePassword);
 router.get('/current-user', authenticateSession, getCurrentUser);
 router.get('/api/online_users', authenticateSession, getOnlineUsers);
 router.get('/api/recent-activity', authenticateSession, getRecentActivity);
+// Who signed in and out, when and from where.
+router.get('/api/sign-in-history', managers, getSignInHistory);
 
 // Permissions updates and removal
 // Changing what another account may do is an administrator's act. These two

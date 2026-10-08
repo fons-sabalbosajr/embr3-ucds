@@ -192,11 +192,29 @@ const limiter = ({ windowMs, max, message }) =>
     handler: (req, res) => res.status(429).json({ message }),
   });
 
-const loginLimiter = limiter({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: 'Too many sign-in attempts. Please wait 15 minutes and try again.',
-});
+// Sign-in is limited per account and address, not per address alone. Keyed
+// on the IP only, 20 attempts per 15 minutes was shared by everyone behind
+// the same address — an office NAT, a proxy, the tailnet bridge — so on a
+// busy morning the 21st colleague was locked out for typing nothing wrong.
+// Guessing one account's password is still capped at 20; an address trying
+// many accounts meets the wider ceiling below.
+const loginKey = (req, res) => `${ipKeyGenerator(req, res)}|${String(req.body?.username || '').trim().toLowerCase()}`;
+const loginLimiter = [
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    keyGenerator: loginKey,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: () => process.env.NODE_ENV === 'test',
+    handler: (req, res) => res.status(429).json({ message: 'Too many sign-in attempts for this account. Please wait 15 minutes and try again.' }),
+  }),
+  limiter({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    message: 'Too many sign-in attempts from this network. Please wait a few minutes and try again.',
+  }),
+];
 
 const passwordResetLimiter = limiter({
   windowMs: 60 * 60 * 1000,

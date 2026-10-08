@@ -97,6 +97,12 @@ const PUBLIC_ROUTES = new Set([
   // that names a host.
   'GET /healthz',
   'GET /readyz',
+  // VERA on the sign-in page. Off unless an administrator enables it (Admin
+  // Settings › VERA Assistant › Public pages); its own narrow knowledge base,
+  // every account or record lookup refused before a model is reached, and
+  // rate limited by address (controllers/veraController.js).
+  'GET /api/vera/public-status',
+  'POST /api/vera/public-chat',
   // CORS preflight, answered by the cors middleware before any route runs.
   'OPTIONS *',
 ]);

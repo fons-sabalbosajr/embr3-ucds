@@ -136,25 +136,25 @@ const UserAccountModal = ({ user, onClose, onSaved }) => {
     <Form form={form} layout="vertical" onFinish={save} className="account-edit-form">
       <div className="account-edit-grid">
         <Form.Item name="empid" label="Employee ID">
-          <Input maxLength={40} />
+          <Input placeholder="Employee number" maxLength={40} />
         </Form.Item>
         <Form.Item name="name" label="Full name" rules={[{ required: true, message: "Enter the person's name." }]}>
-          <Input maxLength={120} />
+          <Input placeholder="First name, middle initial, last name" maxLength={120} />
         </Form.Item>
         <Form.Item name="email" label="Email" rules={[{ required: true, type: "email", message: "Enter a valid email address." }]}>
-          <Input maxLength={160} />
+          <Input placeholder="name@example.com" maxLength={160} />
         </Form.Item>
         <Form.Item name="division" label="Division / Section" rules={[{ required: true, message: "Enter the division or section." }]}>
-          <Input maxLength={120} />
+          <Input placeholder="e.g. Planning Section" maxLength={120} />
         </Form.Item>
         <Form.Item name="designation" label="Designation">
-          <Input maxLength={120} />
+          <Input placeholder="e.g. Engineer II" maxLength={120} />
         </Form.Item>
         <Form.Item name="office" label="Office">
-          <Input maxLength={120} />
+          <Input placeholder="e.g. EMB Regional Office III" maxLength={120} />
         </Form.Item>
         <Form.Item name="region" label="Region">
-          <Input maxLength={40} />
+          <Input placeholder="e.g. Region III" maxLength={40} />
         </Form.Item>
       </div>
     </Form>

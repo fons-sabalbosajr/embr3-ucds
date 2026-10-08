@@ -1,20 +1,20 @@
-# embr3-ucds — Front-end
+# E-Universe — front end
 
-React + Vite front-end for the Universe Central Database System (UCDS).
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The React 18 + Vite + Ant Design 5 single-page app for E-Universe. See the [repository README](../README.md) for what the system is, how to run it, and how it is deployed.
 
 ## Scripts
 
-- `npm run dev` — start the dev server
-- `npm run build` — production build
-- `npm run preview` — preview the production build locally
-- `npm run lint` — run ESLint
+- `npm run dev` — development server on the LAN (`vite --host`)
+- `npm run build` — production build into `dist/`
+- `npm run preview` — serve the production build locally
+- `npm run lint` — ESLint
 
-## Deployment notes
+`dev` and `build` first copy the `VITE_*` keys from `server/.env` into `.env.local` (`../scripts/sync-env.js`) and check them (`../scripts/check-client-env.js`). Only `VITE_*` keys ever reach the browser bundle.
 
-- Environment-specific URLs are configured via environment variables (see `src/config/`), not hardcoded in source.
-- The server is deployed to Render (see `render.yaml`); the front-end is deployed as a static build.
+## Layout
+
+- `src/modules/` — feature modules: `ucds/`, `erms/`, `admin/`, `settings/`, `storage/`, `vera/`
+- `src/shared/` — session transport, feedback, hooks (`useFitHeight`, `visibleInterval`)
+- `src/components/` — the app shell: side menu, header, footer, sign-in pages
+
+Production builds run PurgeCSS (`postcss.config.js`). A class name built at runtime from state must be added to its safelist, or its rules are dropped from the build.

@@ -245,7 +245,7 @@ const OrgUnits = () => {
             <Input placeholder="Provincial Environmental Management Unit — Bataan" />
           </Form.Item>
           <Form.Item name="type" label="Type" rules={[{ required: true }]}>
-            <Select options={ORG_UNIT_TYPES.map((t) => ({ value: t, label: t }))} />
+            <Select placeholder="Select the type" options={ORG_UNIT_TYPES.map((t) => ({ value: t, label: t }))} />
           </Form.Item>
           <Form.Item name="parentCode" label="Parent unit">
             <Select allowClear showSearch options={parentOptions} placeholder="None" />

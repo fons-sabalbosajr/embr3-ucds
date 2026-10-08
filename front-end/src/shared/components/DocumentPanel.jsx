@@ -11,8 +11,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { message } from "../feedback";
 import { withSessionToken } from "../sessionToken";
-import { attachRecordFile, describeApiError, recordFileBase, requestDocumentAccess, unitFileBase } from "../api/recordDocuments";
+import { attachRecordFile, describeApiError, recordFileBase, requestDocumentAccess, requestRecordFullAccess, requestUnitFullAccess, unitFileBase } from "../api/recordDocuments";
 import PdfViewer from "./PdfViewer";
+import { ViewOnlyImage } from "./viewOnly";
+import visibleInterval from "../visibleInterval";
+import { explainFileProblem } from "../nasWords";
 
 const { Text, Paragraph } = Typography;
 
@@ -55,36 +58,8 @@ const humanSize = (bytes) => {
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
 };
 
-/** Each failure means something different to the person reading it. */
-const EXPLANATIONS = {
-  NO_DOCUMENT: ["info", "No document is filed against this record."],
-  FILE_MISSING: [
-    "warning",
-    "The record names a document, but it is not on the records share. It may have been moved or renamed since the record was created.",
-  ],
-  BAD_STORED_PATH: [
-    "warning",
-    "The stored file path for this record cannot be resolved. It needs correcting on the record.",
-  ],
-  NAS_NOT_CONFIGURED: [
-    "info",
-    "The records share is not configured on this server yet, so documents cannot be opened.",
-  ],
-  NAS_DISABLED: ["info", "Document access is currently turned off."],
-  NAS_INACTIVE: ["info", "NAS files are not available right now."],
-  NAS_UNREACHABLE: [
-    "error",
-    "The records share could not be reached. It may be offline, or this server may have lost its connection to it.",
-  ],
-  NAS_DENIED: [
-    "error",
-    "The server is not permitted to read this document. The share account may need access to this folder.",
-  ],
-  CONTAINER_FORBIDDEN: [
-    "warning",
-    "Document access has not been shared with your account. Ask the system developer.",
-  ],
-};
+// Each failure means something different to the person reading it; the
+// sentences, in plain words, are in shared/nasWords.
 
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : "");
 
@@ -208,6 +183,8 @@ const FileScan = ({ serialNo, missing, onFiled }) => {
 const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) => {
   const [state, setState] = useState({ status: "loading" });
   const [preview, setPreview] = useState(false);
+  const [requestingFull, setRequestingFull] = useState(false);
+  const [fullSentAt, setFullSentAt] = useState(null);
 
   // `quiet`: a re-check in the background keeps what is on screen until the
   // answer is in. It used to reset to "loading" first, which unmounted the
@@ -225,12 +202,14 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
         else setState({ status: "unavailable", code: data.code, message: data.message });
       })
       .catch(() => {
-        if (!cancelled) setState((s) => (quiet && s.status === "ready" ? s : { status: "unavailable", code: "NAS_UNREACHABLE" }));
+        if (!cancelled) setState((s) => (quiet && s.status === "ready" ? s : { status: "unavailable", code: navigator.onLine === false ? "NETWORK" : "NAS_UNREACHABLE" }));
       });
     return () => {
       cancelled = true;
     };
-  }, [serialNo, unit, domain]);
+    // `fileName`: a scan filed or replaced from the page is checked at once,
+    // not at the next 45-second look.
+  }, [serialNo, unit, domain, fileName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cancel = load();
@@ -242,15 +221,14 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
   // document is open: nothing about it changes under a reader.
   useEffect(() => {
     if (preview) return undefined;
-    const poll = setInterval(() => load(true), 45000);
-    return () => clearInterval(poll);
+    return visibleInterval(() => load(true), 45000);
   }, [load, preview]);
 
   if (state.status === "loading") {
     return (
       <Space style={{ marginTop: 12 }}>
         <Spin size="small" />
-        <Text type="secondary">Checking the records share…</Text>
+        <Text type="secondary">Looking for the scanned document…</Text>
       </Space>
     );
   }
@@ -269,10 +247,7 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
   }
 
   if (state.status === "unavailable") {
-    const [type, description] = EXPLANATIONS[state.code] || [
-      "warning",
-      state.message || "The document could not be opened.",
-    ];
+    const { type, message: description } = explainFileProblem(state.code, state.message);
     const fileable = canFile && !unit && (state.code === "NO_DOCUMENT" || state.code === "FILE_MISSING");
     return (
       <Alert
@@ -293,6 +268,48 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
 
   const { info } = state;
   const approvedUntil = info.access?.reason === "approved" ? info.access.expiresAt : null;
+
+  // Who can open the rest of a page-limited document, and how to ask them.
+  //   - someone viewing a record by approval: the Records Unit, through its
+  //     approval inbox (the same request, marked "every page");
+  //   - the unit's own staff — the Records Unit on a record, Legal or
+  //     Laboratory on theirs: the administrators, by an ERMS message.
+  const byApproval = !unit && info.access?.reason !== "records-unit";
+  const owner = byApproval ? "the Records Unit" : "the administrators";
+  const limited = info.contentType === "application/pdf" && info.viewing?.pageLimit > 0;
+  const askedAt = fullSentAt || info.access?.fullAccessRequestedAt || null;
+  const pending = byApproval ? info.access?.fullAccessRequested === true || Boolean(fullSentAt) : Boolean(askedAt);
+  const requestFullAccess = async () => {
+    setRequestingFull(true);
+    try {
+      if (byApproval) {
+        await requestDocumentAccess({ serialNo, domain, full: true, reason: "The whole document, asked from the viewer." });
+        setFullSentAt(new Date().toISOString());
+        message.success("Your request for the whole document was sent to the Records Unit.");
+        load(true);
+      } else {
+        const res = unit
+          ? await requestUnitFullAccess({ unit, serialNo, reason: "Asked from the document viewer." })
+          : await requestRecordFullAccess({ serialNo, reason: "Asked from the document viewer." });
+        setFullSentAt(res.at || new Date().toISOString());
+        message.success(res.already ? "You already asked the administrators today." : "Your request for the whole document was sent to the administrators.");
+      }
+    } catch (e) {
+      message.error(describeApiError(e, "The request could not be sent. Please try again."));
+    } finally {
+      setRequestingFull(false);
+    }
+  };
+  const fullRequest = !limited || info.access?.fullAccess === true
+    ? null
+    : pending
+      ? {
+          state: "pending",
+          note: byApproval
+            ? "Your request for the whole document is with the Records Unit. This updates when they decide."
+            : `You asked the administrators for the whole document${askedAt ? ` on ${when(askedAt)}` : ""}. They have it in their ERMS messages.`,
+        }
+      : { state: requestingFull ? "sending" : "idle", send: requestFullAccess, label: byApproval ? "Request full access from the Records Unit" : "Request full access from the administrator" };
 
   return (
     <>
@@ -338,24 +355,27 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
         ]}
         destroyOnHidden
       >
-        {/* A PDF under the unit's viewing rules — a page limit for this
-            viewer, or a watermark — goes through the application's own
-            viewer. Anything else is rendered by the browser's: the endpoint
-            honours range requests, so a large scan pages in rather than
-            loading whole. */}
-        {info.contentType === "application/pdf" && (info.viewing?.pageLimit > 0 || info.viewing?.watermark) ? (
-          <PdfViewer src={`${fileBase(serialNo, unit, domain)}/preview`} watermark={info.viewing?.watermark || null} />
+        {/* Every scan through a view-only viewer: no download, no print,
+            no right-click save. A PDF is drawn by the application's own
+            viewer (the browser's carries download and print buttons); an
+            image is shown without its context menu. Anything else the
+            browser can show goes in a frame without its toolbar. */}
+        {info.contentType === "application/pdf" ? (
+          <PdfViewer
+            src={`${fileBase(serialNo, unit, domain)}/preview`}
+            watermark={info.viewing?.watermark || null}
+            blurWithheld={info.viewing?.blurWithheldPages !== false}
+            request={fullRequest}
+            owner={owner}
+          />
+        ) : String(info.contentType || "").startsWith("image/") ? (
+          <ViewOnlyImage src={previewUrl(serialNo, unit, domain, false)} alt={info.fileName} />
         ) : (
           <iframe
             title={info.fileName}
-            src={previewUrl(serialNo, unit, domain, info.viewing?.hideToolbar !== false)}
+            src={previewUrl(serialNo, unit, domain, true)}
             style={{ width: "100%", height: "78vh", border: "none" }}
           />
-        )}
-        {info.viewing?.pageLimit > 0 && (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            <LockOutlined /> Shown up to {info.viewing.pageLimit} pages under this approval.
-          </Text>
         )}
       </Modal>
     </>

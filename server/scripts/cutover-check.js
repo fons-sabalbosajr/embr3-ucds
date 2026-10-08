@@ -168,23 +168,53 @@ function checkBaseline() {
   );
 }
 
+/**
+ * Room on the cluster. It is a free tier shared with six other applications,
+ * and at its cap Atlas blocks writes for all of them — which, for a records
+ * system mid-parallel-period, is the outage that sends everyone back to the
+ * desktop app. The cap is what Atlas counts: data plus indexes, uncompressed,
+ * across every database. ATLAS_STORAGE_LIMIT_MB changes it after an upgrade.
+ */
+async function checkClusterStorage(client) {
+  const limitMb = Number(process.env.ATLAS_STORAGE_LIMIT_MB) || 512;
+  try {
+    const { databases } = await client.db('admin').admin().listDatabases({ nameOnly: true });
+    let usedMb = 0;
+    for (const { name } of databases) {
+      if (['admin', 'local', 'config'].includes(name)) continue;
+      const s = await client.db(name).command({ dbStats: 1 });
+      usedMb += (s.dataSize + s.indexSize) / 1e6;
+    }
+    const pct = (usedMb / limitMb) * 100;
+    record(
+      'cluster has room',
+      pct >= 90 ? FAIL : pct >= 75 ? WARN : OK,
+      `${usedMb.toFixed(0)} of ${limitMb} MB (${pct.toFixed(0)}%) — at 100% Atlas blocks writes for every app on the cluster`
+    );
+  } catch (err) {
+    record('cluster has room', WARN, `could not measure: ${err.message}`);
+  }
+}
+
 const HUMAN_GATES = [
   'A Records clerk has filed a record end to end, while the desktop app still works',
   'Planning personnel have clicked through the UCDS screens',
   'The NAS credential is stored on the server account the API runs as (cmdkey)',
   'The server has a stable address (static IP or DNS name), not a DHCP lease',
+  'The NAS bridge server (emb3winsrvr2019) is online in `tailscale status`',
   'Someone has agreed to run the daily check for the whole parallel period',
 ];
 
 async function main() {
   const client = new MongoClient(process.env.MONGO_URI);
   await client.connect();
-  const db = client.db();
+  const db = client.db(process.env.MONGO_DB_NAME || undefined);
 
   await checkModuleFlag();
   await checkAuth();
   await checkNas();
   await checkData(db);
+  await checkClusterStorage(client);
   if (nas.isConfigured()) await checkDocumentCoverage(db);
   checkBaseline();
 

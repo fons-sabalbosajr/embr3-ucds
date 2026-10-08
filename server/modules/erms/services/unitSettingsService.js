@@ -15,8 +15,10 @@ const { ERMS_UNIT_VALUES } = require('../../../services/authorization');
 //                 number or file name already filed
 //   privacy       the classification an upload gets by default, the list
 //                 offered, and the watermark on the viewer
-//   pdfViewing    how much of a document someone outside the unit sees:
-//                 the first N pages, the rest withheld and shown blurred
+//   pdfViewing    how much of a document people see: the first N pages,
+//                 the rest withheld and shown blurred — for everyone but
+//                 the Developer, administrators and anyone given the whole
+//                 document (the unit's own staff too, unless exempted)
 //   auditing      which activities are written to the trail
 //   logHistory    how far back the Log history tab reads
 // ---------------------------------------------------------------------------
@@ -36,11 +38,17 @@ const DEFAULT_UNIT = Object.freeze({
     hideProponentFromRequesters: false,
   },
   pdfViewing: {
-    // 0 means every page. Applies to people outside the unit who view by
-    // approval; the unit's own staff see every page unless applyToUnit.
+    // 0 means every page. With a limit, it applies to the people who use
+    // the documents — the unit's own staff and anyone viewing by approval —
+    // not to the Developer or administrators, and not to someone granted
+    // the whole document. (It used to exempt the unit's own staff unless
+    // "applyToUnit" was set, so the limit reached almost nobody: a Legal
+    // document is only ever opened by Legal staff.)
     previewPageLimit: 0,
     blurWithheldPages: true,
-    applyToUnit: false,
+    // Let the unit's own staff see every page all the same.
+    exemptUnit: false,
+    applyToUnit: false, // superseded by exemptUnit; kept so stored settings still read
     hideToolbar: true,
   },
   auditing: { logViews: true, logSearches: false, logShares: true },
@@ -84,6 +92,7 @@ function normalizeUnit(input = {}) {
     pdfViewing: {
       previewPageLimit: int(input.pdfViewing?.previewPageLimit, d.pdfViewing.previewPageLimit, 0, 500),
       blurWithheldPages: bool(input.pdfViewing?.blurWithheldPages, d.pdfViewing.blurWithheldPages),
+      exemptUnit: bool(input.pdfViewing?.exemptUnit, d.pdfViewing.exemptUnit),
       applyToUnit: bool(input.pdfViewing?.applyToUnit, d.pdfViewing.applyToUnit),
       hideToolbar: bool(input.pdfViewing?.hideToolbar, d.pdfViewing.hideToolbar),
     },
@@ -121,7 +130,15 @@ async function save(unit, input, actor) {
   if (!ERMS_UNIT_VALUES.includes(unit)) throw new Error('Unknown unit.');
   await connectToMongo();
   const all = await readAll();
-  const units = { ...all.units, [unit]: normalizeUnit(input) };
+  // A save names what it changes; everything it leaves out keeps its stored
+  // value. Normalizing the input alone filled every omitted section with its
+  // default, so saving one tab of the settings page reset all the others.
+  const current = all.units[unit] || {};
+  const merged = { ...current };
+  for (const [section, value] of Object.entries(input || {})) {
+    merged[section] = value && typeof value === 'object' && !Array.isArray(value) ? { ...(current[section] || {}), ...value } : value;
+  }
+  const units = { ...all.units, [unit]: normalizeUnit(merged) };
   const now = new Date();
   await collection().replaceOne(
     { _id: DOC_ID },

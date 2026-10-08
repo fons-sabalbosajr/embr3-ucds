@@ -92,7 +92,7 @@ const Profile = ({ username }) => {
     return (
       <Paragraph className="paragraph-input">
         <span className="label-title-profile">{label}</span>
-        <Input value={value} className="input-field" readOnly />
+        <Input placeholder="—" value={value} className="input-field" readOnly />
       </Paragraph>
     );
   };

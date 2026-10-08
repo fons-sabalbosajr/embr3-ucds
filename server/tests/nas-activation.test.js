@@ -146,6 +146,40 @@ describe('the activation window is evaluated on the server', () => {
   });
 });
 
+describe('a change in access reaches open screens without waiting for a poll', () => {
+  it('announces a window expiring on its clock, once', async () => {
+    const bridge = (await import('../services/nasBridge.js')).default;
+    const now = Date.now();
+    await write({ enabled: true, startsAt: new Date(now - minutes(5)), endsAt: new Date(now + minutes(60)) });
+    await bridge.broadcast(); // the state the screens were last told: active
+
+    const heard = [];
+    const stop = bridge.onChange((payload) => heard.push(payload));
+    try {
+      await bridge.watchAvailability();
+      expect(heard).toHaveLength(0); // nothing changed
+
+      await write({ endsAt: new Date(now - minutes(1)) });
+      await bridge.watchAvailability();
+      expect(heard).toHaveLength(1);
+      expect(heard[0]).toMatchObject({ active: false, reason: 'expired' });
+
+      await bridge.watchAvailability();
+      expect(heard).toHaveLength(1); // said once, not on every probe
+    } finally {
+      stop();
+    }
+  });
+
+  it('accepts an activation with no end, which never expires', async () => {
+    const res = await activation.setActivation({ enabled: true }, { username: 'test' });
+    expect(res.ok).toBe(true);
+    expect(res.state.endsAt).toBeNull();
+    const later = await activation.evaluate(new Date(Date.now() + minutes(60 * 24 * 365)));
+    expect(later.reason).not.toBe('expired');
+  });
+});
+
 describe('document access follows the activation window', () => {
   it('refuses a document read when the window has expired', async () => {
     const now = new Date();

@@ -25,6 +25,12 @@ import {
   fetchRecords,
 } from "../api/ermsService";
 import RecordFormModal from "../components/RecordFormModal";
+import useFitHeight from "../../../shared/useFitHeight";
+import "./recordslist.css";
+
+// Below the table's top: its header row, the pagination, the card's own
+// padding and the application footer.
+const TABLE_RESERVE = 180;
 
 const LINK_OPTIONS = [
   { value: "", label: "Any register status" },
@@ -74,6 +80,7 @@ const RecordsList = () => {
   // The row being edited in the form, and the one being shared.
   const [editing, setEditing] = useState(null);
   const [sharing, setSharing] = useState(null);
+  const [fitRef, fitHeight] = useFitHeight(TABLE_RESERVE);
 
   useEffect(() => {
     if (searchParams.get("new") === "1") setCreating(true);
@@ -113,7 +120,7 @@ const RecordsList = () => {
       title: "FSN",
       dataIndex: "serialNo",
       key: "serialNo",
-      width: 150,
+      width: 130,
       sorter: true,
       render: (serial, row) => (
         <Space direction="vertical" size={0}>
@@ -137,7 +144,7 @@ const RecordsList = () => {
     {
       title: "Permit / Ref. No.",
       key: "permit",
-      width: 210,
+      width: 180,
       render: (_, row) => (
         <Space direction="vertical" size={0}>
           <a
@@ -154,30 +161,31 @@ const RecordsList = () => {
       ),
     },
     // One column for what the record is about: the project, whose it is,
-    // and where — the three things that used to be spread over four.
+    // and where — the three things that used to be spread over four. No
+    // width: it takes whatever the window has left, and wraps rather than
+    // cutting a long title off.
     {
       title: "Project Details",
       dataIndex: "projectTitle",
       key: "projectTitle",
+      width: 350,
       sorter: true,
       render: (title, row) => (
-        <Space direction="vertical" size={0} style={{ maxWidth: 560 }}>
-          <Typography.Text strong ellipsis={{ tooltip: title }}>
-            {title || "—"}
-          </Typography.Text>
-          <Typography.Text ellipsis={{ tooltip: row.proponentName }}>{row.proponentName || "—"}</Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: address(row.location) }}>
+        <div className="records-project-details">
+          <Typography.Text strong>{title || "—"}</Typography.Text>
+          <Typography.Text>{row.proponentName || "—"}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {address(row.location) || "—"}
           </Typography.Text>
-        </Space>
+        </div>
       ),
     },
     {
       title: "Project Type",
       key: "projectType",
-      width: 220,
+      width: 180,
       render: (_, row) => (
-        <Typography.Text type={projectType(row.project) ? undefined : "secondary"} ellipsis={{ tooltip: projectType(row.project) }} style={{ maxWidth: 200, fontSize: 13 }}>
+        <Typography.Text type={projectType(row.project) ? undefined : "secondary"} style={{ fontSize: 13, whiteSpace: "normal", wordBreak: "break-word" }}>
           {projectType(row.project) || "—"}
         </Typography.Text>
       ),
@@ -185,7 +193,7 @@ const RecordsList = () => {
     {
       title: "Register",
       key: "ucdsRef",
-      width: 150,
+      width: 120,
       render: (_, row) =>
         row.ucdsRef?.sortKey ? (
           <Tooltip title={row.ucdsRef.nameSnapshot || ""}>
@@ -201,7 +209,7 @@ const RecordsList = () => {
       title: "Uploaded",
       dataIndex: ["document", "uploadedAt"],
       key: "uploadedAt",
-      width: 200,
+      width: 130,
       sorter: true,
       render: (d, row) => (
         <Space direction="vertical" size={0}>
@@ -215,7 +223,7 @@ const RecordsList = () => {
     {
       title: "Action",
       key: "actions",
-      width: 120,
+      width: 110,
       align: "center",
       render: (_, row) => (
         <Space size={4}>
@@ -298,7 +306,7 @@ const RecordsList = () => {
               label: PROVINCE_LABEL[p] || p,
             }))}
           />
-          <Select
+          <Select placeholder="Any link status"
             style={{ width: 200 }}
             value={query.linked}
             onChange={(v) => patch({ linked: v })}
@@ -357,16 +365,23 @@ const RecordsList = () => {
           />
         )}
 
+        {/* Fitted to the window: the columns share its width (fixed layout,
+            Project Details taking what is left), and the rows scroll under a
+            header that stays put, ending above the pagination. Narrower than
+            1000px the table scrolls sideways rather than crushing columns —
+            a 1366px laptop with the sidebar open still fits without it. */}
+        <div ref={fitRef}>
         <Table
           rowKey="serialNo"
           size="small"
           bordered
+          tableLayout="fixed"
           loading={isFetching}
           columns={columns}
           dataSource={data?.items || []}
           onChange={onTableChange}
           onRow={(r) => ({ onDoubleClick: () => setOpenSerial(r.serialNo), style: { cursor: "pointer" } })}
-          scroll={{ x: "max-content" }}
+          scroll={{ x: 1000, y: fitHeight }}
           pagination={{
             current: data?.page || 1,
             pageSize: data?.pageSize || 25,
@@ -376,6 +391,7 @@ const RecordsList = () => {
             showTotal: (t, r) => `${r[0]}–${r[1]} of ${new Intl.NumberFormat().format(t)}`,
           }}
         />
+        </div>
       </Space>
 
       <RecordFormModal

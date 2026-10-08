@@ -390,3 +390,109 @@
   font-size: 18px;
   line-height: 1;
 }
+
+/* ========== Scrolling ==========
+   The shell is exactly one window tall, so a menu longer than the window
+   (every section open, a Developer's full list) used to run off the bottom
+   with no way to reach it. The logo stays put; the menu below it scrolls on
+   its own.
+
+   The scrollbar is deliberately quiet: 4px, invisible until the pointer is
+   over the sider, then a faint line that firms up only while grabbed.
+   Chromium draws the ::-webkit-scrollbar parts only when scrollbar-width and
+   scrollbar-color are left at auto, so the global thin rule is undone here;
+   Firefox, which has no pseudo-elements, gets its own thin, transparent
+   version instead. */
+.ant-layout-sider > .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ant-layout-sider .side-menu-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+.ant-layout-sider .side-menu-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ant-layout-sider .side-menu-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ant-layout-sider .side-menu-list::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 0;
+  border-radius: 999px;
+  transition: background-color 0.2s;
+}
+
+.ant-layout-sider:hover .side-menu-list::-webkit-scrollbar-thumb {
+  background-color: rgba(232, 236, 242, 0.18);
+}
+
+.ant-layout-sider .side-menu-list::-webkit-scrollbar-thumb:hover,
+.ant-layout-sider .side-menu-list::-webkit-scrollbar-thumb:active {
+  background-color: rgba(232, 236, 242, 0.38);
+}
+
+@supports (-moz-appearance: none) {
+  .ant-layout-sider .side-menu-list {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .ant-layout-sider:hover .side-menu-list {
+    scrollbar-color: rgba(232, 236, 242, 0.22) transparent;
+  }
+}
+
+/* ========== Compact (Developer) ==========
+   The Developer sees every section — the Central DB, all three ERMS units,
+   Admin Settings — so the comfortable sizes above ran the menu far past the
+   window. Tighter rows and type for that account only; everyone else keeps
+   the roomier menu, which suits their few entries. */
+.side-menu-compact .ant-menu-item,
+.side-menu-compact .ant-menu-submenu-title {
+  margin: 1px 6px;
+  padding: 0 10px !important;
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.side-menu-compact .ant-menu-item .anticon,
+.side-menu-compact .ant-menu-submenu-title .anticon {
+  font-size: 14px;
+}
+
+.side-menu-compact .main {
+  font-size: 13px;
+}
+
+.side-menu-compact .ant-menu-sub .ant-menu-item,
+.side-menu-compact .ant-menu-sub .ant-menu-submenu-title {
+  margin: 0 6px;
+  min-height: 28px;
+  padding-left: 26px !important;
+}
+
+.side-menu-compact .ant-menu-sub .submenu-item-label {
+  min-height: 26px;
+}
+
+.side-menu-compact .submenu-item-label,
+.side-menu-compact .ant-menu-submenu .ant-menu-item,
+.side-menu-compact .ant-menu-submenu .ant-menu-submenu-title {
+  font-size: 11.5px !important;
+}
+
+.side-menu-compact .ant-menu-sub.ant-menu-inline {
+  margin: 0 4px 2px;
+  padding: 2px 0;
+}

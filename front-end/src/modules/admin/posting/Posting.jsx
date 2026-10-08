@@ -354,7 +354,7 @@ const Posting = () => {
       ],
       onFilter: (value, record) => record.status === value,
       render: (_, record) => (
-        <Select
+        <Select placeholder="Status"
           defaultValue={record.status || "active"}
           style={{ width: 120 }}
           onChange={(value) => handleStatusChange(record._id, value)}
@@ -599,7 +599,7 @@ const Posting = () => {
             </Form.Item>
 
             <Form.Item label="Icon Type" name="iconType">
-              <Select
+              <Select placeholder="Select an icon type"
                 onChange={handleIconChange}
                 defaultValue={formData.iconType}
               >

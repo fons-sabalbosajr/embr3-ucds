@@ -27,6 +27,8 @@ import dayjs from "dayjs";
 import { API_BASE_URL } from "../../../config/api";
 import { getPreference, setPreference } from "../../../shared/preferences";
 import { withSessionToken } from "../../../shared/sessionToken";
+import PdfViewer from "../../../shared/components/PdfViewer";
+import { ViewOnlyImage } from "../../../shared/components/viewOnly";
 import "./nasexplorer.css";
 
 const { Text } = Typography;
@@ -341,7 +343,7 @@ const NasFileExplorer = ({ endpoint = "/api/nas", title = "NAS File Explorer", i
         </Tooltip>
 
         {editingAddress ? (
-          <Input
+          <Input placeholder="Type a path, e.g. Records/2024"
             autoFocus
             className="eu-explorer-addressbar"
             value={addressDraft}
@@ -648,7 +650,17 @@ const NasFileExplorer = ({ endpoint = "/api/nas", title = "NAS File Explorer", i
         ]}
         destroyOnClose
       >
-        {preview && <iframe title={preview.name} src={fileUrl(endpoint, container, preview.path, false)} style={{ width: "100%", height: "78vh", border: "none" }} />}
+        {/* The Developer's explorer shows files as the browser does, with
+            Download beside it. Staff see scans view only — the app's own
+            PDF viewer and an image without its context menu — so nothing
+            on the Storage page can be saved or printed. */}
+        {preview && !canDownload && /\.pdf$/i.test(preview.name) ? (
+          <PdfViewer src={fileUrl(endpoint, container, preview.path, false)} owner="the system administrator" />
+        ) : preview && !canDownload && /\.(png|jpe?g|gif|bmp|webp)$/i.test(preview.name) ? (
+          <ViewOnlyImage src={fileUrl(endpoint, container, preview.path, false)} alt={preview.name} />
+        ) : preview ? (
+          <iframe title={preview.name} src={fileUrl(endpoint, container, preview.path, false) + (canDownload ? "" : "#toolbar=0&navpanes=0")} style={{ width: "100%", height: "78vh", border: "none" }} />
+        ) : null}
       </Modal>
     </div>
   );

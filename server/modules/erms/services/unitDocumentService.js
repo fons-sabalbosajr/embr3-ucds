@@ -1,9 +1,12 @@
 const { connectToMongo, getDb } = require('../../../config/db');
-const { notFoundError, badRequest, forbidden } = require('../../../shared/middleware/errorHandler');
+const { notFoundError, badRequest, conflict, forbidden } = require('../../../shared/middleware/errorHandler');
+const nas = require('../../../services/nasStorage');
 const { ERMS_UNITS, ERMS_UNIT_VALUES, canSeeErmsUnit, ermsUnitOf, isErmsEndUser, canAccessAllYears } = require('../../../services/authorization');
 const { PROVINCE_KEYS, PROVINCES } = require('../../../services/provinces');
 const config = require('./configService');
 const filing = require('./filingService');
+const shortCache = require('../../../shared/services/shortCache');
+const { monthWindow } = require('./recordService');
 
 // ---------------------------------------------------------------------------
 // Unit documents: what the Legal Services and Laboratory units file.
@@ -195,13 +198,22 @@ async function get(user, unitKey, serialNo) {
 }
 
 /** Counts for the unit's dashboard. */
+// The unit's dashboard, computed once per unit every 20 seconds however many
+// people have it open (shared/services/shortCache). Filing clears it.
+const DASHBOARD_CACHE = 'erms:units:dashboard:';
+
 async function dashboard(user, unitKey) {
   const unit = assertUnit(unitKey);
   assertCanSee(user, unit);
+  return shortCache.cached(DASHBOARD_CACHE + unit, 20 * 1000, () => computeDashboard(unit));
+}
+
+async function computeDashboard(unit) {
   await connectToMongo();
   const since = new Date(Date.now() - 30 * 86400000);
   const thisYear = new Date(new Date().getFullYear(), 0, 1);
-  const [byType, byProvince, byYear, recent, total, lastMonth, filedThisYear, withoutFile, fromDesktop] = await Promise.all([
+  const months = monthWindow();
+  const [byType, byProvince, byYear, recent, total, lastMonth, filedThisYear, withoutFile, fromDesktop, byMonth] = await Promise.all([
     collection().aggregate([{ $match: { unit } }, { $group: { _id: '$docType', count: { $sum: 1 } } }]).toArray(),
     collection().aggregate([{ $match: { unit } }, { $group: { _id: '$province', count: { $sum: 1 } } }]).toArray(),
     collection().aggregate([{ $match: { unit, createdAt: { $ne: null } } }, { $group: { _id: { $year: '$createdAt' }, count: { $sum: 1 } } }, { $sort: { _id: 1 } }]).toArray(),
@@ -211,6 +223,12 @@ async function dashboard(user, unitKey) {
     collection().countDocuments({ unit, createdAt: { $gte: thisYear } }),
     collection().countDocuments({ unit, $or: [{ 'document.fileName': null }, { 'document.fileName': '' }, { 'document.sharePath': null }] }),
     collection().countDocuments({ unit, legacy: { $ne: null } }),
+    // Uploads per month and document type — the desktop units' monthly
+    // upload views (vwTotUploadLegal, the Laboratory's vwMonthlyUploads).
+    collection().aggregate([
+      { $match: { unit, 'document.uploadedAt': { $gte: months.since } } },
+      { $group: { _id: { month: { $dateToString: { format: '%Y-%m', date: '$document.uploadedAt', timezone: '+08:00' } }, type: '$docType' }, count: { $sum: 1 } } },
+    ]).toArray(),
   ]);
   const unitCfg = await config.unit(unit);
   const label = (code) => unitCfg?.docTypes.find((t) => t.code === code)?.label || code;
@@ -229,6 +247,8 @@ async function dashboard(user, unitKey) {
     byType: allTypes.sort((a, b) => b.count - a.count),
     byProvince: byProvince.map((x) => ({ province: x._id, label: PROVINCE_LABEL[x._id] || x._id || 'Unfiled', count: x.count })).sort((a, b) => b.count - a.count),
     byYear: byYear.map((x) => ({ year: x._id, count: x.count })),
+    byMonth: months.fill(byMonth.map((r) => ({ month: r._id.month, kind: r._id.type, count: r.count }))),
+    kindLabels: Object.fromEntries((unitCfg?.docTypes || []).map((t) => [t.code, t.label])),
     recent: recent.map(publicView),
   };
 }
@@ -314,6 +334,72 @@ async function update(user, unitKey, serialNo, input) {
   return publicView({ ...before, ...set });
 }
 
+/**
+ * File a scan against a document already on file — one the desktop system
+ * kept without a scan, or one whose scan is being replaced. The same rule as
+ * a Records re-upload (recordController.attachRecordFile): a scan that is
+ * on the share is never silently replaced, so `replace` must say what
+ * becomes of it —
+ *
+ *   'keep'    the document points at the new scan; the old file stays
+ *   'delete'  the old file is removed once the new one is written
+ *
+ * — and without it the answer is 409 HAS_DOCUMENT. A stored path that no
+ * longer resolves on the share counts as no scan.
+ *
+ * Returns { document, previous, existing } for the controller's trail.
+ */
+async function attachFile(user, unitKey, serialNo, upload, { replace = '', folder = null, subfolder = null } = {}) {
+  const unit = assertUnit(unitKey);
+  assertCanFile(user, unit);
+  await connectToMongo();
+  const before = await collection().findOne({ unit, serialNo });
+  if (!before) throw notFoundError('Document not found.', 'DOCUMENT_NOT_FOUND');
+  const docType = await config.docType(unit, before.docType);
+  if (!docType) throw badRequest('This document\'s type is no longer configured.', 'DOCTYPE_UNKNOWN');
+
+  const container = String(before.document?.container || unit).toLowerCase();
+  const stored = before.document?.sharePath || before.document?.filePath;
+  let existing = null;
+  if (stored) {
+    const found = await nas.statFile(stored, container);
+    if (found.ok) {
+      if (!['keep', 'delete'].includes(replace)) {
+        throw conflict('This document already has a scan on the share. Choose whether to keep or delete it when re-uploading.', 'HAS_DOCUMENT');
+      }
+      existing = found;
+    }
+  }
+
+  const filed = await filing.file(unit, docType, { province: before.province, fields: before.fields || {}, folder: clean(folder, 120), subfolder: clean(subfolder, 120) }, upload);
+  if (!filed.ok) {
+    const err = new Error(filed.message);
+    err.status = ['NO_FILE', 'FILE_TYPE', 'FILE_TOO_LARGE'].includes(filed.code) ? 400 : 502;
+    err.code = filed.code;
+    throw err;
+  }
+
+  const now = new Date();
+  const set = {
+    document: { ...filed.document, uploadedAt: now, uploadedBy: user?.username || 'unknown' },
+    updatedAt: now,
+    updatedBy: user?.username || 'unknown',
+  };
+  set.searchText = searchTextOf({ ...before, ...set });
+  await collection().updateOne({ _id: before._id }, { $set: set });
+
+  // The old file goes only after the new one is written and the document
+  // points at it, so a failure part-way leaves the document whole.
+  let previous = null;
+  if (existing && replace === 'delete') {
+    const removed = await nas.removeFile(container, stored);
+    previous = { fileName: existing.fileName, deleted: removed.ok, reason: removed.ok ? null : removed.reason, size: removed.size };
+  } else if (existing) {
+    previous = { fileName: existing.fileName, deleted: false, reason: 'kept' };
+  }
+  return { document: publicView({ ...before, ...set }), previous, existing: Boolean(existing), container };
+}
+
 /** The stored document, for streaming its file. Unit scope applies. */
 async function forFile(user, unitKey, serialNo) {
   const unit = assertUnit(unitKey);
@@ -354,10 +440,94 @@ async function duplicatesByFileName(user, unitKey, fileName) {
   return docs.map(publicView);
 }
 
+// ---------------------------------------------------------------------------
+// Suggestions for the upload form: values already on file in the unit, so a
+// clerk filing the third document on a case picks the docket and company
+// rather than typing them a third time — and types them the same way.
+//
+// A key field (the docket, the COC number) also carries the fields that go
+// with it, from the latest document filed under it, for the form to fill in.
+// ---------------------------------------------------------------------------
+
+const SUGGESTABLE = {
+  legal: ['docketNo', 'pabCaseNo', 'companyName', 'companyAddress', 'documentType'],
+  laboratory: ['cocNo', 'firmName', 'address', 'receivedBy', 'unitUnderTest', 'subject'],
+};
+// What a chosen key value fills in, when the form left it empty.
+const FILLS = {
+  docketNo: ['pabCaseNo', 'companyName', 'companyAddress', 'natureOfBusiness'],
+  cocNo: ['firmName', 'address'],
+  firmName: ['address'],
+  companyName: ['companyAddress'],
+};
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+async function suggest(user, unitKey, field, q = '') {
+  const unit = assertUnit(unitKey);
+  assertCanSee(user, unit);
+  if (!(SUGGESTABLE[unit] || []).includes(field)) return [];
+  await connectToMongo();
+
+  const path = `fields.${field}`;
+  const text = String(q || '').trim().slice(0, 100);
+  const match = { unit, [path]: text ? new RegExp(escapeRe(text), 'i') : { $nin: [null, ''] } };
+  const fills = FILLS[field] || [];
+  const groups = await collection()
+    .aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: `$${path}`,
+          count: { $sum: 1 },
+          // The latest document's companion values, for the form to fill.
+          ...Object.fromEntries(fills.map((f) => [f, { $first: `$fields.${f}` }])),
+        },
+      },
+      // Values starting with what was typed first, then the most used.
+      { $addFields: { starts: text ? { $regexMatch: { input: { $toString: '$_id' }, regex: `^${escapeRe(text)}`, options: 'i' } } : true } },
+      { $sort: { starts: -1, count: -1, _id: 1 } },
+      { $limit: 15 },
+    ])
+    .toArray();
+
+  return groups
+    .filter((g) => g._id !== null && String(g._id).trim() !== '')
+    .map((g) => {
+      const fill = Object.fromEntries(fills.map((f) => [f, g[f]]).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+      return { value: String(g._id), count: g.count, ...(Object.keys(fill).length ? { fill } : {}) };
+    });
+}
+
 function publicView(doc) {
   if (!doc) return null;
   const { _id, searchText, ...rest } = doc;
   return { id: String(_id), ...rest };
 }
 
-module.exports = { COLLECTION, ensureIndexes, list, get, dashboard, create, update, forFile, validateFields, nextSerialNo, titleOf, searchTextOf, duplicateGroups, duplicatesByFileName };
+// Filing or editing changes the counts: clear them for the unit at once.
+const clearingDashboard = (fn) => async (user, unitKey, ...rest) => {
+  const result = await fn(user, unitKey, ...rest);
+  shortCache.invalidate(DASHBOARD_CACHE + unitKey);
+  return result;
+};
+
+module.exports = {
+  COLLECTION,
+  ensureIndexes,
+  list,
+  get,
+  dashboard,
+  create: clearingDashboard(create),
+  update: clearingDashboard(update),
+  attachFile: clearingDashboard(attachFile),
+  forFile,
+  validateFields,
+  nextSerialNo,
+  titleOf,
+  searchTextOf,
+  duplicateGroups,
+  duplicatesByFileName,
+  suggest,
+  SUGGESTABLE,
+};

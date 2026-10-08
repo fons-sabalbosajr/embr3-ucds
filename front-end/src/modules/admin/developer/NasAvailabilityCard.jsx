@@ -145,21 +145,21 @@ const BridgeCard = ({ onProbed }) => {
           </Descriptions.Item>
           <Descriptions.Item label="NAS through it">
             <Space>
-              <Input value={draft.nasHost} maxLength={120} onChange={(e) => patch({ nasHost: e.target.value })} style={{ width: 200 }} />
+              <Input placeholder="10.14.76.167" value={draft.nasHost} maxLength={120} onChange={(e) => patch({ nasHost: e.target.value })} style={{ width: 200 }} />
               <Text type="secondary">port</Text>
-              <InputNumber value={draft.nasPort} min={1} max={65535} onChange={(v) => patch({ nasPort: v || 445 })} style={{ width: 90 }} />
+              <InputNumber placeholder="445" value={draft.nasPort} min={1} max={65535} onChange={(v) => patch({ nasPort: v || 445 })} style={{ width: 90 }} />
             </Space>
           </Descriptions.Item>
           <Descriptions.Item label="Check every">
             <Space>
-              <InputNumber value={draft.intervalSec} min={10} max={600} onChange={(v) => patch({ intervalSec: v || 30 })} style={{ width: 90 }} />
+              <InputNumber placeholder="30" value={draft.intervalSec} min={10} max={600} onChange={(v) => patch({ intervalSec: v || 30 })} style={{ width: 90 }} />
               <Text type="secondary">seconds, timeout</Text>
-              <InputNumber value={draft.timeoutMs} min={500} max={20000} step={500} onChange={(v) => patch({ timeoutMs: v || 4000 })} style={{ width: 100 }} />
+              <InputNumber placeholder="4000" value={draft.timeoutMs} min={500} max={20000} step={500} onChange={(v) => patch({ timeoutMs: v || 4000 })} style={{ width: 100 }} />
               <Text type="secondary">ms</Text>
             </Space>
           </Descriptions.Item>
           <Descriptions.Item label="Message when off">
-            <Input.TextArea rows={2} maxLength={400} showCount value={draft.offlineMessage} onChange={(e) => patch({ offlineMessage: e.target.value })} />
+            <Input.TextArea placeholder="Shown to everyone while the bridge server is off" rows={2} maxLength={400} showCount value={draft.offlineMessage} onChange={(e) => patch({ offlineMessage: e.target.value })} />
           </Descriptions.Item>
           {status?.checkedAt && (
             <Descriptions.Item label="Last check">

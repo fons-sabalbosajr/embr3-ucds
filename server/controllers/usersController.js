@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 const { connectToMongo, collections } = require('../config/db');
+const shortCache = require('../shared/services/shortCache');
 const mailer = require('../services/mailer');
 const templates = require('../services/mailTemplates');
 const { principalOf } = require('../middleware/auth');
@@ -513,17 +514,32 @@ async function getCurrentUser(req, res) {
   }
 }
 
+// Who is signed in, for the list every Planning screen shows. It looked up
+// each person's avatar with its own query — 119 database operations per
+// call, from every signed-in user once a minute. Now one query for all the
+// avatars, and the answer (the same for everyone) is shared for 15 seconds.
 async function getOnlineUsers(req, res) {
   try {
-    await connectToMongo();
-    const onlineUsers = await collections.loginStatus.find().toArray();
-    const formattedOnlineUsers = await Promise.all(
-      onlineUsers.map(async (user) => {
-        const userDoc = await collections.users.findOne({ name: user.name });
-        const avatar = userDoc ? userDoc.avatar : null;
-        return { userId: user.userId, userName: user.userName, name: user.name, isLoggedIn: user.isLoggedIn, loginTime: user.loginTime, logoutTime: user.logoutTime, avatar };
-      })
-    );
+    const formattedOnlineUsers = await shortCache.cached('users:online', 15 * 1000, async () => {
+      await connectToMongo();
+      const onlineUsers = await collections.loginStatus.find().toArray();
+      const names = [...new Set(onlineUsers.map((u) => u.name).filter(Boolean))];
+      const avatars = new Map(
+        (await collections.users.find({ name: { $in: names } }, { projection: { name: 1, avatar: 1 } }).toArray())
+          // The first account with a name wins, as findOne({ name }) did.
+          .reverse()
+          .map((u) => [u.name, u.avatar || null])
+      );
+      return onlineUsers.map((user) => ({
+        userId: user.userId,
+        userName: user.userName,
+        name: user.name,
+        isLoggedIn: user.isLoggedIn,
+        loginTime: user.loginTime,
+        logoutTime: user.logoutTime,
+        avatar: avatars.get(user.name) ?? null,
+      }));
+    });
     return res.status(200).json({ onlineUsers: formattedOnlineUsers });
   } catch (error) {
     console.error('Error fetching online users:', error);
@@ -604,6 +620,27 @@ async function getRecentActivity(req, res) {
   }
 }
 
+/**
+ * Sign-in history (services/signInHistory): every account's, or one
+ * account's with `username`. Account managers only.
+ */
+async function getSignInHistory(req, res) {
+  try {
+    const signInHistory = require('../services/signInHistory');
+    const username = String(req.query.username || '').trim();
+    const events = await signInHistory.list({
+      usernames: username ? [username] : null,
+      q: String(req.query.q || '').trim().slice(0, 120),
+      limit: Number(req.query.limit) || 200,
+    });
+    res.json({ events, retentionDays: signInHistory.RETENTION_DAYS });
+  } catch (error) {
+    console.error('Error reading sign-in history:', error);
+    res.status(500).json({ message: 'Could not read the sign-in history.' });
+  }
+}
+
+module.exports.getSignInHistory = getSignInHistory;
 module.exports.updateUserPermissionsByEmail = updateUserPermissionsByEmail;
 module.exports.updateProvincePermissionsByEmail = updateProvincePermissionsByEmail;
 module.exports.removeSignUpUser = removeSignUpUser;

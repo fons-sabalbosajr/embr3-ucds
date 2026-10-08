@@ -42,7 +42,7 @@ const ActivityHistoryConfig = () => {
     modal.confirm({
       title: "Edit message",
       content: (
-        <Input.TextArea defaultValue={newMsg} onChange={(e)=>{ newMsg = e.target.value; }} rows={4} />
+        <Input.TextArea placeholder="The message shown in the activity history" defaultValue={newMsg} onChange={(e)=>{ newMsg = e.target.value; }} rows={4} />
       ),
       onOk: async () => {
         try {

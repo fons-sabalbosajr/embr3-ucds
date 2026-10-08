@@ -2,6 +2,7 @@ const dayjs = require('dayjs');
 const { connectToMongo, collections, client, ObjectId } = require('../config/db');
 const { withYear, stampYear } = require('../services/yearScope');
 const { provinceScoped, requestAllowsProvince } = require('../services/provinces');
+const shortCache = require('../shared/services/shortCache');
 
 // The establishment register, confined to the provinces this request may touch.
 const ucdsFor = (req) => provinceScoped(collections.ucds, req);
@@ -28,74 +29,119 @@ function isMissingOrPlaceholder(value) {
   return value === undefined || value === null || placeholders.includes(String(value).toLowerCase());
 }
 
+// The register's completeness check — the bell in the header.
+//
+// It used to send one sentence per missing field ("BA-00001 - Missing
+// 'Street'") for every establishment: about 700,000 strings, 17.7 MB, built
+// and serialised on every page load of every Planning user, after reading
+// the whole register from Atlas. With a hundred people that alone was more
+// than the server, the office network and the database could carry.
+//
+// Now: the field labels once, then each record's id with the numbers of the
+// fields it lacks — the same information, about a tenth of the size — read
+// with only the fields it checks, and computed once per province scope every
+// five minutes however many people are signed in. A register edit made
+// through the application clears it (see clearRegisterChecks).
+const REGISTER_CHECKS = [
+  ['industry_type', 'Industry Type'],
+  ['industry_subtype', 'Industry Sub-type'],
+  ['industry_class', 'Industry Class'],
+  ['psic_code', 'PSIC Code'],
+  ['mbu_area', 'MBU Area'],
+  ['waterbody', 'Waterbody'],
+  ['long', 'Longitude'],
+  ['lat', 'Latitude'],
+  ['cong_district', 'Congressional District'],
+  ['street', 'Street'],
+  ['brgy', 'Barangay'],
+  ['city', 'City'],
+  ['province', 'Province'],
+  ['emp_total', 'Total Employees'],
+  ['wwtf_type', 'WWTF Type'],
+  ['section_incharged', 'Section In-Charge'],
+  ['handler', 'Handler'],
+  ['monitoring_sched', 'Monitoring Schedule'],
+  ['insp_type', 'Inspection Type'],
+  ['pismu_tracking', 'PISMU Tracking'],
+  ['title_status', 'Title Status'],
+  ['with_nov', 'With NOV'],
+  ['pismu_count_month', 'PISMU Count Month'],
+  ['permit_process', 'Permit Process'],
+  ['denr_pab_case_no', 'DENR PAB Case No.'],
+  ['legal_officer', 'Legal Officer'],
+  ['tc_commitment', 'TC Commitment'],
+  ['ecc_cnc', 'ECC/CNC'],
+  ['pco_no', 'PCO Number'],
+  ['pto_code', 'PTO Code'],
+  ['wwdp_code', 'WWDP Code'],
+  ['haz_id', 'HAZ ID'],
+  ['pco_name', 'PCO Name'],
+  ['docket_no', 'Docket No.'],
+  ['v_pd1586', 'PD 1586'],
+  ['v_ra9275', 'RA 9275'],
+  ['v_ra8749', 'RA 8749'],
+  ['v_ra6969_haz', 'RA 6969 (Hazardous)'],
+  ['v_ra6969_chem', 'RA 6969 (Chemical)'],
+  ['tc_date_actual', 'Actual TC Date'],
+  ['speaker_name', 'Speaker Name'],
+];
+// Every cached answer derived from the register starts with this, so one
+// invalidate() after an edit clears them all (clearRegisterChecks).
+const REGISTER_CACHE = 'ucds:register-';
+const REGISTER_CHECKS_CACHE = `${REGISTER_CACHE}checks:`;
+
+/** The cache key for a request's province scope: one entry per distinct scope. */
+function registerScopeKey(req, prefix = REGISTER_CHECKS_CACHE) {
+  const list = req.provinceFilter?.province?.$in;
+  if (!req.provinceFilter) return prefix + 'all';
+  return prefix + (Array.isArray(list) ? list.map((r) => String(r)).sort().join('|') : JSON.stringify(req.provinceFilter));
+}
+
+async function computeRegisterChecks(req) {
+  await connectToMongo();
+  const projection = { _id: 0, sort_key: 1, id_no: 1, ...Object.fromEntries(REGISTER_CHECKS.map(([key]) => [key, 1])) };
+  const records = [];
+  let issueCount = 0;
+  const cursor = ucdsFor(req).find({}, { projection });
+  for await (const record of cursor) {
+    const missing = [];
+    REGISTER_CHECKS.forEach(([key], i) => {
+      if (isMissingOrPlaceholder(record[key])) missing.push(i);
+    });
+    if (missing.length) {
+      records.push([record.sort_key || record.id_no || '[unknown]', missing]);
+      issueCount += missing.length;
+    }
+  }
+  return { fields: REGISTER_CHECKS.map(([, label]) => label), records, issueCount };
+}
+
 async function checkData(req, res) {
   try {
-    await connectToMongo();
-    const sampleData = await ucdsFor(req).find().toArray();
-
-    const issues = [];
-    sampleData.forEach((record) => {
-      const id_no = record.sort_key || record.id_no || '[unknown]';
-      if (isMissingOrPlaceholder(record.industry_type)) issues.push(`${id_no} - Missing 'Industry Type'`);
-      if (isMissingOrPlaceholder(record.industry_subtype)) issues.push(`${id_no} - Missing 'Industry Sub-type'`);
-      if (isMissingOrPlaceholder(record.industry_class)) issues.push(`${id_no} - Missing 'Industry Class'`);
-      if (isMissingOrPlaceholder(record.psic_code)) issues.push(`${id_no} - Missing 'PSIC Code'`);
-      if (isMissingOrPlaceholder(record.mbu_area)) issues.push(`${id_no} - Missing 'MBU Area'`);
-      if (isMissingOrPlaceholder(record.waterbody)) issues.push(`${id_no} - Missing 'Waterbody'`);
-      if (isMissingOrPlaceholder(record.long)) issues.push(`${id_no} - Missing 'Longitude'`);
-      if (isMissingOrPlaceholder(record.lat)) issues.push(`${id_no} - Missing 'Latitude'`);
-      if (isMissingOrPlaceholder(record.cong_district)) issues.push(`${id_no} - Missing 'Congressional District'`);
-      if (isMissingOrPlaceholder(record.street)) issues.push(`${id_no} - Missing 'Street'`);
-      if (isMissingOrPlaceholder(record.brgy)) issues.push(`${id_no} - Missing 'Barangay'`);
-      if (isMissingOrPlaceholder(record.city)) issues.push(`${id_no} - Missing 'City'`);
-      if (isMissingOrPlaceholder(record.province)) issues.push(`${id_no} - Missing 'Province'`);
-      if (isMissingOrPlaceholder(record.emp_total)) issues.push(`${id_no} - Missing 'Total Employees'`);
-      if (isMissingOrPlaceholder(record.wwtf_type)) issues.push(`${id_no} - Missing 'WWTF Type'`);
-      if (isMissingOrPlaceholder(record.section_incharged)) issues.push(`${id_no} - Missing 'Section In-Charge'`);
-      if (isMissingOrPlaceholder(record.handler)) issues.push(`${id_no} - Missing 'Handler'`);
-      if (isMissingOrPlaceholder(record.monitoring_sched)) issues.push(`${id_no} - Missing 'Monitoring Schedule'`);
-      if (isMissingOrPlaceholder(record.insp_type)) issues.push(`${id_no} - Missing 'Inspection Type'`);
-      if (isMissingOrPlaceholder(record.pismu_tracking)) issues.push(`${id_no} - Missing 'PISMU Tracking'`);
-      if (isMissingOrPlaceholder(record.title_status)) issues.push(`${id_no} - Missing 'Title Status'`);
-      if (isMissingOrPlaceholder(record.with_nov)) issues.push(`${id_no} - Missing 'With NOV'`);
-      if (isMissingOrPlaceholder(record.pismu_count_month)) issues.push(`${id_no} - Missing 'PISMU Count Month'`);
-      if (isMissingOrPlaceholder(record.permit_process)) issues.push(`${id_no} - Missing 'Permit Process'`);
-      if (isMissingOrPlaceholder(record.denr_pab_case_no)) issues.push(`${id_no} - Missing 'DENR PAB Case No.'`);
-      if (isMissingOrPlaceholder(record.legal_officer)) issues.push(`${id_no} - Missing 'Legal Officer'`);
-      if (isMissingOrPlaceholder(record.tc_commitment)) issues.push(`${id_no} - Missing 'TC Commitment'`);
-      if (isMissingOrPlaceholder(record.ecc_cnc)) issues.push(`${id_no} - Missing 'ECC/CNC'`);
-      if (isMissingOrPlaceholder(record.pco_no)) issues.push(`${id_no} - Missing 'PCO Number'`);
-      if (isMissingOrPlaceholder(record.pto_code)) issues.push(`${id_no} - Missing 'PTO Code'`);
-      if (isMissingOrPlaceholder(record.wwdp_code)) issues.push(`${id_no} - Missing 'WWDP Code'`);
-      if (isMissingOrPlaceholder(record.haz_id)) issues.push(`${id_no} - Missing 'HAZ ID'`);
-      if (isMissingOrPlaceholder(record.pco_name)) issues.push(`${id_no} - Missing 'PCO Name'`);
-      if (isMissingOrPlaceholder(record.docket_no)) issues.push(`${id_no} - Missing 'Docket No.'`);
-      if (isMissingOrPlaceholder(record.v_pd1586)) issues.push(`${id_no} - Missing 'PD 1586'`);
-      if (isMissingOrPlaceholder(record.v_ra9275)) issues.push(`${id_no} - Missing 'RA 9275'`);
-      if (isMissingOrPlaceholder(record.v_ra8749)) issues.push(`${id_no} - Missing 'RA 8749'`);
-      if (isMissingOrPlaceholder(record.v_ra6969_haz)) issues.push(`${id_no} - Missing 'RA 6969 (Hazardous)'`);
-      if (isMissingOrPlaceholder(record.v_ra6969_chem)) issues.push(`${id_no} - Missing 'RA 6969 (Chemical)'`);
-      if (isMissingOrPlaceholder(record.tc_date_actual)) issues.push(`${id_no} - Missing 'Actual TC Date'`);
-      if (isMissingOrPlaceholder(record.legal_officer)) issues.push(`${id_no} - Missing 'Legal Officer'`);
-      if (isMissingOrPlaceholder(record.speaker_name)) issues.push(`${id_no} - Missing 'Speaker Name'`);
-    });
-
-    return res.json({ issues });
+    const result = await shortCache.cached(registerScopeKey(req), 5 * 60 * 1000, () => computeRegisterChecks(req));
+    return res.json(result);
   } catch (error) {
     console.error('Error fetching or validating data:', error);
-    return res.status(500).json({ issues: ['Error occurred while validating data. Please try again later.'] });
+    return res.status(500).json({ error: 'Error occurred while validating data. Please try again later.' });
   }
 }
 
+/** A register edit changes what is missing, monitored, due: recompute on the next ask. */
+const clearRegisterChecks = () => shortCache.invalidate(REGISTER_CACHE);
+
 async function getDuplicates(req, res) {
   try {
-    await connectToMongo();
-    const duplicates = await ucdsFor(req).aggregate([
-      { $match: { ecc_cnc: { $exists: true, $ne: null } } },
-      { $group: { _id: '$ecc_cnc', idNos: { $push: '$sort_key' }, count: { $sum: 1 } } },
-      { $match: { count: { $gt: 1 } } },
-      { $project: { _id: 0, ecc_cnc: '$_id', idNos: 1, count: 1 } },
-    ], { allowDiskUse: true }).toArray();
+    // A grouping over the whole register, asked by every Planning page load
+    // (the bell): shared per scope for two minutes, cleared by any edit.
+    const duplicates = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}duplicates:`), 2 * 60 * 1000, async () => {
+      await connectToMongo();
+      return ucdsFor(req).aggregate([
+        { $match: { ecc_cnc: { $exists: true, $ne: null } } },
+        { $group: { _id: '$ecc_cnc', idNos: { $push: '$sort_key' }, count: { $sum: 1 } } },
+        { $match: { count: { $gt: 1 } } },
+        { $project: { _id: 0, ecc_cnc: '$_id', idNos: 1, count: 1 } },
+      ], { allowDiskUse: true }).toArray();
+    });
     return res.status(200).json({ duplicates });
   } catch (error) {
     console.error('Error detecting duplicate ECC/CNC values:', error);
@@ -380,13 +426,22 @@ const permitKeyToFieldMap = {
 };
 
 // ---- Daily notices and monitored dates (migrated from server.js) ----
+// Monitored dates and daily notices are asked for by every Planning
+// dashboard, and are the same for everyone in the same province scope: read
+// once per scope every two minutes, with only the fields they return (the
+// notices used to read whole register documents to keep 31 fields of each).
+// A register edit clears them (clearRegisterChecks).
+const REGISTER_LIST_TTL = 2 * 60 * 1000;
+
 async function getMonitoredDates(req, res) {
   try {
-    await connectToMongo();
-    const monitoredDates = await ucdsFor(req)
-      .find({ title: { $exists: true, $ne: '' }, date_monitored: { $exists: true, $ne: '' } })
-      .project({ title: 1, date_monitored: 1 })
-      .toArray();
+    const monitoredDates = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}monitored:`), REGISTER_LIST_TTL, async () => {
+      await connectToMongo();
+      return ucdsFor(req)
+        .find({ title: { $exists: true, $ne: '' }, date_monitored: { $exists: true, $ne: '' } })
+        .project({ title: 1, date_monitored: 1 })
+        .toArray();
+    });
     return res.status(200).json({ monitoredDates });
   } catch (error) {
     console.error('Error fetching monitored dates:', error);
@@ -394,47 +449,26 @@ async function getMonitoredDates(req, res) {
   }
 }
 
+const NOTICE_FIELDS = [
+  'sort_key', 'title', 'name', 'address', 'industry_class', 'date_monitored', 'date_routed', 'date_signed',
+  'iis_no_2024', 'iis_no_2025', 'pismu_tracking', 'section_incharged', 'fmr_section_incharged', 'handler',
+  'monitoring_sched', 'insp_type', 'remarks', 'ecc_cnc', 'pto_code', 'wwdp_code', 'haz_id', 'pco_no',
+  'pismu_count_month', 'title_status', 'docket_no', 'v_pd1586', 'v_ra9275', 'v_ra8749', 'v_ra6969_haz', 'v_ra6969_tchem',
+];
+
 async function getDailyNotices(req, res) {
   try {
-    await connectToMongo();
-    const rawNotices = await ucdsFor(req)
-      .find({ date_monitored: { $exists: true, $ne: '' } })
-      .toArray();
-
-    const notices = rawNotices.map((doc) => ({
-      _id: doc._id,
-      sort_key: doc.sort_key || '',
-      title: doc.title || '',
-      name: doc.name || '',
-      address: doc.address || '',
-      industry_class: doc.industry_class || '',
-      date_monitored: doc.date_monitored || '',
-      date_routed: doc.date_routed || '',
-      date_signed: doc.date_signed || '',
-      iis_no_2024: doc.iis_no_2024 || '',
-      iis_no_2025: doc.iis_no_2025 || '',
-      pismu_tracking: doc.pismu_tracking || '',
-      section_incharged: doc.section_incharged || '',
-      fmr_section_incharged: doc.fmr_section_incharged || '',
-      handler: doc.handler || '',
-      monitoring_sched: doc.monitoring_sched || '',
-      insp_type: doc.insp_type || '',
-      remarks: doc.remarks || '',
-      ecc_cnc: doc.ecc_cnc || '',
-      pto_code: doc.pto_code || '',
-      wwdp_code: doc.wwdp_code || '',
-      haz_id: doc.haz_id || '',
-      pco_no: doc.pco_no || '',
-      pismu_count_month: doc.pismu_count_month || '',
-      title_status: doc.title_status || '',
-      docket_no: doc.docket_no || '',
-      v_pd1586: doc.v_pd1586 || '',
-      v_ra9275: doc.v_ra9275 || '',
-      v_ra8749: doc.v_ra8749 || '',
-      v_ra6969_haz: doc.v_ra6969_haz || '',
-      v_ra6969_tchem: doc.v_ra6969_tchem || '',
-    }));
-
+    const notices = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}notices:`), REGISTER_LIST_TTL, async () => {
+      await connectToMongo();
+      const rawNotices = await ucdsFor(req)
+        .find({ date_monitored: { $exists: true, $ne: '' } })
+        .project(Object.fromEntries(NOTICE_FIELDS.map((f) => [f, 1])))
+        .toArray();
+      return rawNotices.map((doc) => ({
+        _id: doc._id,
+        ...Object.fromEntries(NOTICE_FIELDS.map((f) => [f, doc[f] || ''])),
+      }));
+    });
     return res.json({ notices });
   } catch (error) {
     console.error('Error fetching daily notices:', error);
@@ -463,8 +497,15 @@ async function permitsSummary(req, res) {
       const searchRegex = { $regex: searchText, $options: 'i' };
       mongoQuery.$or = [{ sort_key: searchRegex }, { title: searchRegex }, { name: searchRegex }, { ecc_cnc: searchRegex }];
     }
+    // Every permit of every establishment, with its expiry worked out: the
+    // whole register read and three dates parsed per record, on Node's one
+    // thread — the slowest thing on the Planning dashboard. Without a search
+    // it is the same for everyone in the same scope, so it is shared for two
+    // minutes (cleared by any register edit); filtering and paging below are
+    // per request and cheap.
+    const processPermits = async () => {
     const allMatchingRecords = await ucdsFor(req).find(mongoQuery, { projection: { sort_key: 1, title: 1, name: 1, ecc_cnc: 1, pto_issued: 1, pto_code: 1, wwdp_issued: 1, wwdp_code: 1, pco_validity: 1, pco_no: 1 } }).toArray();
-    let processedRecords = allMatchingRecords.map((record) => {
+    return allMatchingRecords.map((record) => {
       const permits = [];
       if (record.pto_issued) {
         const issuedDate = parseDateStringForStats(record.pto_issued);
@@ -489,6 +530,10 @@ async function permitsSummary(req, res) {
       }
       return { sort_key: record.sort_key, title: record.title || record.name || 'Untitled', ecc_cnc: record.ecc_cnc || '', permits };
     });
+    };
+    const processedRecords = searchText
+      ? await processPermits()
+      : await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}permits:${prefixList.join(',')}:`), 2 * 60 * 1000, processPermits);
     let finalRecordsToPaginate = processedRecords.filter((rec) => rec.permits.length > 0);
     if (shouldFilterByExpiry) {
       finalRecordsToPaginate = finalRecordsToPaginate.map((rec) => ({ ...rec, permits: rec.permits.filter((p) => p.isExpired || p.isNearExpiry) })).filter((rec) => rec.permits.length > 0);
@@ -588,12 +633,16 @@ async function getProvinceData(req, res) {
     // previously called an undefined `withProvinceScope`, which threw on every
     // request — the helper exists in services/provinces.js but was never
     // imported, and applying it here would have scoped the query twice anyway.
+    // Everyone opening the same province in the same scope shares one read
+    // for 30 seconds — the whole province, 2 to 8 MB, was read from Atlas
+    // for each of them. Every write to the register clears it (see
+    // clearRegisterChecks), so an edit shows at once.
+    const formattedData = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}province:${province.toLowerCase()}:`), 30 * 1000, async () => {
     const provinceData = await ucdsFor(req)
       .find({ province: new RegExp(`^${province}$`, 'i') })
       .toArray();
-    if (provinceData.length === 0) return res.status(404).json({ message: `No data found for ${province}.` });
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
-    const formattedData = provinceData.map((doc) => ({
+    return provinceData.map((doc) => ({
       id_no: doc.id_no,
       sort_key: doc.sort_key || '',
       helper_column: doc.helper_column || '',
@@ -670,6 +719,8 @@ async function getProvinceData(req, res) {
       order_status: doc.order_status || '',
       color: doc.color || '',
     }));
+    });
+    if (formattedData.length === 0) return res.status(404).json({ message: `No data found for ${province}.` });
     return res.status(200).json(formattedData);
   } catch (error) {
     console.error('Error retrieving data:', error);
@@ -1543,3 +1594,18 @@ async function updatePermitExpiry(req, res) {
 module.exports.updateData = updateData;
 module.exports.revertByEcc = revertByEcc;
 module.exports.updatePermitExpiry = updatePermitExpiry;
+
+// Register writes change what the completeness check reports (checkData):
+// once one succeeds, the cached result is dropped and the next ask
+// recomputes it. Named as the handler they wrap, for the route audit.
+for (const name of ['updateDuplicates', 'archiveData', 'bulkUpdateUcds', 'addEstablishment', 'updateData', 'revertByEcc', 'updatePermitExpiry']) {
+  const handler = module.exports[name];
+  const wrapped = (req, res, next) => {
+    res.on('finish', () => {
+      if (res.statusCode < 400) clearRegisterChecks();
+    });
+    return handler(req, res, next);
+  };
+  Object.defineProperty(wrapped, 'name', { value: name });
+  module.exports[name] = wrapped;
+}

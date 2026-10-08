@@ -82,8 +82,10 @@ const DEFAULTS = {
         { code: 'ecc-amended', label: 'ECC (Amended)', folder: 'ECC Folder', filePrefix: 'ECC_Amended', fields: [] },
         { code: 'cnc', label: 'Certificate of Non-Coverage', folder: 'CNC', filePrefix: 'CNC', fields: [] },
         { code: 'hw-generator', label: 'HW Generator Registration', folder: 'HWID Folder', filePrefix: 'HW', fields: [] },
-        { code: 'dp', label: 'Discharge Permit', folder: 'DP Folder', filePrefix: 'DP', fields: [] },
         { code: 'pto', label: 'Permit to Operate', folder: 'PTO Folder', filePrefix: 'PTO', fields: [] },
+        { code: 'dp', label: 'Discharge Permit', folder: 'DP Folder', filePrefix: 'DP', fields: [] },
+        { code: 'luc', label: 'Land Use Conversion', folder: 'LUC Folder', filePrefix: 'LUC', fields: [] },
+        { code: 'coa', label: 'Certificate of Accreditation', folder: 'COA Folder', filePrefix: 'COA', fields: [] },
         { code: 'other', label: 'Other', folder: 'Others', filePrefix: '', fields: [] },
       ],
     },
@@ -96,6 +98,10 @@ const DEFAULTS = {
         folderField: 'companyName',
         yearField: 'novDateIssued',
       },
+      // Case numbers, as the desktop system issued them from a register per
+      // province: EMBR3-2023-PA-111. `issueOn` is the document types that
+      // open a case, whose form offers the next number.
+      docket: { prefix: 'EMBR3', pad: 3, issueOn: ['nov'] },
       docTypes: [
         {
           code: 'nov',
@@ -318,6 +324,18 @@ function normalizeUnit(input, unit) {
   if (!out.docTypes.length) out.docTypes = d.docTypes;
   if (unit === ERMS_UNITS.RECORDS) {
     out.serial = { prefix: cleanText(input?.serial?.prefix, 20) || d.serial.prefix, pad: Math.min(Math.max(Number(input?.serial?.pad) || d.serial.pad, 3), 10) };
+  }
+  if (d.docket) {
+    const codes = new Set(out.docTypes.map((t) => t.code));
+    const issueOn = (Array.isArray(input?.docket?.issueOn) ? input.docket.issueOn : d.docket.issueOn)
+      .map((c) => cleanText(c, 40).toLowerCase())
+      .filter((c) => codes.has(c));
+    out.docket = {
+      // Letters, digits and dashes only: the number is typed, searched and filed under.
+      prefix: cleanText(input?.docket?.prefix, 20).toUpperCase().replace(/[^A-Z0-9-]/g, '') || d.docket.prefix,
+      pad: Math.min(Math.max(Number(input?.docket?.pad) || d.docket.pad, 1), 6),
+      issueOn,
+    };
   }
   return out;
 }

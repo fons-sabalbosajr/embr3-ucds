@@ -220,7 +220,7 @@ async function signIn(page, username) {
 
   await page.locator('input').first().fill(username);
   await page.locator('input[type="password"]').fill(PASSWORD);
-  await page.getByRole('button', { name: /^login$/i }).first().click();
+  await page.getByRole('button', { name: /^(login|sign in)$/i }).first().click();
 
   // Leaving the login page is the only proof the credentials were accepted.
   await page
@@ -280,7 +280,7 @@ async function main() {
 
   const client = new MongoClient(process.env.MONGO_URI, { ssl: true, serverSelectionTimeoutMS: 30000 });
   await client.connect();
-  const db = client.db('universe-db');
+  const db = client.db(process.env.MONGO_DB_NAME || 'universe-db');
   const names = await seedAccounts(db);
 
   const browser = await chromium.launch({ headless: !HEADED });

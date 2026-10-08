@@ -11,11 +11,12 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { describeApiError, fetchUnitDashboard } from "../api/ermsService";
-import { DonutChart, MagnitudeBars, YearColumns } from "../components/charts";
+import { DonutChart, MagnitudeBars, MonthStack, YearColumns } from "../components/charts";
 import { AttentionTile, StatTile } from "../components/dashboardTiles";
 import { useTheme } from "../../../theme/ThemeProvider";
 import { useUnits } from "./useUnits";
 import { formatValue, unitTheme } from "./unitTheme";
+import { settingsPath } from "../settingsPath";
 
 const { Title, Text } = Typography;
 const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
@@ -94,7 +95,7 @@ const UnitDashboard = () => {
             <Button icon={<FileTextOutlined />} onClick={() => navigate(documentsUrl)}>
               Documents
             </Button>
-            <Button icon={<SettingOutlined />} onClick={() => navigate("/universe/settings/erms")}>
+            <Button icon={<SettingOutlined />} onClick={() => navigate(settingsPath(unit))}>
               Unit settings
             </Button>
           </Space>
@@ -149,6 +150,19 @@ const UnitDashboard = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* The desktop unit's monthly upload figures. */}
+      <Card title="Uploads per month" size="small" extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 months, by document type</Text>}>
+        {loading ? (
+          <Skeleton active />
+        ) : (
+          <MonthStack
+            months={data.byMonth}
+            kinds={(unitConfig?.docTypes || []).map((t) => ({ code: t.code, label: data.kindLabels?.[t.code] || t.label }))}
+            dark={isDark}
+          />
+        )}
+      </Card>
 
       <Card
         title="Most recently filed"

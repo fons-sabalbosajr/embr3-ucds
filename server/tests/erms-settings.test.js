@@ -104,6 +104,18 @@ describe('who reads and who writes', () => {
     expect(reset.status).toBe(200);
     expect(reset.body.settings.pdfViewing.previewPageLimit).toBe(0);
   });
+
+  it('keeps every section a save does not name', async () => {
+    // The settings page sends the tab on show; the other tabs must keep
+    // their values, not fall back to the defaults.
+    await records.put('/api/erms/units/records/settings').send({ pdfViewing: { previewPageLimit: 4 }, auditing: { logSearches: true } });
+    const saved = await records.put('/api/erms/units/records/settings').send({ privacy: { watermarkViewer: true } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.settings.privacy.watermarkViewer).toBe(true);
+    expect(saved.body.settings.pdfViewing.previewPageLimit).toBe(4);
+    expect(saved.body.settings.auditing.logSearches).toBe(true);
+    await records.post('/api/erms/units/records/settings/reset');
+  });
 });
 
 describe('what the rules do', () => {

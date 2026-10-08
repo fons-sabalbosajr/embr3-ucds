@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, Button, Card, Descriptions, Divider, Skeleton, Space, Table, Tag, Typography } from "antd";
-import { ArrowLeftOutlined, EditOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CloudUploadOutlined, EditOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { describeApiError, fetchUnitDocument } from "../api/ermsService";
@@ -8,21 +8,37 @@ import DocumentPanel from "../../../shared/components/DocumentPanel";
 import { useUnits } from "./useUnits";
 import { formatValue, groupFields, unitTheme } from "./unitTheme";
 import UnitUploadModal from "./UnitUploadModal";
+import UnitScanModal from "./UnitScanModal";
 
 const { Title, Text } = Typography;
 
 // ---------------------------------------------------------------------------
 // One Legal or Laboratory document: its fields as the unit's form groups
 // them, the scan (view only), and the other documents on the same docket.
+//
+// On its own page (`/erms/:unit/documents/:serialNo`) or embedded in a dialog
+// over the document list (`unit` + `serialNo` + `embedded`), as Records
+// does. Embedded, a link to another document hands its serial to
+// `onOpenDocument` instead of navigating, so the dialog follows it.
 // ---------------------------------------------------------------------------
 
-const UnitDocumentDetail = () => {
-  const { unit, serialNo } = useParams();
+const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = false, onOpenDocument }) => {
+  const params = useParams();
+  const unit = unitProp || params.unit;
+  const serialNo = serialProp || params.serialNo;
   const navigate = useNavigate();
+  const pageOf = (serial) => `/universe/erms/${unit}/documents/${encodeURIComponent(serial)}`;
+  const docLink = (serial) =>
+    embedded && onOpenDocument ? (
+      <Typography.Link onClick={() => onOpenDocument(serial)}>{serial}</Typography.Link>
+    ) : (
+      <Link to={pageOf(serial)}>{serial}</Link>
+    );
   const theme = unitTheme(unit);
   const { unit: unitOf } = useUnits();
   const unitConfig = unitOf(unit);
   const [editing, setEditing] = useState(false);
+  const [filingScan, setFilingScan] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["erms", "unit", unit, "document", serialNo],
@@ -38,11 +54,14 @@ const UnitDocumentDetail = () => {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
+      {/* Embedded, the dialog's close button sits in this row's top-right corner. */}
+      <Space style={{ width: "100%", justifyContent: "space-between", paddingRight: embedded ? 36 : 0 }} wrap>
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/universe/erms/${unit}/documents`)}>
-            Documents
-          </Button>
+          {!embedded && (
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/universe/erms/${unit}/documents`)}>
+              Documents
+            </Button>
+          )}
           <Title level={4} style={{ margin: 0 }}>
             <span style={{ color: theme.accent, marginRight: 8 }}>{theme.icon}</span>
             {doc.serialNo}
@@ -51,9 +70,14 @@ const UnitDocumentDetail = () => {
           {doc.legacy && <Tag>from the desktop ERMS</Tag>}
         </Space>
         {unitConfig?.canFile && (
-          <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-            Edit details
-          </Button>
+          <Space>
+            <Button icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>
+              {doc.document?.fileName ? "Replace scan" : "Upload scan"}
+            </Button>
+            <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+              Edit details
+            </Button>
+          </Space>
         )}
       </Space>
 
@@ -64,7 +88,7 @@ const UnitDocumentDetail = () => {
           <Descriptions.Item label="File">{doc.document?.fileName || "—"}</Descriptions.Item>
           {doc.parentSerialNo && (
             <Descriptions.Item label="Attached to">
-              <Link to={`/universe/erms/${unit}/documents/${encodeURIComponent(doc.parentSerialNo)}`}>{doc.parentSerialNo}</Link>
+              {docLink(doc.parentSerialNo)}
             </Descriptions.Item>
           )}
         </Descriptions>
@@ -84,6 +108,15 @@ const UnitDocumentDetail = () => {
       </Card>
 
       <Card size="small" title="Scanned document">
+        {!doc.document?.fileName && unitConfig?.canFile && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="No scan is filed for this document"
+            action={<Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>Upload scan</Button>}
+          />
+        )}
         <DocumentPanel serialNo={doc.serialNo} fileName={doc.document?.fileName} unit={unit} />
       </Card>
 
@@ -95,7 +128,7 @@ const UnitDocumentDetail = () => {
             pagination={false}
             dataSource={data.related}
             columns={[
-              { title: "Serial", dataIndex: "serialNo", render: (s) => <Link to={`/universe/erms/${unit}/documents/${encodeURIComponent(s)}`}>{s}</Link> },
+              { title: "Serial", dataIndex: "serialNo", render: (s) => docLink(s) },
               { title: "Type", dataIndex: "docTypeLabel", render: (v, r) => <Tag color={theme.color}>{v || r.docType}</Tag> },
               { title: "Filed", dataIndex: "createdAt", render: (v) => formatValue({ type: "date" }, v) },
               { title: "File", dataIndex: ["document", "fileName"], ellipsis: true },
@@ -105,6 +138,7 @@ const UnitDocumentDetail = () => {
       )}
 
       <UnitUploadModal unit={unit} unitConfig={unitConfig} open={editing} document={doc} onClose={() => setEditing(false)} />
+      <UnitScanModal unit={unit} unitConfig={unitConfig} open={filingScan} document={doc} onClose={() => setFilingScan(false)} />
     </Space>
   );
 };

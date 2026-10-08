@@ -373,7 +373,7 @@ const DatasetPage = () => {
           <>
             <Space wrap style={{ marginBottom: 12 }}>
               {dataset.sheets.length > 1 && (
-                <Select
+                <Select placeholder="Sheet"
                   value={sheet}
                   onChange={(v) => {
                     setSheet(v);
@@ -471,7 +471,7 @@ const DatasetPage = () => {
         <Form form={form} layout="vertical" onFinish={save} style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: 8 }}>
           {(currentSheet?.columns || []).map((c) => (
             <Form.Item key={c} name={c} label={c} style={{ marginBottom: 10 }}>
-              <Input allowClear />
+              <Input placeholder={c} allowClear />
             </Form.Item>
           ))}
         </Form>

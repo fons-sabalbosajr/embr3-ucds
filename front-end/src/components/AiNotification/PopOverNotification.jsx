@@ -7,15 +7,25 @@ import {
   Spin, // Import Spin for loading indicator
   Collapse,
   Button,
+  Empty,
   Modal,
   Tabs,
+  Tag,
+  Typography,
 } from "antd";
 import {
   BellOutlined,
   CaretRightFilled,
   CaretLeftFilled,
+  ExclamationCircleOutlined,
+  FileExclamationOutlined,
+  MailOutlined,
+  ReloadOutlined,
   SettingOutlined,
+  UserAddOutlined,
+  FileSearchOutlined,
 } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
 // Known boundary debt: a shared notification popover opens a UCDS screen.
 // Tracked in docs/UNIFICATION-PLAN.md.
@@ -25,7 +35,17 @@ import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import "./popovernotification.css";
 
 const { Panel } = Collapse;
-const { TabPane } = Tabs;
+
+// An action item's icon and colour, by kind: what it is at a glance, with the
+// words beside it so colour never carries the meaning alone.
+const ITEM_LOOK = {
+  "erms-access": [FileSearchOutlined, "gold"],
+  "erms-message": [MailOutlined, "blue"],
+  "erms-review": [ExclamationCircleOutlined, "red"],
+  "erms-legal-scan": [FileExclamationOutlined, "orange"],
+  "erms-lab-scan": [FileExclamationOutlined, "orange"],
+  "admin-signup": [UserAddOutlined, "green"],
+};
 
 // Define prefixToProvince outside the component to make it a stable constant
 const prefixToProvince = {
@@ -40,11 +60,16 @@ const prefixToProvince = {
 
 const NotificationsPopover = ({
   notifications = [],
+  ermsNotifications = [],
   theme,
   isLoading, // Prop from Universe.jsx
   currentUser,
   refreshNotifications,
+  domains = [],
 }) => {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -63,14 +88,19 @@ const NotificationsPopover = ({
   );
   const [refreshTrigger, setRefreshTrigger] = useState("initial"); // 'initial', 'archive'
 
-  // Determine which province prefixes the user has "readWrite" access to
-  const allowedReadWriteProvincesPrefixes = useMemo(() => {
+  const canSeeAllNotifications = ["developer", "admin"].includes(String(currentUser?.role || "").toLowerCase());
+
+  // Determine which province prefixes the user can see. Developers and legacy
+  // administrators keep the full notification stream; end users get only the
+  // provinces their account can view or edit.
+  const allowedNotificationPrefixes = useMemo(() => {
+    if (canSeeAllNotifications) return Object.keys(prefixToProvince);
     if (!currentUser?.provinceStringPermissions) return [];
     const prefixes = [];
     for (const [provinceNameKey, permission] of Object.entries(
       currentUser.provinceStringPermissions
     )) {
-      if (permission === "readWrite") {
+      if (permission === "readWrite" || permission === "view") {
         for (const [prefix, name] of Object.entries(prefixToProvince)) {
           // Normalize both names for comparison (e.g., "Nueva Ecija" vs "nuevaEcija")
           if (
@@ -84,7 +114,7 @@ const NotificationsPopover = ({
       }
     }
     return prefixes;
-  }, [currentUser?.provinceStringPermissions, prefixToProvince]);
+  }, [canSeeAllNotifications, currentUser?.provinceStringPermissions]);
 
   useEffect(() => {
     if (isLoading) {
@@ -106,32 +136,32 @@ const NotificationsPopover = ({
       // Defer heavy processing to allow UI to update (e.g., show "Processing..." spinner)
       const timerId = setTimeout(() => {
         if (refreshTrigger === "initial") {
-          // Process Notifications (Missing Data Issues)
-          const localProvinceFilteredDataIssues = notifications
-            .filter((notification) => typeof notification === "string")
-            .filter((notificationString) => {
-              const id_no = notificationString.split(" - ")[0];
+          // Process Notifications (Missing Data Issues). The register check
+          // arrives grouped: one entry per establishment with the numbers of
+          // the fields it lacks (see Universe.jsx). The labels are looked up
+          // only for the page on show, not for all 17,000 records at once.
+          // Plain strings ("ID - Missing 'X'") are still understood.
+          const localGroupedNotifications = {};
+          for (const n of notifications) {
+            if (n && typeof n === "object" && n.id_no && Array.isArray(n.missing)) {
+              const idPrefix = String(n.id_no).split("-")[0]?.toUpperCase();
+              if (!allowedNotificationPrefixes.includes(idPrefix)) continue;
+              localGroupedNotifications[n.id_no] = {
+                province: prefixToProvince[idPrefix] || "Unknown Province",
+                issues: n.missing,
+                fields: n.fields,
+              };
+            } else if (typeof n === "string") {
+              const [id_no, issue] = n.split(" - ");
               const idPrefix = id_no.split("-")[0]?.toUpperCase();
-              return allowedReadWriteProvincesPrefixes.includes(idPrefix);
-            });
-
-          const localGroupedNotifications =
-            localProvinceFilteredDataIssues.reduce(
-              (acc, notificationString) => {
-                const parts = notificationString.split(" - ");
-                const id_no = parts[0];
-                const issue = parts[1];
-                const idPrefix = id_no.split("-")[0]?.toUpperCase();
-                const province =
-                  prefixToProvince[idPrefix] || "Unknown Province";
-                if (!acc[id_no]) {
-                  acc[id_no] = { province, issues: [] };
-                }
-                acc[id_no].issues.push(issue);
-                return acc;
-              },
-              {}
-            );
+              if (!allowedNotificationPrefixes.includes(idPrefix)) continue;
+              const entry = (localGroupedNotifications[id_no] ||= {
+                province: prefixToProvince[idPrefix] || "Unknown Province",
+                issues: [],
+              });
+              entry.issues.push(issue);
+            }
+          }
           setProcessedGroupedNotifications(localGroupedNotifications);
           setIsProcessingNotifications(false); // Notifications processing done
         }
@@ -146,7 +176,7 @@ const NotificationsPopover = ({
           .filter((dup) => {
             return dup.idNos.some((idNo) => {
               const idPrefix = String(idNo).split("-")[0]?.toUpperCase();
-              return allowedReadWriteProvincesPrefixes.includes(idPrefix);
+              return allowedNotificationPrefixes.includes(idPrefix);
             });
           })
           .map((dup) => ({
@@ -174,7 +204,7 @@ const NotificationsPopover = ({
   }, [
     notifications,
     isLoading,
-    allowedReadWriteProvincesPrefixes,
+    allowedNotificationPrefixes,
     refreshTrigger,
     prefixToProvince,
   ]);
@@ -323,11 +353,14 @@ const NotificationsPopover = ({
           <List
             dataSource={[...paginatedKeys]
               .map((key) => {
+                const entry = processedGroupedNotifications[key];
                 return {
                   id_no: key,
-                  province:
-                    processedGroupedNotifications[key]?.province || "Unknown",
-                  issues: processedGroupedNotifications[key]?.issues || [],
+                  province: entry?.province || "Unknown",
+                  // Field numbers become their labels here, for this page only.
+                  issues: (entry?.issues || []).map((i) =>
+                    typeof i === "number" ? `Missing '${entry.fields?.[i] ?? i}'` : i
+                  ),
                 };
               })
               .sort((a, b) => {
@@ -579,32 +612,86 @@ const NotificationsPopover = ({
     </div>
   );
 
-  const messagesContent = (
-    <div style={{ maxHeight: "700px", overflowY: "auto" }}>
-      {isLoading ? ( // Messages don't have separate client-side processing for now
-        <div style={{ textAlign: "center", padding: "20px" }}>
-          <Spin tip="Fetching data..." />
-        </div>
+  // The action items, grouped as the bell shows them.
+  const actionGroup = (group) => (
+    <div className="notifications-popover-panel">
+      {ermsNotifications.filter((i) => i.group === group).length ? (
+        <List
+          size="small"
+          dataSource={ermsNotifications.filter((i) => i.group === group)}
+          renderItem={(item) => {
+            const [Icon, color] = ITEM_LOOK[item.type] || [BellOutlined, "default"];
+            return (
+              <List.Item
+                className="notification-action-item"
+                style={{ cursor: "pointer", padding: "10px 8px", borderRadius: 8 }}
+                onClick={() => {
+                  setOpen(false);
+                  navigate(item.href);
+                }}
+                actions={[<Tag key="n" color={color} style={{ marginInlineEnd: 0 }}>{item.count > 999 ? "999+" : item.count}</Tag>]}
+              >
+                <List.Item.Meta
+                  avatar={<Icon style={{ fontSize: 18, marginTop: 3 }} />}
+                  title={<Typography.Text strong style={{ fontSize: 13 }}>{item.title}</Typography.Text>}
+                  description={<Typography.Text type="secondary" style={{ fontSize: 12 }}>{item.description}</Typography.Text>}
+                />
+              </List.Item>
+            );
+          }}
+        />
       ) : (
-        <p style={{ fontSize: "12px", textAlign: "center" }}>
-          No messages available.
-        </p>
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing waiting for you here." />
       )}
     </div>
   );
 
+  // Only the areas this account works in. The Developer holds every domain
+  // and unit, so sees every tab; a Legal officer sees ERMS alone; a Planning
+  // encoder sees the register.
+  const hasUcds = domains.includes("ucds");
+  const hasErms = domains.includes("erms");
+  const hasAccounts = ermsNotifications.some((i) => i.group === "Accounts");
+  const registerCount = groupedKeys.length;
+  const duplicateCount = processedComputedWarnings.length;
+  const ermsCount = ermsNotifications.filter((i) => i.group === "ERMS").length;
+  const label = (text, n) => (
+    <span>
+      {text}
+      {n ? <Badge count={n} size="small" overflowCount={99} style={{ marginInlineStart: 6 }} /> : null}
+    </span>
+  );
+  const tabItems = [
+    hasErms && { key: "erms", label: label("ERMS", ermsCount), children: actionGroup("ERMS") },
+    hasUcds && { key: "register", label: label("Register", registerCount), children: notificationsContent },
+    hasUcds && { key: "duplicates", label: label("Duplicates", duplicateCount), children: warningsContent },
+    hasAccounts && { key: "accounts", label: label("Accounts", ermsNotifications.filter((i) => i.group === "Accounts").length), children: actionGroup("Accounts") },
+  ].filter(Boolean);
+  // Open on the first tab with something in it.
+  const firstBusy = tabItems.find((t) => (t.key === "erms" ? ermsCount : t.key === "register" ? registerCount : t.key === "duplicates" ? duplicateCount : 1))?.key;
+  const activeTab = tabItems.some((t) => t.key === tab) ? tab : firstBusy || tabItems[0]?.key;
+  const total = registerCount + duplicateCount + ermsNotifications.length;
+  const busy = isLoading || isProcessingNotifications || isProcessingWarnings;
+
   const popoverContent = (
-    <Tabs defaultActiveKey="1" size="small" style={{ width: "300px" }}>
-      <TabPane tab="Notifications" key="1">
-        {/* {notificationsContent} */}
-      </TabPane>
-      <TabPane tab="Warnings" key="2">
-        {warningsContent}
-      </TabPane>
-      <TabPane tab="Messages" key="3">
-        {messagesContent}
-      </TabPane>
-    </Tabs>
+    <div style={{ width: 380 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 6 }}>
+        <div>
+          <Typography.Text strong style={{ fontSize: 15 }}>Notifications</Typography.Text>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              {canSeeAllNotifications ? "Everything across the system" : "For what your account can act on"}
+            </Typography.Text>
+          </div>
+        </div>
+        <Button size="small" type="text" icon={<ReloadOutlined spin={busy} />} onClick={() => refreshNotifications?.()} aria-label="Refresh notifications" />
+      </div>
+      {tabItems.length ? (
+        <Tabs size="small" activeKey={activeTab} onChange={setTab} items={tabItems} />
+      ) : (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No notifications for your account." />
+      )}
+    </div>
   );
 
   return (
@@ -613,8 +700,9 @@ const NotificationsPopover = ({
         content={popoverContent}
         trigger="click"
         placement="bottomRight"
-        overlayStyle={{ padding: 0 }}
-        destroyTooltipOnHide
+        open={open}
+        onOpenChange={setOpen}
+        destroyOnHidden
         getPopupContainer={() => document.body}
       >
         {/* Wrap trigger in a native element so Popover can attach a ref without findDOMNode */}
@@ -622,10 +710,10 @@ const NotificationsPopover = ({
           {/* Ant Design's own badge: red pill, white count, overflow at 99+,
               nothing while the counts are still being worked out. */}
           <Badge
-            count={isLoading || isProcessingNotifications || isProcessingWarnings ? 0 : groupedKeys.length + processedComputedWarnings.length}
+            count={busy ? 0 : total}
             overflowCount={99}
             offset={[-4, 4]}
-            title={`${groupedKeys.length + processedComputedWarnings.length} notification(s)`}
+            title={`${total} notification${total === 1 ? "" : "s"}`}
           >
             <button type="button" aria-label="Notifications" className="header-control" style={{ cursor: "pointer" }}>
               <BellOutlined style={{ fontSize: 16 }} />

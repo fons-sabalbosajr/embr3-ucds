@@ -16,17 +16,44 @@ if (!mongoUri) {
 const { configureDns, resilientLookup } = require('./dns');
 configureDns();
 
+// Atlas always wants TLS. A local server (the test database, see
+// tests/setup.js) does not offer it unless the URI asks.
+const wantsTls = /^mongodb\+srv:/i.test(mongoUri) || /[?&](tls|ssl)=true/i.test(mongoUri);
+
+// zstd and snappy are optional packages the driver loads only when a server
+// picks them. Offering one that is not installed fails every command the
+// moment a server accepts it — Atlas has not so far, MongoDB 7 does — so only
+// what is installed is offered. zlib is built into Node.
+const installed = (pkg) => {
+  try {
+    require.resolve(pkg);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const compressors = [
+  installed('@mongodb-js/zstd') && 'zstd',
+  installed('snappy') && 'snappy',
+  'zlib',
+].filter(Boolean);
+
 const client = new MongoClient(mongoUri, {
-  ssl: true,
+  tls: wantsTls,
   maxPoolSize: Number(process.env.MONGO_MAX_POOL) || 50,
   minPoolSize: 5,
   maxIdleTimeMS: 60_000,
   serverSelectionTimeoutMS: 10_000,
-  compressors: ['zstd', 'snappy', 'zlib'],
+  compressors,
   lookup: resilientLookup,
 });
 
-let db; // universe-db
+// The application database. Production is `universe-db`; the test suite
+// points MONGO_URI and MONGO_DB_NAME at its own copy (see tests/setup.js) so
+// a test run cannot change what staff are working with.
+const DB_NAME = String(process.env.MONGO_DB_NAME || 'universe-db').trim();
+
+let db;
 
 // Named collection handles (populated after connect)
 const collections = {};
@@ -34,7 +61,7 @@ const collections = {};
 async function connectToMongo() {
   if (db) return { db, client, collections };
   await client.connect();
-  db = client.db('universe-db');
+  db = client.db(DB_NAME);
 
   // Initialize commonly used collections
   collections.users = db.collection('users');
@@ -67,4 +94,4 @@ function getDb() {
   return db;
 }
 
-module.exports = { connectToMongo, getDb, collections, client, ObjectId };
+module.exports = { connectToMongo, getDb, collections, client, ObjectId, DB_NAME };

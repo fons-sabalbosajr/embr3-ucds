@@ -52,3 +52,26 @@
 .warnings-popover::-webkit-scrollbar {
   display: none; /* Safari and Chrome */
 }
+
+.notifications-popover-panel {
+  max-height: 440px;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.notification-card {
+  border-radius: 10px;
+}
+
+.notification-card-dark {
+  background: #1f1f1f;
+  border-color: #3a3a3a;
+}
+/* An action item in the bell: the whole row opens it. */
+.notification-action-item {
+  transition: background 0.15s ease;
+}
+
+.notification-action-item:hover {
+  background: rgba(127, 127, 127, 0.1);
+}

@@ -79,7 +79,7 @@ const MenuItemModal = ({ open, year, item, parent, folders = [], onClose }) => {
           </Form.Item>
         )}
         <Form.Item name="parent" label="Where">
-          <Select options={placeOptions} />
+          <Select placeholder="Choose where it goes" options={placeOptions} />
         </Form.Item>
         {!isEdit && (
           <Typography.Text type="secondary">

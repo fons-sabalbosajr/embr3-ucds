@@ -1,0 +1,36 @@
+/* Settings › General: full width, one setting per row — what it is on the
+   left, the control on the right — with room between rows. */
+
+.general-settings-intro {
+  padding: 8px 0 4px;
+}
+
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 340px) minmax(0, 1fr);
+  gap: 16px 48px;
+  align-items: start;
+  padding: 24px 4px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+.settings-row-control {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+@media (max-width: 860px) {
+  .settings-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 20px 0;
+  }
+}

@@ -1,5 +1,6 @@
 const { connectToMongo, collections } = require('../config/db');
 const { normalizeKeys, PROVINCE_KEYS } = require('./provinces');
+const shortCache = require('../shared/services/shortCache');
 
 // ---------------------------------------------------------------------------
 // Year containers are data, not constants. Adding 2028 means inserting one
@@ -8,10 +9,20 @@ const { normalizeKeys, PROVINCE_KEYS } = require('./provinces');
 
 const BASELINE_YEAR = 2025; // the dataset that existed before year containers
 
+// Every year-scoped request checks the container twice (may this user still
+// enter it, and which provinces does it cover) — two reads per request, for
+// documents that change a few times a year. Kept for 30 seconds; every change
+// below clears them. Callers must treat what they get as read-only.
+const YEARS_CACHE = 'years:';
+const YEARS_TTL = 30 * 1000;
+const yearsChanged = () => shortCache.invalidate(YEARS_CACHE);
+
 async function listYears({ includeArchived = false } = {}) {
-  await connectToMongo();
-  const filter = includeArchived ? {} : { status: 'active' };
-  return collections.yearContainers.find(filter).sort({ year: -1 }).toArray();
+  return shortCache.cached(`${YEARS_CACHE}list:${includeArchived}`, YEARS_TTL, async () => {
+    await connectToMongo();
+    const filter = includeArchived ? {} : { status: 'active' };
+    return collections.yearContainers.find(filter).sort({ year: -1 }).toArray();
+  });
 }
 
 async function listYearNumbers(options) {
@@ -19,10 +30,12 @@ async function listYearNumbers(options) {
 }
 
 async function getYear(year) {
-  await connectToMongo();
   const n = Number(year);
   if (!Number.isInteger(n)) return null;
-  return collections.yearContainers.findOne({ year: n });
+  return shortCache.cached(`${YEARS_CACHE}one:${n}`, YEARS_TTL, async () => {
+    await connectToMongo();
+    return collections.yearContainers.findOne({ year: n });
+  });
 }
 
 /**
@@ -75,6 +88,7 @@ async function createYear({ year, label, description, provinces, createdBy }) {
     createdBy: createdBy || null,
   };
   await collections.yearContainers.insertOne(doc);
+  yearsChanged();
   return doc;
 }
 
@@ -92,6 +106,7 @@ async function setYearProvinces(year, provinces) {
     { $set: { provinces: keys, updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
+  yearsChanged();
   return result && (result.value || result);
 }
 
@@ -112,6 +127,7 @@ async function setYearFlags(year, { hidden, locked }) {
     { $set: set },
     { returnDocument: 'after' }
   );
+  yearsChanged();
   return result && (result.value || result);
 }
 
@@ -128,6 +144,7 @@ async function setYearStatus(year, status) {
     { $set: { status, updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
+  yearsChanged();
   return result && (result.value || result);
 }
 
@@ -143,6 +160,7 @@ async function ensureSeeded() {
     createdAt: new Date(),
     createdBy: 'system',
   });
+  yearsChanged();
 }
 
 module.exports = {

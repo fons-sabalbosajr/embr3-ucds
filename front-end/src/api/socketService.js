@@ -3,17 +3,21 @@ import { io } from "socket.io-client";
 import { SOCKET_URL } from "../config/api";
 let socket = null;
 
-export const initializeSocket = (options = { withCredentials: true }) => {
-  if (socket && socket.connected) {
-    // console.log("[SocketService] Socket already initialized and connected.");
+export const initializeSocket = (options = {}) => {
+  // One connection per tab. A socket still connecting (or reconnecting) is
+  // reused: tearing it down and starting another — what this did whenever a
+  // second screen asked before the first connection finished — meant several
+  // connections per page load and a stream of polling requests to match.
+  if (socket && (socket.connected || socket.active)) {
     return socket;
   }
   if (socket) {
-    // console.log("[SocketService] Socket exists but not connected, re-initializing.");
     socket.disconnect();
   }
-  // console.log("[SocketService] Initializing new socket connection.");
-  socket = io(SOCKET_URL, options);
+  // WebSocket first: one long-lived connection rather than long-polling
+  // requests every few seconds. Polling stays as the fallback for a network
+  // that blocks WebSockets.
+  socket = io(SOCKET_URL, { withCredentials: true, transports: ["websocket", "polling"], ...options });
 
   socket.on("connect", () => {
     //console.log("[SocketService] Connected to socket server");

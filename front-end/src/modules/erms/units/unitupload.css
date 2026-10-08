@@ -1,0 +1,39 @@
+/* File a document (Legal, Laboratory): what the document is, on one row
+   above the tabs; the tabs' fields on a grid with room between them. */
+
+.unit-upload-head {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) auto;
+  gap: 0 24px;
+  align-items: start;
+  padding: 4px 0 0;
+}
+
+.unit-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 4px 24px;
+  /* Tabs of different lengths should not make the dialog jump. */
+  min-height: 240px;
+  padding-top: 8px;
+}
+
+.unit-upload-scan {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 24px;
+  align-items: start;
+  min-height: 240px;
+  padding-top: 8px;
+}
+
+.unit-upload-scan .ant-upload-wrapper .ant-upload-drag {
+  padding: 24px 0;
+}
+
+@media (max-width: 820px) {
+  .unit-upload-head,
+  .unit-upload-scan {
+    grid-template-columns: 1fr;
+  }
+}

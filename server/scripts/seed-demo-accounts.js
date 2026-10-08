@@ -109,7 +109,7 @@ const password = () =>
   if (process.argv.includes('--remove')) {
     const users = await collections.users.find({ username: { $in: usernames } }).toArray();
     for (const u of users) {
-      await client.db().collection('sessions').deleteMany({ 'session.user.userId': String(u._id) });
+      await client.db(process.env.MONGO_DB_NAME || undefined).collection('sessions').deleteMany({ 'session.user.userId': String(u._id) });
       await collections.loginStatus.deleteMany({ $or: [{ userId: u._id }, { username: u.username }] });
     }
     const r = await collections.users.deleteMany({ username: { $in: usernames } });

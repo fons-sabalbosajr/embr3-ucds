@@ -18,6 +18,8 @@ export const DataProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [currentProvince, setCurrentProvince] = useState(""); // Default province
   const loaded = useRef(false);
+  // The request in flight per province, so overlapping callers share it.
+  const inFlight = useRef({});
 
  const fetchData = useCallback(
   async (province, forceReload = false) => {
@@ -38,15 +40,23 @@ export const DataProvider = ({ children }) => {
         return dataCache[province];
       }
 
-      const response = await axios.get(
-        `${API_BASE_URL}/api/get-province-data`,
-        {
-          params: { province, _nocache: Date.now() },
-          headers: {
-            "Cache-Control": "no-cache", // Force HTTP no-cache
-          },
-        }
-      );
+      // One request per province at a time. The screen, this provider's own
+      // effect and a reload could each ask for the same province before the
+      // first answer arrived, and each fetched the whole province — 2 to 8 MB
+      // — again. Callers that overlap now share the request in flight.
+      if (!inFlight.current[province]) {
+        inFlight.current[province] = axios
+          .get(`${API_BASE_URL}/api/get-province-data`, {
+            params: { province, _nocache: Date.now() },
+            headers: {
+              "Cache-Control": "no-cache", // Force HTTP no-cache
+            },
+          })
+          .finally(() => {
+            delete inFlight.current[province];
+          });
+      }
+      const response = await inFlight.current[province];
 
       if (response.status >= 200 && response.status < 300) {
         const fetchedData = response.data;

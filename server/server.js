@@ -1,3 +1,10 @@
+// More worker threads than libuv's default of four, set before anything uses
+// the pool. Password checks (bcrypt) run there — a morning's worth of people
+// signing in at once queued four at a time — and so does file access to the
+// NAS, where one read stuck on an unreachable share holds a thread for tens
+// of seconds. With four threads, four such reads stalled every sign-in.
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || "16";
+
 const os = require("os");
 const http = require("http");
 const cron = require("node-cron");
@@ -26,6 +33,7 @@ async function connectWithRetry(attempt = 0) {
     await require("./shared/services/orgUnits").ensureIndexes();
     await require("./services/datasetService").ensureIndexes();
     await require("./services/menuItems").ensureIndexes();
+    await require("./services/signInHistory").ensureIndexes();
     const erms = require("./modules/erms");
     if (erms.isEnabled()) await erms.ensureIndexes();
   } catch (error) {
@@ -87,7 +95,15 @@ process.on("SIGINT", async () => {
 });
 
 const server = http.createServer(app);
+// Keep an idle browser connection open for a minute, not Node's default five
+// seconds. People pause longer than five seconds between screens, so each
+// click opened a new connection — and a request sent just as the server
+// closed an idle one failed outright. Headers must be allowed slightly longer.
+server.keepAliveTimeout = 65 * 1000;
+server.headersTimeout = 66 * 1000;
 const io = setupSocket(server, allowedOrigins);
+// Sign-ins and sign-outs reach open screens as they happen (services/presence.js).
+require("./services/presence").attach(io);
 // Watch the NAS bridge and push its state to open screens (see services/nasBridge.js).
 connectToMongo().then(() => require("./services/nasBridge").start(io)).catch((err) => console.warn("[NAS bridge] not started:", err.message));
 

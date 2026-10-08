@@ -276,7 +276,7 @@ const GenInfoAdd = ({
                   },
                 }}
               >
-                <TextArea
+                <TextArea placeholder="Built from the address fields"
                   value={fullAddress}
                   readOnly
                   rows={5}
@@ -319,7 +319,7 @@ const GenInfoAdd = ({
                       },
                     }}
                   >
-                    <Input
+                    <Input placeholder="e.g. 120.6200"
                       value={longitude}
                       onChange={(e) => isEditing && setLongitude(e.target.value)}
                       style={{
@@ -346,7 +346,7 @@ const GenInfoAdd = ({
                       },
                     }}
                   >
-                    <Input
+                    <Input placeholder="e.g. 15.0300"
                       value={latitude}
                       onChange={(e) => isEditing && setLatitude(e.target.value)}
                       style={{

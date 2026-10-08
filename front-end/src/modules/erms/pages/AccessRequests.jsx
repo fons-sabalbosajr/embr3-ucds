@@ -268,7 +268,7 @@ const AccessRequests = () => {
             {deciding.decision === "approved" && (
               <Space>
                 <Text>Open the document for</Text>
-                <Select
+                <Select placeholder="Duration"
                   value={duration}
                   onChange={setDuration}
                   style={{ width: 140 }}

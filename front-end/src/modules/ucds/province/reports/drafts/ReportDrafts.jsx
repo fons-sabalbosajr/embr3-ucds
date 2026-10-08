@@ -5,6 +5,7 @@ import { notification } from "../../../../../shared/feedback";
 import moment from "moment";
 import "./reportdrafts.css";
 import { API_BASE_URL } from "../../../../../config/api";
+import visibleInterval from "../../../../../shared/visibleInterval";
 
 const ReportDrafts = () => {
   const [drafts, setDrafts] = useState([]);
@@ -92,10 +93,8 @@ const ReportDrafts = () => {
 
   useEffect(() => {
     if (currentUser) {
-      const intervalId = setInterval(() => {
-        fetchDraftReports(); // Refresh reports every 15 seconds if user information is available
-      }, 15000);
-      return () => clearInterval(intervalId);
+      // Every 60 s while the tab is visible (was 15 s, hidden or not).
+      return visibleInterval(fetchDraftReports, 60000);
     }
   }, [currentUser]);
 

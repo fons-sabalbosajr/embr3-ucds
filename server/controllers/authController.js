@@ -17,6 +17,8 @@ const {
   ERMS_UNIT_LABELS,
 } = require('../services/authorization');
 const storageAccess = require('../services/storageAccess');
+const signInHistory = require('../services/signInHistory');
+const presence = require('../services/presence');
 const { userProvinceAccess, userProvinceKeys } = require('../services/provinces');
 const { tokenFor, beginFreshSession, COOKIE_NAME } = require('../middleware/sessionToken');
 
@@ -166,21 +168,27 @@ async function login(req, res) {
       }
     }
 
-    await collections.loginStatus.updateOne(
-      { userId: user._id },
-      { $set: {
-          isLoggedIn: true,
-          loginTime: new Date(),
-          name: user.name,
-          username: user.username,
-          division: user.division,
-          permission: user.permission,
+    // The three records of a sign-in are independent: written together, not
+    // one after another, so a person waits for the slowest rather than the sum.
+    await Promise.all([
+      collections.loginStatus.updateOne(
+        { userId: user._id },
+        { $set: {
+            isLoggedIn: true,
+            loginTime: new Date(),
+            name: user.name,
+            username: user.username,
+            division: user.division,
+            permission: user.permission,
+          },
         },
-      },
-      { upsert: true }
-    );
-
-    await collections.users.updateOne({ _id: user._id }, { $set: { status: 'online' } });
+        { upsert: true }
+      ),
+      collections.users.updateOne({ _id: user._id }, { $set: { status: 'online' } }),
+      signInHistory.record(req, user, 'sign-in'),
+    ]);
+    // Everyone's "who is online" list updates now, not at its next poll.
+    presence.changed({ username: user.username, name: user.name, online: true });
 
     return res.status(200).json({
       status: 'success',
@@ -348,13 +356,20 @@ async function me(req, res) {
     // an administrator made since — a province granted, a capability, the
     // unit — is brought into the session, rather than waiting for the next
     // sign-in. An account that no longer exists ends the session.
+    //
+    // Read once, and used for everything below (the unit, the theme): this
+    // was three reads of the same document per call. The session is replaced
+    // only when the account actually changed — assigning it every time made
+    // express-session write the session back on every load as well.
+    let account = null;
     if (req.session.user.userId && ObjectId.isValid(String(req.session.user.userId))) {
-      const account = await collections.users.findOne({ _id: new ObjectId(String(req.session.user.userId)) });
+      account = await collections.users.findOne({ _id: new ObjectId(String(req.session.user.userId)) });
       if (!account) {
         req.session.destroy(() => {});
         return res.status(401).json({ message: 'User not authenticated' });
       }
-      req.session.user = buildSessionPayload(account);
+      const fresh = buildSessionPayload(account);
+      if (JSON.stringify(fresh) !== JSON.stringify(req.session.user)) req.session.user = fresh;
     }
     const u = req.session.user;
     return res.status(200).json({
@@ -387,8 +402,7 @@ async function me(req, res) {
       // The ERMS unit ("System") on the account, read now so a change made by
       // the Developer a moment ago is already here; and every unit this
       // person may see (one for an ERMS User, all three for a Developer).
-      ...(await (async () => {
-        const account = await collections.users.findOne({ _id: new ObjectId(u.userId) }, { projection: { ermsUnit: 1, permission: 1 } });
+      ...(() => {
         const merged = { ...u, ermsUnit: account?.ermsUnit ?? u.ermsUnit, permission: account?.permission ?? u.permission };
         const unit = ermsUnitOf(merged);
         return {
@@ -398,10 +412,10 @@ async function me(req, res) {
           // No year container to choose: the shell hides the year switcher.
           skipYearSelect: isErmsEndUser(merged),
         };
-      })()),
+      })(),
       // The look this person chose, kept on the account so it follows them
       // to any device (see PUT /api/profile/theme).
-      theme: (await collections.users.findOne({ _id: new ObjectId(u.userId) }, { projection: { 'preferences.theme': 1 } }))?.preferences?.theme || null,
+      theme: account?.preferences?.theme || null,
     });
   } catch (error) {
     console.error('Error building /api/auth/me:', error);
@@ -415,10 +429,14 @@ async function logout(req, res) {
   try {
     const { collections } = await connectToMongo();
     const logoutTime = new Date();
-    await collections.loginStatus.updateOne(
-      { userId: new ObjectId(userId) },
-      { $set: { isLoggedIn: false, logoutTime } }
-    );
+    await Promise.all([
+      collections.loginStatus.updateOne(
+        { userId: new ObjectId(userId) },
+        { $set: { isLoggedIn: false, logoutTime } }
+      ),
+      signInHistory.record(req, req.session.user, 'sign-out'),
+    ]);
+    presence.changed({ username: req.session.user.username, name: req.session.user.name, online: false });
     // The cookie is cleared only when it names the session being ended. A tab
     // signing out by its own token leaves a cookie that belongs to another
     // tab's sign-in alone.

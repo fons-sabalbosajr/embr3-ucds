@@ -49,14 +49,39 @@ const DEFAULTS = {
   intervalSec: 30,
   timeoutMs: 4000,
   offlineMessage:
-    'The office server that connects this application to the NAS is switched off right now. NAS files are available on working days; please try again then.',
+    'The office computer that connects E-Universe to the file storage is turned off right now — after office hours, or because of a power interruption. Scanned documents will open again once it is back on. Everything else keeps working.',
 };
 
 // Said when the NAS itself does not answer — with no bridge configured, or
 // through a bridge that does. Reassures about the rest on purpose: people
 // who see "NAS not connected" assume the whole system is down.
+// Said to everyone, most of whom do not know what a NAS is: what happened,
+// in words they would use, the likely cause, and that the rest still works.
 const NAS_OFFLINE_MESSAGE =
-  'The NAS is not connected right now, so files stored on it cannot be opened. The database and everything else in the application keep working.';
+  'The office file storage is not responding right now — this happens during a power interruption or when the office internet is down. Scanned documents cannot be opened until it is back. Everything else in E-Universe keeps working.';
+
+// An answer slower than this, while still an answer, is reported as a slow
+// connection: scans will open, but slowly, and people should know why.
+const SLOW_MS = Number(process.env.NAS_SLOW_MS) || 1500;
+const SLOW_MESSAGE =
+  'The connection to the office file storage is slow right now, so scanned documents may take longer than usual to open.';
+
+// The previous default, saved into the configuration whenever the bridge
+// settings were saved. It is not anyone's own wording, so it gives way to
+// the plain default above rather than keeping its jargon on every screen.
+const OLD_DEFAULT_MESSAGE =
+  'The office server that connects this application to the NAS is switched off right now. NAS files are available on working days; please try again then.';
+const customMessage = (text) => {
+  const s = String(text || '').trim().slice(0, 400);
+  return s && s !== OLD_DEFAULT_MESSAGE ? s : null;
+};
+
+/** Whether the last probe found the NAS answering, but slowly. */
+async function connectionQuality() {
+  const last = await status();
+  const ms = last?.nas?.up ? last.nas.ms : null;
+  return { slow: ms !== null && ms > SLOW_MS, ms, message: ms !== null && ms > SLOW_MS ? SLOW_MESSAGE : null };
+}
 
 /** The NAS host named by the records share (\\host\share), if any. */
 function hostOfShare() {
@@ -113,7 +138,7 @@ function normalize(doc) {
     nasPort: clampInt(doc?.nasPort, 1, 65535, DEFAULTS.nasPort),
     intervalSec: clampInt(doc?.intervalSec, 10, 600, DEFAULTS.intervalSec),
     timeoutMs: clampInt(doc?.timeoutMs, 500, 20000, DEFAULTS.timeoutMs),
-    offlineMessage: String(doc?.offlineMessage || '').trim().slice(0, 400) || DEFAULTS.offlineMessage,
+    offlineMessage: customMessage(doc?.offlineMessage) || DEFAULTS.offlineMessage,
     updatedAt: doc?.updatedAt || null,
     updatedBy: doc?.updatedBy || null,
   };
@@ -304,6 +329,10 @@ async function announce() {
   broadcast();
 }
 
+// The last availability pushed to screens, as "active|reason".
+let announced = null;
+const keyOf = (payload) => `${payload?.active === true}|${payload?.reason || ''}|${payload?.slow === true}`;
+
 /** Push the current availability to sockets and in-process listeners. */
 async function broadcast() {
   let payload;
@@ -312,10 +341,32 @@ async function broadcast() {
   } catch {
     payload = { active: false, reason: 'bridge-offline' };
   }
+  announced = keyOf(payload);
   if (io) io.emit('nas:availability', payload);
   for (const fn of listeners) {
     try { fn(payload); } catch { /* listener's problem */ }
   }
+}
+
+/**
+ * Push again whenever the overall answer changes for any reason, not only
+ * when the NAS goes up or down: an activation window that starts or expires
+ * on its clock, the weekday schedule opening or closing, a change saved by
+ * another server process. Without this a screen learned of those only on its
+ * next poll. Runs after each probe.
+ */
+async function watchAvailability() {
+  let payload;
+  try {
+    payload = await require('./nasActivation').evaluate();
+  } catch {
+    return;
+  }
+  if (announced === null) {
+    announced = keyOf(payload); // first look after a start: nothing changed yet
+    return;
+  }
+  if (keyOf(payload) !== announced) await broadcast();
 }
 
 const onChange = (fn) => {
@@ -338,8 +389,9 @@ async function restart() {
   }
   // Tests drive probe() by hand; no timer, no boot probe.
   if (process.env.VITEST) return;
-  await probe().catch(() => {});
-  timer = setInterval(() => probe().catch(() => {}), cfg.intervalSec * 1000);
+  const tick = () => probe().then(watchAvailability).catch(() => {});
+  await tick();
+  timer = setInterval(tick, cfg.intervalSec * 1000);
   if (timer.unref) timer.unref();
 }
 
@@ -349,4 +401,4 @@ async function start(socketServer) {
   await restart();
 }
 
-module.exports = { read, save, probe, status, blocking, start, restart, broadcast, onChange, watched, DEFAULTS, NAS_OFFLINE_MESSAGE, COLLECTION, DOC_ID };
+module.exports = { read, save, probe, status, blocking, connectionQuality, start, restart, broadcast, watchAvailability, onChange, watched, DEFAULTS, NAS_OFFLINE_MESSAGE, SLOW_MS, COLLECTION, DOC_ID };

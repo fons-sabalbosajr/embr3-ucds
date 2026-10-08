@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Input, Popconfirm, Select, Space, Tooltip, Typography } from "antd";
+import { Alert, Button, Input, Popconfirm, Select, Space, Tooltip, Typography } from "antd";
 import { DeleteOutlined, FolderAddOutlined, FolderOpenOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
 import { createFolder, deleteFolder, describeApiError, fetchFolders } from "../api/ermsService";
+import { explainFileProblem } from "../../../shared/nasWords";
 
 const { Text } = Typography;
 
@@ -26,6 +27,11 @@ const { Text } = Typography;
 //
 // An empty folder made by mistake can be removed; nothing with documents in
 // it can. The choice is sent with the upload; left alone, the layout applies.
+//
+// The folders are read from the office file storage, so when it cannot be
+// reached — or opening and filing scans is switched off — there is nothing
+// to choose from. That used to show only as an empty list, which read as a
+// broken picker; it is now said plainly above the list, with what to do.
 // ---------------------------------------------------------------------------
 
 /** One level of folders: a list to choose from, a box to make one, a way to remove an empty one. */
@@ -137,7 +143,7 @@ const FolderPicker = ({ unit, province, date, hint, typeFolder, value, onChange,
   }, [value]);
 
   // The listing of the top level also tells us where it is on the share.
-  const { data: level } = useQuery({
+  const { data: level, error: levelError, isFetching: levelLoading, refetch: retryLevel } = useQuery({
     queryKey: ["erms", "folders", unit, { ...params, hint: hint || undefined }],
     queryFn: () => fetchFolders(unit, { ...params, hint: hint || undefined }),
     enabled: ready,
@@ -153,6 +159,32 @@ const FolderPicker = ({ unit, province, date, hint, typeFolder, value, onChange,
     );
   }
   if (level && level.applicable === false) return null;
+
+  // The storage could not be listed: say why, in words a clerk would use.
+  if (levelError && !level) {
+    const code = levelError?.response?.data?.code || (levelError?.response ? "NAS_UNREACHABLE" : "NETWORK");
+    const { type, message: why } = explainFileProblem(code, levelError?.response?.data?.message);
+    return (
+      <Alert
+        type={type}
+        showIcon
+        message="The folders cannot be shown right now"
+        description={
+          <Space direction="vertical" size={4}>
+            <span>{why}</span>
+            <span style={{ fontSize: 12 }}>
+              You can try again in a moment. Filing the scan also needs the file storage, so if this does not clear, save your work and file the scan later.
+            </span>
+          </Space>
+        }
+        action={
+          <Button size="small" icon={<ReloadOutlined />} loading={levelLoading} onClick={() => retryLevel()}>
+            Try again
+          </Button>
+        }
+      />
+    );
+  }
 
   const suggested = level?.suggested || null;
   const projectFolder = value || suggested || null;

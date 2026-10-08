@@ -55,7 +55,7 @@ const PSICCode = ({
     >
       <Paragraph>
         <strong>PSIC Code</strong>
-        <Input
+        <Input placeholder="Filled in automatically"
           value={psicCode}
           readOnly
           style={{

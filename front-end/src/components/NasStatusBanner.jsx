@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Typography } from "antd";
-import { DisconnectOutlined } from "@ant-design/icons";
+import { DisconnectOutlined, FieldTimeOutlined, WifiOutlined } from "@ant-design/icons";
 import { initializeSocket, getSocket } from "../api/socketService";
 import { API_BASE_URL } from "../config/api";
+import visibleInterval from "../shared/visibleInterval";
+import { OUTAGE_TITLES } from "../shared/nasWords";
 
 const { Text } = Typography;
 
@@ -17,9 +19,15 @@ const { Text } = Typography;
 // the database is reached over the internet, not through the office, so the
 // register, the records and the reports keep working.
 //
-// It shows only for the outage reasons (the NAS or the bridge to it not
-// answering). A schedule or a switch the Developer set is not an outage;
-// the Storage page explains those where they matter.
+// It shows for three things, in plain words (see shared/nasWords):
+//
+//   outage    the file storage, or the office computer that connects to it,
+//             not answering — a power interruption, the office internet
+//   slow      answering, but slowly: scans will take longer to open
+//   offline   this computer has lost its own internet connection
+//
+// A schedule or a switch the Developer set is not an outage; the screens
+// that open documents explain those where they matter.
 // ---------------------------------------------------------------------------
 
 const OUTAGE = new Set(["nas-offline", "bridge-offline"]);
@@ -39,6 +47,7 @@ const NasStatusBanner = () => {
         reason: payload.reason || null,
         message: payload.message || null,
         nextOpensAt: payload.nextOpensAt || null,
+        slow: payload.slow === true,
       });
     };
     const load = () =>
@@ -52,38 +61,72 @@ const NasStatusBanner = () => {
     socket?.on("nas:availability", apply);
     // After a reconnect the socket may have missed a change; ask again.
     socket?.on("connect", load);
-    const poll = setInterval(load, 60000);
+    // A fallback for a missed push; skipped while the tab is hidden (this
+    // banner is on every screen, for everyone).
+    const stopPolling = visibleInterval(load, 60000);
     return () => {
       cancelled.current = true;
       socket?.off("nas:availability", apply);
       socket?.off("connect", load);
-      clearInterval(poll);
+      stopPolling();
+    };
+  }, []);
+
+  // This computer's own connection, from the browser.
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
     };
   }, []);
 
   const outage = state && !state.active && OUTAGE.has(state.reason);
+  const kind = !online ? "offline" : outage ? state.reason : state?.active && state.slow ? "slow" : null;
   useEffect(() => {
-    if (!outage) setDismissed(null);
-  }, [outage]);
+    if (!kind) setDismissed(null);
+  }, [kind]);
 
-  if (!outage || dismissed === state.reason) return null;
+  if (!kind || dismissed === kind) return null;
+
+  if (kind === "offline") {
+    return (
+      <Alert
+        banner
+        type="error"
+        showIcon
+        icon={<WifiOutlined />}
+        className="nas-status-banner"
+        message={
+          <span>
+            <Text strong>No internet connection.</Text> This computer has lost its connection, so E-Universe cannot save or load anything right now. It will
+            carry on by itself when the connection is back.
+          </span>
+        }
+      />
+    );
+  }
 
   return (
     <Alert
       banner
-      type="warning"
+      type={kind === "slow" ? "info" : "warning"}
       showIcon
-      icon={<DisconnectOutlined />}
+      icon={kind === "slow" ? <FieldTimeOutlined /> : <DisconnectOutlined />}
       closable
-      onClose={() => setDismissed(state.reason)}
+      onClose={() => setDismissed(kind)}
       className="nas-status-banner"
       message={
         <span>
-          <Text strong>NAS not connected.</Text>{" "}
-          {state.message ||
-            "Files stored on the NAS cannot be opened right now. The database and everything else keep working."}
-          {state.nextOpensAt && (
-            <Text type="secondary"> Next available: {new Date(state.nextOpensAt).toLocaleString()}.</Text>
+          <Text strong>{OUTAGE_TITLES[kind] || "Scanned documents are unavailable."}</Text>{" "}
+          {state?.message ||
+            "Scanned documents cannot be opened right now. Everything else in E-Universe keeps working."}
+          {kind !== "slow" && state?.nextOpensAt && (
+            <Text type="secondary"> Expected back: {new Date(state.nextOpensAt).toLocaleString()}.</Text>
           )}
         </span>
       }

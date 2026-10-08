@@ -285,7 +285,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                   },
                 }}
               >
-                <TextArea
+                <TextArea placeholder="Built from the address fields"
                   value={fullAddress}
                   readOnly
                   rows={5}

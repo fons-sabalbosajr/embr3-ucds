@@ -77,12 +77,12 @@ async function main() {
 
   const client = new MongoClient(process.env.MONGO_URI);
   await client.connect();
-  const users = client.db().collection('users');
+  const users = client.db(process.env.MONGO_DB_NAME || undefined).collection('users');
   const names = defs.map((d) => d.username).filter(Boolean);
 
   if (drop) {
     const res = await users.deleteMany({ username: { $in: names } });
-    await client.db().collection('loginStatus').deleteMany({ username: { $in: names } });
+    await client.db(process.env.MONGO_DB_NAME || undefined).collection('loginStatus').deleteMany({ username: { $in: names } });
     console.log(`removed ${res.deletedCount} test account(s)`);
     await client.close();
     return;

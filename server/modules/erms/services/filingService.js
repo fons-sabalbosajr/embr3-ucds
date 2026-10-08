@@ -129,8 +129,29 @@ async function file(unitKey, docType, values, upload) {
   if (!unitCfg) return { ok: false, code: 'UNIT_UNKNOWN', message: 'Unknown unit.' };
   const check = await checkUpload(upload);
   if (!check.ok) return check;
+  return writeInto(unitCfg, directoryFor(unitCfg, docType, values), docType, upload);
+}
 
-  const dir = directoryFor(unitCfg, docType, values);
+/**
+ * File one upload in the folder another document is already in — an
+ * attachment beside the record it belongs to, as the desktop system filed
+ * them (FSN-0000206 Att-00012 sits in FSN-0000206's ECC Folder). The folder
+ * is taken from the stored path, so a record the desktop system filed under
+ * a hand-made project folder gets its attachment there, not in a new one.
+ * Returns { ok: false, code: 'NO_FOLDER' } when the stored path has none.
+ */
+async function fileBeside(unitKey, docType, storedPath, upload) {
+  const unitCfg = await config.unit(unitKey);
+  if (!unitCfg) return { ok: false, code: 'UNIT_UNKNOWN', message: 'Unknown unit.' };
+  const segments = String(nas.safeRelativePath(storedPath) || '').split('\\').filter(Boolean);
+  if (segments.length < 2) return { ok: false, code: 'NO_FOLDER', message: 'The record\'s document has no folder to file beside.' };
+  const check = await checkUpload(upload);
+  if (!check.ok) return check;
+  return writeInto(unitCfg, segments.slice(0, -1).join('\\'), docType, upload);
+}
+
+/** Write the bytes into `dir` on the unit's container and describe the result. */
+async function writeInto(unitCfg, dir, docType, upload) {
   const name = fileNameFor(docType, upload.originalname);
   const written = await nas.writeFile(unitCfg.container, dir, name, upload.buffer);
   if (!written.ok) {
@@ -158,4 +179,4 @@ async function file(unitKey, docType, values, upload) {
   };
 }
 
-module.exports = { yearRange, yearFor, folderFor, directoryFor, parentDirectoryFor, fileNameFor, checkUpload, file };
+module.exports = { yearRange, yearFor, folderFor, directoryFor, parentDirectoryFor, fileNameFor, checkUpload, file, fileBeside };

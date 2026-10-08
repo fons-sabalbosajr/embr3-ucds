@@ -77,11 +77,20 @@ async function evaluate(now = new Date()) {
     return { active: false, reason: 'expired', ...windowOf(state) };
   }
 
+  // Open — but say so when the files will be slow to come.
+  let quality = { slow: false, message: null };
+  try {
+    quality = await require('./nasBridge').connectionQuality();
+  } catch {
+    /* no probe yet: say nothing */
+  }
   return {
     active: true,
     reason: null,
     ...windowOf(state),
     remainingMs: state.endsAt ? Math.max(state.endsAt - now, 0) : null,
+    slow: quality.slow === true,
+    message: quality.message || undefined,
   };
 }
 
@@ -149,16 +158,17 @@ async function requireNasActive(req, res, next) {
       req.nasActivation = state;
       return next();
     }
+    // Read by staff, not technicians: what is happening and what to do.
     const messages = {
-      'not-configured': 'The records share is not configured on this server.',
-      'disabled-by-environment': 'Document access is switched off for this deployment.',
-      disabled: 'Document access is currently switched off.',
-      'not-yet': 'Document access is scheduled to start later.',
-      expired: 'The document access window has expired.',
-      'master-off': 'The NAS is switched off for everyone.',
-      'outside-schedule': 'NAS files are not available at this time.',
-      'bridge-offline': 'The server that connects to the NAS is switched off right now.',
-      'nas-offline': 'The NAS is not answering through the bridge server right now.',
+      'not-configured': 'Scanned documents are not set up on this system yet. Please tell the system administrator.',
+      'disabled-by-environment': 'Opening scanned documents is turned off on this system. Please tell the system administrator.',
+      disabled: 'Opening scanned documents is turned off at the moment. Ask the system administrator to turn it on.',
+      'not-yet': 'Opening scanned documents is scheduled to start later.',
+      expired: 'Opening scanned documents is turned off at the moment (the access period has ended). Ask the system administrator to turn it on again.',
+      'master-off': 'Opening scanned documents is turned off for everyone at the moment.',
+      'outside-schedule': 'Scanned documents cannot be opened at this time of day. Please try again during office hours.',
+      'bridge-offline': 'The office computer that connects to the file storage is turned off right now (after office hours or a power interruption). Please try again later.',
+      'nas-offline': 'The office file storage is not responding right now — it may be a power interruption or the office internet. Please try again in a few minutes.',
     };
     return res.status(503).json({
       code: 'NAS_INACTIVE',

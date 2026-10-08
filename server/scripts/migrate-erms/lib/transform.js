@@ -19,6 +19,11 @@ const PERMIT_TYPES = [
   { code: 'ecc-amended', match: /environmental compliance certificate\s*\(\s*amend/i, label: 'ECC (Amended)' },
   { code: 'cnc', match: /certificate of non-?coverage/i, label: 'Certificate of Non-Coverage' },
   { code: 'hw-generator', match: /hazardous waste generator/i, label: 'HW Generator Registration' },
+  // Offered by the desktop system's menu (see its vwTotalUploadRecords view).
+  { code: 'pto', match: /permit to operate/i, label: 'Permit to Operate' },
+  { code: 'dp', match: /discharge permit/i, label: 'Discharge Permit' },
+  { code: 'luc', match: /land use conversion/i, label: 'Land Use Conversion' },
+  { code: 'coa', match: /certificate of accreditation/i, label: 'Certificate of Accreditation' },
 ];
 
 function permitTypeOf(raw) {
@@ -125,6 +130,7 @@ function transformRow(row, index) {
       city: clean(row.City),
       barangay: clean(row.Barangay),
       street: clean(row.Street),
+      mailingAddress: clean(row.Mailing_Address),
       lat,
       long,
     },

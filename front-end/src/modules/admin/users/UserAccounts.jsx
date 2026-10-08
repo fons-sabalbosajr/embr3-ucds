@@ -29,6 +29,7 @@ import { accountType, accountTypeLabel } from "../../../shared/accountTypes";
 import { fetchCurrentUser } from "../../../api/universeService";
 import "./useraccount.css";
 import { API_BASE_URL } from "../../../config/api";
+import visibleInterval from "../../../shared/visibleInterval";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -80,7 +81,9 @@ const UserAccounts = ({ theme = "dark" }) => {
   const [selectedAccessUser, setSelectedAccessUser] = useState(null);
   const [isAccountPermissionVisible, setAccountPermissionVisible] =
     useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(1000);
+  // 30 s while the tab is visible. It was 1 s for both lists: two queries a
+  // second for as long as the screen stayed open.
+  const [refreshInterval] = useState(30000);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [isEditAccessModalOpen, setEditAccessModalOpen] = useState(false);
 
@@ -344,8 +347,7 @@ const UserAccounts = ({ theme = "dark" }) => {
 
   useEffect(() => {
     fetchData();
-    const intervalId = setInterval(fetchData, refreshInterval);
-    return () => clearInterval(intervalId);
+    return visibleInterval(fetchData, refreshInterval);
   }, [pagination.current, pagination.pageSize, refreshInterval]);
 
   useEffect(() => {
@@ -363,11 +365,10 @@ const UserAccounts = ({ theme = "dark" }) => {
   }, [userData]);
 
   useEffect(() => {
-    const intervalId = setInterval(async () => {
+    return visibleInterval(async () => {
       const data = await fetchSignUpUsers();
       setSignUpUsers(data);
     }, refreshInterval);
-    return () => clearInterval(intervalId);
   }, [refreshInterval, pagination.current, pagination.pageSize]);
 
   useEffect(() => {
@@ -673,7 +674,7 @@ const UserAccounts = ({ theme = "dark" }) => {
         };
 
         return (
-          <Select
+          <Select placeholder="Status"
             defaultValue={status}
             style={{ width: 120 }}
             onChange={handleChangeStatus}
@@ -768,7 +769,7 @@ const UserAccounts = ({ theme = "dark" }) => {
               style={{ width: 250 }}
             />
 
-            <Select
+            <Select placeholder="Filter by role"
               defaultValue="all"
               style={{ width: 180 }}
               onChange={handlePermissionChange}

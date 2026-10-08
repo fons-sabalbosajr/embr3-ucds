@@ -184,13 +184,13 @@ const UcdsSettings = () => {
           <Descriptions column={1} bordered size="small" labelStyle={{ width: 260 }}>
             <Descriptions.Item label="Monitoring Plan page size">
               <Space direction="vertical" size={2}>
-                <Select value={draft.register.pageSize} options={PAGE_SIZES} disabled={!canEdit} onChange={(v) => patch("register", "pageSize", v)} style={{ width: 160 }} />
+                <Select placeholder="Rows per page" value={draft.register.pageSize} options={PAGE_SIZES} disabled={!canEdit} onChange={(v) => patch("register", "pageSize", v)} style={{ width: 160 }} />
                 <Text type="secondary">Rows per page when a province register opens. People can still change it on the screen.</Text>
               </Space>
             </Descriptions.Item>
             <Descriptions.Item label="Dataset page size">
               <Space direction="vertical" size={2}>
-                <Select value={draft.datasets.pageSize} options={PAGE_SIZES} disabled={!canEdit} onChange={(v) => patch("datasets", "pageSize", v)} style={{ width: 160 }} />
+                <Select placeholder="Rows per page" value={draft.datasets.pageSize} options={PAGE_SIZES} disabled={!canEdit} onChange={(v) => patch("datasets", "pageSize", v)} style={{ width: 160 }} />
                 <Text type="secondary">Rows per page when an imported dataset opens.</Text>
               </Space>
             </Descriptions.Item>
@@ -460,13 +460,13 @@ const YearContainers = ({ canManage }) => {
       <Modal open={adding} title="Add a year container" onCancel={() => setAdding(false)} onOk={() => form.submit()} okText="Create" destroyOnClose>
         <Form form={form} layout="vertical" onFinish={create} initialValues={{ year: thisYear + 1 }}>
           <Form.Item name="year" label="Year" rules={[{ required: true, message: "Enter the year." }]}>
-            <Input type="number" min={2000} max={2100} />
+            <Input placeholder="e.g. 2027" type="number" min={2000} max={2100} />
           </Form.Item>
           <Form.Item name="label" label="Label" extra="Defaults to “<year> Data”.">
             <Input placeholder="e.g. 2032 Data" />
           </Form.Item>
           <Form.Item name="description" label="Description">
-            <Input.TextArea rows={2} />
+            <Input.TextArea placeholder="What this year's container holds (optional)" rows={2} />
           </Form.Item>
         </Form>
       </Modal>

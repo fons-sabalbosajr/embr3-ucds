@@ -17,7 +17,6 @@ import {
   theme as antdTheme,
 } from "antd";
 import {
-  ClockCircleOutlined,
   CloudUploadOutlined,
   ExclamationCircleOutlined,
   FileSearchOutlined,
@@ -29,16 +28,16 @@ import {
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { DonutChart, MagnitudeBars, YearColumns } from "../components/charts";
+import { DonutChart, MagnitudeBars, MonthStack, YearColumns } from "../components/charts";
 import { AttentionTile } from "../components/dashboardTiles";
 import { useTheme } from "../../../theme/ThemeProvider";
 import {
+  PERMIT_OPTIONS,
   PERMIT_TYPE_COLOR,
   PROVINCE_LABEL,
   describeApiError,
   fetchAccessRequests,
   fetchDashboard,
-  fetchOverdue,
 } from "../api/ermsService";
 
 // ---------------------------------------------------------------------------
@@ -46,27 +45,20 @@ import {
 //
 // For an ERMS User this is the main Dashboard — they have no planning
 // dashboard — so it opens on what the day's work is: the upload, the inbox
-// of document requests, loans that are overdue, records that need review.
+// of document requests, records that need review. (The "overdue loans" tile
+// was removed: the office no longer tracks paper loans from here.)
 // The counts and distributions that describe the collection follow.
 //
 // The charts below say how the collection is made up; the status colours
-// on the tiles (pending, overdue, needs review) always come with an icon
+// on the tiles (pending, needs review) always come with an icon
 // and a word, never on their own.
 // ---------------------------------------------------------------------------
 
 const { Text, Title } = Typography;
 
-const PERMIT_LABEL = {
-  "ecc-original": "ECC (Original)",
-  "ecc-amended": "ECC (Amended)",
-  cnc: "Certificate of Non-Coverage",
-  "hw-generator": "HW Generator Registration",
-  dp: "Discharge Permit",
-  pto: "Permit to Operate",
-  other: "Other",
-};
-
-const TYPE_ORDER = ["ecc-original", "ecc-amended", "cnc", "hw-generator", "dp", "pto", "other"];
+const PERMIT_LABEL = Object.fromEntries(PERMIT_OPTIONS.map((o) => [o.value, o.label]));
+const TYPE_ORDER = PERMIT_OPTIONS.map((o) => o.value);
+const PERMIT_KINDS = PERMIT_OPTIONS.map((o) => ({ code: o.value, label: o.label }));
 
 const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
 const when = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
@@ -75,14 +67,13 @@ const ErmsDashboard = () => {
   const { token } = antdTheme.useToken();
   const isDark = useTheme().mode === "dark";
   const stats = useQuery({ queryKey: ["erms", "dashboard"], queryFn: fetchDashboard });
-  // The inbox and the loans are the Records Unit's work; for anyone else the
+  // The inbox is the Records Unit's work; for anyone else the
   // inbox is their own requests, which is still worth a glance.
   const inbox = useQuery({
     queryKey: ["erms", "access-requests", "pending", "dashboard"],
     queryFn: () => fetchAccessRequests({ status: "pending", limit: 5 }),
     refetchInterval: 60000,
   });
-  const overdue = useQuery({ queryKey: ["erms", "overdue"], queryFn: fetchOverdue });
 
   if (stats.error) {
     return (
@@ -169,7 +160,7 @@ const ErmsDashboard = () => {
 
       {/* What needs attention. */}
       <Row gutter={[12, 12]}>
-        <Col xs={12} md={6}>
+        <Col xs={24} sm={8}>
           <AttentionTile
             icon={<MailOutlined />}
             label={canDecide ? "Document requests waiting" : "My pending requests"}
@@ -180,18 +171,7 @@ const ErmsDashboard = () => {
             hint={pending ? "to decide" : "none"}
           />
         </Col>
-        <Col xs={12} md={6}>
-          <AttentionTile
-            icon={<ClockCircleOutlined />}
-            label="Overdue loans"
-            value={overdue.data?.length || 0}
-            tone="danger"
-            to="/universe/erms/records"
-            loading={overdue.isLoading}
-            hint={overdue.data?.length ? "not returned" : "none"}
-          />
-        </Col>
-        <Col xs={12} md={6}>
+        <Col xs={24} sm={8}>
           <AttentionTile
             icon={<ExclamationCircleOutlined />}
             label="Needs review"
@@ -202,7 +182,7 @@ const ErmsDashboard = () => {
             hint="values to check"
           />
         </Col>
-        <Col xs={12} md={6}>
+        <Col xs={24} sm={8}>
           <AttentionTile
             icon={<WarningOutlined />}
             label="Not linked to the register"
@@ -269,6 +249,20 @@ const ErmsDashboard = () => {
         <Col xs={24} lg={8}>
           <Card title="By year approved" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 years</Text>}>
             {loading ? <Skeleton active /> : <YearColumns rows={(data.byYear || []).map((y) => ({ year: y._id, count: y.count }))} color={token.colorPrimary} dark={isDark} name="Permits approved" />}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* The desktop system's monthly upload figures and its project-type chart. */}
+      <Row gutter={[12, 12]}>
+        <Col xs={24} lg={15}>
+          <Card title="Uploads per month" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 months, by permit type</Text>}>
+            {loading ? <Skeleton active /> : <MonthStack months={data.byMonth} kinds={PERMIT_KINDS} dark={isDark} />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={9}>
+          <Card title="Most filed project types" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>top 10</Text>}>
+            {loading ? <Skeleton active /> : <MagnitudeBars rows={data.byProjectType || []} color={token.colorPrimary} dark={isDark} height={280} name="Records" />}
           </Card>
         </Col>
       </Row>

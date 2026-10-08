@@ -22,6 +22,9 @@ export default {
             /^rc-/,  // rc-* deps used by AntD
             /^joyride/, // react-joyride
             /^slick-/, // carousels if any
+            // VERA builds modifier classes from state (`vera-msg--${role}`,
+            // `vera-status-dot--${...}`), which no extractor can see whole.
+            /^vera-/,
           ],
         },
         // Extract identifier-shaped tokens rather than everything between

@@ -8,7 +8,7 @@ import {
   setPreference,
 } from "./shared/preferences";
 import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
-import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
+import { Routes, Route, useNavigate, useParams, Navigate } from "react-router-dom";
 import {
   fetchCurrentUser,
   fetchDataValidationIssues,
@@ -34,7 +34,11 @@ const UnitDashboard = lazy(() => import("./modules/erms/units/UnitDashboard"));
 const UnitDocuments = lazy(() => import("./modules/erms/units/UnitDocuments"));
 const UnitDocumentDetail = lazy(() => import("./modules/erms/units/UnitDocumentDetail"));
 const ErmsConfig = lazy(() => import("./modules/admin/erms/ErmsConfig"));
+const VeraSettings = lazy(() => import("./modules/vera/VeraSettings"));
 const ErmsSettings = lazy(() => import("./modules/erms/pages/ErmsSettings"));
+const UploadTally = lazy(() => import("./modules/erms/pages/UploadTally"));
+const Messages = lazy(() => import("./modules/erms/pages/Messages"));
+const SignInHistory = lazy(() => import("./modules/admin/users/SignInHistory"));
 const CustomItemPage = lazy(() => import("./modules/ucds/custom/CustomItemPage"));
 const Report = Admin;
 const Posting = lazy(() => import("./modules/admin/posting/Posting"));
@@ -46,10 +50,11 @@ import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
 import UserPopover from "./components/PopOverUser/PopOverUser";
 import Z_CustomSpinner from "./Z_CustomSpinner";
-import YearSwitcher from "./components/YearSwitcher";
 import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import NasStatusBanner from "./components/NasStatusBanner";
+import AppFooter from "./components/AppFooter";
+import VeraChat from "./modules/vera/VeraChat";
 import moment from "moment";
 
 const StorageConfig = lazy(() => import("./modules/admin/developer/StorageConfig"));
@@ -66,8 +71,17 @@ import Forbidden from "./shared/components/Forbidden";
 const OrgUnits = lazy(() => import("./modules/admin/OrgUnits"));
 import GeneralSettings from "./modules/settings/GeneralSettings";
 const UcdsSettings = lazy(() => import("./modules/settings/UcdsSettings"));
+import { settingsPath } from "./modules/erms/settingsPath";
+import { fetchAccessRequests, fetchRecords, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
+import visibleInterval from "./shared/visibleInterval";
 
 const { Header, Content } = Layout;
+
+/** /settings/erms/:section? — the old shared page — to the home unit's own settings. */
+function LegacyErmsSettings({ home }) {
+  const { section } = useParams();
+  return <Navigate to={settingsPath(home || "records", section)} replace />;
+}
 
 // Where the chosen theme is remembered. It survives sign-out: a display
 // preference is not session data, and losing it on every logout reads as a
@@ -98,6 +112,7 @@ const Universe = () => {
   // and whether the year container picker is skipped for them.
   const [erms, setErms] = useState({ unit: null, units: [], skipYearSelect: false });
   const [notifications, setNotifications] = useState([]);
+  const [ermsNotifications, setErmsNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [retrying, setRetrying] = useState(false);
@@ -191,23 +206,37 @@ const Universe = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Define fetchDataIssues outside of useEffect, memoized with useCallback
+  // The register's completeness check and its duplicate permits, for the
+  // bell. Asked once per sign-in and when the bell's refresh is pressed —
+  // not on every render: it depended on `domains`, a new array each render,
+  // so every navigation asked again, and each answer was 17.7 MB.
+  const hasUcds = domains.includes("ucds");
+  const hasErms = domains.includes("erms");
   const fetchDataIssues = useCallback(async () => {
     if (!auth) return; // Ensure auth is true before fetching
-    // The issues are the register's; an ERMS User has no UCDS domain and
-    // would only be refused (and told "error") for asking.
-    if (!domains.includes("ucds")) {
+    if (!hasUcds) {
       setNotifications([]);
       return;
     }
     setIsLoading(true); // Set loading for notifications
     try {
-      const dataIssuesPayload = await fetchDataValidationIssues(); // Assuming this returns the actual data object like { issues: ... }
-      const duplicateIssuesPayload = await fetchDuplicateDataIssues(); // Assuming this returns { duplicates: ... }
+      const [dataIssuesPayload, duplicateIssuesPayload] = await Promise.all([
+        hasUcds ? fetchDataValidationIssues() : Promise.resolve(null),
+        hasUcds ? fetchDuplicateDataIssues() : Promise.resolve(null),
+      ]);
 
-      let dataIssues;
-      // Check if dataIssuesPayload itself is not null/undefined and has an 'issues' property
-      if (dataIssuesPayload && dataIssuesPayload.issues !== undefined) {
+      let dataIssues = [];
+      // The check now arrives grouped: the field labels once, and per
+      // establishment the numbers of the fields it lacks. The bell turns
+      // numbers into labels only for the page it shows.
+      if (!hasUcds) {
+        dataIssues = [];
+      } else if (dataIssuesPayload && Array.isArray(dataIssuesPayload.records)) {
+        const { fields = [] } = dataIssuesPayload;
+        dataIssues = dataIssuesPayload.records.length
+          ? dataIssuesPayload.records.map(([id_no, missing]) => ({ id_no, missing, fields }))
+          : ["No issues detected"];
+      } else if (dataIssuesPayload && dataIssuesPayload.issues !== undefined) {
         const issuesSource = dataIssuesPayload.issues;
         if (Array.isArray(issuesSource)) {
           // If issuesSource is an empty array, set to ["No issues detected"]
@@ -234,7 +263,9 @@ const Universe = () => {
 
       let duplicateIssues = [];
       // Check if duplicateIssuesPayload is not null/undefined and has a 'duplicates' array
-      if (
+      if (!hasUcds) {
+        duplicateIssues = [];
+      } else if (
         duplicateIssuesPayload &&
         Array.isArray(duplicateIssuesPayload.duplicates)
       ) {
@@ -262,13 +293,76 @@ const Universe = () => {
     } finally {
       setIsLoading(false); // Clear loading for notifications
     }
-  }, [auth, domains, setIsLoading, setNotifications]); // backendUrl removed as it's not directly used here
+  }, [auth, hasUcds, setIsLoading, setNotifications]);
 
   useEffect(() => {
     if (!auth) return; // Only fetch if authenticated
     fetchDataIssues();
     // If you need polling, you can set it up here, calling the memoized fetchDataIssues
   }, [auth, fetchDataIssues]); // fetchDataIssues is now a dependency
+
+  // ---------------------------------------------------------------------------
+  // The bell's action items: what this account can act on, and nothing it
+  // cannot. Each is a count the server already scopes to the account, so a
+  // Legal officer is told about Legal, the Records Unit about records, an
+  // administrator about accounts — and the Developer, who holds every
+  // domain and unit, about all of it. Small reads, so they are checked again
+  // every two minutes while the tab is in view (the register check above is
+  // large and stays on demand).
+  // ---------------------------------------------------------------------------
+  const ermsUnitsKey = (erms.units || []).join(",");
+  const isManager = ["developer", "admin"].includes(String(userRole || "").toLowerCase());
+  const fetchActionItems = useCallback(async () => {
+    if (!auth) return;
+    const units = ermsUnitsKey ? ermsUnitsKey.split(",") : [];
+    const seesRecords = hasErms && (units.includes("records") || !units.length);
+    const count = (promise, pick) => promise.then(pick).catch(() => 0);
+    const [access, unread, flagged, legalNoScan, labNoScan, signUps] = await Promise.all([
+      hasErms ? fetchAccessRequests({ status: "pending" }).catch(() => null) : null,
+      hasErms ? count(fetchUnreadMessages(), (n) => Number(n) || 0) : 0,
+      seesRecords ? count(fetchRecords({ flagged: true, page: 1, pageSize: 1 }), (r) => r?.total || 0) : 0,
+      hasErms && units.includes("legal") ? count(fetchUnitDocuments("legal", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
+      hasErms && units.includes("laboratory") ? count(fetchUnitDocuments("laboratory", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
+      isManager
+        ? count(fetch(`${backendUrl}/api/sign-up`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])), (rows) => (Array.isArray(rows) ? rows.length : 0))
+        : 0,
+    ]);
+    const items = [];
+    const pending = Number(access?.pending ?? access?.requests?.length ?? 0);
+    if (pending > 0) {
+      items.push({
+        type: "erms-access", group: "ERMS", tone: "warning", count: pending, href: "/universe/erms/access-requests",
+        title: access?.canDecide ? `${pending} document ${pending === 1 ? "request" : "requests"} to decide` : `${pending} of your document ${pending === 1 ? "request is" : "requests are"} waiting`,
+        description: access?.canDecide ? "People are waiting to view scanned documents." : "The Records Unit has not decided yet.",
+      });
+    }
+    if (unread > 0) {
+      items.push({ type: "erms-message", group: "ERMS", tone: "info", count: unread, href: "/universe/erms/messages", title: `${unread} unread ${unread === 1 ? "message" : "messages"}`, description: "In the ERMS Action Center." });
+    }
+    if (flagged > 0) {
+      items.push({ type: "erms-review", group: "ERMS", tone: "danger", count: flagged, href: "/universe/erms/records?flagged=1", title: `${flagged} ${flagged === 1 ? "record needs" : "records need"} review`, description: "Values that could not be read during migration — usually a date." });
+    }
+    if (legalNoScan > 0) {
+      items.push({ type: "erms-legal-scan", group: "ERMS", tone: "warning", count: legalNoScan, href: "/universe/erms/legal/settings/data", title: `${legalNoScan} Legal ${legalNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
+    }
+    if (labNoScan > 0) {
+      items.push({ type: "erms-lab-scan", group: "ERMS", tone: "warning", count: labNoScan, href: "/universe/erms/laboratory/settings/data", title: `${labNoScan} Laboratory ${labNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
+    }
+    if (signUps > 0) {
+      items.push({ type: "admin-signup", group: "Accounts", tone: "info", count: signUps, href: "/universe/admin/users", title: `${signUps} account ${signUps === 1 ? "request" : "requests"} to review`, description: "People asking for an E-Universe account." });
+    }
+    setErmsNotifications(items);
+  }, [auth, hasErms, ermsUnitsKey, isManager]);
+
+  useEffect(() => {
+    if (!auth) return undefined;
+    fetchActionItems();
+    return visibleInterval(fetchActionItems, 120000);
+  }, [auth, fetchActionItems]);
+  const refreshAll = useCallback(() => {
+    fetchDataIssues();
+    fetchActionItems();
+  }, [fetchDataIssues, fetchActionItems]);
 
   // Whether the one-off "Toggle Theme" hint has been dismissed for good.
   //
@@ -394,19 +488,19 @@ const Universe = () => {
                       </Tag>
                     </span>
 
-                    {/* Which year container this session is operating in.
-                        Not for ERMS Users: nothing they do is year-scoped,
-                        so the server picked one at sign-in and there is
-                        nothing to switch. */}
-                    {!erms.skipYearSelect && <YearSwitcher theme={theme} />}
+                    {/* The year switcher ("2026 DATA") was removed from the
+                        header: the year is chosen at sign-in, and Settings ›
+                        Universe Central DB still manages the year containers. */}
 
                     <NotificationsPopover
                       theme={theme}
                       notifications={notifications}
+                      ermsNotifications={ermsNotifications}
                       isLoading={isLoading} // Pass the loading state for notifications
                       className="notification-icon"
                       currentUser={currentUser}
-                      refreshNotifications={fetchDataIssues} // Pass the refresh handler
+                      refreshNotifications={refreshAll}
+                      domains={domains}
                     />
 
                     {/* Theme first, then the account: the avatar closes the row,
@@ -555,6 +649,14 @@ const Universe = () => {
                     }
                   />
                   <Route
+                    path="admin/sign-in-history"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <SignInHistory />
+                      </DomainGuard>
+                    }
+                  />
+                  <Route
                     path="accounts"
                     element={<Navigate to="/universe/admin/users" replace />}
                   />
@@ -643,12 +745,21 @@ const Universe = () => {
                     {/* Reports were removed from the menu; a bookmark lands on the dashboard. */}
                     <Route path="erms/reports" element={<Navigate to="/universe/erms/dashboard" replace />} />
                     <Route path="erms/access-requests" element={<AccessRequests />} />
+                    {/* Uploads per person per day and their check — every unit,
+                        so not under a unit's own path (erms/records/:serialNo
+                        would take "records/upload-tally" for a serial). */}
+                    <Route path="erms/upload-tally/:unit" element={<UploadTally />} />
+                    <Route path="erms/messages" element={<Messages />} />
                     {/* The Legal Services and Laboratory units. Which units
                         the person may see is decided by the server; the
                         screens explain when one is not theirs. */}
                     <Route path="erms/:unit/dashboard" element={<UnitDashboard />} />
                     <Route path="erms/:unit/documents" element={<UnitDocuments />} />
                     <Route path="erms/:unit/documents/:serialNo" element={<UnitDocumentDetail />} />
+                    {/* Each unit's own settings, read by its members and set
+                        by its staff: Records', then Legal's and Laboratory's. */}
+                    <Route path="erms/settings/:section?" element={<ErmsSettings unit="records" />} />
+                    <Route path="erms/:unit/settings/:section?" element={<ErmsSettings />} />
                     <Route
                       path="erms"
                       element={
@@ -671,15 +782,27 @@ const Universe = () => {
                     }
                   />
 
+                  {/* VERA, the assistant. Admin domain; the API refuses
+                      everyone else. */}
+                  <Route
+                    path="admin/vera"
+                    element={
+                      <DomainGuard domain="admin" user={currentUser}>
+                        <VeraSettings />
+                      </DomainGuard>
+                    }
+                  />
+
                   {/* Universe Central DB settings: read by every UCDS account,
                       changed by a Developer or Administrator (enforced by the API). */}
                   <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
                     <Route path="settings/ucds" element={<UcdsSettings />} />
                   </Route>
-                  {/* A unit's working rules, set by its own staff. */}
+                  {/* The single ERMS settings page became one per unit, under
+                      each unit's own section. An old bookmark lands on the
+                      person's home unit, on the same tab. */}
                   <Route element={<DomainGuard domain="erms" user={currentUser} />}>
-                    <Route path="settings/erms" element={<ErmsSettings />} />
-                    <Route path="settings/erms/:section" element={<ErmsSettings />} />
+                    <Route path="settings/erms/:section?" element={<LegacyErmsSettings home={erms.unit} />} />
                   </Route>
                   <Route
                     path="settings/general"
@@ -765,7 +888,11 @@ const Universe = () => {
                 </Routes>
                 </Suspense>
               </Content>
+              <AppFooter />
             </Layout>
+            {/* VERA, on every screen. It decides for itself whether to show
+                (Admin Settings › VERA Assistant). */}
+            <VeraChat />
           </Layout>
         </DataProvider>
       </>

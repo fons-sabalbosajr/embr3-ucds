@@ -1,17 +1,26 @@
+import { useSearchParams } from "react-router-dom";
 import {
-  Alert,
   Button,
   Card,
   ColorPicker,
   Radio,
   Segmented,
   Space,
+  Tabs,
   Tag,
   Tooltip,
   Typography,
 } from "antd";
-import { BgColorsOutlined, CheckOutlined, MoonOutlined, SunOutlined } from "@ant-design/icons";
+import {
+  BgColorsOutlined,
+  CheckOutlined,
+  LayoutOutlined,
+  MenuOutlined,
+  MoonOutlined,
+  SunOutlined,
+} from "@ant-design/icons";
 import { useTheme } from "../../theme/ThemeProvider";
+import "./generalsettings.css";
 
 const { Text, Paragraph, Title } = Typography;
 
@@ -80,16 +89,22 @@ const NavPreview = ({ sider, header, accent, active }) => (
   </div>
 );
 
+/**
+ * One setting: what it is and what it does on the left, the control on the
+ * right — so a wide screen is used across, not as one narrow column. Stacks
+ * on a narrow one (generalsettings.css).
+ */
 const Section = ({ title, hint, children }) => (
-  <div>
-    <Text strong>{title}</Text>
-    {hint && (
-      <Paragraph type="secondary" style={{ fontSize: 12, margin: "4px 0 10px" }}>
-        {hint}
-      </Paragraph>
-    )}
-    {!hint && <div style={{ height: 8 }} />}
-    {children}
+  <div className="settings-row">
+    <div className="settings-row-label">
+      <Text strong>{title}</Text>
+      {hint && (
+        <Paragraph type="secondary" style={{ fontSize: 12, margin: "4px 0 0" }}>
+          {hint}
+        </Paragraph>
+      )}
+    </div>
+    <div className="settings-row-control">{children}</div>
   </div>
 );
 
@@ -111,19 +126,25 @@ const GeneralSettings = () => {
 
   const customActive = Boolean(appearance.accentHex);
 
-  return (
-    <Space direction="vertical" size="large" style={{ width: "100%", maxWidth: 760 }}>
-      <Card>
-        <Title level={5} style={{ marginTop: 0 }}>
-          Appearance
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 24 }}>
-          Your own look. It is kept on your account, so it follows you to any computer you sign in on.
-        </Paragraph>
+  // Which tab is open, kept in the address so a link can point at one.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wanted = searchParams.get("tab");
+  const tab = ["theme", "navigation", "layout"].includes(wanted) ? wanted : "theme";
+  const openTab = (key) => setSearchParams({ tab: key }, { replace: true });
 
-        <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          <Section title="Theme">
+  const items = [
+    {
+      key: "theme",
+      label: (
+        <span>
+          <SunOutlined /> Theme &amp; colour
+        </span>
+      ),
+      children: (
+        <div className="settings-rows">
+          <Section title="Theme" hint="Light or dark, for the content area. The navigation keeps its own colours in both.">
             <Segmented
+              size="large"
               value={mode}
               onChange={setMode}
               options={[
@@ -137,17 +158,18 @@ const GeneralSettings = () => {
             title="Accent colour"
             hint="Used for buttons, links, the selected menu item and focus outlines. The rest of the palette is derived from it, so contrast stays readable in both themes."
           >
-            <Space wrap size={[8, 8]} align="center">
+            <Space wrap size={[10, 10]} align="center">
               {accents.map((a) => (
                 <Swatch
                   key={a.key}
+                  size={32}
                   color={a.color}
                   title={a.label}
                   active={!customActive && appearance.accent === a.key}
                   onClick={() => setAppearance({ accent: a.key, accentHex: null })}
                 />
               ))}
-              <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.15)", margin: "0 4px" }} />
+              <span style={{ width: 1, height: 28, background: "rgba(0,0,0,0.15)", margin: "0 6px" }} />
               <ColorPicker
                 value={appearance.accentHex || accentColor}
                 onChangeComplete={(c) => setAppearance({ accentHex: c.toHexString().slice(0, 7).toLowerCase() })}
@@ -162,21 +184,32 @@ const GeneralSettings = () => {
               )}
             </Space>
             {customActive && (
-              <Paragraph type="secondary" style={{ fontSize: 12, margin: "8px 0 0" }}>
+              <Paragraph type="secondary" style={{ fontSize: 12, margin: "10px 0 0" }}>
                 A very light or very saturated colour can make buttons and links hard to read. If it does, pick a preset.
               </Paragraph>
             )}
           </Section>
-
-          <Section title="Navigation" hint="How the sidebar and header take the accent. They stay dark in both themes; the content area follows the theme.">
+        </div>
+      ),
+    },
+    {
+      key: "navigation",
+      label: (
+        <span>
+          <MenuOutlined /> Navigation
+        </span>
+      ),
+      children: (
+        <div className="settings-rows">
+          <Section title="Navigation style" hint="How the sidebar and header take the accent. They stay dark in both themes; the content area follows the theme.">
             <Radio.Group value={navStyle} onChange={(e) => setAppearance({ navStyle: e.target.value, tintedSider: e.target.value !== "neutral" })}>
-              <Space wrap size={[12, 12]} align="start">
+              <Space wrap size={[16, 16]} align="start">
                 {navStyles.map((s) => {
                   // Sketch the surfaces the same way ThemeProvider derives them.
                   const preview = previewSurfaces(accentColor, s.key);
                   return (
-                    <Radio.Button key={s.key} value={s.key} style={{ height: "auto", padding: 8, lineHeight: 1.2 }}>
-                      <Space direction="vertical" size={4} align="center">
+                    <Radio.Button key={s.key} value={s.key} style={{ height: "auto", padding: 10, lineHeight: 1.2 }}>
+                      <Space direction="vertical" size={6} align="center">
                         <NavPreview sider={preview.sider} header={preview.header} accent={accentColor} active={navStyle === s.key} />
                         <Text style={{ fontSize: 12 }}>{s.label}</Text>
                       </Space>
@@ -185,18 +218,29 @@ const GeneralSettings = () => {
                 })}
               </Space>
             </Radio.Group>
-            <Paragraph type="secondary" style={{ fontSize: 12, margin: "8px 0 0" }}>
+            <Paragraph type="secondary" style={{ fontSize: 12, margin: "12px 0 0" }}>
               {navStyles.find((s) => s.key === navStyle)?.description}
             </Paragraph>
           </Section>
-
+        </div>
+      ),
+    },
+    {
+      key: "layout",
+      label: (
+        <span>
+          <LayoutOutlined /> Layout &amp; density
+        </span>
+      ),
+      children: (
+        <div className="settings-rows">
           <Section title="Content background" hint="The surface behind cards and tables.">
             <Segmented
               value={appearance.surface || "plain"}
               onChange={(value) => setAppearance({ surface: value })}
               options={surfaces.map((s) => ({ value: s.key, label: s.label }))}
             />
-            <Paragraph type="secondary" style={{ fontSize: 12, margin: "8px 0 0" }}>
+            <Paragraph type="secondary" style={{ fontSize: 12, margin: "10px 0 0" }}>
               {surfaces.find((s) => s.key === (appearance.surface || "plain"))?.description}
             </Paragraph>
           </Section>
@@ -216,22 +260,33 @@ const GeneralSettings = () => {
               options={densities.map((d) => ({ value: d.key, label: d.label }))}
             />
           </Section>
+        </div>
+      ),
+    },
+  ];
 
-          <div>
-            <Button icon={<BgColorsOutlined />} onClick={resetAppearance}>
-              Reset appearance
-            </Button>
-          </div>
-        </Space>
-      </Card>
-
-      {/* <Alert
-        type="info"
-        showIcon
-        // message="Looking for something else?"
-        // description="Settings that affect other people — user accounts, the register, storage, ERMS — are under Admin Settings and need the appropriate role."
-      /> */}
-    </Space>
+  return (
+    <Card className="general-settings" styles={{ body: { paddingTop: 8 } }}>
+      <div className="general-settings-intro">
+        <Title level={4} style={{ margin: 0 }}>
+          Appearance
+        </Title>
+        <Paragraph type="secondary" style={{ margin: "4px 0 0" }}>
+          Your own look. It is kept on your account, so it follows you to any computer you sign in on.
+        </Paragraph>
+      </div>
+      <Tabs
+        activeKey={tab}
+        onChange={openTab}
+        items={items}
+        size="large"
+        tabBarExtraContent={
+          <Button icon={<BgColorsOutlined />} onClick={resetAppearance}>
+            Reset appearance
+          </Button>
+        }
+      />
+    </Card>
   );
 };
 

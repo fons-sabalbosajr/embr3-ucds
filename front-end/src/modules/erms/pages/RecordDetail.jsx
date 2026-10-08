@@ -24,6 +24,7 @@ import {
   HistoryOutlined,
   InboxOutlined,
   LinkOutlined,
+  PaperClipOutlined,
   ProfileOutlined,
   ShareAltOutlined,
 } from "@ant-design/icons";
@@ -40,6 +41,7 @@ import TrackingPanel from "../components/TrackingPanel";
 import RecordFormModal from "../components/RecordFormModal";
 import ShareDocumentModal from "../components/ShareDocumentModal";
 import BoxAssignment from "../components/BoxAssignment";
+import AttachmentModal from "../components/AttachmentModal";
 import DocumentPanel from "../../../shared/components/DocumentPanel";
 
 const { Text } = Typography;
@@ -94,6 +96,7 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
 
   const [editing, setEditing] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const [tab, setTab] = useState("record");
 
   const { data, isLoading, error } = useQuery({
@@ -196,6 +199,7 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
             <Field label="City / Municipality" value={location?.city} />
             <Field label="Barangay" value={location?.barangay} />
             <Field label="Street" value={location?.street} />
+            <Field label="Mailing address" value={location?.mailingAddress} span />
             <Field label="Latitude" value={location?.lat} />
             <Field label="Longitude" value={location?.long} />
           </Grid>
@@ -251,9 +255,23 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
             {doc?.sharePath && <Field label="Location on the share" value={doc.sharePath} mono span />}
           </Grid>
           <DocumentPanel serialNo={record.serialNo} fileName={doc?.fileName} canFile={canWrite} />
-          {attachments?.length > 0 && (
-            <Card title={`Attachments (${attachments.length})`} size="small">
-              <Table rowKey="serialNo" size="small" columns={attachmentColumns} dataSource={attachments} pagination={false} />
+          {(attachments?.length > 0 || (canWrite && !record.isAttachment)) && (
+            <Card
+              title={`Attachments (${attachments?.length || 0})`}
+              size="small"
+              extra={
+                canWrite && !record.isAttachment && (
+                  <Button size="small" icon={<PaperClipOutlined />} onClick={() => setAttaching(true)}>
+                    Add attachment
+                  </Button>
+                )
+              }
+            >
+              {attachments?.length > 0 ? (
+                <Table rowKey="serialNo" size="small" columns={attachmentColumns} dataSource={attachments} pagination={false} />
+              ) : (
+                <Text type="secondary">An amendment, a certified copy or a letter filed against this record appears here.</Text>
+              )}
             </Card>
           )}
         </Space>
@@ -339,6 +357,7 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
 
       <RecordFormModal open={editing} record={record} writableProvinces={writable} onClose={() => setEditing(false)} />
       <ShareDocumentModal open={sharing} serialNo={record.serialNo} fileName={doc?.fileName} onClose={() => setSharing(false)} />
+      <AttachmentModal open={attaching} parent={record} onClose={() => setAttaching(false)} />
     </Space>
   );
 };

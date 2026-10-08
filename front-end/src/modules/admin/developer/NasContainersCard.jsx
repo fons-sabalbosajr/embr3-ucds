@@ -252,6 +252,7 @@ const NasContainersCard = ({ onChanged }) => {
       title: "Share",
       key: "share",
       align: "left",
+      width: 400,
       render: (_, c) =>
         c.configured ? (
           <Text code>{`\\\\${c.host}\\${c.share}${c.baseDir ? `\\${c.baseDir}` : ""}`}</Text>
@@ -509,7 +510,7 @@ const NasContainersCard = ({ onChanged }) => {
           </Form.Item>
 
           <Form.Item name="domain" label="Domain or workgroup" extra="Leave empty if the account is local to the NAS.">
-            <Input autoComplete="off" />
+            <Input placeholder="e.g. EMBR3SYNOLOGY" autoComplete="off" />
           </Form.Item>
 
           <Form.Item

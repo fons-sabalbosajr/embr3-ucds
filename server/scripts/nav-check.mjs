@@ -82,7 +82,7 @@ async function signIn(page, username) {
 
 const client = new MongoClient(process.env.MONGO_URI);
 await client.connect();
-const users = client.db().collection('users');
+const users = client.db(process.env.MONGO_DB_NAME || undefined).collection('users');
 const names = [DEV, RECORDS];
 await users.deleteMany({ username: { $in: names } });
 const password = await bcrypt.hash(PASSWORD, 10);
@@ -352,7 +352,7 @@ try {
 } finally {
   await browser.close();
   await users.deleteMany({ username: { $in: names } });
-  await client.db().collection('loginStatus').deleteMany({ username: { $in: names } });
+  await client.db(process.env.MONGO_DB_NAME || undefined).collection('loginStatus').deleteMany({ username: { $in: names } });
   await client.close();
 }
 

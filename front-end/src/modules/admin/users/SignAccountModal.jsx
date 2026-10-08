@@ -195,7 +195,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
           <div className="user-details">
             <div>
               <label className="details-label">Name:</label>
-              <Input
+              <Input placeholder="Full name"
                 name="name"
                 value={editableUser.name || ""} // Provide a default value
                 onChange={handleInputChange}
@@ -203,7 +203,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
             </div>
             <div>
               <label className="details-label">Email:</label>
-              <Input
+              <Input placeholder="Email address"
                 name="email"
                 value={editableUser.email || ""} // Provide a default value
                 onChange={handleInputChange}
@@ -211,7 +211,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
             </div>
             <div>
               <label className="details-label">Division:</label>
-              <Input
+              <Input placeholder="Division"
                 name="division"
                 value={editableUser.division || ""} // Provide a default value
                 onChange={handleInputChange}
@@ -219,7 +219,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
             </div>
             <div>
               <label className="details-label">Position:</label>
-              <Input
+              <Input placeholder="Position"
                 name="position"
                 value={editableUser.position || ""} // Provide a default value
                 onChange={handleInputChange}
@@ -249,7 +249,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
           >
             <div className="generate-section">
               <p className="details-label">Generate Username:</p>
-              <Input
+              <Input placeholder="Username"
                 value={generateUsername}
                 onChange={(e) => setGenerateUsername(e.target.value)} 
                 className="generate-username-input"
@@ -257,7 +257,7 @@ const SignAccountModal = ({ user, visible, onCancel, onUpdate }) => {
             </div>
             <div className="generate-section">
               <p className="details-label">Generate Password:</p>
-              <Input.Password
+              <Input.Password placeholder="Password"
                 value={generatePassword}
                 className="generate-password-input"
               />

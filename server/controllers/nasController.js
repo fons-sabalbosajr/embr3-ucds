@@ -541,7 +541,13 @@ async function setActivation(req, res, next) {
     });
 
     if (!result.ok) return res.status(result.status).json(result);
-    return res.json(result.state);
+
+    // Effective now, for everyone: probe the road to the NAS so the answer is
+    // not the last 30-second probe's, then push the new state to every open
+    // screen rather than leaving them to their next poll.
+    await bridge.probe().catch(() => {});
+    await bridge.broadcast();
+    return res.json(await activation.evaluate());
   } catch (error) {
     return next(error);
   }

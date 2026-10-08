@@ -102,7 +102,7 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
       extra={
         <Space size={8}>
           {legacyCount > 0 && (
-            <Select size="small" value={source} onChange={setSource} options={SOURCE_OPTIONS} style={{ width: 210 }} />
+            <Select placeholder="Source" size="small" value={source} onChange={setSource} options={SOURCE_OPTIONS} style={{ width: 210 }} />
           )}
           {canWrite && (
             <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
@@ -184,7 +184,7 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
         </Typography.Paragraph>
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="action" label="Action" rules={[{ required: true }]}>
-            <Select options={actions.map((a) => ({ value: a.code, label: a.label }))} />
+            <Select placeholder="Select the action" options={actions.map((a) => ({ value: a.code, label: a.label }))} />
           </Form.Item>
           <Form.Item name="fromParty" label="From">
             <Input placeholder="Section or person releasing the record" />
@@ -203,7 +203,7 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item name="remarks" label="Remarks">
-            <Input.TextArea rows={2} />
+            <Input.TextArea placeholder="Optional note for the trail" rows={2} />
           </Form.Item>
         </Form>
       </Modal>

@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Skeleton,
@@ -30,6 +31,7 @@ import {
   SafetyCertificateOutlined,
   SearchOutlined,
   ToolOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -42,20 +44,35 @@ import {
   fetchUnitActivity,
   fetchUnitDocuments,
   fetchUnitDuplicateGroups,
+  fetchUnitLookups,
   fetchUnitSettings,
   fetchUnits,
   resetUnitSettings,
+  saveUnitLookup,
   saveUnitSettings,
 } from "../api/ermsService";
 import RecordFormModal from "../components/RecordFormModal";
+import LookupListEditor from "../components/LookupListEditor";
 import { unitTheme } from "../units/unitTheme";
+import UnitDocumentDetail from "../units/UnitDocumentDetail";
+import { SETTINGS_SECTIONS, settingsPath } from "../settingsPath";
 
-const SECTIONS = ["data", "duplicates", "privacy", "pdf", "audit", "log"];
+const SECTIONS = SETTINGS_SECTIONS.map(([key]) => key);
 
 const { Text, Paragraph } = Typography;
 
 // ---------------------------------------------------------------------------
-// Settings › ERMS — a unit's working rules, set by its own staff.
+// A unit's settings — its working rules, set by its own staff.
+//
+// Records, Legal Services and Laboratory each have their own settings page,
+// reached from their own section of the sidebar (ERMS · Records › Settings,
+// and so on) — not one shared page with a unit picker. A person sees the
+// settings of the units on their account and no other; the API enforces the
+// same (read: the unit's members; change: its filing staff).
+//
+//   Records     /universe/erms/settings/:section?
+//   Legal       /universe/erms/legal/settings/:section?
+//   Laboratory  /universe/erms/laboratory/settings/:section?
 //
 // Each tab is one concern, and each setting is enforced somewhere named in
 // its description: the record form, the library, the viewer, the trail. The
@@ -119,12 +136,13 @@ const DuplicateGroups = () => {
 
 /** A unit's documents that name no file on the share. */
 const UnitMissingFiles = ({ unit }) => {
+  const [openSerial, setOpenSerial] = useState(null);
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["erms", "unit", unit, "documents", { missingFile: true }],
     queryFn: () => fetchUnitDocuments(unit, { missingFile: true, pageSize: 50 }),
   });
   const columns = [
-    { title: "Serial", dataIndex: "serialNo", key: "serialNo", width: 160, render: (s) => <Link to={`/universe/erms/${unit}/documents/${encodeURIComponent(s)}`} style={{ fontFamily: "monospace" }}>{s}</Link> },
+    { title: "Serial", dataIndex: "serialNo", key: "serialNo", width: 160, render: (s) => <Typography.Link onClick={() => setOpenSerial(s)} style={{ fontFamily: "monospace" }}>{s}</Typography.Link> },
     { title: "Title", dataIndex: "title", key: "title", ellipsis: true },
     { title: "Type", dataIndex: "docTypeLabel", key: "type", width: 200, render: (v, d) => v || d.docType },
     { title: "Province", dataIndex: "provinceLabel", key: "province", width: 120, render: (v, d) => v || d.province || "—" },
@@ -135,6 +153,18 @@ const UnitMissingFiles = ({ unit }) => {
         Entries the desktop system kept without a scan, or whose scan could not be placed. Open one to file the scan against it.
       </Paragraph>
       <Table size="small" rowKey="serialNo" loading={isLoading} columns={columns} dataSource={data?.items || []} pagination={{ defaultPageSize: 10, hideOnSinglePage: true }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Every document has its file" /> }} />
+      <Modal
+        open={Boolean(openSerial)}
+        onCancel={() => { setOpenSerial(null); refetch(); }}
+        footer={null}
+        width="min(1100px, 96vw)"
+        style={{ top: 24 }}
+        title={null}
+        styles={{ body: { paddingTop: 8 } }}
+        destroyOnHidden
+      >
+        {openSerial && <UnitDocumentDetail unit={unit} serialNo={openSerial} embedded onOpenDocument={setOpenSerial} />}
+      </Modal>
     </Card>
   );
 };
@@ -166,7 +196,7 @@ const LogHistory = ({ unit }) => {
     { title: "Who", dataIndex: "who", key: "who", width: 140, render: (v) => v || <Text type="secondary">—</Text> },
     { title: "What", key: "what", render: (_, r) => (
       <Space size={6} wrap>
-        <Tag color={r.success ? (r.source === "document" ? "blue" : "default") : "red"}>{r.label}</Tag>
+        <Tag color={r.success ? (r.source === "document" ? "blue" : r.source === "sign-in" ? "green" : "default") : "red"}>{r.label}</Tag>
         {r.serialNo && <Text style={{ fontFamily: "monospace", fontSize: 12 }}>{r.serialNo}</Text>}
         {r.fileName && <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: r.fileName }}>{r.fileName}</Text>}
         {r.detail && <Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text>}
@@ -195,22 +225,66 @@ const LogHistory = ({ unit }) => {
   );
 };
 
-const ErmsSettings = () => {
+/** The menus the unit's forms offer, kept by the unit itself. */
+const UnitMenus = ({ unit }) => {
+  const queryClient = useQueryClient();
+  const { data, isLoading, error } = useQuery({ queryKey: ["erms", "unit-lookups", unit], queryFn: () => fetchUnitLookups(unit) });
+  if (error) return <Alert type="error" showIcon message={describeApiError(error, "Could not load the menus.")} />;
+  if (isLoading) return <Skeleton active />;
+  if (!data.lists.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="This unit keeps no menus of its own." />;
+  const byKind = Object.fromEntries(data.lists.map((l) => [l.kind, l]));
+  return (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <Paragraph type="secondary" style={{ margin: 0 }}>
+        The lists the unit&rsquo;s forms offer{unit === "legal" ? " — legal officers, case handlers, case statuses, nature of business" : unit === "laboratory" ? " — the parameter groups" : " — project types and document statuses"}.
+        Saved on their own with <Text strong>Save menu</Text>; the addresses are shared by every unit and kept in Admin Settings.
+      </Paragraph>
+      <LookupListEditor
+        kinds={data.lists.map((l) => ({ value: l.kind, label: MENU_LABEL[l.kind] || l.kind }))}
+        load={async (kind) => byKind[kind] || (await fetchUnitLookups(unit)).lists.find((l) => l.kind === kind)}
+        save={({ kind, items }) => saveUnitLookup({ unit, kind, items })}
+        queryKey={(kind) => ["erms", "unit-lookups", unit, kind]}
+        canEdit={data.canEdit}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["erms", "unit-lookups", unit] });
+          queryClient.invalidateQueries({ queryKey: ["erms", "lookups"] });
+        }}
+      />
+    </Space>
+  );
+};
+
+const MENU_LABEL = {
+  "project-types": "Project types",
+  "document-statuses": "Document statuses",
+  "legal-statuses": "Case statuses",
+  "legal-officers": "Legal officers",
+  "case-handlers": "Case handlers",
+  "nature-of-business": "Nature of business",
+  "lab-parameters": "Parameter groups",
+};
+
+const ErmsSettings = ({ unit: unitProp }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  // Each section is its own entry in the sidebar; the tab follows the URL.
-  const { section } = useParams();
-  const activeTab = SECTIONS.includes(section) ? section : "data";
+  // The unit comes from the route: fixed for Records, :unit for the others.
+  // The tab follows the URL, so a section can be bookmarked.
+  const params = useParams();
+  const unit = unitProp || params.unit;
+  const activeTab = SECTIONS.includes(params.section) ? params.section : "data";
   const [form] = Form.useForm();
   const { data: units } = useQuery({ queryKey: ["erms", "units"], queryFn: fetchUnits, staleTime: 5 * 60 * 1000 });
-  const mine = useMemo(() => units?.units || [], [units]);
-  const [unit, setUnit] = useState(null);
-  useEffect(() => {
-    if (!unit && units) setUnit(units.home || mine[0]?.key || null);
-  }, [units, unit, mine]);
+  const isMine = useMemo(() => (units?.units || []).some((u) => u.key === unit), [units, unit]);
 
-  const { data, isLoading, error } = useQuery({ queryKey: ["erms", "unit-settings", unit], queryFn: () => fetchUnitSettings(unit), enabled: Boolean(unit) });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["erms", "unit-settings", unit],
+    queryFn: () => fetchUnitSettings(unit),
+    enabled: Boolean(unit) && isMine,
+  });
   useEffect(() => {
+    // A fresh form per unit: going from Legal's settings to Laboratory's must
+    // not carry a value across.
+    form.resetFields();
     if (data?.settings) form.setFieldsValue(data.settings);
   }, [data, form]);
 
@@ -235,7 +309,7 @@ const ErmsSettings = () => {
   const watchedClassifications = Form.useWatch(["privacy", "classifications"], form);
   const classifications = useMemo(() => watchedClassifications || data?.settings?.privacy?.classifications || [], [watchedClassifications, data]);
   const isRecords = unit === "records";
-  const accent = unit && unit !== "records" ? unitTheme(unit).accent : undefined;
+  const theme = unitTheme(unit);
 
   const tabs = useMemo(() => [
     {
@@ -281,10 +355,10 @@ const ErmsSettings = () => {
       children: (
         <Card size="small" title="Classification and what a viewer sees">
           <Form.Item name={["privacy", "classifications"]} label="Classifications offered on the form" extra="Type a new one and press Enter. The first in the list is the default unless another is chosen below." style={{ marginBottom: 14 }}>
-            <Select mode="tags" disabled={!canEdit} tokenSeparators={[","]} />
+            <Select placeholder="Type a classification and press Enter" mode="tags" disabled={!canEdit} tokenSeparators={[","]} />
           </Form.Item>
           <Form.Item name={["privacy", "defaultClassification"]} label="Classification an upload gets when the form names none" style={{ marginBottom: 14 }}>
-            <Select disabled={!canEdit} options={classifications.map((c) => ({ value: c, label: c }))} />
+            <Select placeholder="Select the default" disabled={!canEdit} options={classifications.map((c) => ({ value: c, label: c }))} />
           </Form.Item>
           <Rule name={["privacy", "watermarkViewer"]} label="Watermark the viewer with the viewer's name and the date" help="Drawn over every page in the application's viewer, so a screenshot says who took it."><Switch disabled={!canEdit} /></Rule>
           {isRecords && <Rule name={["privacy", "hideProponentFromRequesters"]} label="Hide the proponent's name from people asking for access" help="Their request list and the establishment panel show the permit number and title only."><Switch disabled={!canEdit} /></Rule>}
@@ -296,12 +370,13 @@ const ErmsSettings = () => {
       label: <Space size={6}><FilePdfOutlined />PDF viewing</Space>,
       children: (
         <Card size="small" title="How much of a document someone outside the unit sees">
-          <Form.Item name={["pdfViewing", "previewPageLimit"]} label={isRecords ? "Pages shown to a person viewing by approval" : "Pages shown in the viewer"} extra={isRecords ? "0 shows every page. With a limit, the PDF is cut on the server to its first N pages — the rest never leave it — and the viewer shows the withheld pages as blurred placeholders." : "0 shows every page. Only the unit's own staff see its documents, so a limit here applies only with the switch below turned on."} style={{ marginBottom: 14 }}>
-            <InputNumber min={0} max={500} disabled={!canEdit} addonAfter="pages" />
+          <Form.Item name={["pdfViewing", "previewPageLimit"]} label="Pages shown in the viewer" extra="0 shows every page. With a limit, the document is cut on the server to its first pages — the rest never leave it — and the viewer shows the remaining pages blurred, with a button to ask for the whole document. It applies to the unit's staff and anyone viewing by approval; the Developer and administrators always see every page." style={{ marginBottom: 14 }}>
+            <InputNumber placeholder="0 = every page" min={0} max={500} disabled={!canEdit} addonAfter="pages" />
           </Form.Item>
           <Rule name={["pdfViewing", "blurWithheldPages"]} label="Show the withheld pages blurred, with a note to ask the unit" help="Off: the document simply ends at the limit."><Switch disabled={!canEdit} /></Rule>
-          <Rule name={["pdfViewing", "applyToUnit"]} label="Apply the limit to the unit's own staff as well"><Switch disabled={!canEdit} /></Rule>
-          <Rule name={["pdfViewing", "hideToolbar"]} label="Hide the viewer's toolbar (no save or print button)" help="A courtesy to the rule, not a lock: a browser cannot be stopped from saving what it shows."><Switch disabled={!canEdit} /></Rule>
+          <Rule name={["pdfViewing", "exemptUnit"]} label="Let the unit's own staff see every page" help="Off (the usual): the limit applies to everyone except the Developer, administrators and anyone given the whole document — the unit's own staff included."><Switch disabled={!canEdit} /></Rule>
+          {/* Download, print and right-click save are always off in the viewer (shared/components/viewOnly), so there is no switch for them. */}
+          <Alert type="info" showIcon style={{ marginTop: 4 }} message="Download, print and saving are always turned off" description="Every scanned document opens in a view-only viewer: no download or print button, no right-click save, and printing the page gives a blank sheet. Withheld pages show blurred, with a button to ask for the whole document." />
         </Card>
       ),
     },
@@ -315,7 +390,7 @@ const ErmsSettings = () => {
           <Rule name={["auditing", "logShares"]} label="Every share of a document"><Switch disabled={!canEdit} /></Rule>
           <Divider style={{ margin: "8px 0 14px" }} />
           <Form.Item name={["logHistory", "retentionDays"]} label="Log history reads back" style={{ marginBottom: 14 }}>
-            <InputNumber min={7} max={3650} disabled={!canEdit} addonAfter="days" />
+            <InputNumber placeholder="Days" min={7} max={3650} disabled={!canEdit} addonAfter="days" />
           </Form.Item>
           <Rule name={["logHistory", "showDesktopLog"]} label="Show the desktop system's log on a record's Tracking tab"><Switch disabled={!canEdit} /></Rule>
         </Card>
@@ -326,23 +401,32 @@ const ErmsSettings = () => {
       label: <Space size={6}><HistoryOutlined />Log history</Space>,
       children: unit ? <LogHistory unit={unit} /> : null,
     },
+    {
+      key: "menus",
+      label: <Space size={6}><UnorderedListOutlined />Menus</Space>,
+      children: unit ? <UnitMenus unit={unit} /> : null,
+    },
   ], [canEdit, classifications, isRecords, unit]);
 
-  if (units && !mine.length) {
-    return <Alert type="info" showIcon message="No ERMS unit on this account" description="These settings belong to a unit's own staff." />;
+  if (units && !isMine) {
+    return (
+      <Alert
+        type="info"
+        showIcon
+        message={`The ${UNIT_LABEL[unit] || unit} settings are not part of your account`}
+        description="A unit's settings belong to its own staff. Your own units' settings are under their sections of the menu."
+      />
+    );
   }
 
   return (
     <Card
+      style={{ borderTop: `3px solid ${theme.accent}` }}
       title={
         <Space size={12} wrap>
-          <span style={{ color: accent }}>{unit && unit !== "records" ? unitTheme(unit).icon : <SafetyCertificateOutlined />}</span>
-          <span>ERMS settings</span>
-          {mine.length > 1 ? (
-            <Select size="small" value={unit} onChange={setUnit} options={mine.map((u) => ({ value: u.key, label: UNIT_LABEL[u.key] || u.label }))} style={{ width: 170 }} />
-          ) : (
-            unit && <Tag>{UNIT_LABEL[unit] || unit}</Tag>
-          )}
+          <span style={{ color: theme.accent }}>{theme.icon || <SafetyCertificateOutlined />}</span>
+          <span>{UNIT_LABEL[unit] || unit} settings</span>
+          <Tag color={theme.color}>{theme.label}</Tag>
         </Space>
       }
       extra={
@@ -351,7 +435,13 @@ const ErmsSettings = () => {
             <Popconfirm title="Return every setting to its default?" onConfirm={() => reset.mutate()} okText="Reset" okButtonProps={{ danger: true }}>
               <Button loading={reset.isPending}>Reset</Button>
             </Popconfirm>
-            <Button type="primary" loading={save.isPending} onClick={async () => save.mutate(await form.validateFields())}>
+            <Button type="primary" loading={save.isPending} onClick={async () => {
+              // Check the tab on show, then send every value the form holds —
+              // the other tabs' too, which are not mounted and so are left
+              // out of what validateFields returns.
+              await form.validateFields();
+              save.mutate(form.getFieldsValue(true));
+            }}>
               Save settings
             </Button>
           </Space>
@@ -367,11 +457,11 @@ const ErmsSettings = () => {
           Last changed {new Date(data.updatedAt).toLocaleString()}{data.updatedBy ? ` by ${data.updatedBy}` : ""}.
         </Text>
       )}
-      {isLoading || !unit ? (
+      {isLoading || !units ? (
         <Skeleton active paragraph={{ rows: 8 }} />
       ) : (
         <Form form={form} layout="vertical" initialValues={data?.settings}>
-          <Tabs items={tabs} activeKey={activeTab} onChange={(key) => navigate(`/universe/settings/erms/${key}`)} />
+          <Tabs items={tabs} activeKey={activeTab} onChange={(key) => navigate(settingsPath(unit, key))} />
         </Form>
       )}
     </Card>

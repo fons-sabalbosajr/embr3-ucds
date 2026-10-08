@@ -44,7 +44,7 @@ const Waterbody = ({ selectedMunicipality, readOnly }) => {
     >
       <Paragraph>
         <strong>Receiving Waterbody (Major River/River System)</strong>
-        <Input
+        <Input placeholder="Filled in automatically"
           value={waterbody}
           readOnly
           style={{

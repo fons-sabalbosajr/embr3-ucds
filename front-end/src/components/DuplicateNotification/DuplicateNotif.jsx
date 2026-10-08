@@ -105,7 +105,7 @@ const DuplicateNotif = ({ duplicateData, onDuplicateResolved, theme }) => {
     return (
       <td>
         {editing ? (
-          <Input
+          <Input placeholder="Enter a value"
             value={record[dataIndex]}
             onChange={handleChange}
             autoFocus

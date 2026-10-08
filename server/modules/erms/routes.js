@@ -84,6 +84,7 @@ const locationShape = z.object({
   city: optional(120),
   barangay: optional(120),
   street: optional(200),
+  mailingAddress: optional(500),
   lat: z.number().min(-90).max(90).optional().nullable(),
   long: z.number().min(-180).max(180).optional().nullable(),
 });
@@ -192,6 +193,9 @@ const reportQuery = z.object({
 
 router.get('/api/erms/dashboard', ermsAccess, expensiveLimiter, ctrl.dashboard);
 router.get('/api/erms/filter-options', ermsAccess, ctrl.filterOptions);
+// Autocomplete on the upload forms: values already on file, within scope.
+const suggestQuery = (fields) => z.object({ field: z.enum(fields), q: z.string().trim().max(100).optional() });
+router.get('/api/erms/records/suggest', ermsAccess, validate(suggestQuery(['proponentName', 'projectTitle']), 'query'), ctrl.suggest);
 // The desktop system's menus (project types, statuses, addresses), for the forms.
 router.get(
   '/api/erms/lookups',
@@ -302,14 +306,73 @@ router.get(
   unitCtrl.unitActivity
 );
 
+// The unit's own menus (Settings › ERMS › Menus): read by the unit, changed by its staff.
+router.get('/api/erms/units/:unit/lookups', ermsAccess, validate(folderUnitParam, 'params'), unitCtrl.unitLookups);
+router.put(
+  '/api/erms/units/:unit/lookups/:kind',
+  ermsAccess,
+  validate(z.object({ unit: z.enum(ERMS_UNIT_VALUES), kind: z.string().regex(/^[a-z][a-z-]{1,40}$/) }), 'params'),
+  validate(z.object({ items: z.array(z.union([z.string().max(200), z.record(z.any())])).max(5000) })),
+  unitCtrl.saveUnitLookup
+);
+
+// Docket numbers (Legal): the next one, claiming it, and the register.
+const docketScope = z.object({ province: z.enum(PROVINCE_KEYS), year: z.coerce.number().int().min(1990).max(2200).optional() });
+router.get('/api/erms/units/:unit/dockets/next', ermsAccess, validate(folderUnitParam, 'params'), validate(docketScope, 'query'), unitCtrl.nextDocket);
+router.get(
+  '/api/erms/units/:unit/dockets',
+  ermsAccess,
+  validate(folderUnitParam, 'params'),
+  validate(docketScope.partial().extend({ limit: z.coerce.number().int().min(1).max(500).optional() }), 'query'),
+  unitCtrl.listDockets
+);
+router.post('/api/erms/units/:unit/dockets', ermsAccess, validate(folderUnitParam, 'params'), validate(docketScope.extend({ note: optional(300) })), unitCtrl.claimDocket);
+
+// The upload tally: counts per person per day, and the supervisor's check.
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+router.get(
+  '/api/erms/units/:unit/upload-tally',
+  ermsAccess,
+  expensiveLimiter,
+  validate(folderUnitParam, 'params'),
+  validate(z.object({ from: day.optional(), to: day.optional(), format: z.enum(['json', 'csv']).optional() }), 'query'),
+  unitCtrl.uploadTally
+);
+router.post(
+  '/api/erms/units/:unit/upload-tally/checks',
+  ermsAccess,
+  validate(folderUnitParam, 'params'),
+  validate(z.object({ entries: z.array(z.object({ date: day, uploader: z.string().max(200) })).min(1).max(200), remarks: optional(500) })),
+  unitCtrl.checkUploads
+);
+router.delete(
+  '/api/erms/units/:unit/upload-tally/checks',
+  ermsAccess,
+  validate(folderUnitParam, 'params'),
+  validate(z.object({ date: day, uploader: z.string().max(200) })),
+  unitCtrl.uncheckUploads
+);
+
 router.get('/api/erms/units', ermsAccess, unitCtrl.myUnits);
 router.get('/api/erms/units/:unit/dashboard', ermsAccess, validate(unitParam, 'params'), expensiveLimiter, unitCtrl.unitDashboard);
 router.get('/api/erms/units/:unit/documents', ermsAccess, validate(unitParam, 'params'), validate(unitListQuery, 'query'), unitCtrl.listDocuments);
+router.get(
+  '/api/erms/units/:unit/suggest',
+  ermsAccess,
+  validate(unitParam, 'params'),
+  validate(suggestQuery([...new Set(Object.values(require('./services/unitDocumentService').SUGGESTABLE).flat())]), 'query'),
+  unitCtrl.suggest
+);
 router.post('/api/erms/units/:unit/documents', ermsAccess, requireNasActive, validate(unitParam, 'params'), uploadOne, unitCtrl.createDocument);
 router.get('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.getDocument);
 router.patch('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), validate(unitUpdateSchema), unitCtrl.updateDocument);
+// File a scan against a document already on file, or replace its scan.
+router.post('/api/erms/units/:unit/documents/:serialNo/upload', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), uploadOne, unitCtrl.attachDocumentFile);
 router.get('/api/erms/units/:unit/documents/:serialNo/file', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), unitCtrl.getDocumentFileInfo);
 router.get('/api/erms/units/:unit/documents/:serialNo/file/preview', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), unitCtrl.viewDocumentFile);
+// Ask the administrators for every page of a document the viewer shows only in part.
+router.post('/api/erms/units/:unit/documents/:serialNo/full-access-request', ermsAccess, validate(unitSerialParam, 'params'), validate(z.object({ reason: optional(500) })), unitCtrl.requestFullAccess);
+router.post('/api/erms/records/:serialNo/full-access-request', ermsAccess, validate(serialParam, 'params'), validate(z.object({ reason: optional(500) })), unitCtrl.requestRecordFullAccess);
 
 // --- configuration (Admin Settings > ERMS Config) ------------------------------------
 
@@ -434,6 +497,28 @@ router.patch(
   ctrl.updateBox
 );
 router.get('/api/erms/disposal-due', ermsAccess, ctrl.disposalDue);
+
+// --- the Action Center: messages between ERMS users ------------------------------
+
+const messageCtrl = require('./controllers/messageController');
+const { PURPOSES } = require('./services/messageService');
+const messageId = z.object({ id: z.string().regex(/^[a-f0-9]{24}$/i) });
+router.get(
+  '/api/erms/messages',
+  ermsAccess,
+  validate(z.object({ box: z.enum(['inbox', 'sent']).default('inbox'), page: z.coerce.number().int().min(1).max(10000).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) }), 'query'),
+  messageCtrl.list
+);
+router.get('/api/erms/messages/unread', ermsAccess, messageCtrl.unread);
+router.get('/api/erms/messages/people', ermsAccess, validate(z.object({ q: z.string().trim().max(120).optional() }), 'query'), messageCtrl.people);
+router.post(
+  '/api/erms/messages',
+  ermsAccess,
+  validate(z.object({ to: z.string().trim().min(1).max(120), purpose: z.enum(PURPOSES), subject: z.string().trim().min(1).max(200), details: optional(4000) })),
+  messageCtrl.send
+);
+router.patch('/api/erms/messages/:id', ermsAccess, validate(messageId, 'params'), validate(z.object({ read: z.boolean() })), messageCtrl.mark);
+router.delete('/api/erms/messages/:id', ermsAccess, validate(messageId, 'params'), messageCtrl.remove);
 
 router.get(
   '/api/erms/reports/:key',

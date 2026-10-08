@@ -40,7 +40,7 @@ async function main() {
 
   const client = new MongoClient(process.env.MONGO_URI);
   await client.connect();
-  const col = client.db().collection('erms-records');
+  const col = client.db(process.env.MONGO_DB_NAME || undefined).collection('erms-records');
 
   const match = { 'document.sharePath': { $nin: [null, ''] } };
   const pipeline = [{ $match: match }];

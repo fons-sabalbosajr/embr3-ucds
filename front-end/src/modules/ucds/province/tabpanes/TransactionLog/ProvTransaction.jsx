@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import CryptoJS from "crypto-js";
 import "./provtransaction.css";
 import { API_BASE_URL } from "../../../../../config/api";
+import visibleInterval from "../../../../../shared/visibleInterval";
 
 const ProvTransaction = ({
   editedRecord,
@@ -99,8 +100,9 @@ const ProvTransaction = ({
 
     fetchTransactions();
 
-    const intervalId = setInterval(fetchTransactions, 1000);
-    return () => clearInterval(intervalId);
+    // Every 30 s while the tab is visible. It was every second, which with
+    // the tab left open was one query per second per person, all day.
+    return visibleInterval(fetchTransactions, 30000);
   }, [editedRecord, handleReload]);
 
   const handleTableChange = (pagination) => {

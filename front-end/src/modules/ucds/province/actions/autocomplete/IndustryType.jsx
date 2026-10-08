@@ -43,7 +43,7 @@ const IndustryType = ({ selectedIndustryClass, readOnly }) => {
     >
       <Paragraph>
         <strong>Industry Type</strong>
-        <Input
+        <Input placeholder="Filled in automatically"
           value={industryType}
           readOnly
           style={{

@@ -70,6 +70,67 @@ export const MagnitudeBars = ({ rows, color, dark, height = 260, name = "Documen
   );
 };
 
+/**
+ * Uploads per month, stacked by kind — the desktop system's monthly upload
+ * views. `months`: [{ month: "2026-09", total, kinds: { <code>: n } }];
+ * `kinds`: [{ code, label }] in the fixed order the palette follows (beyond
+ * six, the rest fold into "Other", as the donut does). Each column's total
+ * is labelled over it, so the counts never rest on colour alone.
+ */
+export const MonthStack = ({ months, kinds, dark, height = 280, name = "Uploads" }) => {
+  const rows = months || [];
+  if (!rows.some((m) => m.total > 0)) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing uploaded in the last twelve months" />;
+  // A kind's colour is its slot in the fixed order, whatever else was filed
+  // that year, so it matches the donut above: ECC (Amended) is never blue
+  // because no ECC (Original) happened to be filed. Kinds past the sixth
+  // slot, and any not in the list, share "Other".
+  const present = new Set(rows.flatMap((m) => Object.keys(m.kinds || {}).filter((c) => m.kinds[c] > 0)));
+  const fixed = kinds || [];
+  const head = fixed.slice(0, 6).map((k, slot) => ({ ...k, slot })).filter((k) => present.has(k.code));
+  const fold = new Set([...present].filter((c) => !head.some((k) => k.code === c)));
+  const series = [...head.map((k) => k.label), ...(fold.size ? ["Other"] : [])];
+  const labelOf = Object.fromEntries(head.map((k) => [k.code, k.label]));
+  const short = (m) => new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+
+  const data = [];
+  for (const m of rows) {
+    const other = [...fold].reduce((s, c) => s + (m.kinds?.[c] || 0), 0);
+    for (const k of head) data.push({ month: short(m.month), kind: labelOf[k.code], count: m.kinds?.[k.code] || 0 });
+    if (fold.size) data.push({ month: short(m.month), kind: "Other", count: other });
+  }
+  const totals = rows.map((m) => ({ month: short(m.month), total: m.total }));
+  const palette = CATEGORICAL[dark ? "dark" : "light"];
+
+  return (
+    <Column
+      data={data}
+      xField="month"
+      yField="count"
+      colorField="kind"
+      stack
+      height={height}
+      theme={dark ? "classicDark" : "classic"}
+      scale={{ color: { domain: series, range: [...head.map((k) => palette[k.slot]), ...(fold.size ? [palette[6]] : [])] } }}
+      // A 2px surface gap between stacked segments.
+      style={{ stroke: dark ? "#1a1a19" : "#ffffff", lineWidth: 2, maxWidth: 28 }}
+      axis={{ x: { title: false, labelFontSize: 11 }, y: { title: false, grid: true, labelFormatter: (v) => fmt(v), labelFontSize: 11 } }}
+      legend={{ color: { position: "bottom", itemLabelFontSize: 11 } }}
+      tooltip={{ items: [{ channel: "y", valueFormatter: (v) => fmt(v) }] }}
+      annotations={[
+        {
+          type: "text",
+          data: totals.filter((t) => t.total > 0),
+          encode: { x: "month", y: "total", text: (d) => fmt(d.total) },
+          style: { textAlign: "center", textBaseline: "bottom", dy: -4, fontSize: 11, fill: dark ? "#d9d9d6" : "#4a4a47" },
+          tooltip: false,
+        },
+      ]}
+      animate={false}
+      aria-label={`${name} per month`}
+    />
+  );
+};
+
 /** Columns per year, the most recent `years`. `rows`: [{ year, count }]. */
 export const YearColumns = ({ rows, color, dark, height = 260, years = 12, name = "Documents" }) => {
   const data = [...(rows || [])]

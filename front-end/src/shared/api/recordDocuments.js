@@ -24,10 +24,26 @@ export const unitFileBase = (unit, serialNo) =>
   `${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/file`;
 
 /** Ask the Records Unit to open one record's document for the caller. */
-export const requestDocumentAccess = async ({ serialNo, reason, domain = "erms" }) =>
+export const requestDocumentAccess = async ({ serialNo, reason, full, domain = "erms" }) =>
   (
     await axios.post(
       `${prefix(domain)}/records/${encodeURIComponent(serialNo)}/access-request`,
+      { reason, full },
+      { withCredentials: true }
+    )
+  ).data;
+
+/** Ask the administrators for every page of a record (the Records Unit's own staff). */
+export const requestRecordFullAccess = async ({ serialNo, reason }) =>
+  (
+    await axios.post(`${API_BASE}/erms/records/${encodeURIComponent(serialNo)}/full-access-request`, { reason }, { withCredentials: true })
+  ).data;
+
+/** Ask the administrators for every page of a Legal or Laboratory document. */
+export const requestUnitFullAccess = async ({ unit, serialNo, reason }) =>
+  (
+    await axios.post(
+      `${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/full-access-request`,
       { reason },
       { withCredentials: true }
     )
@@ -37,15 +53,33 @@ export const requestDocumentAccess = async ({ serialNo, reason, domain = "erms" 
  * File a scan against a record (Records Unit). `replace`: absent or
  * 'missing' for a record without a scan; 'keep' or 'delete' to re-upload
  * over one that exists, saying what happens to the old file on the share.
- * `folder`: the project folder chosen on the form, if any.
+ * `folder`, `subfolder`: the project folder, and the folder inside it,
+ * chosen on the form, if any.
  */
-export const attachRecordFile = async ({ serialNo, file, replace, folder }) => {
+export const attachRecordFile = async ({ serialNo, file, replace, folder, subfolder }) => {
   const form = new FormData();
   if (replace) form.append("replace", replace);
   if (folder) form.append("folder", folder);
+  if (subfolder) form.append("subfolder", subfolder);
   form.append("file", file, file.name);
   return (
     await axios.post(`${API_BASE}/erms/records/${encodeURIComponent(serialNo)}/upload`, form, { withCredentials: true })
+  ).data;
+};
+
+/**
+ * File a scan against a Legal or Laboratory document, or replace its scan.
+ * The same `replace` rule as a record: 'keep' or 'delete' when the
+ * document already has a scan on the share.
+ */
+export const attachUnitFile = async ({ unit, serialNo, file, replace, folder, subfolder }) => {
+  const form = new FormData();
+  if (replace) form.append("replace", replace);
+  if (folder) form.append("folder", folder);
+  if (subfolder) form.append("subfolder", subfolder);
+  form.append("file", file, file.name);
+  return (
+    await axios.post(`${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/upload`, form, { withCredentials: true })
   ).data;
 };
 

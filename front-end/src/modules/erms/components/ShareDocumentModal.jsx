@@ -123,7 +123,7 @@ const ShareDocumentModal = ({ open, serialNo, fileName, onClose }) => {
           />
         </Form.Item>
         <Form.Item name="durationHours" label="For how long">
-          <Select options={DURATIONS.map(([value, label]) => ({ value, label }))} />
+          <Select placeholder="Select how long" options={DURATIONS.map(([value, label]) => ({ value, label }))} />
         </Form.Item>
         <Form.Item name="note" label="Note (optional)">
           <Input.TextArea rows={2} maxLength={500} showCount placeholder="Why it is being shared, for the record" />

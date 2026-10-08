@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -13,7 +13,6 @@ import {
   Space,
   Table,
   Tabs,
-  Tag,
   Typography,
 } from "antd";
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SettingOutlined } from "@ant-design/icons";
@@ -28,6 +27,7 @@ import {
   saveLookupList,
 } from "../../erms/api/ermsService";
 import { UNIT_THEME } from "../../erms/units/unitTheme";
+import LookupListEditor from "../../erms/components/LookupListEditor";
 
 const { Text, Paragraph, Title } = Typography;
 
@@ -62,8 +62,8 @@ const FieldsEditor = ({ open, docType, fieldTypes, lookupKinds, onClose, onSave 
   const patch = (id, changes) => setRows((rs) => rs.map((r) => (r._id === id ? { ...r, ...changes } : r)));
   const columns = [
     { title: "Key", dataIndex: "key", width: 160, render: (v, r) => <Input value={v} onChange={(e) => patch(r._id, { key: e.target.value.replace(/[^a-zA-Z0-9]/g, "") })} placeholder="camelCase" /> },
-    { title: "Label", dataIndex: "label", render: (v, r) => <Input value={v} onChange={(e) => patch(r._id, { label: e.target.value })} /> },
-    { title: "Type", dataIndex: "type", width: 130, render: (v, r) => <Select value={v} onChange={(t) => patch(r._id, { type: t })} options={fieldTypes.map((t) => ({ value: t, label: t }))} style={{ width: "100%" }} /> },
+    { title: "Label", dataIndex: "label", render: (v, r) => <Input placeholder="Label shown on the form" value={v} onChange={(e) => patch(r._id, { label: e.target.value })} /> },
+    { title: "Type", dataIndex: "type", width: 130, render: (v, r) => <Select placeholder="Field type" value={v} onChange={(t) => patch(r._id, { type: t })} options={fieldTypes.map((t) => ({ value: t, label: t }))} style={{ width: "100%" }} /> },
     {
       title: "List / options",
       width: 200,
@@ -115,7 +115,7 @@ const UnitTab = ({ unitKey, unit, fieldTypes, folderTokens, lookupKinds, onChang
 
   const typeColumns = [
     { title: "Code", dataIndex: "code", width: 130, render: (v) => <Text code>{v}</Text> },
-    { title: "Label", dataIndex: "label", render: (v, t) => <Input value={v} onChange={(e) => patchType(t.code, { label: e.target.value })} /> },
+    { title: "Label", dataIndex: "label", render: (v, t) => <Input placeholder="Label shown in lists" value={v} onChange={(e) => patchType(t.code, { label: e.target.value })} /> },
     { title: "Folder on the share", dataIndex: "folder", width: 180, render: (v, t) => <Input value={v} onChange={(e) => patchType(t.code, { folder: e.target.value })} placeholder="(none)" /> },
     isRecords
       ? { title: "File prefix", dataIndex: "filePrefix", width: 140, render: (v, t) => <Input value={v} onChange={(e) => patchType(t.code, { filePrefix: e.target.value })} placeholder="ECC_Original" /> }
@@ -169,11 +169,11 @@ const UnitTab = ({ unitKey, unit, fieldTypes, folderTokens, lookupKinds, onChang
       <Card size="small" title={<Space><span style={{ color: theme.accent }}>{theme.icon}</span>Unit</Space>} style={{ borderTop: `3px solid ${theme.accent}` }}>
         <Descriptions column={1} size="small" bordered labelStyle={{ width: 220 }}>
           <Descriptions.Item label="Name">
-            <Input value={unit.label} onChange={(e) => patch({ label: e.target.value })} style={{ maxWidth: 320 }} />
+            <Input placeholder="Unit name" value={unit.label} onChange={(e) => patch({ label: e.target.value })} style={{ maxWidth: 320 }} />
           </Descriptions.Item>
           <Descriptions.Item label="Storage container">
             <Space>
-              <Input value={unit.container} onChange={(e) => patch({ container: e.target.value })} style={{ width: 200 }} />
+              <Input placeholder="e.g. legal" value={unit.container} onChange={(e) => patch({ container: e.target.value })} style={{ width: 200 }} />
               <Text type="secondary">the container key under Storage Configuration</Text>
             </Space>
           </Descriptions.Item>
@@ -185,6 +185,32 @@ const UnitTab = ({ unitKey, unit, fieldTypes, folderTokens, lookupKinds, onChang
               </Space.Compact>
             </Descriptions.Item>
           )}
+          {unit.docket && (
+            <Descriptions.Item label="Docket numbers">
+              <Space direction="vertical" size={6}>
+                <Space wrap>
+                  <Space.Compact>
+                    <Input value={unit.docket.prefix} onChange={(e) => patch({ docket: { ...unit.docket, prefix: e.target.value.toUpperCase() } })} style={{ width: 110 }} />
+                    <InputNumber value={unit.docket.pad} min={1} max={6} onChange={(n) => patch({ docket: { ...unit.docket, pad: n || 3 } })} style={{ width: 70 }} />
+                  </Space.Compact>
+                  <Text type="secondary">
+                    e.g. <Text code>{`${unit.docket.prefix}-${new Date().getFullYear()}-PA-${"1".padStart(unit.docket.pad, "0")}`}</Text>, one register per province and year
+                  </Text>
+                </Space>
+                <Space wrap>
+                  <Text type="secondary">Issued on</Text>
+                  <Select
+                    mode="multiple"
+                    value={unit.docket.issueOn}
+                    onChange={(issueOn) => patch({ docket: { ...unit.docket, issueOn } })}
+                    options={unit.docTypes.map((t) => ({ value: t.code, label: t.label }))}
+                    style={{ minWidth: 260 }}
+                    placeholder="the document types that open a case"
+                  />
+                </Space>
+              </Space>
+            </Descriptions.Item>
+          )}
         </Descriptions>
       </Card>
 
@@ -194,17 +220,17 @@ const UnitTab = ({ unitKey, unit, fieldTypes, folderTokens, lookupKinds, onChang
           document being filed; <Text code>{"{yearRange}"}</Text> is the desktop system’s five-year bucket (2021-2025).
         </Paragraph>
         <Descriptions column={1} size="small" bordered labelStyle={{ width: 220 }}>
-          <Descriptions.Item label="Root folder"><Input value={unit.folder.root} onChange={(e) => patchFolder({ root: e.target.value })} /></Descriptions.Item>
-          <Descriptions.Item label="Pattern"><Input value={unit.folder.pattern} onChange={(e) => patchFolder({ pattern: e.target.value })} /></Descriptions.Item>
+          <Descriptions.Item label="Root folder"><Input placeholder="Top folder on the share" value={unit.folder.root} onChange={(e) => patchFolder({ root: e.target.value })} /></Descriptions.Item>
+          <Descriptions.Item label="Pattern"><Input placeholder="e.g. {year}/{folder}" value={unit.folder.pattern} onChange={(e) => patchFolder({ pattern: e.target.value })} /></Descriptions.Item>
           <Descriptions.Item label="{folder} comes from">
             <Space>
-              <Input value={unit.folder.folderField} onChange={(e) => patchFolder({ folderField: e.target.value })} style={{ width: 240 }} />
+              <Input placeholder="Field key, e.g. companyName" value={unit.folder.folderField} onChange={(e) => patchFolder({ folderField: e.target.value })} style={{ width: 240 }} />
               <Text type="secondary">a field key (companyName, firmName, projectTitle)</Text>
             </Space>
           </Descriptions.Item>
           <Descriptions.Item label="{year} comes from">
             <Space>
-              <Input value={unit.folder.yearField} onChange={(e) => patchFolder({ yearField: e.target.value })} style={{ width: 240 }} />
+              <Input placeholder="Date field key, e.g. dateFiled" value={unit.folder.yearField} onChange={(e) => patchFolder({ yearField: e.target.value })} style={{ width: 240 }} />
               <Text type="secondary">a date field; the upload date when empty</Text>
             </Space>
           </Descriptions.Item>
@@ -243,67 +269,18 @@ const UnitTab = ({ unitKey, unit, fieldTypes, folderTokens, lookupKinds, onChang
 
 const MenusTab = ({ kinds }) => {
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState(kinds[0] || "project-types");
-  const [rows, setRows] = useState([]);
-  const [dirty, setDirty] = useState(false);
-
-  const { data, isFetching } = useQuery({ queryKey: ["erms", "config", "lookup", kind], queryFn: () => fetchLookupList(kind), enabled: Boolean(kind) });
-  useEffect(() => {
-    if (data) {
-      setRows((data.items || []).map((it) => ({ ...it, _id: uid() })));
-      setDirty(false);
-    }
-  }, [data]);
-
-  const save = useMutation({
-    mutationFn: () => saveLookupList({ kind, items: rows.filter((r) => r.label).map(({ _id, ...it }) => it) }),
-    onSuccess: () => {
-      message.success("Menu saved.");
-      setDirty(false);
-      queryClient.invalidateQueries({ queryKey: ["erms", "lookups"] });
-      queryClient.invalidateQueries({ queryKey: ["erms", "config"] });
-    },
-    onError: (e) => message.error(describeApiError(e, "Could not save the menu.")),
-  });
-
-  const patch = (id, changes) => {
-    setRows((rs) => rs.map((r) => (r._id === id ? { ...r, ...changes } : r)));
-    setDirty(true);
-  };
-  const extraKeys = useMemo(() => {
-    const keys = new Set();
-    for (const r of rows.slice(0, 50)) for (const k of Object.keys(r)) if (!["_id", "label"].includes(k) && typeof r[k] === "string") keys.add(k);
-    return [...keys].slice(0, 3);
-  }, [rows]);
-
-  const large = rows.length > 500;
-  const columns = [
-    { title: "Label", dataIndex: "label", render: (v, r) => <Input value={v} onChange={(e) => patch(r._id, { label: e.target.value })} /> },
-    ...extraKeys.map((k) => ({ title: k, dataIndex: k, width: 200, render: (v, r) => <Input value={v || ""} onChange={(e) => patch(r._id, { [k]: e.target.value })} /> })),
-    { title: "", width: 40, render: (_, r) => <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => { setRows((rs) => rs.filter((x) => x._id !== r._id)); setDirty(true); }} /> },
-  ];
-
   return (
-    <Card
-      size="small"
-      title={
-        <Space>
-          <span>Menu</span>
-          <Select value={kind} onChange={setKind} options={kinds.map((k) => ({ value: k, label: k }))} style={{ width: 220 }} />
-          {data && <Tag>{data.count ?? rows.length} items{data.unit ? ` · ${data.unit}` : ""}</Tag>}
-        </Space>
-      }
-      extra={
-        <Space>
-          <Button icon={<PlusOutlined />} onClick={() => { setRows((rs) => [{ _id: uid(), label: "" }, ...rs]); setDirty(true); }}>Add</Button>
-          <Button type="primary" icon={<SaveOutlined />} disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>Save menu</Button>
-        </Space>
-      }
-    >
-      {data?.description && <Paragraph type="secondary">{data.description}</Paragraph>}
-      {large && <Alert type="info" showIcon style={{ marginBottom: 8 }} message="A large list; showing the first page at a time. Search the label to find an entry." />}
-      <Table rowKey="_id" size="small" loading={isFetching} columns={columns} dataSource={rows} pagination={{ defaultPageSize: 50, hideOnSinglePage: true }} />
-    </Card>
+    <LookupListEditor
+      kinds={kinds.map((k) => ({ value: k, label: k }))}
+      load={fetchLookupList}
+      save={saveLookupList}
+      queryKey={(kind) => ["erms", "config", "lookup", kind]}
+      onSaved={() => {
+        queryClient.invalidateQueries({ queryKey: ["erms", "lookups"] });
+        queryClient.invalidateQueries({ queryKey: ["erms", "config"] });
+        queryClient.invalidateQueries({ queryKey: ["erms", "unit-lookups"] });
+      }}
+    />
   );
 };
 

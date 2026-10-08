@@ -10,7 +10,7 @@ require("dotenv").config();
 require("./config/dns").configureDns();
 
 const MongoStore = require("connect-mongo");
-const { connectToMongo, client } = require("./config/db");
+const { connectToMongo, client, DB_NAME } = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
 const postingRoutes = require("./routes/postingRoutes");
@@ -70,8 +70,17 @@ const sessionStore = MongoStore.create({
     await connectToMongo();
     return client;
   })(),
+  // Named, not taken from the URI's path, so sessions live beside the users
+  // they belong to whichever database MONGO_DB_NAME selects.
+  dbName: DB_NAME,
   collectionName: "sessions",
   ttl: 14 * 24 * 60 * 60,
+  // Re-save an unchanged session at most every 10 minutes, not on every
+  // request. Without it each API call was a read and a write on Atlas — a
+  // free tier with an operations-per-second limit, shared with six other
+  // applications — so the session store alone grew with every user and
+  // every poll. A session changed by the request is still saved at once.
+  touchAfter: 10 * 60,
 });
 
 // A tab that carries its own session token is answered by that session, not
@@ -126,6 +135,8 @@ app.use(healthRoutes);
 app.use(developerRoutes);
 app.use(yearRoutes);
 app.use(require("./routes/datasetRoutes"));
+// VERA, the in-app assistant (services/vera, controllers/veraController.js).
+app.use(require("./routes/veraRoutes"));
 app.use(orgUnitRoutes);
 
 // Cross-domain routes. The establishment→records panel lives here rather than

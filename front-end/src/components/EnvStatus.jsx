@@ -25,28 +25,6 @@ export default function EnvStatus() {
   };
 
   return (
-    <div style={boxStyle}>
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>Env Status</div>
-      <div
-        style={{
-          ...mono,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        API: {API_BASE_URL}
-      </div>
-      <div
-        style={{
-          ...mono,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        Socket: {SOCKET_URL}
-      </div>
-    </div>
+    <></>
   );
 }

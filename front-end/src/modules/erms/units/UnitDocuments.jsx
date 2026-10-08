@@ -1,25 +1,30 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Alert, Button, Card, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { EyeOutlined, UploadOutlined } from "@ant-design/icons";
+import { useParams, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { describeApiError, fetchUnitDocuments } from "../api/ermsService";
 import { useUnits } from "./useUnits";
 import { PROVINCE_OPTIONS, unitTheme, formatValue } from "./unitTheme";
 import UnitUploadModal from "./UnitUploadModal";
+import UnitDocumentDetail from "./UnitDocumentDetail";
 
 const { Title, Text } = Typography;
 
 // ---------------------------------------------------------------------------
 // A unit's documents: Legal cases by docket, Laboratory documents by firm.
 // Filter by type, province and text; open one; file a new one.
+//
+// A document opens in a dialog over the list, as a Records record does, so
+// the filters, page and scroll position are still there when it closes. The
+// page route (/erms/:unit/documents/:serialNo) remains for links from
+// elsewhere.
 // ---------------------------------------------------------------------------
 
 const DEFAULT = { search: "", docType: undefined, province: undefined, page: 1, pageSize: 25, sortBy: "createdAt", sortDir: -1 };
 
 const UnitDocuments = () => {
   const { unit } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = unitTheme(unit);
   const { unit: unitOf, isLoading: unitsLoading } = useUnits();
@@ -28,6 +33,7 @@ const UnitDocuments = () => {
   const [query, setQuery] = useState({ ...DEFAULT, docType: searchParams.get("docType") || undefined, docketNo: searchParams.get("docketNo") || undefined, search: searchParams.get("search") || undefined });
   const [draft, setDraft] = useState("");
   const [filing, setFiling] = useState(searchParams.get("upload") === "1");
+  const [openSerial, setOpenSerial] = useState(searchParams.get("open") || null);
 
   useEffect(() => {
     if (searchParams.get("upload") === "1") setFiling(true);
@@ -55,7 +61,19 @@ const UnitDocuments = () => {
       dataIndex: "serialNo",
       sorter: true,
       width: 170,
-      render: (s) => <Link to={`/universe/erms/${unit}/documents/${encodeURIComponent(s)}`}>{s}</Link>,
+      render: (s) => (
+        <Typography.Link
+          href={`/universe/erms/${unit}/documents/${encodeURIComponent(s)}`}
+          onClick={(e) => {
+            // A plain click opens the dialog; ctrl/middle-click still opens the page in a new tab.
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            setOpenSerial(s);
+          }}
+        >
+          {s}
+        </Typography.Link>
+      ),
     },
     { title: "Type", dataIndex: "docType", width: 200, render: (code) => <Tag color={theme.color}>{typeLabel(code)}</Tag> },
     {
@@ -74,6 +92,17 @@ const UnitDocuments = () => {
     unit === "laboratory" && { title: "Sampled", dataIndex: ["fields", "dateOfSampling"], width: 120, render: (v) => formatValue({ type: "date" }, v) },
     { title: "Filed", dataIndex: "createdAt", sorter: true, width: 120, render: (v) => formatValue({ type: "date" }, v) },
     { title: "File", dataIndex: ["document", "fileName"], ellipsis: true, render: (v) => v || <Text type="secondary">no file</Text> },
+    {
+      title: "",
+      key: "view",
+      width: 56,
+      align: "center",
+      render: (_, r) => (
+        <Tooltip title="View">
+          <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(r.serialNo)} aria-label={`View ${r.serialNo}`} />
+        </Tooltip>
+      ),
+    },
   ].filter(Boolean);
 
   return (
@@ -145,7 +174,7 @@ const UnitDocuments = () => {
               sortDir: sorter?.order === "ascend" ? 1 : -1,
             }));
           }}
-          onRow={(r) => ({ onDoubleClick: () => navigate(`/universe/erms/${unit}/documents/${encodeURIComponent(r.serialNo)}`) })}
+          onRow={(r) => ({ onDoubleClick: () => setOpenSerial(r.serialNo), style: { cursor: "pointer" } })}
         />
       </Card>
 
@@ -156,9 +185,23 @@ const UnitDocuments = () => {
         onClose={(saved) => {
           setFiling(false);
           if (searchParams.get("upload")) setSearchParams({});
-          if (saved) navigate(`/universe/erms/${unit}/documents/${encodeURIComponent(saved.serialNo)}`);
+          if (saved) setOpenSerial(saved.serialNo);
         }}
       />
+
+      <Modal
+        open={Boolean(openSerial)}
+        onCancel={() => setOpenSerial(null)}
+        footer={null}
+        width="min(1100px, 96vw)"
+        style={{ top: 24 }}
+        // The document's own header names it; a title above would repeat it.
+        title={null}
+        styles={{ body: { paddingTop: 8 } }}
+        destroyOnHidden
+      >
+        {openSerial && <UnitDocumentDetail unit={unit} serialNo={openSerial} embedded onOpenDocument={setOpenSerial} />}
+      </Modal>
     </Space>
   );
 };

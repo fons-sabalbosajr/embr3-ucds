@@ -145,7 +145,7 @@ const AccountTypePanel = ({ userId, permission, nasContainers, ermsUnit, onChang
       <div>
         <Text strong>Account type</Text>
         <div style={{ marginTop: 6 }}>
-          <Select
+          <Select placeholder="Select the account type"
             value={type}
             onChange={setType}
             disabled={!isDeveloper}
@@ -167,7 +167,7 @@ const AccountTypePanel = ({ userId, permission, nasContainers, ermsUnit, onChang
         <div>
           <Text strong>System</Text>
           <div style={{ marginTop: 6 }}>
-            <Select
+            <Select placeholder="Select the system"
               value={unit || "records"}
               onChange={setUnit}
               disabled={!isDeveloper}

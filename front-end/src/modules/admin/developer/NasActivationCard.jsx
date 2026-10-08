@@ -4,6 +4,7 @@ import { message } from "../../../shared/feedback";
 import { PoweroffOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { API_BASE_URL } from "../../../config/api";
+import { initializeSocket, getSocket } from "../../../api/socketService";
 
 const { Text, Paragraph } = Typography;
 
@@ -17,6 +18,11 @@ const { Text, Paragraph } = Typography;
 // Switching this on switches it on for everyone, which is the point: the old
 // per-session behaviour meant a developer could see documents while nobody
 // else could, and nothing said so.
+//
+// A change takes effect at once: the server re-checks the road to the NAS and
+// pushes the new state to every open screen. If access is still off after
+// switching it on, the status names the rule that is holding it (the weekday
+// schedule, the bridge server, the NAS), which this card does not override.
 // ---------------------------------------------------------------------------
 
 const REASONS = {
@@ -25,12 +31,22 @@ const REASONS = {
   disabled: "Manually switched off.",
   "not-yet": "Scheduled to start later.",
   expired: "The activation window has expired.",
+  "master-off": "The NAS is switched off for everyone (Storage › Availability).",
+  "outside-schedule": "Outside the weekday schedule (Storage › Availability).",
+  "bridge-offline": "The office server that connects to the NAS is off.",
+  "nas-offline": "The NAS is not answering.",
 };
 
+/** Reasons that are another rule's doing, not this switch's. */
+const HELD_ELSEWHERE = new Set(["master-off", "outside-schedule", "bridge-offline", "nas-offline"]);
+
+// 0 means no end: on until someone switches it off.
 const PRESETS = [
   { label: "4 hours", minutes: 240 },
   { label: "1 day", minutes: 1440 },
   { label: "5 days", minutes: 7200 },
+  { label: "30 days", minutes: 43200 },
+  { label: "Until switched off", minutes: 0 },
 ];
 
 const humanDuration = (ms) => {
@@ -77,6 +93,14 @@ const NasActivationCard = ({ onChanged }) => {
     return () => clearInterval(t);
   }, [load]);
 
+  // And at once when anything changes it: another administrator, a window
+  // starting or ending on its clock, the bridge server going up or down.
+  useEffect(() => {
+    const socket = getSocket() || initializeSocket();
+    socket?.on("nas:availability", load);
+    return () => socket?.off("nas:availability", load);
+  }, [load]);
+
   const save = async (body) => {
     setSaving(true);
     setError(null);
@@ -93,7 +117,9 @@ const NasActivationCard = ({ onChanged }) => {
         return;
       }
       setState(data);
-      message.success(body.enabled ? "Document access is on" : "Document access is off");
+      if (!body.enabled) message.success("Document access is off for everyone");
+      else if (data.active) message.success("Document access is on for everyone, now");
+      else message.warning(`Switched on, but access is still held: ${data.message || REASONS[data.reason] || data.reason}`);
       onChanged?.(data);
     } finally {
       setSaving(false);
@@ -101,7 +127,7 @@ const NasActivationCard = ({ onChanged }) => {
   };
 
   const activate = () => {
-    if (mode === "duration") return save({ enabled: true, durationMinutes: minutes });
+    if (mode === "duration") return save(minutes ? { enabled: true, durationMinutes: minutes } : { enabled: true });
     if (!range?.[0] || !range?.[1]) {
       setError("Choose a start and an end.");
       return undefined;
@@ -116,6 +142,9 @@ const NasActivationCard = ({ onChanged }) => {
   if (loading) return <Card size="small" loading title="Document access" />;
 
   const active = state?.active === true;
+  // Switched on here, but another rule is holding access off.
+  const held = !active && HELD_ELSEWHERE.has(state?.reason);
+  const switchedOn = active || held;
 
   return (
     <Card
@@ -130,10 +159,10 @@ const NasActivationCard = ({ onChanged }) => {
 
       <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
         <Descriptions.Item label="Status">
-          {active ? <Tag color="green">Active</Tag> : <Tag color="red">Inactive</Tag>}
+          {active ? <Tag color="green">Active</Tag> : held ? <Tag color="gold">On, but held</Tag> : <Tag color="red">Inactive</Tag>}
           {!active && state?.reason && (
             <Text type="secondary" style={{ marginLeft: 8 }}>
-              {REASONS[state.reason] || state.reason}
+              {state.message || REASONS[state.reason] || state.reason}
             </Text>
           )}
         </Descriptions.Item>
@@ -165,12 +194,10 @@ const NasActivationCard = ({ onChanged }) => {
         )}
       </Descriptions>
 
-      {active ? (
-        <Button danger icon={<PoweroffOutlined />} loading={saving} onClick={() => save({ enabled: false })}>
-          Switch off for everyone
-        </Button>
-      ) : (
-        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          {switchedOn && (
+            <Text type="secondary">Change the period — it replaces the current one from now:</Text>
+          )}
           <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)} size="small">
             <Radio.Button value="duration">For a period</Radio.Button>
             <Radio.Button value="window">Between two times</Radio.Button>
@@ -190,27 +217,35 @@ const NasActivationCard = ({ onChanged }) => {
               ))}
               <InputNumber
                 min={1}
-                max={20160}
-                value={minutes}
-                onChange={(v) => setMinutes(v || 1)}
+                max={525600}
+                value={minutes || null}
+                placeholder="Custom"
+                onChange={(v) => setMinutes(v || 0)}
                 addonAfter="min"
-                style={{ width: 150 }}
+                style={{ width: 160 }}
               />
             </Space>
           ) : (
-            <DatePicker.RangePicker showTime value={range} onChange={setRange} />
+            <DatePicker.RangePicker showTime value={range} onChange={setRange} placeholder={["Opens", "Closes"]} />
           )}
 
-          <Button type="primary" loading={saving} onClick={activate}>
-            Switch on for everyone
-          </Button>
+          <Space wrap>
+            <Button type="primary" icon={<PoweroffOutlined />} loading={saving} onClick={activate}>
+              {switchedOn ? "Apply the new period" : "Switch on for everyone, now"}
+            </Button>
+            {switchedOn && (
+              <Button danger loading={saving} onClick={() => save({ enabled: false })}>
+                Switch off for everyone
+              </Button>
+            )}
+          </Space>
         </Space>
-      )}
 
       <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 16, marginBottom: 0 }}>
-        The server evaluates this window on every request, so access ends on its
-        own when the period passes — nobody has to remember to switch it off.
-        The share is unavailable at weekends, which is what this is for.
+        Takes effect immediately for everyone. The server evaluates the window on
+        every request, so a period ends on its own — nobody has to remember to
+        switch it off. The weekday schedule under Storage › Availability still
+        applies within it.
       </Paragraph>
     </Card>
   );

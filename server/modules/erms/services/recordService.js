@@ -1,5 +1,6 @@
 const { connectToMongo, getDb } = require('../../../config/db');
 const { badRequest, conflict, forbidden, notFoundError } = require('../../../shared/middleware/errorHandler');
+const shortCache = require('../../../shared/services/shortCache');
 
 // ---------------------------------------------------------------------------
 // The ERMS records register.
@@ -25,6 +26,13 @@ const PERMIT_TYPES = [
   { code: 'ecc-amended', label: 'ECC (Amended)' },
   { code: 'cnc', label: 'Certificate of Non-Coverage' },
   { code: 'hw-generator', label: 'HW Generator Registration' },
+  // The desktop system offered these and counted their uploads (DP, PTO,
+  // LUC, COA on tb_uploadcounter); none had been filed by the time it was
+  // retired, but the Records Unit may still file them.
+  { code: 'pto', label: 'Permit to Operate' },
+  { code: 'dp', label: 'Discharge Permit' },
+  { code: 'luc', label: 'Land Use Conversion' },
+  { code: 'coa', label: 'Certificate of Accreditation' },
   { code: 'other', label: 'Other' },
 ];
 
@@ -139,13 +147,25 @@ async function listAttachments(serialNo) {
     .toArray();
 }
 
-async function dashboardStats(allowedProvinces) {
+/**
+ * The dashboard's figures, kept for 20 seconds per province scope: everyone
+ * looking at the dashboard shares one computation (shared/services/shortCache).
+ * Record writes clear it (see the exports below).
+ */
+const DASHBOARD_CACHE = 'erms:records:dashboard:';
+function dashboardStats(allowedProvinces) {
+  const scopeKey = Array.isArray(allowedProvinces) ? [...allowedProvinces].sort().join(',') : '*';
+  return shortCache.cached(DASHBOARD_CACHE + scopeKey, 20 * 1000, () => computeDashboardStats(allowedProvinces));
+}
+
+async function computeDashboardStats(allowedProvinces) {
   await connectToMongo();
   const scope = Array.isArray(allowedProvinces)
     ? { 'location.province': { $in: allowedProvinces } }
     : {};
 
-  const [total, linked, flagged, byType, byProvince, byYear, recent] = await Promise.all([
+  const months = monthWindow();
+  const [total, linked, flagged, byType, byProvince, byYear, recent, byMonth, byProjectType] = await Promise.all([
     collection().countDocuments(scope),
     collection().countDocuments({ ...scope, ucdsRef: { $ne: null } }),
     collection().countDocuments({ ...scope, 'dataQuality.clean': false }),
@@ -169,9 +189,89 @@ async function dashboardStats(allowedProvinces) {
       .sort({ 'document.uploadedAt': -1 })
       .limit(8)
       .toArray(),
+    // Uploads per month and permit type — the desktop system's
+    // vwMonthlyUploads / vwTotalUploads.
+    collection().aggregate([
+      { $match: { ...scope, 'document.uploadedAt': { $gte: months.since } } },
+      { $group: { _id: { month: { $dateToString: { format: '%Y-%m', date: '$document.uploadedAt', timezone: '+08:00' } }, type: '$permit.type' }, count: { $sum: 1 } } },
+    ]).toArray(),
+    // The most filed project types — the desktop system's pie chart
+    // (vw_PieChartUpload, vw_TotalUploadProjType).
+    collection().aggregate([
+      { $match: { ...scope, 'project.type': { $nin: [null, ''] } } },
+      { $group: { _id: '$project.type', count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $limit: 10 },
+    ]).toArray(),
   ]);
 
-  return { total, linked, unlinked: total - linked, flagged, byType, byProvince, byYear, recent };
+  return {
+    total,
+    linked,
+    unlinked: total - linked,
+    flagged,
+    byType,
+    byProvince,
+    byYear,
+    recent,
+    byMonth: months.fill(byMonth.map((r) => ({ month: r._id.month, kind: r._id.type || 'other', count: r.count }))),
+    byProjectType: byProjectType.map((r) => ({ label: r._id, count: r.count })),
+  };
+}
+
+/**
+ * The last twelve months, this one included, in Philippine time: where to
+ * start counting, and a filler that gives every month a row so a quiet
+ * month shows as zero rather than vanishing from the chart.
+ */
+function monthWindow(count = 12) {
+  const now = new Date(Date.now() + 8 * 3600000);
+  const keys = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    keys.push(d.toISOString().slice(0, 7));
+  }
+  return {
+    since: new Date(`${keys[0]}-01T00:00:00+08:00`),
+    keys,
+    /** [{ month, kind, count }] -> [{ month, total, kinds: { <kind>: n } }] for every month. */
+    fill: (rows) =>
+      keys.map((month) => {
+        const kinds = {};
+        for (const r of rows) if (r.month === month) kinds[r.kind] = (kinds[r.kind] || 0) + r.count;
+        return { month, total: Object.values(kinds).reduce((s, n) => s + n, 0), kinds };
+      }),
+  };
+}
+
+/**
+ * Values already on file for the upload form — proponents and project
+ * titles, within the caller's provinces — so a second permit for the same
+ * proponent is typed the way the first was. Starting matches first, then the
+ * most used. A proponent carries the project title it was last filed with.
+ */
+const SUGGESTABLE = { proponentName: 'proponentName', projectTitle: 'projectTitle' };
+
+async function suggest(allowedProvinces, field, q = '') {
+  const path = SUGGESTABLE[field];
+  if (!path) return [];
+  await connectToMongo();
+  const text = String(q || '').trim().slice(0, 100);
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const scope = Array.isArray(allowedProvinces) ? { 'location.province': { $in: allowedProvinces } } : {};
+  const groups = await collection()
+    .aggregate([
+      { $match: { ...scope, [path]: text ? new RegExp(escaped, 'i') : { $nin: [null, ''] } } },
+      { $sort: { 'document.uploadedAt': -1 } },
+      { $group: { _id: `$${path}`, count: { $sum: 1 }, ...(field === 'proponentName' ? { projectTitle: { $first: '$projectTitle' } } : {}) } },
+      { $addFields: { starts: text ? { $regexMatch: { input: { $toString: '$_id' }, regex: `^${escaped}`, options: 'i' } } : true } },
+      { $sort: { starts: -1, count: -1, _id: 1 } },
+      { $limit: 15 },
+    ])
+    .toArray();
+  return groups
+    .filter((g) => g._id && String(g._id).trim())
+    .map((g) => ({ value: String(g._id), count: g.count, ...(g.projectTitle ? { fill: { projectTitle: g.projectTitle } } : {}) }));
 }
 
 /** Distinct values for the filter controls, within the caller's scope. */
@@ -264,6 +364,62 @@ async function peekSerialNo() {
 }
 
 /**
+ * The next attachment number, Att-00039 after Att-00038.
+ *
+ * The desktop system numbered attachments from one sequence across all
+ * records and wrote the record's serial before it: "FSN-0000206 Att-00012"
+ * is the twelfth attachment filed, and it belongs to FSN-0000206. Seeded
+ * from the attachments already on file, then an atomic $inc.
+ */
+async function nextAttachmentNo() {
+  await connectToMongo();
+  const existing = await sequences().findOne({ _id: 'attachmentNo' });
+  if (!existing || typeof existing.seq !== 'number') {
+    const rows = await collection().find({ serialNo: / Att-\d+$/ }, { projection: { serialNo: 1 } }).toArray();
+    const seed = rows.reduce((max, r) => Math.max(max, Number(/Att-(\d+)$/.exec(r.serialNo)?.[1]) || 0), 0);
+    // $max: a concurrent attach may have seeded and moved it already.
+    await sequences().updateOne({ _id: 'attachmentNo' }, { $max: { seq: seed } }, { upsert: true });
+  }
+  const result = await sequences().findOneAndUpdate(
+    { _id: 'attachmentNo' },
+    { $inc: { seq: 1 } },
+    { returnDocument: 'after', includeResultMetadata: false }
+  );
+  const seq = (result && typeof result.seq === 'number' ? result : result?.value)?.seq;
+  if (typeof seq !== 'number' || !Number.isFinite(seq)) throw new Error('Could not allocate an attachment number.');
+  return `Att-${String(seq).padStart(5, '0')}`;
+}
+
+/**
+ * The record an attachment is filed against, or null. An attachment belongs
+ * to a record, not to another attachment.
+ */
+async function parentFor(serialNo) {
+  if (!serialNo) return null;
+  const parent = await collection().findOne({ serialNo });
+  if (!parent) throw badRequest('The record to attach to does not exist.', 'PARENT_NOT_FOUND');
+  if (parent.isAttachment) {
+    throw badRequest(`${serialNo} is itself an attachment. Attach to ${parent.parentSerialNo || 'the record it belongs to'} instead.`, 'PARENT_IS_ATTACHMENT');
+  }
+  return parent;
+}
+
+/**
+ * Another record already carrying this permit number, or null.
+ *
+ * An attachment carries its record's permit number — the desktop system
+ * filed amendments and certified copies that way — so the record and its
+ * other attachments (`family`, the parent's serial) are not a clash.
+ */
+async function permitClash(number, { exclude = null, family = null } = {}) {
+  const filter = { 'permit.number': number };
+  const not = [exclude, family].filter(Boolean);
+  if (not.length) filter.serialNo = { $nin: not };
+  if (family) filter.parentSerialNo = { $ne: family };
+  return collection().findOne(filter, { projection: { serialNo: 1 } });
+}
+
+/**
  * Resolve a permit number to an establishment and build the stored reference.
  *
  * Reads UCDS through its exported service, never by querying ucds-data. The
@@ -306,10 +462,15 @@ function assertWritable(province, writableProvinces) {
 
 async function createRecord(input, { username, writableProvinces }) {
   await connectToMongo();
-  assertWritable(input.location?.province, writableProvinces);
+
+  // An attachment lives where its record does: same province, same place,
+  // same register entry. Its own form may not move it.
+  const parent = await parentFor(input.parentSerialNo);
+  const location = parent ? { ...(parent.location || {}) } : input.location;
+  assertWritable(location?.province, writableProvinces);
 
   if (input.permit?.number) {
-    const clash = await collection().findOne({ 'permit.number': input.permit.number });
+    const clash = await permitClash(input.permit.number, { family: parent?.serialNo });
     if (clash) {
       throw conflict(
         `Permit number ${input.permit.number} is already on record ${clash.serialNo}.`,
@@ -318,18 +479,13 @@ async function createRecord(input, { username, writableProvinces }) {
     }
   }
 
-  let parent = null;
-  if (input.parentSerialNo) {
-    parent = await collection().findOne({ serialNo: input.parentSerialNo });
-    if (!parent) throw badRequest('The parent record does not exist.', 'PARENT_NOT_FOUND');
-  }
-
-  const serialNo = await nextSerialNo();
+  const attachmentNo = parent ? await nextAttachmentNo() : null;
+  const serialNo = parent ? `${parent.serialNo} ${attachmentNo}` : await nextSerialNo();
   const doc = {
     serialNo,
-    parentSerialNo: input.parentSerialNo || null,
-    attachmentNo: input.parentSerialNo ? `Att-${serialNo.slice(-5)}` : null,
-    isAttachment: Boolean(input.parentSerialNo),
+    parentSerialNo: parent ? parent.serialNo : null,
+    attachmentNo,
+    isAttachment: Boolean(parent),
 
     proponentName: input.proponentName,
     projectTitle: input.projectTitle,
@@ -350,13 +506,14 @@ async function createRecord(input, { username, writableProvinces }) {
     project: { type: input.project?.type || null, otherType: input.project?.otherType || null },
 
     location: {
-      province: input.location.province,
-      provinceLabel: input.location.provinceLabel || null,
-      city: input.location.city || null,
-      barangay: input.location.barangay || null,
-      street: input.location.street || null,
-      lat: input.location.lat ?? null,
-      long: input.location.long ?? null,
+      province: location.province,
+      provinceLabel: location.provinceLabel || null,
+      city: location.city || null,
+      barangay: location.barangay || null,
+      street: location.street || null,
+      mailingAddress: location.mailingAddress || null,
+      lat: location.lat ?? null,
+      long: location.long ?? null,
     },
 
     document: {
@@ -368,7 +525,9 @@ async function createRecord(input, { username, writableProvinces }) {
       uploadedBy: username,
     },
 
-    ucdsRef: await resolveUcdsRef(input.permit.number, input.location.province),
+    ucdsRef: parent && (!input.permit?.number || input.permit.number === parent.permit?.number)
+      ? parent.ucdsRef || null
+      : await resolveUcdsRef(input.permit?.number, location.province),
 
     // Provenance. A record created here has no legacy id; the field exists so
     // migrated and native records have the same shape.
@@ -412,9 +571,10 @@ async function updateRecord(serialNo, changes, { username, writableProvinces }) 
   if (changes.location?.province) assertWritable(changes.location.province, writableProvinces);
 
   if (changes.permit?.number && changes.permit.number !== before.permit?.number) {
-    const clash = await collection().findOne({
-      'permit.number': changes.permit.number,
-      serialNo: { $ne: serialNo },
+    // A record and its attachments share a permit number (see permitClash).
+    const clash = await permitClash(changes.permit.number, {
+      exclude: serialNo,
+      family: before.parentSerialNo || (before.isAttachment ? null : serialNo),
     });
     if (clash) {
       throw conflict(
@@ -502,21 +662,33 @@ async function listForFirm(sortKey, limit = 20) {
     .toArray();
 }
 
+// A write changes the dashboard's counts: clear them, so the person who just
+// filed sees their record counted rather than waiting out the cache.
+const clearingDashboard = (fn) => async (...args) => {
+  const result = await fn(...args);
+  shortCache.invalidate(DASHBOARD_CACHE);
+  return result;
+};
+
 module.exports = {
   RECORDS,
   SEQUENCES,
   PERMIT_TYPES,
   buildFilter,
+  monthWindow,
   listRecords,
   getRecord,
   listAttachments,
   dashboardStats,
   filterOptions,
+  suggest,
   // writes
   nextSerialNo,
+  nextAttachmentNo,
   peekSerialNo,
-  createRecord,
-  updateRecord,
+  parentFor,
+  createRecord: clearingDashboard(createRecord),
+  updateRecord: clearingDashboard(updateRecord),
   resolveUcdsRef,
   // cross-domain read API
   countForFirm,

@@ -113,7 +113,7 @@ function session() {
 async function main() {
   const client = new MongoClient(process.env.MONGO_URI, { ssl: true, serverSelectionTimeoutMS: 30000 });
   await client.connect();
-  const db = client.db('universe-db');
+  const db = client.db(process.env.MONGO_DB_NAME || 'universe-db');
   const users = db.collection('users');
   const names = ROLES.map((r) => r.user);
 

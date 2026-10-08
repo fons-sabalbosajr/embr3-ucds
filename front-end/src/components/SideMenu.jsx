@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { Layout, Menu, Button, Avatar, Tooltip } from "antd";
+import { Layout, Menu, Button, Avatar, Tooltip, Badge } from "antd";
 import {
+  MessageOutlined,
   DashboardFilled,
   DatabaseFilled,
   LockOutlined,
@@ -36,6 +37,7 @@ import Logo from "./Logo";
 import MenuItemModal from "./MenuItemModal";
 import { useYear } from "../context/YearContext";
 import { API_BASE_URL } from "../config/api";
+import visibleInterval from "../shared/visibleInterval";
 import "./sidemenu.css";
 
 const { Sider } = Layout;
@@ -128,6 +130,10 @@ const SideMenu = ({ theme, currentUser }) => {
   // Whether a unit's own Dashboard entry is already the main one above.
   const unitDashboardIsMain = (path) => mainDashboard === path;
 
+  // A unit's settings page has one menu entry and a tab per section in the
+  // path (…/settings/privacy); the entry stays lit on every tab.
+  const selectedKey = location.pathname.replace(/^(\/universe\/erms(?:\/[a-z]+)?\/settings)\/[^/]+$/, "$1");
+
   useEffect(() => {
     const path = location.pathname;
     if (path.startsWith("/universe/dashboard") || (mainDashboard && path === mainDashboard)) {
@@ -136,9 +142,11 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys(["ucds-db", `year-${activeYear}`]);
       // } else if (path.startsWith("/universe/mbu")) {
       //   setOpenKeys([]);
-    } else if (path.startsWith("/universe/erms/legal")) {
+    } else if (path.startsWith("/universe/erms/messages")) {
+      setOpenKeys([]);
+    } else if (path.startsWith("/universe/erms/legal") || path.startsWith("/universe/erms/upload-tally/legal")) {
       setOpenKeys(["erms-legal"]);
-    } else if (path.startsWith("/universe/erms/laboratory")) {
+    } else if (path.startsWith("/universe/erms/laboratory") || path.startsWith("/universe/erms/upload-tally/laboratory")) {
       setOpenKeys(["erms-laboratory"]);
     } else if (path.startsWith("/universe/erms/")) {
       setOpenKeys(["erms"]);
@@ -153,6 +161,28 @@ const SideMenu = ({ theme, currentUser }) => {
       setOpenKeys([]); // Default: close all submenus if no specific match
     }
   }, [location.pathname, activeYear, mainDashboard]);
+
+  // Unread messages in the Action Center, for the badge. Every two minutes,
+  // and only while the tab is in view (see shared/visibleInterval); opening
+  // the Messages page refreshes it at once.
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  useEffect(() => {
+    if (!hasErms) return undefined;
+    let cancelled = false;
+    const load = () =>
+      fetch(`${API_BASE_URL}/api/erms/messages/unread`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : { unread: 0 }))
+        .then((body) => {
+          if (!cancelled) setUnreadMessages(Number(body.unread) || 0);
+        })
+        .catch(() => {});
+    load();
+    const stop = visibleInterval(load, 120000);
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [hasErms, location.pathname === "/universe/erms/messages"]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hasUcds) return undefined;
@@ -592,6 +622,10 @@ const SideMenu = ({ theme, currentUser }) => {
         // The Records Unit's inbox; for everyone else, their own requests.
         ["access-requests", "Document Requests"],
         ["archive", "Archive Boxes"],
+        // Uploads per person per day, and the supervisor's check.
+        ["upload-tally/records", "Upload Tally"],
+        // The Records Unit's own settings (Legal and Laboratory have theirs).
+        ["settings", "Settings"],
       ].filter(Boolean).map(([path, label]) => ({
         key: `/universe/erms/${path}`,
         label: (
@@ -611,15 +645,34 @@ const SideMenu = ({ theme, currentUser }) => {
           !unitDashboardIsMain(`/universe/erms/${u}/dashboard`) && ["dashboard", "Dashboard"],
           ["documents?upload=1", "File a document"],
           ["documents", "Documents"],
-        ].filter(Boolean).map(([path, label]) => ({
-          key: `/universe/erms/${u}/${path}`,
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to={`/universe/erms/${u}/${path}`}>{label}</Link>
-            </div>
-          ),
-        })),
+          // Shared with the Records Unit's, so its path is not under the unit.
+          ["/universe/erms/upload-tally/" + u, "Upload Tally"],
+          // This unit's own settings, separate from the other units'.
+          ["settings", "Settings"],
+        ].filter(Boolean).map(([path, label]) => {
+          const to = path.startsWith("/") ? path : `/universe/erms/${u}/${path}`;
+          return {
+            key: to,
+            label: (
+              <div className="menu-label-wrapper submenu-item-label">
+                <Link to={to}>{label}</Link>
+              </div>
+            ),
+          };
+        }),
       })),
+    // The Action Center: messages between the people who work in ERMS.
+    hasErms && {
+      key: "/universe/erms/messages",
+      icon: <MessageOutlined />,
+      label: (
+        <div className="menu-label-wrapper main">
+          <Link to="/universe/erms/messages">
+            Messages <Badge count={unreadMessages} size="small" offset={[4, -2]} />
+          </Link>
+        </div>
+      ),
+    },
     // Anyone with the ERMS domain but no unit yet (a Planning Admin who was
     // given ERMS) still reaches their document requests.
     hasErms && !ermsUnits.length && {
@@ -674,26 +727,9 @@ const SideMenu = ({ theme, currentUser }) => {
             </div>
           ),
         },
-        // The unit's own rules, one entry each — data quality, duplicates,
-        // privacy, PDF viewing, auditing, log history. Read by the unit, set
-        // by its staff. (Legal and Laboratory get the same entries.)
-        ...(hasErms && ermsUnits.length > 0
-          ? [
-              ["data", "Data Quality"],
-              ["duplicates", "Duplicates"],
-              ["privacy", "Data Privacy"],
-              ["pdf", "PDF Viewing"],
-              ["audit", "Tracing & Auditing"],
-              ["log", "Log History"],
-            ].map(([section, label]) => ({
-              key: `/universe/settings/erms/${section}`,
-              label: (
-                <div className="menu-label-wrapper submenu-item-label">
-                  <Link to={`/universe/settings/erms/${section}`}>{label}</Link>
-                </div>
-              ),
-            }))
-          : []),
+        // An ERMS unit's settings are not here: each unit has its own, under
+        // its own section above (ERMS · Records › Settings, and so on), so a
+        // Legal officer never wades through the Records Unit's rules.
       ].filter(Boolean),
     },
     hasAdmin && canViewAdminPanel && {
@@ -706,6 +742,15 @@ const SideMenu = ({ theme, currentUser }) => {
           label: (
             <div className="menu-label-wrapper submenu-item-label">
               <Link to="/universe/admin/users">User Accounts</Link>
+            </div>
+          ),
+        },
+        // Who signed in and out, when and from where.
+        {
+          key: "/universe/admin/sign-in-history",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/sign-in-history">Sign-in History</Link>
             </div>
           ),
         },
@@ -752,6 +797,16 @@ const SideMenu = ({ theme, currentUser }) => {
           label: (
             <div className="menu-label-wrapper submenu-item-label">
               <Link to="/universe/admin/erms-config">ERMS Config</Link>
+            </div>
+          ),
+        },
+        // VERA, the assistant: on/off, the model, limits, the sign-in page
+        // surface, and its activity log.
+        {
+          key: "/universe/admin/vera",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/universe/admin/vera">VERA Assistant</Link>
             </div>
           ),
         },
@@ -831,11 +886,11 @@ const SideMenu = ({ theme, currentUser }) => {
           once in ThemeProvider, and re-applying the algorithm here only
           re-derived the same palette a second time on every render. */}
       <Menu
-        className="side-menu-list"
+        className={isDeveloper ? "side-menu-list side-menu-compact" : "side-menu-list"}
         theme="dark"
         mode="inline"
         inlineIndent={14}
-        selectedKeys={[location.pathname]}
+        selectedKeys={[selectedKey]}
         openKeys={openKeys}
         onOpenChange={(keys) => {
           const latestOpenKey = keys.find((key) => !openKeys.includes(key));

@@ -1,0 +1,221 @@
+{
+ "planning": {
+  "after-sign-in": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/users?username=__rec_planning",
+   "GET /api/nas/activation",
+   "GET /api/postings",
+   "GET /api/ucds/duplicates",
+   "GET /api/online_users",
+   "GET /api/monitored_dates",
+   "GET /api/daily_notices",
+   "GET /api/permits-summary?page=1&pageSize=10&prefixes=AU,BA,BU,NE,PA,TA,ZA&filterEstablishmentsByExpiryStatus=true",
+   "POST /api/check-data"
+  ],
+  "/universe/dashboard": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/postings",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_planning",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/ucds/menu-items",
+   "GET /api/online_users",
+   "GET /api/monitored_dates",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates",
+   "GET /api/daily_notices",
+   "GET /api/permits-summary?page=1&pageSize=10&prefixes=AU,BA,BU,NE,PA,TA,ZA&filterEstablishmentsByExpiryStatus=true"
+  ],
+  "/universe/province/Bataan": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/users?username=__rec_planning",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates",
+   "GET /api/get-province-data?province=Bataan"
+  ],
+  "/universe/province/Pampanga": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_planning",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates",
+   "GET /api/get-province-data?province=Pampanga"
+  ],
+  "/universe/survey": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_planning",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates"
+  ],
+  "/universe/healthcare": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/users?username=__rec_planning",
+   "GET /api/nas/activation",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates"
+  ],
+  "/universe/chemicals": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/users?username=__rec_planning",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates"
+  ]
+ },
+ "admin": {
+  "/universe/dashboard": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/postings",
+   "GET /api/ucds/menu-items",
+   "GET /api/users?username=__rec_admin",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/nas/activation",
+   "GET /api/online_users",
+   "GET /api/monitored_dates",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates",
+   "GET /api/daily_notices",
+   "GET /api/permits-summary?page=1&pageSize=10&prefixes=AU,BA,BU,NE,PA,TA,ZA&filterEstablishmentsByExpiryStatus=true"
+  ],
+  "/universe/admin/users": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_admin",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates",
+   "GET /api/sign-up?page=1&pageSize=10",
+   "GET /api/users?page=1&pageSize=10",
+   "GET /api/login-status",
+   "GET /api/online_users",
+   "GET /api/users?username=asabalbosa",
+   "GET /api/users?username=demo.planning",
+   "GET /api/users?username=demo.encoder",
+   "GET /api/users?username=demo.legal",
+   "GET /api/users?username=demo.laboratory",
+   "GET /api/users?username=__load_0",
+   "GET /api/users?username=__load_1",
+   "GET /api/users?username=__load_2",
+   "GET /api/users?username=__load_3",
+   "GET /api/users?username=__load_4"
+  ],
+  "/universe/admin/audit": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/users?username=__rec_admin",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/nas/activation",
+   "POST /api/check-data",
+   "GET /api/logs",
+   "GET /api/ucds/duplicates"
+  ],
+  "/universe/province/Bulacan": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/ucds/menu-items",
+   "GET /api/ucds/datasets/registry",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_admin",
+   "POST /api/check-data",
+   "GET /api/ucds/duplicates",
+   "GET /api/get-province-data?province=Bulacan"
+  ]
+ },
+ "records": {
+  "/universe/erms/dashboard": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_records",
+   "GET /api/erms/dashboard",
+   "GET /api/erms/access-requests?status=pending&limit=5",
+   "GET /api/erms/tracking/overdue"
+  ],
+  "/universe/erms/records": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_records",
+   "GET /api/erms/records?page=1&pageSize=25&sortBy=document.uploadedAt&sortDir=-1",
+   "GET /api/erms/filter-options"
+  ]
+ },
+ "legal": {
+  "/universe/erms/legal/dashboard": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_legal",
+   "GET /api/erms/units",
+   "GET /api/erms/units/legal/dashboard"
+  ],
+  "/universe/erms/legal/documents": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_legal",
+   "GET /api/erms/units",
+   "GET /api/erms/units/legal/documents?page=1&pageSize=25&sortBy=createdAt&sortDir=-1"
+  ]
+ },
+ "laboratory": {
+  "/universe/erms/laboratory/dashboard": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_laboratory",
+   "GET /api/erms/units",
+   "GET /api/erms/units/laboratory/dashboard"
+  ],
+  "/universe/erms/laboratory/documents": [
+   "GET /auth-check",
+   "GET /api/years",
+   "GET /api/auth/me",
+   "GET /api/nas/activation",
+   "GET /api/users?username=__rec_laboratory",
+   "GET /api/erms/units",
+   "GET /api/erms/units/laboratory/documents?page=1&pageSize=25&sortBy=createdAt&sortDir=-1"
+  ]
+ }
+}

@@ -264,7 +264,7 @@ const ArchiveBoxes = () => {
             <Input placeholder="Bataan ECC records, 2021" />
           </Form.Item>
           <Form.Item name="province" label="Province" rules={[{ required: true }]}>
-            <Select
+            <Select placeholder="Select a province"
               options={(options?.writableProvinces || Object.keys(PROVINCE_LABEL)).map((p) => ({
                 value: p,
                 label: PROVINCE_LABEL[p] || p,
@@ -279,7 +279,7 @@ const ArchiveBoxes = () => {
             label="Retention (years after sealing)"
             extra="From the agency's retention schedule. Leave blank if not yet decided."
           >
-            <InputNumber min={0} max={200} style={{ width: "100%" }} />
+            <InputNumber placeholder="Years, e.g. 10" min={0} max={200} style={{ width: "100%" }} />
           </Form.Item>
         </Form>
       </Modal>

@@ -44,7 +44,7 @@ const District = ({ selectedMunicipality, readOnly }) => {
     >
       <Paragraph>
         <strong>Congressional District</strong>
-        <Input
+        <Input placeholder="Filled in automatically"
           value={zipCode}
           readOnly
           style={{

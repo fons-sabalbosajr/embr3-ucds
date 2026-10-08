@@ -46,6 +46,9 @@ async function findDuplicates({ permitNumber, fileName, exclude }, scope) {
  * Returns null when the record may go ahead, else a 4xx body.
  */
 async function checkAgainstSettings(payload, { exclude } = {}) {
+  // An attachment is filed against a record that already passed these
+  // rules, and carries its permit number by design (recordService.permitClash).
+  if (payload.parentSerialNo) return null;
   const cfg = await unitSettings.forUnit('records');
   const errors = [];
   if (cfg.dataQuality.requirePermitNumber && !payload.permit?.number) errors.push({ field: 'permit.number', message: 'The permit number is required.' });
@@ -73,9 +76,11 @@ async function withDefaultClassification(payload) {
 }
 
 /**
- * How much of a document this viewer sees. The unit's own staff see it all
- * unless the unit applied the limit to itself; someone viewing by approval
- * sees the first N pages, the rest withheld.
+ * How much of a document this viewer sees: with a page limit set, the first
+ * N pages and the rest withheld — for the Records Unit's own staff and for
+ * anyone viewing by approval alike. Not limited: the Developer and
+ * administrators, someone the Records Unit approved for every page, and the
+ * unit's staff when the unit exempted them.
  */
 async function viewingRules(user, permission = null) {
   const cfg = await unitSettings.forUnit('records');
@@ -83,7 +88,8 @@ async function viewingRules(user, permission = null) {
   // An approval the Records Unit marked "every page" lifts the limit for
   // the person it names.
   const fullAccess = permission?.request?.fullAccess === true;
-  const limited = cfg.pdfViewing.previewPageLimit > 0 && (!own || cfg.pdfViewing.applyToUnit) && !fullAccess;
+  const limited =
+    cfg.pdfViewing.previewPageLimit > 0 && !fullAccess && !canAccessAllYears(user) && !(own && cfg.pdfViewing.exemptUnit);
   return {
     pageLimit: limited ? cfg.pdfViewing.previewPageLimit : 0,
     blurWithheldPages: cfg.pdfViewing.blurWithheldPages,
@@ -290,7 +296,7 @@ async function getRecordFileInfo(req, res, next) {
       // View-only for everyone; the approval, when that is what lets this
       // person in, so the screen can show when it lapses.
       downloadable: false,
-      access: { reason: permission.reason, expiresAt: permission.request?.expiresAt || null, fullAccess: permission.request?.fullAccess === true, fullAccessRequested: permission.request?.fullAccessRequested === true && permission.request?.status === 'pending' },
+      access: { reason: permission.reason, expiresAt: permission.request?.expiresAt || null, fullAccess: permission.request?.fullAccess === true, fullAccessRequested: permission.request?.fullAccessRequested === true && permission.request?.status === 'pending', fullAccessRequestedAt: viewing.pageLimit > 0 ? await require('./unitController').fullRequestAt(principalOf(req), record.serialNo) : null },
       // How the viewer shows it: a page limit for people outside the unit,
       // blurred placeholders for the withheld pages, a watermark.
       viewing: { pageLimit: viewing.pageLimit, blurWithheldPages: viewing.blurWithheldPages, hideToolbar: viewing.hideToolbar, watermark: viewing.watermark },
@@ -449,13 +455,57 @@ async function fileRecordScan(payload, upload) {
 const uploadFailure = (res, filed) =>
   res.status(['NO_FILE', 'FILE_TYPE', 'FILE_TOO_LARGE'].includes(filed.code) ? 400 : 502).json({ code: filed.code, message: filed.message });
 
-/** Create a record and file its scan in one go. */
+/**
+ * An attachment's scan: in the folder the clerk chose, else beside the
+ * record's own document (where the desktop system put attachments), else
+ * where the record's own scan would have been filed.
+ */
+async function fileAttachmentScan(parent, payload, upload) {
+  const asParent = {
+    ...payload,
+    location: parent.location,
+    projectTitle: parent.projectTitle,
+    proponentName: parent.proponentName,
+    permit: { ...(payload.permit || {}), dateApproved: parent.permit?.dateApproved || payload.permit?.dateApproved || null },
+  };
+  const stored = parent.document?.sharePath || parent.document?.filePath;
+  if (!payload.document?.folder && stored) {
+    const unitCfg = await config.unit('records');
+    const docType = unitCfg?.docTypes.find((t) => t.code === payload.permit?.type) || unitCfg?.docTypes.find((t) => t.code === 'other') || null;
+    const beside = await filing.fileBeside('records', docType, stored, upload);
+    if (beside.ok || beside.code !== 'NO_FOLDER') return beside;
+  }
+  return fileRecordScan(asParent, upload);
+}
+
+/**
+ * The record an upload is to be attached to, within the caller's provinces,
+ * or a response already sent. Null (and nothing sent) for a record of its own.
+ */
+async function parentInScope(req, res, payload) {
+  if (!payload.parentSerialNo) return { parent: null };
+  const parent = await recordService.getRecord(payload.parentSerialNo, readScope(req));
+  if (!parent) {
+    res.status(404).json({ code: 'PARENT_NOT_FOUND', message: 'The record to attach to was not found, or is outside your provinces.' });
+    return null;
+  }
+  if (parent.isAttachment) {
+    res.status(400).json({ code: 'PARENT_IS_ATTACHMENT', message: `${parent.serialNo} is itself an attachment. Attach to ${parent.parentSerialNo || 'the record it belongs to'} instead.` });
+    return null;
+  }
+  return { parent };
+}
+
+/** Create a record and file its scan in one go — or, with `parentSerialNo`, an attachment to one. */
 async function uploadRecord(req, res, next) {
   try {
     const payload = await withDefaultClassification(req.validatedPayload);
+    const scoped = await parentInScope(req, res, payload);
+    if (!scoped) return undefined;
+    const { parent } = scoped;
     const refused = await checkAgainstSettings(payload);
     if (refused) return res.status(refused.status).json(refused.body);
-    const filed = await fileRecordScan(payload, req.file);
+    const filed = parent ? await fileAttachmentScan(parent, payload, req.file) : await fileRecordScan(payload, req.file);
     if (!filed.ok) return uploadFailure(res, filed);
 
     const doc = await recordService.createRecord(
@@ -474,7 +524,7 @@ async function uploadRecord(req, res, next) {
     await audit.record(req, {
       domain: DOMAINS.ERMS,
       action: 'create',
-      label: 'record created with scan',
+      label: parent ? `attachment filed against ${parent.serialNo}` : 'record created with scan',
       collection: 'erms-records',
       documentId: doc.serialNo,
       changes: { fileName: filed.document.fileName, sharePath: filed.document.sharePath },
@@ -784,6 +834,7 @@ async function revokeAccessRequest(req, res, next) {
 async function createRecord(req, res, next) {
   try {
     const payload = await withDefaultClassification(req.body);
+    if (!(await parentInScope(req, res, payload))) return undefined;
     const refused = await checkAgainstSettings(payload);
     if (refused) return res.status(refused.status).json(refused.body);
     const doc = await recordService.createRecord(payload, actor(req));
@@ -865,6 +916,15 @@ async function filterOptions(req, res, next) {
       writableProvinces: writeScope(req),
       canShare: accessRequests.isRecordsUnit(principalOf(req)),
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Proponents and project titles already on file, for the upload form. */
+async function suggest(req, res, next) {
+  try {
+    res.json({ items: await recordService.suggest(readScope(req), req.query.field, req.query.q) });
   } catch (error) {
     next(error);
   }
@@ -1045,6 +1105,7 @@ module.exports = {
   nextSerial,
   dashboard,
   filterOptions,
+  suggest,
   listTracking,
   addTracking,
   overdueLoans,
