@@ -92,7 +92,8 @@ const kindOf = (entry) => {
   return { label: ext ? `${ext.toUpperCase()} File` : "File", Icon: FileOutlined, color: "#6b7280" };
 };
 
-const NasFileExplorer = ({ endpoint = "/api/nas", title = "NAS File Explorer", initialContainer = "records" }) => {
+/** `allowDownload`: offer Download on the shared Storage screen too (the Developer's; the server checks). */
+const NasFileExplorer = ({ endpoint = "/api/nas", title = "NAS File Explorer", initialContainer = "records", allowDownload = false }) => {
   const { token } = antdTheme.useToken();
   const [containers, setContainers] = useState([]);
   const [container, setContainer] = useState(initialContainer);
@@ -225,10 +226,11 @@ const NasFileExplorer = ({ endpoint = "/api/nas", title = "NAS File Explorer", i
     setFilter("");
   };
 
-  // Staff view, never download. Only the Developer's elevated explorer
-  // (/api/nas) saves files; the shared storage screen (/api/storage) is
-  // view-only, and the server ignores download=1 there anyway.
-  const canDownload = endpoint === "/api/nas";
+  // Staff view, never download. The Developer's elevated explorer
+  // (/api/nas) saves files, and so does the Developer on the shared Storage
+  // screen (/api/storage); for anyone else it is view-only, and the server
+  // ignores download=1 for them anyway.
+  const canDownload = endpoint === "/api/nas" || allowDownload;
 
   const openEntry = (entry) => {
     if (entry.type === "directory") load(entry.path);

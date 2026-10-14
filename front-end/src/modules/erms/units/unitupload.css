@@ -1,5 +1,6 @@
-/* File a document (Legal, Laboratory): what the document is, on one row
-   above the tabs; the tabs' fields on a grid with room between them. */
+/* Upload record / Upload document (all three units): what the document is,
+   on one row above the tabs; the tabs' fields on a grid with room between
+   them. */
 
 .unit-upload-head {
   display: grid;
@@ -18,22 +19,32 @@
   padding-top: 8px;
 }
 
+/* The scan, then where it files: one above the other, each the full width
+   of the dialog, as Upload record has them — the folder browser needs the
+   width for long project folder names, and side by side the drop zone left
+   it a narrow column that was mostly empty until a province was chosen. */
 .unit-upload-scan {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0 24px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   align-items: start;
   min-height: 240px;
   padding-top: 8px;
 }
 
-.unit-upload-scan .ant-upload-wrapper .ant-upload-drag {
-  padding: 24px 0;
+/* A compact drop zone: the file is one line once chosen. */
+.unit-upload-scan .ant-upload-wrapper .ant-upload-drag .ant-upload-btn {
+  padding: 12px 0;
+}
+.unit-upload-scan .ant-upload-wrapper .ant-upload-drag p.ant-upload-drag-icon {
+  margin-bottom: 6px;
+}
+.unit-upload-scan .ant-upload-wrapper .ant-upload-drag p.ant-upload-drag-icon .anticon {
+  font-size: 36px;
 }
 
 @media (max-width: 820px) {
-  .unit-upload-head,
-  .unit-upload-scan {
+  .unit-upload-head {
     grid-template-columns: 1fr;
   }
 }

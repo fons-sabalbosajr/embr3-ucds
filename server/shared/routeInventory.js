@@ -103,6 +103,21 @@ const PUBLIC_ROUTES = new Set([
   // rate limited by address (controllers/veraController.js).
   'GET /api/vera/public-status',
   'POST /api/vera/public-chat',
+  // The E-Universe Document Portal's public page (/e-universe/document-portal):
+  // people without an account ask for a scanned document and read it once
+  // the unit that keeps it approves. Rate limited by address; a browser
+  // reaches its own request only with the httpOnly ticket it was given;
+  // changes need the X-Portal-Request header; search returns no file
+  // locations; the document is the approved pages only (modules/portal).
+  'GET /api/portal/room',
+  'GET /api/portal/terms',
+  'GET /api/portal/search',
+  'POST /api/portal/requests',
+  'POST /api/portal/leave',
+  'GET /api/portal/document',
+  // The temporary conversation about this browser's own request (ticket-scoped, rate limited).
+  'GET /api/portal/chat',
+  'POST /api/portal/chat',
   // CORS preflight, answered by the cors middleware before any route runs.
   'OPTIONS *',
 ]);
@@ -118,6 +133,8 @@ function domainOf(path) {
     return 'admin';
   }
   if (path.startsWith('/api/nas/')) return 'shared';
+  // The Document Portal's public page; its desk is under /api/erms/.
+  if (path.startsWith('/api/portal/')) return 'shared';
   if (path.startsWith('/api/auth') || path.startsWith('/api/years')) return 'shared';
   return 'ucds';
 }

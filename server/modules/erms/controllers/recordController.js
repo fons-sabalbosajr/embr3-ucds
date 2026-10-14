@@ -8,15 +8,13 @@ const filing = require('../services/filingService');
 const config = require('../services/configService');
 const audit = require('../../../shared/services/audit');
 const { principalOf } = require('../../../middleware/auth');
-const { canAccessAllYears, isDeveloper, roleOf, ROLE_LABELS, DOMAINS } = require('../../../services/authorization');
-const { connectToMongo, ObjectId } = require('../../../config/db');
+const { canAccessAllYears, isDeveloper, DOMAINS } = require('../../../services/authorization');
 const { userProvinceKeys, userWritableProvinceKeys } = require('../../../services/provinces');
 const { notFoundError } = require('../../../shared/middleware/errorHandler');
 const nas = require('../../../services/nasStorage');
 const storageAccess = require('../../../services/storageAccess');
 const { recordFileEvent } = require('../../../services/nasAudit');
 const unitSettings = require('../services/unitSettingsService');
-const { PDFDocument } = require('pdf-lib');
 
 // --- the Records Unit's own settings, where the API enforces them -----------------
 //
@@ -77,24 +75,18 @@ async function withDefaultClassification(payload) {
 
 /**
  * How much of a document this viewer sees: with a page limit set, the first
- * N pages and the rest withheld — for the Records Unit's own staff and for
- * anyone viewing by approval alike. Not limited: the Developer and
- * administrators, someone the Records Unit approved for every page, and the
- * unit's staff when the unit exempted them.
+ * N pages and the rest withheld. Not limited: the Developer and
+ * administrators, and the unit's staff when the unit exempted them.
  */
-async function viewingRules(user, permission = null) {
+async function viewingRules(user) {
   const cfg = await unitSettings.forUnit('records');
   const own = accessRequests.isRecordsUnit(user);
-  // An approval the Records Unit marked "every page" lifts the limit for
-  // the person it names.
-  const fullAccess = permission?.request?.fullAccess === true;
-  const limited =
-    cfg.pdfViewing.previewPageLimit > 0 && !fullAccess && !canAccessAllYears(user) && !(own && cfg.pdfViewing.exemptUnit);
+  const limited = cfg.pdfViewing.previewPageLimit > 0 && !canAccessAllYears(user) && !(own && cfg.pdfViewing.exemptUnit);
   return {
     pageLimit: limited ? cfg.pdfViewing.previewPageLimit : 0,
     blurWithheldPages: cfg.pdfViewing.blurWithheldPages,
     hideToolbar: cfg.pdfViewing.hideToolbar,
-    watermark: cfg.privacy.watermarkViewer ? `${user?.name || user?.username || 'viewer'} · ${new Date().toLocaleDateString()}` : null,
+    watermark: cfg.privacy.watermarkViewer ? require('../services/watermark').watermarkText() : null,
     logViews: cfg.auditing.logViews,
   };
 }
@@ -202,9 +194,8 @@ async function resolveRecordFile(req, res) {
   // against the account document, so revoking it takes effect at once.
   const containerKey = String(record.document?.container || nas.RECORDS_KEY).toLowerCase();
 
-  // Who may open it: the Records Unit, or someone the Records Unit has
-  // approved for this record and this period. Everyone else is told how to
-  // ask, and the refusal is in the audit trail like any other.
+  // Who may open it: the Records Unit. Everyone else is pointed to the
+  // Document Portal, and the refusal is in the audit trail like any other.
   const permission = await accessRequests.viewPermission(principalOf(req), record.serialNo);
   if (!permission.allowed) {
     await recordFileEvent(req, {
@@ -218,21 +209,14 @@ async function resolveRecordFile(req, res) {
     res.status(403).json({
       code: 'APPROVAL_REQUIRED',
       reason: permission.reason,
-      request: permission.request,
-      message:
-        permission.reason === 'pending'
-          ? 'Your request to view this document is waiting for the Records Unit.'
-          : 'Viewing this document needs the approval of the Records Unit. Send a request from this record.',
+      portalUrl: accessRequests.PORTAL_URL,
+      message: 'Only the Records Unit opens this document here. Ask for it in the E-Universe Document Portal.',
     });
     return null;
   }
 
-  // The Records Unit's approval is the grant for the person it names: a
-  // Planning Admin or an Encoder is never designated a container (the NAS is
-  // not their job), and the approval opens exactly one record's document
-  // for a period. The container designation applies to everyone who views
-  // by right rather than by approval.
-  const granted = permission.reason === 'approved' ? [{ key: containerKey }] : await storageAccess.grantedContainers(principalOf(req));
+  // The container must be designated to the account (storage Access tab).
+  const granted = await storageAccess.grantedContainers(principalOf(req));
   if (!granted.some((c) => c.key === containerKey)) {
     await recordFileEvent(req, {
       operation: 'document-read',
@@ -284,7 +268,7 @@ async function getRecordFileInfo(req, res, next) {
     const resolved = await resolveRecordFile(req, res);
     if (!resolved) return undefined;
     const { record, file, permission } = resolved;
-    const viewing = await viewingRules(principalOf(req), permission);
+    const viewing = await viewingRules(principalOf(req));
     return res.json({
       serialNo: record.serialNo,
       fileName: file.fileName,
@@ -293,10 +277,9 @@ async function getRecordFileInfo(req, res, next) {
       previewable: file.previewable,
       modifiedAt: file.modifiedAt,
       fileClass: record.document?.fileClass || null,
-      // View-only for everyone; the approval, when that is what lets this
-      // person in, so the screen can show when it lapses.
+      // View-only for everyone.
       downloadable: false,
-      access: { reason: permission.reason, expiresAt: permission.request?.expiresAt || null, fullAccess: permission.request?.fullAccess === true, fullAccessRequested: permission.request?.fullAccessRequested === true && permission.request?.status === 'pending', fullAccessRequestedAt: viewing.pageLimit > 0 ? await require('./unitController').fullRequestAt(principalOf(req), record.serialNo) : null },
+      access: { reason: permission.reason, expiresAt: null },
       // How the viewer shows it: a page limit for people outside the unit,
       // blurred placeholders for the withheld pages, a watermark.
       viewing: { pageLimit: viewing.pageLimit, blurWithheldPages: viewing.blurWithheldPages, hideToolbar: viewing.hideToolbar, watermark: viewing.watermark },
@@ -325,7 +308,7 @@ async function viewRecordFile(req, res, next) {
     const resolved = await resolveRecordFile(req, res);
     if (!resolved) return undefined;
     const { record, file, permission } = resolved;
-    const viewing = await viewingRules(principalOf(req), permission);
+    const viewing = await viewingRules(principalOf(req));
 
     // The stored name can contain commas, quotes and non-ASCII; both forms are
     // sent so every browser gets one it can parse.
@@ -343,26 +326,8 @@ async function viewRecordFile(req, res, next) {
     // here, so the withheld pages never leave the server. The page counts
     // travel in headers so the viewer can show what was withheld, blurred.
     if (viewing.pageLimit > 0 && file.contentType === 'application/pdf') {
-      const whole = await new Promise((resolve, reject) => {
-        const chunks = [];
-        nas.openStream(file.resolved).on('data', (c) => chunks.push(c)).on('end', () => resolve(Buffer.concat(chunks))).on('error', reject);
-      });
-      let out = whole;
-      let total = null;
-      try {
-        const src = await PDFDocument.load(whole, { ignoreEncryption: true });
-        total = src.getPageCount();
-        if (total > viewing.pageLimit) {
-          const cut = await PDFDocument.create();
-          const pages = await cut.copyPages(src, Array.from({ length: viewing.pageLimit }, (_, i) => i));
-          for (const p of pages) cut.addPage(p);
-          out = Buffer.from(await cut.save());
-        }
-      } catch (err) {
-        // A PDF pdf-lib cannot read is served whole rather than not at all;
-        // the viewer then knows no page count and applies no limit.
-        console.warn('PDF page limit not applied:', err.message);
-      }
+      // Cut once and kept a while (see streamFile.pageLimitedPdf).
+      const { out, total } = await require('../services/streamFile').pageLimitedPdf(file, viewing.pageLimit);
       res.setHeader('Access-Control-Expose-Headers', 'X-Document-Pages, X-Document-Pages-Shown');
       if (total !== null) {
         res.setHeader('X-Document-Pages', String(total));
@@ -376,6 +341,7 @@ async function viewRecordFile(req, res, next) {
     }
 
     res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Range, Content-Length, X-Session-Token');
     const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
     let options;
     if (range && file.size > 0) {
@@ -446,9 +412,11 @@ async function fileRecordScan(payload, upload) {
     projectTitle: payload.projectTitle,
     proponentName: payload.proponentName,
     permit: payload.permit || {},
-    // The project folder (and subfolder) the clerk chose, when they did.
+    // The project folder (and subfolder) the clerk chose, when they did —
+    // or a folder they browsed to anywhere on the Records share.
     folder: payload.document?.folder || null,
     subfolder: payload.document?.subfolder || null,
+    targetPath: payload.document?.targetPath || null,
   }, upload);
 }
 
@@ -469,7 +437,9 @@ async function fileAttachmentScan(parent, payload, upload) {
     permit: { ...(payload.permit || {}), dateApproved: parent.permit?.dateApproved || payload.permit?.dateApproved || null },
   };
   const stored = parent.document?.sharePath || parent.document?.filePath;
-  if (!payload.document?.folder && stored) {
+  // Beside the record's own scan unless the clerk chose a folder (by the
+  // project-folder picker or by browsing the share).
+  if (!payload.document?.folder && !payload.document?.targetPath && stored) {
     const unitCfg = await config.unit('records');
     const docType = unitCfg?.docTypes.find((t) => t.code === payload.permit?.type) || unitCfg?.docTypes.find((t) => t.code === 'other') || null;
     const beside = await filing.fileBeside('records', docType, stored, upload);
@@ -572,7 +542,8 @@ async function attachRecordFile(req, res, next) {
     // The folder picker's choice, if the clerk made one for the re-upload.
     const folder = nas.safeName(req.body?.folder, 120) || null;
     const subfolder = nas.safeName(req.body?.subfolder, 120) || null;
-    const filed = await fileRecordScan({ ...record, document: { ...(record.document || {}), folder, subfolder } }, req.file);
+    const targetPath = nas.safeRelativePath(req.body?.targetPath) || null;
+    const filed = await fileRecordScan({ ...record, document: { ...(record.document || {}), folder, subfolder, targetPath } }, req.file);
     if (!filed.ok) return uploadFailure(res, filed);
 
     const { after: updated } = await recordService.updateRecord(
@@ -655,88 +626,6 @@ async function getLookups(req, res, next) {
   }
 }
 
-// --- document access requests ----------------------------------------------
-
-/** Ask the Records Unit to open one record's document for the caller. */
-async function requestDocumentAccess(req, res, next) {
-  try {
-    // The record must be readable by this person at all — province scope —
-    // before they may ask for its document.
-    const record = await recordService.getRecord(req.params.serialNo, readScope(req));
-    if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
-    const result = await accessRequests.create(record.serialNo, principalOf(req), req.body || {});
-    if (result.created) {
-      await audit.record(req, {
-        domain: DOMAINS.ERMS,
-        action: 'access-request',
-        label: 'document access requested',
-        collection: accessRequests.COLLECTION,
-        documentId: result.request.id,
-        changes: { serialNo: record.serialNo, reason: result.request.reason },
-      });
-    }
-    res.status(result.created ? 201 : 200).json(result);
-  } catch (error) {
-    next(error);
-  }
-}
-
-/**
- * Share a record's document with a named person (Records Unit): an approval
- * granted without a request. The recipient is read from the users
- * collection now, so the share names the account as it is today.
- */
-async function shareDocument(req, res, next) {
-  try {
-    const record = await recordService.getRecord(req.params.serialNo, readScope(req));
-    if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
-    const { collections } = await connectToMongo();
-    const target = ObjectId.isValid(String(req.body?.userId || ''))
-      ? await collections.users.findOne({ _id: new ObjectId(String(req.body.userId)) }, { projection: { username: 1, name: 1, division: 1, permission: 1 } })
-      : null;
-    if (!target) return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'No account with that id.' });
-    const result = await accessRequests.share(record.serialNo, principalOf(req), { ...target, userId: String(target._id) }, req.body || {});
-    if (result.created && (await unitSettings.forUnit('records')).auditing.logShares) {
-      await audit.record(req, {
-        domain: DOMAINS.ERMS,
-        action: 'access-decision',
-        label: 'document shared',
-        collection: accessRequests.COLLECTION,
-        documentId: result.request.id,
-        changes: { serialNo: record.serialNo, with: target.username, expiresAt: result.request.expiresAt },
-      });
-    }
-    return res.status(result.created ? 201 : 200).json(result);
-  } catch (error) {
-    return next(error);
-  }
-}
-
-/** People a document can be shared with: any account but the caller's own. Records Unit only. */
-async function sharePeople(req, res, next) {
-  try {
-    const user = principalOf(req);
-    if (!accessRequests.isRecordsUnit(user)) return res.status(403).json({ code: 'RECORDS_UNIT_ONLY', message: 'Only the Records Unit shares documents.' });
-    const q = String(req.query.q || '').trim();
-    const { collections } = await connectToMongo();
-    const filter = { username: { $ne: user.username } };
-    if (q) {
-      const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ name: rx }, { username: rx }, { division: rx }, { email: rx }];
-    }
-    const people = await collections.users
-      .find(filter, { projection: { username: 1, name: 1, division: 1, permission: 1 } })
-      .sort({ name: 1 })
-      .limit(25)
-      .toArray();
-    res.json({
-      people: people.map((p) => ({ userId: String(p._id), username: p.username, name: p.name, division: p.division || null, roleLabel: ROLE_LABELS[roleOf(p)] })),
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
 /** Records already filed with this permit number or file name — for the form's warning. */
 async function duplicateCheck(req, res, next) {
   try {
@@ -770,62 +659,6 @@ async function duplicateGroups(req, res, next) {
       ])
       .toArray();
     res.json({ groups: groups.map((g) => ({ permitNumber: g._id, count: g.count, serials: g.serials, proponents: g.proponents, types: g.types })) });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/** The inbox: everything for the Records Unit, one's own for anyone else. */
-async function listAccessRequests(req, res, next) {
-  try {
-    const user = principalOf(req);
-    const [requests, pending] = await Promise.all([
-      accessRequests.list(user, req.query),
-      accessRequests.pendingCount(user),
-    ]);
-    res.json({
-      requests,
-      pending,
-      canDecide: accessRequests.isRecordsUnit(user),
-      durations: accessRequests.DURATION_HOURS,
-      defaultDuration: accessRequests.DEFAULT_DURATION_HOURS,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/** Approve or decline (Records Unit). */
-async function decideAccessRequest(req, res, next) {
-  try {
-    const request = await accessRequests.decide(req.params.id, principalOf(req), req.body || {});
-    await audit.record(req, {
-      domain: DOMAINS.ERMS,
-      action: 'access-decision',
-      label: `document access ${request.status}`,
-      collection: accessRequests.COLLECTION,
-      documentId: request.id,
-      changes: { serialNo: request.serialNo, for: request.requestedBy?.username, status: request.status, expiresAt: request.expiresAt },
-    });
-    res.json({ request });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/** Take an approval back early (Records Unit). */
-async function revokeAccessRequest(req, res, next) {
-  try {
-    const request = await accessRequests.revoke(req.params.id, principalOf(req), req.body || {});
-    await audit.record(req, {
-      domain: DOMAINS.ERMS,
-      action: 'access-decision',
-      label: 'document access revoked',
-      collection: accessRequests.COLLECTION,
-      documentId: request.id,
-      changes: { serialNo: request.serialNo, for: request.requestedBy?.username, status: request.status },
-    });
-    res.json({ request });
   } catch (error) {
     next(error);
   }
@@ -914,7 +747,6 @@ async function filterOptions(req, res, next) {
       })),
       // What this user may do, so the UI does not offer actions the API refuses.
       writableProvinces: writeScope(req),
-      canShare: accessRequests.isRecordsUnit(principalOf(req)),
     });
   } catch (error) {
     next(error);
@@ -924,7 +756,7 @@ async function filterOptions(req, res, next) {
 /** Proponents and project titles already on file, for the upload form. */
 async function suggest(req, res, next) {
   try {
-    res.json({ items: await recordService.suggest(readScope(req), req.query.field, req.query.q) });
+    res.json({ items: await recordService.suggest(readScope(req), req.query.field, req.query.q, { projectType: req.query.projectType }) });
   } catch (error) {
     next(error);
   }
@@ -1083,7 +915,44 @@ async function runReport(req, res, next) {
   }
 }
 
+/**
+ * Move a record's scan to another record — the Developer's or an
+ * administrator's. Only which record points at the file changes; the file
+ * stays where it is on the share. Recorded against both records.
+ */
+async function moveRecordFile(req, res, next) {
+  try {
+    const user = principalOf(req);
+    if (!canAccessAllYears(user)) {
+      return res.status(403).json({ code: 'MOVE_FORBIDDEN', message: 'Only the Developer or an administrator moves a scan to another record.' });
+    }
+    const toSerialNo = String(req.body.toSerialNo || '').trim();
+    const result = await recordService.moveDocument(req.params.serialNo, toSerialNo, { username: user?.username || 'unknown' });
+    for (const [serialNo, label] of [
+      [result.from, `scan moved to ${result.to}`],
+      [result.to, `scan moved here from ${result.from}`],
+    ]) {
+      await audit.record(req, { domain: DOMAINS.ERMS, action: 'file-moved', label, collection: recordService.RECORDS, documentId: serialNo, changes: { fileName: result.fileName, from: result.from, to: result.to }, includeBody: false });
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** VERA's suggestions for where a record's scan belongs. */
+async function moveRecordFileSuggestions(req, res, next) {
+  try {
+    if (!canAccessAllYears(principalOf(req))) return res.status(403).json({ code: 'MOVE_FORBIDDEN', message: 'Only the Developer or an administrator moves a scan to another record.' });
+    res.json(await recordService.moveSuggestions(req.params.serialNo, readScope(req)));
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
+  moveRecordFile,
+  moveRecordFileSuggestions,
   listRecords,
   getRecord,
   getRecordFileInfo,
@@ -1092,14 +961,8 @@ module.exports = {
   attachRecordFile,
   nextSerial,
   getLookups,
-  requestDocumentAccess,
-  shareDocument,
-  sharePeople,
   duplicateCheck,
   duplicateGroups,
-  listAccessRequests,
-  decideAccessRequest,
-  revokeAccessRequest,
   createRecord,
   updateRecord,
   nextSerial,

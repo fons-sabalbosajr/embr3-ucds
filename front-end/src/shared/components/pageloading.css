@@ -1,0 +1,132 @@
+/* The whole-page loading screen (PageLoading.jsx). The accent comes from the
+   theme (--eu-accent, set by ThemeProvider). */
+
+.eu-page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.eu-page-loading--full {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.eu-page-loading__mark {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+}
+
+.eu-page-loading__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 55%, var(--eu-accent, #2f7ecb) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  animation: eu-loading-spin 1.1s linear infinite;
+}
+
+.eu-page-loading__ring--slow {
+  inset: 10px;
+  opacity: 0.45;
+  animation-duration: 2.4s;
+  animation-direction: reverse;
+}
+
+.eu-page-loading__seal {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  animation: eu-loading-breathe 2.4s ease-in-out infinite;
+}
+
+.eu-page-loading__name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.eu-page-loading__e {
+  font-weight: 800;
+  color: var(--eu-accent, #2f7ecb);
+}
+
+.eu-page-loading__sub {
+  font-size: 12px;
+  max-width: 320px;
+}
+
+.eu-page-loading__bar {
+  position: relative;
+  width: min(240px, 70vw);
+  height: 4px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 14px;
+}
+
+.eu-page-loading__bar span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: 4px;
+  background: var(--eu-accent, #2f7ecb);
+  animation: eu-loading-slide 1.3s ease-in-out infinite;
+}
+
+.eu-page-loading__tip {
+  font-size: 12px;
+  min-height: 18px;
+  animation: eu-loading-fade 0.4s ease-out;
+}
+
+@keyframes eu-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes eu-loading-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes eu-loading-slide {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@keyframes eu-loading-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eu-page-loading__ring,
+  .eu-page-loading__seal,
+  .eu-page-loading__bar span {
+    animation-duration: 4s;
+  }
+}

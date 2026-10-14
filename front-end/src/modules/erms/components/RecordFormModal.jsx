@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, App as AntdApp, AutoComplete, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Skeleton, Space, Tabs, Tag, Typography, Upload } from "antd";
-import { InboxOutlined } from "@ant-design/icons";
+import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Skeleton, Space, Tag, Typography, Upload } from "antd";
+import { InboxOutlined, MinusCircleOutlined, PlusOutlined } from "@ant-design/icons";
+import { UnitTabs, UploadFooter } from "./UploadParts";
 import { attachRecordFile } from "../../../shared/api/recordDocuments";
+import { unitTheme } from "../units/unitTheme";
+import "../units/unitupload.css";
 import RegisterLookup from "./RegisterLookup";
-import FolderPicker from "./FolderPicker";
+import NasFolderBrowser from "./NasFolderBrowser";
 import SuggestInput from "./SuggestInput";
+import ListInput from "./ListInput";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,6 +25,7 @@ import {
   updateRecord,
   uploadRecord,
 } from "../api/ermsService";
+import { message } from "../../../shared/feedback";
 
 // Create and edit share one form: the fields are identical and only the
 // submitted verb differs.
@@ -30,8 +35,6 @@ import {
 // for years — but stay free text underneath, so a value that is not on the
 // list, or one typed into an older record, is still accepted.
 
-const contains = (input, option) =>
-  String(option?.value || "").toLowerCase().includes(String(input || "").toLowerCase());
 
 // The type folder the layout files each permit kind into (the desktop
 // system's folders; see configService DEFAULTS). Shown as the default leaf
@@ -48,8 +51,15 @@ const TYPE_FOLDER = {
   other: "Others",
 };
 
+// What one of a record's other ECC Ref Nos is.
+const REF_KINDS = ["Original", "Amendment", "Re-issued", "Other"].map((v) => ({ value: v, label: v }));
+
+// The tabs in order, for the dialog's Back and Next.
+const TAB_KEYS = ["permit", "location", "document"];
+
+const theme = unitTheme("records");
+
 const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
-  const { message } = AntdApp.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const isEdit = Boolean(record);
@@ -59,14 +69,19 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   // record and its file are one request, so nothing lands on the share for a
   // record that is then not saved.
   const [scan, setScan] = useState(null);
-  // The project folder on the share the clerk chose for the scan, if any
-  // (see FolderPicker). Null files under the project title as before.
+  // The project folder and subfolder of the earlier picker: still accepted by
+  // the server, no longer chosen here (the folder browser sets targetPath).
   const [folder, setFolder] = useState(null);
   const [subfolder, setSubfolder] = useState(null);
+  // A folder the clerk browsed to and chose on the Records share (relative
+  // to its root), the desktop ERMS's way; null files in the standard place.
+  const [targetPath, setTargetPath] = useState(null);
   // Re-uploading over a record that has a scan: what to do with the old
   // file on the share. "keep" leaves it where the desktop system filed it.
   const [oldFile, setOldFile] = useState("keep");
   const [tab, setTab] = useState("permit");
+  // The upload's progress, 0–100, while a scan is on its way; null otherwise.
+  const [progress, setProgress] = useState(null);
 
   // The serial the record will get, as the desktop system showed the next
   // FSN. Peeked, not claimed: the number is taken on save.
@@ -113,6 +128,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             dateApproved: current.permit?.dateApproved ? dayjs(current.permit.dateApproved) : null,
             dateAmended: current.permit?.dateAmended ? dayjs(current.permit.dateAmended) : null,
             projectType: current.project?.type,
+            specificProjectType: current.project?.otherType,
             province: current.location?.province,
             city: current.location?.city,
             barangay: current.location?.barangay,
@@ -122,8 +138,9 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             long: current.location?.long ?? null,
             fileName: current.document?.fileName,
             fileClass: current.document?.fileClass,
+            permitRefs: (current.permit?.refs || []).map((r) => ({ number: r.number, dateApproved: r.dateApproved ? dayjs(r.dateApproved) : null, label: r.label || undefined })),
           }
-        : { permitType: "cnc" },
+        : { permitType: "cnc", permitRefs: [] },
     // The serial, not the object: a background refresh of the same record
     // must not rebuild the form under what is being typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,8 +153,10 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
     setScan(null);
     setFolder(null);
     setSubfolder(null);
+    setTargetPath(null);
     setOldFile("keep");
     setTab("permit");
+    setProgress(null);
     setPermitNumber(initialValues.permitNumber || "");
   }, [open, waiting, initialValues]);
 
@@ -152,8 +171,9 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   };
 
   const createMutation = useMutation({
-    mutationFn: (payload) => (scan ? uploadRecord({ payload, file: scan }) : createRecord(payload)),
+    mutationFn: (payload) => (scan ? uploadRecord({ payload, file: scan, onProgress: setProgress }) : createRecord(payload)),
     onSuccess: settle(scan ? "Filed" : "Created"),
+    onSettled: () => setProgress(null),
     onError: (e) => message.error(describeApiError(e, "Could not create the record.")),
   });
 
@@ -164,7 +184,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
       const saved = await updateRecord(payload);
       if (!scan) return saved;
       const hadFile = Boolean(current?.document?.fileName);
-      const result = await attachRecordFile({ serialNo: payload.serialNo, file: scan, replace: hadFile ? oldFile : "missing", folder, subfolder });
+      const result = await attachRecordFile({ serialNo: payload.serialNo, file: scan, replace: hadFile ? oldFile : "missing", folder, subfolder, targetPath, onProgress: setProgress });
       if (result.previous) {
         if (result.previous.deleted) message.info(`The previous file “${result.previous.fileName}” was deleted from the share.`);
         else if (result.previous.reason === "kept") message.info(`The previous file “${result.previous.fileName}” was kept on the share.`);
@@ -173,6 +193,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
       return result.record;
     },
     onSuccess: settle(scan ? "Updated and re-uploaded" : "Updated"),
+    onSettled: () => setProgress(null),
     onError: (e) => message.error(describeApiError(e, "Could not save the record.")),
   });
 
@@ -188,8 +209,11 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
         processSource: v.processSource || null,
         dateApproved: v.dateApproved ? v.dateApproved.format("YYYY-MM-DD") : null,
         dateAmended: v.dateAmended ? v.dateAmended.format("YYYY-MM-DD") : null,
+        refs: (v.permitRefs || [])
+          .filter((r) => r && (r.number || r.dateApproved))
+          .map((r) => ({ number: r.number?.trim() || null, dateApproved: r.dateApproved ? r.dateApproved.format("YYYY-MM-DD") : null, label: r.label || null })),
       },
-      project: { type: v.projectType || null },
+      project: { type: v.projectType || null, otherType: v.specificProjectType || null },
       location: {
         province: v.province,
         provinceLabel: PROVINCE_LABEL[v.province] || null,
@@ -205,7 +229,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
       // failed upload does not leave the record naming a file it lacks.
       document: isEdit && scan
         ? { fileClass: v.fileClass || null }
-        : { fileName: scan ? scan.name : v.fileName || null, folder: scan ? folder : null, subfolder: scan ? subfolder : null, fileClass: v.fileClass || null },
+        : { fileName: scan ? scan.name : v.fileName || null, folder: scan ? folder : null, subfolder: scan ? subfolder : null, targetPath: scan ? targetPath : null, fileClass: v.fileClass || null },
     };
 
     if (isEdit) updateMutation.mutate({ serialNo: current.serialNo, ...payload });
@@ -226,6 +250,13 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   const dateApproved = Form.useWatch("dateApproved", form);
   const projectTitle = Form.useWatch("projectTitle", form);
   const permitType = Form.useWatch("permitType", form);
+  const projectTypeValue = Form.useWatch("projectType", form);
+  // The Ref No as typed or chosen, for the register lookup and the duplicate check.
+  const watchedPermit = Form.useWatch("permitNumber", form);
+  useEffect(() => setPermitNumber(watchedPermit || ""), [watchedPermit]);
+  const standardHint = [PROVINCE_LABEL[province] || null, dateApproved ? String(dateApproved.year()) : "this year", projectTitle ? `“${projectTitle}”` : "the project", TYPE_FOLDER[permitType] || null]
+    .filter(Boolean)
+    .join(" \\ ");
 
   // The Records Unit's own rules (Settings › ERMS): what is required, what
   // is warned about, which classifications are offered.
@@ -301,9 +332,14 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   // is on rather than fail silently behind another one.
   const TAB_OF = {
     proponentName: "permit", projectTitle: "permit", permitType: "permit", permitNumber: "permit", processSource: "permit",
-    dateApproved: "permit", dateAmended: "permit", projectType: "permit",
+    dateApproved: "permit", dateAmended: "permit", projectType: "permit", specificProjectType: "permit", permitRefs: "permit",
     province: "location", city: "location", barangay: "location", street: "location", mailingAddress: "location", lat: "location", long: "location",
     fileName: "document", remarks: "document",
+  };
+  const step = TAB_KEYS.indexOf(tab);
+  const close = () => {
+    form.resetFields();
+    onClose(null);
   };
   const submitWithTabs = () =>
     submit().catch((err) => {
@@ -314,10 +350,10 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   const tabs = [
     {
       key: "permit",
-      label: "Proponent & permit",
+      label: "Proponent & Permit",
       forceRender: true,
       children: (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0 16px" }}>
+        <div className="unit-upload-grid">
           {/* Offered from what is already on file, so a second permit for a
               proponent is spelled the way the first was. */}
           <Form.Item name="proponentName" label="Proponent" rules={[{ required: true, message: "Enter the proponent." }]} style={{ gridColumn: "1 / -1" }}>
@@ -357,7 +393,20 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
               style={{ marginBottom: 8 }}
               rules={rules?.dataQuality?.requirePermitNumber ? [{ required: true, message: "The permit number is required." }] : undefined}
             >
-              <Input placeholder="ECC-OL-R03-2019-0573" onChange={(e) => setPermitNumber(e.target.value)} />
+              {/* The ECC Ref No, completed as it is typed: the numbers already
+                  filed (an amendment carries its original's) and the
+                  register's. Choosing one fills the proponent, project and
+                  date approved where they are still empty. */}
+              <SuggestInput
+                placeholder="ECC-OL-R03-2019-0573"
+                queryKey={["records", "permitNumber"]}
+                fetcher={(q) => fetchRecordSuggestions("permitNumber", q)}
+                onPick={(fill) => {
+                  if (fill.proponentName && !form.getFieldValue("proponentName")) form.setFieldValue("proponentName", fill.proponentName);
+                  if (fill.projectTitle && !form.getFieldValue("projectTitle")) form.setFieldValue("projectTitle", fill.projectTitle);
+                  if (fill.dateApproved && !form.getFieldValue("dateApproved")) form.setFieldValue("dateApproved", dayjs(fill.dateApproved));
+                }}
+              />
             </Form.Item>
             {dupes?.duplicates?.length > 0 && (
               <Alert
@@ -386,8 +435,52 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
           <Form.Item name="dateAmended" label="Date amended">
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
+          {/* A record can carry more than one ECC Ref No — the original's and
+              each amendment's — every one with the date it was approved. The
+              first, above, is the one the register link and the lists use. */}
+          <Form.List name="permitRefs">
+            {(fields, { add, remove }) => (
+              <div style={{ gridColumn: "1 / -1", marginBottom: 16 }}>
+                <Space size={6} wrap>
+                  <Typography.Text strong>Other ECC Ref Nos</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>an amendment&rsquo;s or a re-issue&rsquo;s number, each with its date approved</Typography.Text>
+                </Space>
+                {fields.map(({ key, name, ...rest }) => (
+                  <div key={key} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start", marginTop: 8 }}>
+                    <Form.Item {...rest} name={[name, "number"]} rules={[{ required: true, message: "Enter the Ref No." }]} style={{ marginBottom: 0, flex: "2 1 240px" }}>
+                      <Input placeholder="ECC-OL-R03-2021-0123" />
+                    </Form.Item>
+                    <Form.Item {...rest} name={[name, "dateApproved"]} style={{ marginBottom: 0, flex: "1 1 150px" }}>
+                      <DatePicker placeholder="Date approved" style={{ width: "100%" }} />
+                    </Form.Item>
+                    <Form.Item {...rest} name={[name, "label"]} style={{ marginBottom: 0, flex: "1 1 140px" }}>
+                      <Select allowClear placeholder="Which it is" options={REF_KINDS} />
+                    </Form.Item>
+                    <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} aria-label="Remove this Ref No" />
+                  </div>
+                ))}
+                <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})} style={{ marginTop: 8 }}>
+                  Add another ECC Ref No
+                </Button>
+              </div>
+            )}
+          </Form.List>
           <Form.Item name="projectType" label="Project type" style={{ gridColumn: "1 / -1" }} rules={rules?.dataQuality?.requireProjectType ? [{ required: true, message: "The project type is required." }] : undefined}>
-            <AutoComplete options={projectTypeOptions} filterOption={contains} placeholder="e.g. Mining and Quarrying Projects" allowClear />
+            <ListInput options={projectTypeOptions} placeholder="e.g. Mining and Quarrying Projects" />
+          </Form.Item>
+          {/* The desktop system's "specific project type". Suggested from the
+              records already filed — within the project type, once one is
+              chosen — and choosing one fills in the project type it is
+              usually filed under, when that is still empty. */}
+          <Form.Item name="specificProjectType" label="Specific project type" style={{ gridColumn: "1 / -1" }}>
+            <SuggestInput
+              placeholder="e.g. Poultry Farm, Gasoline Filling Station"
+              queryKey={["records", "specificProjectType", projectTypeValue || null]}
+              fetcher={(q) => fetchRecordSuggestions("specificProjectType", q, { projectType: projectTypeValue || undefined })}
+              onPick={(fill) => {
+                if (fill.projectType && !form.getFieldValue("projectType")) form.setFieldValue("projectType", fill.projectType);
+              }}
+            />
           </Form.Item>
         </div>
       ),
@@ -397,7 +490,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
       label: "Location",
       forceRender: true,
       children: (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0 16px" }}>
+        <div className="unit-upload-grid">
           <Form.Item
             name="province"
             label="Province"
@@ -407,10 +500,10 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             <Select placeholder="Select a province" options={provinceOptions} />
           </Form.Item>
           <Form.Item name="city" label="City / Municipality">
-            <AutoComplete options={cityOptions} filterOption={contains} placeholder={province ? "Choose or type" : "Select the province first"} allowClear onSelect={fillCoordinates} />
+            <ListInput options={cityOptions} placeholder={province ? "Choose or type" : "Select the province first"} onSelect={fillCoordinates} />
           </Form.Item>
           <Form.Item name="barangay" label="Barangay">
-            <AutoComplete options={barangayOptions} filterOption={contains} placeholder={city ? "Choose or type" : "Choose the city first"} allowClear onSelect={fillCoordinates} />
+            <ListInput options={barangayOptions} placeholder={city ? "Choose or type" : "Choose the city first"} onSelect={fillCoordinates} />
           </Form.Item>
           <Form.Item name="street" label="Street">
             <Input placeholder="Street, purok or sitio" />
@@ -478,17 +571,14 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
                 </Form.Item>
               )}
               {scan && (
-                <Form.Item label="Location on the share" extra="Where the new scan files. Choose or make the folders, or leave them to the layout.">
-                  <FolderPicker
+                <Form.Item label="Folder on the Records share" extra="Open the folders and press File here, make a new folder inside one, or leave it to the standard place.">
+                  <NasFolderBrowser
                     unit="records"
                     province={province}
                     date={dateApproved ? dateApproved.format("YYYY-MM-DD") : undefined}
-                    hint={projectTitle}
-                    typeFolder={TYPE_FOLDER[permitType]}
-                    value={folder}
-                    onChange={setFolder}
-                    subfolder={subfolder}
-                    onSubfolderChange={setSubfolder}
+                    value={targetPath}
+                    onChange={setTargetPath}
+                    standardHint={standardHint}
                   />
                 </Form.Item>
               )}
@@ -518,19 +608,16 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
           )}
           {!isEdit && (
             <Form.Item
-              label="Location on the share"
-              extra={scan ? "Where the scan files: the project folder under the province and year, and a folder inside it. Choose ones that exist, make new ones, or leave them to the layout." : "Where a scan would file. Attach a scan above for it to apply."}
+              label="Folder on the Records share"
+              extra={scan ? "Open the folders and press File here — or make a new folder inside one — as in the desktop ERMS. Left alone, the scan files in the standard place." : "Where a scan would file. Attach a scan above for it to apply."}
             >
-              <FolderPicker
+              <NasFolderBrowser
                 unit="records"
                 province={province}
                 date={dateApproved ? dateApproved.format("YYYY-MM-DD") : undefined}
-                hint={projectTitle}
-                typeFolder={TYPE_FOLDER[permitType]}
-                value={folder}
-                onChange={setFolder}
-                subfolder={subfolder}
-                onSubfolderChange={setSubfolder}
+                value={targetPath}
+                onChange={setTargetPath}
+                standardHint={standardHint}
               />
             </Form.Item>
           )}
@@ -549,26 +636,40 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
     <Modal
       title={
         <Space>
-          {isEdit ? `Edit ${record.serialNo}` : "Upload record"}
+          <span style={{ color: theme.accent }}>{theme.icon}</span>
+          {isEdit ? `Edit ${record.serialNo}` : `Upload record — ${theme.label}`}
           {!isEdit && (
-            <Tag color="geekblue" style={{ fontFamily: "monospace" }}>
+            <Tag color={theme.color} style={{ fontFamily: "monospace" }}>
               {nextSerial ? `next: ${nextSerial}` : "next FSN…"}
             </Tag>
           )}
         </Space>
       }
       open={open}
-      onCancel={() => {
-        form.resetFields();
-        onClose(null);
-      }}
-      onOk={submitWithTabs}
-      okText={isEdit ? (scan ? "Save and re-upload" : "Save") : scan ? "File record and scan" : "Create record"}
-      confirmLoading={createMutation.isPending || updateMutation.isPending}
-      // Not before the stored record is in: saving the register row's partial
-      // values would blank the fields the row does not carry.
-      okButtonProps={{ disabled: waiting || (isEdit && storedFailed) }}
-      width={760}
+      onCancel={close}
+      // Step through the tabs, or save from any of them — as the Legal and
+      // Laboratory forms do.
+      footer={
+        <UploadFooter percent={progress}>
+        <Space>
+          <Button onClick={close}>Cancel</Button>
+          <Button disabled={step <= 0} onClick={() => setTab(TAB_KEYS[step - 1])}>Back</Button>
+          {step < TAB_KEYS.length - 1 && <Button onClick={() => setTab(TAB_KEYS[step + 1])}>Next</Button>}
+          <Button
+            type="primary"
+            loading={createMutation.isPending || updateMutation.isPending}
+            // Not before the stored record is in: saving the register row's partial
+            // values would blank the fields the row does not carry.
+            disabled={waiting || (isEdit && storedFailed)}
+            onClick={submitWithTabs}
+          >
+            {isEdit ? (scan ? "Save and re-upload" : "Save") : scan ? "Upload record and scan" : "Save record"}
+          </Button>
+        </Space>
+        </UploadFooter>
+      }
+      width="min(1040px, 96vw)"
+      style={{ top: 32 }}
       destroyOnHidden
     >
       {!isEdit && (
@@ -583,7 +684,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
         <Skeleton active paragraph={{ rows: 8 }} />
       ) : (
         <Form key={current?.serialNo || "new"} form={form} layout="vertical" preserve={false} initialValues={initialValues}>
-          <Tabs activeKey={tab} onChange={setTab} items={tabs} />
+          <UnitTabs unit="records" activeKey={tab} onChange={setTab} items={tabs} />
         </Form>
       )}
     </Modal>

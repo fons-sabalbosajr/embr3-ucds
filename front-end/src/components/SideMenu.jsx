@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { Layout, Menu, Button, Avatar, Tooltip, Badge } from "antd";
+import { Layout, Menu, Button, Avatar, Tooltip, Badge, Tag } from "antd";
 import {
   MessageOutlined,
   DashboardFilled,
@@ -16,6 +16,12 @@ import {
   CloudUploadOutlined,
   ExperimentOutlined,
   ToolOutlined,
+  DashboardOutlined,
+  FileSearchOutlined,
+  MailOutlined,
+  InboxOutlined,
+  BarChartOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 // Known boundary debt: the shared layout drives province selection, but the
@@ -38,6 +44,7 @@ import MenuItemModal from "./MenuItemModal";
 import { useYear } from "../context/YearContext";
 import { API_BASE_URL } from "../config/api";
 import visibleInterval from "../shared/visibleInterval";
+import { useErmsAvailability } from "../shared/ermsAvailability";
 import "./sidemenu.css";
 
 const { Sider } = Layout;
@@ -63,8 +70,14 @@ const PROVINCE_MENU = [
   { key: "zambales", value: "Zambales" },
 ];
 
-const SideMenu = ({ theme, currentUser }) => {
-  const [collapsed, setCollapsed] = useState(false);
+/**
+ * @param collapsed / setCollapsed  owned by the shell (Universe), which starts
+ *                    it collapsed on a tablet and closed on a phone
+ * @param mobile      a phone: the navigation is a drawer over the page — no
+ *                    width of its own, a backdrop behind it, opened from the
+ *                    header's menu button and closed by choosing somewhere
+ */
+const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false }) => {
   const [siderWidth, setSiderWidth] = useState(230);
   const [openKeys, setOpenKeys] = useState([]);
   const [provinceViewers, setProvinceViewers] = useState({});
@@ -84,6 +97,14 @@ const SideMenu = ({ theme, currentUser }) => {
   const [itemDialog, setItemDialog] = useState(null);
 
   const location = useLocation();
+  // The sections open as popups while the menu is collapsed; none at first.
+  const [popupKeys, setPopupKeys] = useState([]);
+  useEffect(() => setPopupKeys([]), [collapsed, location.pathname]);
+  // On a phone the drawer closes once somewhere is chosen.
+  useEffect(() => {
+    if (mobile) setCollapsed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search, mobile]);
   const navigate = useNavigate();
   const { setCurrentProvince, clearCache } = useContext(DataContext);
   const prevLocationPathnameRef = useRef(location.pathname); // To track previous path
@@ -129,6 +150,34 @@ const SideMenu = ({ theme, currentUser }) => {
   const mainDashboard = hasUcds ? "/universe/dashboard" : hasErms ? ermsHome : null;
   // Whether a unit's own Dashboard entry is already the main one above.
   const unitDashboardIsMain = (path) => mainDashboard === path;
+  // The unit whose upload is a main entry of its own: the person's unit, or
+  // Records when they see it. Another unit's upload sits in its section.
+  // Units taken down for maintenance (Admin Settings › System › ERMS Units):
+  // greyed out for everyone but the Developer, who keeps their links.
+  const availability = useErmsAvailability({ enabled: hasErms });
+  const unitClosed = (u) => availability.isDown(u) && !isDeveloper;
+  const maintenanceTag = <Tag color="warning" style={{ marginInlineStart: 6, fontSize: 10, lineHeight: "16px", paddingInline: 4 }}>maintenance</Tag>;
+  // The Developer's open section of a down unit: a small wrench, which leaves the section's arrow room.
+  const maintenanceMark = (
+    <Tooltip title="Down for maintenance — only you can open it">
+      <ToolOutlined style={{ color: "#faad14", marginInlineStart: 6, fontSize: 12 }} aria-label="down for maintenance" />
+    </Tooltip>
+  );
+  const closedSection = (key, icon, name) => ({
+    key,
+    icon,
+    disabled: true,
+    label: (
+      <Tooltip title={availability.units[key.replace(/^erms-?/, "") || "records"]?.reason || "Temporarily unavailable"} placement="right">
+        <div className="menu-label-wrapper main">ERMS · {name}{maintenanceTag}</div>
+      </Tooltip>
+    ),
+  });
+  const uploadUnit = (() => {
+    const open = ermsUnits.filter((u) => !unitClosed(u));
+    return hasErms && open.length ? (open.includes("records") ? "records" : open[0]) : null;
+  })();
+  const uploadPath = (u) => (u === "records" ? "/universe/erms/records?new=1" : `/universe/erms/${u}/documents?upload=1`);
 
   // A unit's settings page has one menu entry and a tab per section in the
   // path (…/settings/privacy); the entry stays lit on every tab.
@@ -494,6 +543,85 @@ const SideMenu = ({ theme, currentUser }) => {
     </div>
   );
 
+  // ERMS, one section per unit the person may see. The Developer, who sees
+  // all three, keeps them grouped — ERMS · Records, · Legal, · Laboratory.
+  // An ERMS User works in one unit only: its pages are main entries of their
+  // own, with no "ERMS · Laboratory" group around them to open first.
+  // The route keys and API namespace stay "erms", which nobody sees.
+  const UNIT_ICON = { records: <FileProtectOutlined />, legal: <AuditOutlined />, laboratory: <ExperimentOutlined /> };
+  const UNIT_NAME = { records: "Records", legal: "Legal", laboratory: "Laboratory" };
+  const PAGE_ICON = {
+    Dashboard: <DashboardOutlined />,
+    "Upload document": <CloudUploadOutlined />,
+    "Document Library": <FileSearchOutlined />,
+    "Portal Requests": <MailOutlined />,
+    "Archive Boxes": <InboxOutlined />,
+    "Upload Tally": <BarChartOutlined />,
+    Settings: <SettingOutlined />,
+  };
+  const unitPages = (u) =>
+    (u === "records"
+      ? [
+          // The unit's dashboard, unless it is already the main Dashboard above.
+          // (Upload record is a main entry of its own, above.)
+          !unitDashboardIsMain("/universe/erms/dashboard") && ["/universe/erms/dashboard", "Dashboard"],
+          // The library is the register: every document, by its FSN.
+          ["/universe/erms/records", "Document Library"],
+          // Requests from the public Document Portal (/e-universe/document-portal).
+          ["/universe/erms/portal-requests", "Portal Requests"],
+          ["/universe/erms/archive", "Archive Boxes"],
+          // Uploads per person per day, and the supervisor's check.
+          ["/universe/erms/upload-tally/records", "Upload Tally"],
+          // The Records Unit's own settings (Legal and Laboratory have theirs).
+          ["/universe/erms/settings", "Settings"],
+        ]
+      : [
+          !unitDashboardIsMain(`/universe/erms/${u}/dashboard`) && [`/universe/erms/${u}/dashboard`, "Dashboard"],
+          // Unless it is the main Upload entry above, as Records' is.
+          uploadUnit !== u && [`/universe/erms/${u}/documents?upload=1`, "Upload document"],
+          // Named as Records names its own: every document, by its serial.
+          [`/universe/erms/${u}/documents`, "Document Library"],
+          // Portal requests for this unit's documents (the desk shows each unit its own).
+          ["/universe/erms/portal-requests", "Portal Requests"],
+          // Shared with the Records Unit's, so its path is not under the unit.
+          ["/universe/erms/upload-tally/" + u, "Upload Tally"],
+          // This unit's own settings, separate from the other units'.
+          [`/universe/erms/${u}/settings`, "Settings"],
+        ]
+    ).filter(Boolean);
+  const ermsUnitsShown = hasErms ? ["records", "legal", "laboratory"].filter((u) => ermsUnits.includes(u)) : [];
+  const flatErms = ermsUnitsShown.length === 1 && !isDeveloper;
+  const ermsSections = ermsUnitsShown.flatMap((u) => {
+    const key = u === "records" ? "erms" : `erms-${u}`;
+    if (unitClosed(u)) return [closedSection(key, UNIT_ICON[u], UNIT_NAME[u])];
+    if (flatErms) {
+      return unitPages(u).map(([to, label]) => ({
+        key: to,
+        icon: PAGE_ICON[label],
+        label: (
+          <div className="menu-label-wrapper main">
+            <Link to={to}>{label}</Link>
+          </div>
+        ),
+      }));
+    }
+    return [
+      {
+        key,
+        icon: UNIT_ICON[u],
+        label: <div className="menu-label-wrapper main">ERMS · {UNIT_NAME[u]}{availability.isDown(u) && maintenanceMark}</div>,
+        children: unitPages(u).map(([to, label]) => ({
+          key: to,
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to={to}>{label}</Link>
+            </div>
+          ),
+        })),
+      },
+    ];
+  });
+
   const menuItems = [
     mainDashboard && {
       key: mainDashboard,
@@ -504,14 +632,15 @@ const SideMenu = ({ theme, currentUser }) => {
         </div>
       ),
     },
-    // The Records Unit's main job, one click from anywhere: the desktop
-    // system's upload, as its own entry rather than inside the ERMS section.
-    hasErms && ermsUnits.includes("records") && {
-      key: "/universe/erms/records?new=1",
+    // A unit's main job, one click from anywhere: the desktop system's
+    // upload, as its own entry rather than inside the unit's section — the
+    // same for Records, Legal and Laboratory.
+    uploadUnit && {
+      key: uploadPath(uploadUnit),
       icon: <CloudUploadOutlined />,
       label: (
         <div className="menu-label-wrapper main">
-          <Link to="/universe/erms/records?new=1">Upload record</Link>
+          <Link to={uploadPath(uploadUnit)}>{uploadUnit === "records" ? "Upload record" : "Upload document"}</Link>
         </div>
       ),
     },
@@ -606,61 +735,7 @@ const SideMenu = ({ theme, currentUser }) => {
           };
         }),
     },
-    // ERMS, one section per unit the person may see: their own for an ERMS
-    // User, all three for the Developer. The route keys and API namespace
-    // stay "erms", which nobody outside the code sees.
-    hasErms && ermsUnits.includes("records") && {
-      key: "erms",
-      icon: <FileProtectOutlined />,
-      label: <div className="menu-label-wrapper main">ERMS · Records</div>,
-      children: [
-        // The unit's dashboard, unless it is already the main Dashboard above.
-        // (Upload record is a main entry of its own, above.)
-        !unitDashboardIsMain("/universe/erms/dashboard") && ["dashboard", "Dashboard"],
-        // The library is the register: every document, by its FSN.
-        ["records", "Document Library"],
-        // The Records Unit's inbox; for everyone else, their own requests.
-        ["access-requests", "Document Requests"],
-        ["archive", "Archive Boxes"],
-        // Uploads per person per day, and the supervisor's check.
-        ["upload-tally/records", "Upload Tally"],
-        // The Records Unit's own settings (Legal and Laboratory have theirs).
-        ["settings", "Settings"],
-      ].filter(Boolean).map(([path, label]) => ({
-        key: `/universe/erms/${path}`,
-        label: (
-          <div className="menu-label-wrapper submenu-item-label">
-            <Link to={`/universe/erms/${path}`}>{label}</Link>
-          </div>
-        ),
-      })),
-    },
-    ...["legal", "laboratory"]
-      .filter((u) => hasErms && ermsUnits.includes(u))
-      .map((u) => ({
-        key: `erms-${u}`,
-        icon: u === "legal" ? <AuditOutlined /> : <ExperimentOutlined />,
-        label: <div className="menu-label-wrapper main">ERMS · {u === "legal" ? "Legal" : "Laboratory"}</div>,
-        children: [
-          !unitDashboardIsMain(`/universe/erms/${u}/dashboard`) && ["dashboard", "Dashboard"],
-          ["documents?upload=1", "File a document"],
-          ["documents", "Documents"],
-          // Shared with the Records Unit's, so its path is not under the unit.
-          ["/universe/erms/upload-tally/" + u, "Upload Tally"],
-          // This unit's own settings, separate from the other units'.
-          ["settings", "Settings"],
-        ].filter(Boolean).map(([path, label]) => {
-          const to = path.startsWith("/") ? path : `/universe/erms/${u}/${path}`;
-          return {
-            key: to,
-            label: (
-              <div className="menu-label-wrapper submenu-item-label">
-                <Link to={to}>{label}</Link>
-              </div>
-            ),
-          };
-        }),
-      })),
+    ...ermsSections,
     // The Action Center: messages between the people who work in ERMS.
     hasErms && {
       key: "/universe/erms/messages",
@@ -674,14 +749,14 @@ const SideMenu = ({ theme, currentUser }) => {
       ),
     },
     // Anyone with the ERMS domain but no unit yet (a Planning Admin who was
-    // given ERMS) still reaches their document requests.
+    // given ERMS) still reaches the library; documents are asked for in the
+    // Document Portal.
     hasErms && !ermsUnits.length && {
       key: "erms",
       icon: <FileProtectOutlined />,
       label: <div className="menu-label-wrapper main">ERMS</div>,
       children: [
         { key: "/universe/erms/records", label: <div className="menu-label-wrapper submenu-item-label"><Link to="/universe/erms/records">Document Library</Link></div> },
-        { key: "/universe/erms/access-requests", label: <div className="menu-label-wrapper submenu-item-label"><Link to="/universe/erms/access-requests">Document Requests</Link></div> },
       ],
     },
     storageContainers.length > 0 && {
@@ -837,19 +912,23 @@ const SideMenu = ({ theme, currentUser }) => {
   ].filter(Boolean);
 
   return (
+    <>
+    {/* Behind the open drawer on a phone: a tap outside closes it. */}
+    {mobile && !collapsed && <div className="side-menu-backdrop" onClick={() => setCollapsed(true)} aria-hidden="true" />}
     <Sider
       collapsed={collapsed}
       onCollapse={setCollapsed}
+      className={mobile ? "side-menu-drawer" : undefined}
       // Always dark. The sider is a fixed, accent-derived surface rather than
       // something that inverts with the reading theme — see ThemeProvider.
       theme="dark"
-      width={220} // expanded
-      collapsedWidth={68} // collapsed
+      width={mobile ? 264 : 220} // expanded
+      collapsedWidth={mobile ? 0 : 68} // collapsed; on a phone, out of sight
       trigger={null}
     >
       <Logo theme={theme} collapsed={collapsed} />
 
-      {window.innerWidth >= 600 && (
+      {!mobile && (
         // Styled like the theme toggle in the header: the header surface with
         // navigation-coloured type. It used to be a primary button filled with
         // the accent, which sat on an accent-derived sider and was almost
@@ -891,8 +970,14 @@ const SideMenu = ({ theme, currentUser }) => {
         mode="inline"
         inlineIndent={14}
         selectedKeys={[selectedKey]}
-        openKeys={openKeys}
+        // Collapsed, a section opens as a popup on hover — never the open
+        // sections of the expanded menu, which would float over the page.
+        openKeys={collapsed ? popupKeys : openKeys}
         onOpenChange={(keys) => {
+          if (collapsed) {
+            setPopupKeys(keys);
+            return;
+          }
           const latestOpenKey = keys.find((key) => !openKeys.includes(key));
           setOpenKeys(
             rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys
@@ -922,6 +1007,7 @@ const SideMenu = ({ theme, currentUser }) => {
         }}
       />
     </Sider>
+    </>
   );
 };
 

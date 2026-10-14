@@ -60,10 +60,12 @@
   white-space: nowrap;
 }
 
-/* The accent sits on the "E", not on "Universe". */
+/* The accent sits on the "E", not on "Universe" — lightened from the
+   accent (--eu-accent-light, ThemeProvider) so it reads on the dark sider
+   whichever accent is chosen. */
 .logo-ucds {
   font-weight: 800;
-  color: var(--eu-accent, #1890ff);
+  color: var(--eu-accent-light, #8cc1f2);
 }
 
 .logo-tagline {

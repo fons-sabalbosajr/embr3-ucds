@@ -51,5 +51,17 @@ export const accountType = (permission) =>
 
 export const accountTypeLabel = (permission) => accountType(permission).label;
 
+const ERMS_SYSTEM_LABEL = { records: "ERMS Records", legal: "ERMS Legal", laboratory: "ERMS Laboratory" };
+
+/**
+ * The account type as the header shows it. An ERMS User is named by the
+ * subsystem they work in — "ERMS Laboratory", not just "ERMS User" — from
+ * the System set on the account (/api/auth/me's ermsUnit).
+ */
+export const accountTypeFor = (permission, ermsUnit) => {
+  const type = accountType(permission);
+  return type.value === "records" && ERMS_SYSTEM_LABEL[ermsUnit] ? { ...type, label: ERMS_SYSTEM_LABEL[ermsUnit] } : type;
+};
+
 /** Types that may hold storage containers at all. */
 export const STORAGE_TYPES = new Set(["developer", "planning", "records", "admin"]);

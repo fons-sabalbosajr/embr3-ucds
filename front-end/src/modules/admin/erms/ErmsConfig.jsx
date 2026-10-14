@@ -17,7 +17,7 @@ import {
 } from "antd";
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SettingOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { message } from "../../../shared/feedback";
+import { message, modal } from "../../../shared/feedback";
 import {
   describeApiError,
   fetchErmsConfig,
@@ -143,7 +143,7 @@ const UnitTab = ({ unitKey, unit, fieldTypes, folderTokens, lookupKinds, onChang
 
   const addType = () => {
     let code = "";
-    Modal.confirm({
+    modal.confirm({
       title: "New document type",
       content: <Input placeholder="code, e.g. cdo" onChange={(e) => { code = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""); }} />,
       onOk: () => {

@@ -46,6 +46,7 @@ const LIST_PROJECTION = {
   'permit.number': 1,
   'permit.dateApproved': 1,
   'permit.dateAmended': 1,
+  'permit.refs': 1,
   'permit.processSource': 1,
   'project.type': 1,
   'project.otherType': 1,
@@ -91,6 +92,7 @@ function buildFilter(
     filter.$or = [
       { serialNo: rx },
       { 'permit.number': rx },
+      { 'permit.refs.number': rx },
       { proponentName: rx },
       { projectTitle: rx },
     ];
@@ -196,12 +198,12 @@ async function computeDashboardStats(allowedProvinces) {
       { $group: { _id: { month: { $dateToString: { format: '%Y-%m', date: '$document.uploadedAt', timezone: '+08:00' } }, type: '$permit.type' }, count: { $sum: 1 } } },
     ]).toArray(),
     // The most filed project types — the desktop system's pie chart
-    // (vw_PieChartUpload, vw_TotalUploadProjType).
+    // (vw_PieChartUpload, vw_TotalUploadProjType). Fifty: the card shows ten, its See more the rest.
     collection().aggregate([
       { $match: { ...scope, 'project.type': { $nin: [null, ''] } } },
       { $group: { _id: '$project.type', count: { $sum: 1 } } },
       { $sort: { count: -1, _id: 1 } },
-      { $limit: 10 },
+      { $limit: 50 },
     ]).toArray(),
   ]);
 
@@ -250,28 +252,97 @@ function monthWindow(count = 12) {
  * proponent is typed the way the first was. Starting matches first, then the
  * most used. A proponent carries the project title it was last filed with.
  */
-const SUGGESTABLE = { proponentName: 'proponentName', projectTitle: 'projectTitle' };
+// specificProjectType is the desktop system's "specific project type"
+// (project.otherType: "Poultry Farm", "Gasoline Filling Station"); choosing
+// one brings the project type it is usually filed under.
+// permitNumber is the ECC Ref No: the numbers already filed (an amendment
+// carries its original's number) and the register's own, each bringing the
+// proponent and project it belongs to.
+const SUGGESTABLE = { proponentName: 'proponentName', projectTitle: 'projectTitle', specificProjectType: 'project.otherType', permitNumber: 'permit.number' };
 
-async function suggest(allowedProvinces, field, q = '') {
+async function suggest(allowedProvinces, field, q = '', { projectType } = {}) {
   const path = SUGGESTABLE[field];
   if (!path) return [];
   await connectToMongo();
   const text = String(q || '').trim().slice(0, 100);
   const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (field === 'permitNumber') return suggestPermitNumbers(allowedProvinces, text, escaped);
   const scope = Array.isArray(allowedProvinces) ? { 'location.province': { $in: allowedProvinces } } : {};
+  // A specific type within the project type already chosen on the form.
+  const within = field === 'specificProjectType' && projectType ? { 'project.type': String(projectType).slice(0, 200) } : {};
   const groups = await collection()
     .aggregate([
-      { $match: { ...scope, [path]: text ? new RegExp(escaped, 'i') : { $nin: [null, ''] } } },
+      { $match: { ...scope, ...within, [path]: text ? new RegExp(escaped, 'i') : { $nin: [null, ''] } } },
       { $sort: { 'document.uploadedAt': -1 } },
-      { $group: { _id: `$${path}`, count: { $sum: 1 }, ...(field === 'proponentName' ? { projectTitle: { $first: '$projectTitle' } } : {}) } },
+      {
+        $group: {
+          _id: `$${path}`,
+          count: { $sum: 1 },
+          ...(field === 'proponentName' ? { projectTitle: { $first: '$projectTitle' } } : {}),
+          ...(field === 'specificProjectType' ? { projectTypes: { $push: '$project.type' } } : {}),
+        },
+      },
       { $addFields: { starts: text ? { $regexMatch: { input: { $toString: '$_id' }, regex: `^${escaped}`, options: 'i' } } : true } },
       { $sort: { starts: -1, count: -1, _id: 1 } },
       { $limit: 15 },
     ])
     .toArray();
+  // The project type a specific type is filed under most often.
+  const mostCommon = (list = []) => {
+    const n = new Map();
+    for (const t of list) if (t) n.set(t, (n.get(t) || 0) + 1);
+    return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  };
   return groups
     .filter((g) => g._id && String(g._id).trim())
-    .map((g) => ({ value: String(g._id), count: g.count, ...(g.projectTitle ? { fill: { projectTitle: g.projectTitle } } : {}) }));
+    .map((g) => {
+      const fill = g.projectTitle ? { projectTitle: g.projectTitle } : g.projectTypes ? { projectType: mostCommon(g.projectTypes) } : null;
+      return { value: String(g._id), count: g.count, ...(fill && Object.values(fill).some(Boolean) ? { fill } : {}) };
+    });
+}
+
+/**
+ * ECC Ref Nos as typed: those already in the library first (with the
+ * proponent, project and date approved they were filed with), then the
+ * register's — dashes, spaces and capitals ignored in the comparison.
+ */
+async function suggestPermitNumbers(allowedProvinces, text, escaped) {
+  if (text.length < 2) return [];
+  // "ECC OL R03 2019" finds "ECC-OL-R03-2019-0573": any run of separators matches any other.
+  const loose = new RegExp(escaped.replace(/(\\[-.\s]|[\s\-–—_./])+/g, '[\\s\\-–—_./]*'), 'i');
+  const scope = Array.isArray(allowedProvinces) ? { 'location.province': { $in: allowedProvinces } } : {};
+  const filed = await collection()
+    .aggregate([
+      { $match: { ...scope, 'permit.number': loose } },
+      { $sort: { 'document.uploadedAt': -1 } },
+      { $group: { _id: '$permit.number', count: { $sum: 1 }, proponentName: { $first: '$proponentName' }, projectTitle: { $first: '$projectTitle' }, dateApproved: { $first: '$permit.dateApproved' } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $limit: 10 },
+    ])
+    .toArray();
+  const seen = new Set(filed.map((g) => String(g._id).toUpperCase()));
+  let fromRegister = [];
+  try {
+    const rows = await getDb().collection('ucds-data').find({ ecc_cnc: loose }, { projection: { ecc_cnc: 1, name: 1, title: 1 } }).limit(8).toArray();
+    const pm = require('../../ucds/services/permitMatch');
+    fromRegister = rows.flatMap((r) =>
+      pm.tokensOf(r.ecc_cnc).filter((t) => loose.test(t) && !seen.has(t.toUpperCase())).map((t) => {
+        seen.add(t.toUpperCase());
+        return { value: t, count: 0, source: 'register', fill: { proponentName: r.name || null, projectTitle: r.title || null } };
+      })
+    );
+  } catch {
+    /* the register is a convenience here */
+  }
+  return [
+    ...filed.map((g) => ({
+      value: String(g._id),
+      count: g.count,
+      source: 'library',
+      fill: { proponentName: g.proponentName || null, projectTitle: g.projectTitle || null, dateApproved: g.dateApproved || null },
+    })),
+    ...fromRegister,
+  ].slice(0, 15);
 }
 
 /** Distinct values for the filter controls, within the caller's scope. */
@@ -364,19 +435,29 @@ async function peekSerialNo() {
 }
 
 /**
- * The next attachment number, Att-00039 after Att-00038.
+ * The highest attachment number the desktop system issued. Its register
+ * (tb_maindata_attachment_IDs) runs to Att-00098, but only 37 of those
+ * reached tb_maindata with a record's serial; the other 61 were never
+ * linked to a record and so are not in erms-records. Their numbers are
+ * still theirs.
+ */
+const LEGACY_ATTACHMENT_HIGH = 98;
+
+/**
+ * The next attachment number, Att-00099 after Att-00098.
  *
  * The desktop system numbered attachments from one sequence across all
  * records and wrote the record's serial before it: "FSN-0000206 Att-00012"
  * is the twelfth attachment filed, and it belongs to FSN-0000206. Seeded
- * from the attachments already on file, then an atomic $inc.
+ * from the attachments already on file — and never below the desktop
+ * register's last number — then an atomic $inc.
  */
 async function nextAttachmentNo() {
   await connectToMongo();
   const existing = await sequences().findOne({ _id: 'attachmentNo' });
-  if (!existing || typeof existing.seq !== 'number') {
+  if (!existing || typeof existing.seq !== 'number' || existing.seq < LEGACY_ATTACHMENT_HIGH) {
     const rows = await collection().find({ serialNo: / Att-\d+$/ }, { projection: { serialNo: 1 } }).toArray();
-    const seed = rows.reduce((max, r) => Math.max(max, Number(/Att-(\d+)$/.exec(r.serialNo)?.[1]) || 0), 0);
+    const seed = rows.reduce((max, r) => Math.max(max, Number(/Att-(\d+)$/.exec(r.serialNo)?.[1]) || 0), LEGACY_ATTACHMENT_HIGH);
     // $max: a concurrent attach may have seeded and moved it already.
     await sequences().updateOne({ _id: 'attachmentNo' }, { $max: { seq: seed } }, { upsert: true });
   }
@@ -501,6 +582,7 @@ async function createRecord(input, { username, writableProvinces }) {
       dateApprovedRaw: null,
       dateAmended: input.permit.dateAmended ? new Date(input.permit.dateAmended) : null,
       dateAmendedRaw: null,
+      refs: refsOf(input.permit.refs),
     },
 
     project: { type: input.project?.type || null, otherType: input.project?.otherType || null },
@@ -547,6 +629,18 @@ async function createRecord(input, { username, writableProvinces }) {
 
   await collection().insertOne(doc);
   return doc;
+}
+
+/**
+ * The record's other ECC Ref Nos — an amendment's, a re-issue's — each with
+ * the date it was approved. The first number stays in permit.number and
+ * permit.dateApproved, where the register link and every list read it.
+ */
+function refsOf(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((r) => ({ number: String(r?.number || '').trim() || null, dateApproved: r?.dateApproved ? new Date(r.dateApproved) : null, label: String(r?.label || '').trim() || null }))
+    .filter((r) => r.number || r.dateApproved)
+    .slice(0, 20);
 }
 
 /** Fields a user may change. Identity and provenance are not among them. */
@@ -607,6 +701,7 @@ async function updateRecord(serialNo, changes, { username, writableProvinces }) 
               : null
             : before.permit?.dateAmended ?? null,
       };
+      if (changes.permit.refs !== undefined) set.permit.refs = refsOf(changes.permit.refs);
       // Correcting a date clears the preserved raw value it replaces.
       if (changes.permit.dateApproved) set.permit.dateApprovedRaw = null;
       if (changes.permit.dateAmended) set.permit.dateAmendedRaw = null;
@@ -670,9 +765,99 @@ const clearingDashboard = (fn) => async (...args) => {
   return result;
 };
 
+// ---------------------------------------------------------------------------
+// Moving a scan to the record it belongs to.
+//
+// A scan is sometimes filed against the wrong record — a neighbouring FSN, the
+// amendment instead of the original. The Developer or an administrator moves
+// it: the record that held it lets it go, the one it belongs to takes it. The
+// file itself stays where it is on the share; only which record points at it
+// changes, so nothing on the NAS can be lost by a move. Both records remember
+// the move (document.movedTo / movedFrom), and it is in both their histories.
+// ---------------------------------------------------------------------------
+
+const DOCUMENT_FIELDS = ['fileName', 'filePath', 'sharePath'];
+
+async function moveDocument(fromSerial, toSerial, { username }) {
+  await connectToMongo();
+  if (fromSerial === toSerial) throw badRequest('Choose a different record to move the scan to.', 'SAME_RECORD');
+  const [from, to] = await Promise.all([collection().findOne({ serialNo: fromSerial }), collection().findOne({ serialNo: toSerial })]);
+  if (!from) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+  if (!to) throw notFoundError(`There is no record ${toSerial}.`, 'TARGET_NOT_FOUND');
+  if (!from.document?.fileName && !from.document?.sharePath) throw badRequest('This record has no scan to move.', 'NO_DOCUMENT');
+  if (to.document?.fileName || to.document?.sharePath) {
+    throw conflict(`${toSerial} already has a scan (${to.document.fileName || 'on the share'}). Move that one away first.`, 'TARGET_HAS_DOCUMENT');
+  }
+  const now = new Date();
+  const moved = Object.fromEntries(DOCUMENT_FIELDS.map((k) => [`document.${k}`, from.document?.[k] ?? null]));
+  await collection().updateOne(
+    { _id: to._id },
+    { $set: { ...moved, 'document.fileClass': to.document?.fileClass || from.document?.fileClass || null, 'document.movedFrom': fromSerial, 'document.movedAt': now, 'document.movedBy': username, updatedAt: now, updatedBy: username } }
+  );
+  await collection().updateOne(
+    { _id: from._id },
+    { $set: { ...Object.fromEntries(DOCUMENT_FIELDS.map((k) => [`document.${k}`, null])), 'document.movedTo': toSerial, 'document.movedAt': now, 'document.movedBy': username, updatedAt: now, updatedBy: username } }
+  );
+  return { from: fromSerial, to: toSerial, fileName: from.document?.fileName || null };
+}
+
+/**
+ * Where a scan probably belongs — VERA's suggestion when moving one: records
+ * whose permit number appears in the file's name, or whose proponent and
+ * project share its words. Records without a scan of their own come first,
+ * since only those can take it.
+ */
+async function moveSuggestions(serialNo, allowedProvinces) {
+  await connectToMongo();
+  const from = await collection().findOne({ serialNo }, { projection: { document: 1, proponentName: 1, projectTitle: 1, permit: 1 } });
+  if (!from) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+  const pm = require('../../ucds/services/permitMatch');
+  const name = String(from.document?.fileName || '').replace(/\.[a-z0-9]{2,5}$/i, '');
+  const STOP = new Set(['pdf', 'ecc', 'cnc', 'the', 'and', 'of', 'inc', 'corp', 'corporation', 'co', 'amended', 'amendment', 'original', 'pages', 'from', 'scan', 'copy']);
+  const words = (s) => new Set(String(s || '').toLowerCase().split(/[^a-z0-9ñ]+/).filter((w) => w.length > 2 && !STOP.has(w) && !/^\d+$/.test(w)));
+  const nameWords = words(name);
+  const numbers = pm.numbersIn(name).map((n) => pm.loosen(n));
+  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const longest = [...nameWords].sort((a, b) => b.length - a.length).slice(0, 4);
+  const or = [
+    ...longest.flatMap((w) => [{ proponentName: new RegExp(escape(w), 'i') }, { projectTitle: new RegExp(escape(w), 'i') }]),
+    ...pm.numbersIn(name).map((n) => ({ 'permit.number': new RegExp(escape(n).replace(/[-\s]+/g, '[-\\s]*'), 'i') })),
+  ];
+  if (!or.length) return { fileName: from.document?.fileName || null, suggestions: [] };
+  const scope = Array.isArray(allowedProvinces) ? { 'location.province': { $in: allowedProvinces } } : {};
+  const rows = await collection()
+    .find({ ...scope, serialNo: { $ne: serialNo }, $or: or }, { projection: { serialNo: 1, proponentName: 1, projectTitle: 1, permit: 1, location: 1, document: 1 } })
+    .limit(300)
+    .toArray();
+  const scored = rows
+    .map((r) => {
+      const theirs = new Set([...words(r.proponentName), ...words(r.projectTitle)]);
+      const shared = [...nameWords].filter((w) => theirs.has(w)).length;
+      const numberHit = r.permit?.number && numbers.includes(pm.loosen(r.permit.number));
+      const score = Math.min(100, Math.round((nameWords.size ? (shared / nameWords.size) * 70 : 0) + (numberHit ? 60 : 0)));
+      const hasDocument = Boolean(r.document?.fileName || r.document?.sharePath);
+      return {
+        serialNo: r.serialNo,
+        permitNumber: r.permit?.number || null,
+        proponentName: r.proponentName || null,
+        projectTitle: r.projectTitle || null,
+        province: r.location?.province || null,
+        hasDocument,
+        score,
+        why: [numberHit ? 'its permit number is in the file name' : null, shared ? `${shared} word${shared === 1 ? '' : 's'} of the file name in its proponent or project` : null].filter(Boolean).join('; '),
+      };
+    })
+    .filter((s) => s.score >= 25)
+    .sort((a, b) => Number(a.hasDocument) - Number(b.hasDocument) || b.score - a.score)
+    .slice(0, 6);
+  return { fileName: from.document?.fileName || null, suggestions: scored };
+}
+
 module.exports = {
   RECORDS,
   SEQUENCES,
+  moveDocument: clearingDashboard(moveDocument),
+  moveSuggestions,
   PERMIT_TYPES,
   buildFilter,
   monthWindow,

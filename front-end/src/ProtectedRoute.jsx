@@ -3,6 +3,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import axios from "axios";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
+import PageLoading from "./shared/components/PageLoading";
 
 const ProtectedRoute = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -30,10 +31,17 @@ const ProtectedRoute = () => {
 
   // If the authentication status is still loading
   if (isAuthenticated === null) {
-    return <div>Loading...</div>; // You can replace this with a loading spinner
+    return <PageLoading tip="Checking your session" />;
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to={ROUTES.login} replace />;
+  // A tab that is not signed in — a new tab opened on an application link —
+  // signs in, then goes where it was headed (Login follows ?next=).
+  const next = `${window.location.pathname}${window.location.search}`;
+  return isAuthenticated ? (
+    <Outlet />
+  ) : (
+    <Navigate to={next.startsWith(ROUTES.app) ? `${ROUTES.login}?next=${encodeURIComponent(next)}` : ROUTES.login} replace />
+  );
 };
 
 export default ProtectedRoute;

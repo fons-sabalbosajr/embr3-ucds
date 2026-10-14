@@ -29,10 +29,11 @@ export const UNIT_THEME = {
     icon: <AuditOutlined />,
     description: "Cases by docket: notices of violation, technical conferences, orders and resolutions, penalty payments and their attachments.",
     groups: [
-      { title: "The case", keys: ["docketNo", "pabCaseNo", "companyName", "companyAddress", "natureOfBusiness", "documentType"] },
-      { title: "Laws cited", keys: ["pd1586", "ra8749", "ra9275", "ra6969"] },
+      { title: "Basic Info", keys: ["docketNo", "pabCaseNo", "companyName", "companyAddress", "natureOfBusiness", "documentType"] },
+      // One tab: the laws the case cites — each a text area on a row of its
+      // own — then who handles it and where it stands.
+      { title: "Laws Cited & Handling", keys: ["pd1586", "ra8749", "ra9275", "ra6969", "legalOfficer", "caseHandler", "status", "remarks"] },
       { title: "Dates", keys: ["dateOfReport", "novDateIssued", "novDateReleased", "daysProcessed", "tcSchedule", "tcActualDate", "orderDateIssued", "resolutionDateIssued", "dateApproved"] },
-      { title: "Handling", keys: ["legalOfficer", "caseHandler", "status", "remarks"] },
     ],
   },
   laboratory: {
@@ -43,8 +44,9 @@ export const UNIT_THEME = {
     icon: <ExperimentOutlined />,
     description: "Test results, chain-of-custody forms, memos, receipts and calibration certificates, by firm and sampling station.",
     groups: [
-      { title: "Sample", keys: ["cocNo", "firmName", "address", "dateOfSampling", "parameters"] },
-      { title: "Analysis", keys: ["dateReported", "receivedBy", "dateReceived"] },
+      // The sample and its analysis on one tab: a chain-of-custody form is
+      // read as one thing, and the analysis was three fields on a tab of its own.
+      { title: "Laboratory Info", keys: ["cocNo", "firmName", "address", "dateOfSampling", "parameters", "dateReported", "receivedBy", "dateReceived"] },
       { title: "Document", keys: ["subject", "date", "orNumber", "orDate", "referenceNo", "unitUnderTest", "dateIssued", "dateCalibrated", "dateDue"] },
     ],
   },

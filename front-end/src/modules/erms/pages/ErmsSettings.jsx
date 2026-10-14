@@ -360,7 +360,7 @@ const ErmsSettings = ({ unit: unitProp }) => {
           <Form.Item name={["privacy", "defaultClassification"]} label="Classification an upload gets when the form names none" style={{ marginBottom: 14 }}>
             <Select placeholder="Select the default" disabled={!canEdit} options={classifications.map((c) => ({ value: c, label: c }))} />
           </Form.Item>
-          <Rule name={["privacy", "watermarkViewer"]} label="Watermark the viewer with the viewer's name and the date" help="Drawn over every page in the application's viewer, so a screenshot says who took it."><Switch disabled={!canEdit} /></Rule>
+          <Rule name={["privacy", "watermarkViewer"]} label="Watermark the viewer with the application's name and the date" help="“E-Universe · Oct 12, 2026”, drawn across every page in the viewer, so a screenshot or photo of a scan shows where and when it came from."><Switch disabled={!canEdit} /></Rule>
           {isRecords && <Rule name={["privacy", "hideProponentFromRequesters"]} label="Hide the proponent's name from people asking for access" help="Their request list and the establishment panel show the permit number and title only."><Switch disabled={!canEdit} /></Rule>}
         </Card>
       ),
@@ -387,7 +387,7 @@ const ErmsSettings = ({ unit: unitProp }) => {
         <Card size="small" title="What is written to the trail">
           <Rule name={["auditing", "logViews"]} label="Every document view, with who and from where" help="Recommended. Off, the trail records uploads and changes only."><Switch disabled={!canEdit} /></Rule>
           <Rule name={["auditing", "logSearches"]} label="Every library search, with the term and the number of hits"><Switch disabled={!canEdit} /></Rule>
-          <Rule name={["auditing", "logShares"]} label="Every share of a document"><Switch disabled={!canEdit} /></Rule>
+          {/* Sharing from a record is gone; Document Portal requests, decisions and views are always on the trail. */}
           <Divider style={{ margin: "8px 0 14px" }} />
           <Form.Item name={["logHistory", "retentionDays"]} label="Log history reads back" style={{ marginBottom: 14 }}>
             <InputNumber placeholder="Days" min={7} max={3650} disabled={!canEdit} addonAfter="days" />

@@ -90,6 +90,182 @@
   flex: none;
 }
 
+/* ═══ Introduction (the Document Portal) ═══════════════════════════════════ */
+/* VERA says hello by herself above her launcher: the card rises in, her
+   flame ignites, the greeting types itself out (VeraChat `introduce`). */
+
+.vera-intro {
+  position: fixed;
+  right: 28px;
+  bottom: 96px;
+  z-index: 1001;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px 16px 14px;
+  border: 1px solid var(--v-line);
+  border-radius: 16px;
+  background: var(--v-surface);
+  color: var(--v-ink);
+  font-family: var(--v-font);
+  box-shadow: var(--v-shadow);
+  animation: vera-intro-rise 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+.vera-intro > :not(.vera-edge-beam) {
+  position: relative;
+  z-index: 1;
+}
+/* A tail pointing down at the launcher. */
+.vera-intro::after {
+  content: "";
+  position: absolute;
+  right: 44px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--v-surface);
+  border-right: 1px solid var(--v-line);
+  border-bottom: 1px solid var(--v-line);
+  transform: rotate(45deg);
+}
+.vera-intro__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Her mark, alive while she introduces herself: a pop on arrival, then a
+   gentle bob and glow while she speaks. */
+.vera-intro__mark {
+  display: inline-flex;
+  flex: none;
+  border-radius: 50%;
+  animation: vera-mark-pop 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.4) both;
+}
+.vera-intro__mark.is-speaking {
+  animation: vera-mark-pop 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.4) both, vera-mark-speak 1.1s ease-in-out 0.7s infinite;
+}
+@keyframes vera-mark-pop {
+  0% {
+    transform: scale(0.3) rotate(-12deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes vera-mark-speak {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.06);
+    filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--v-accent) 45%, transparent));
+  }
+}
+.vera-intro__who {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.vera-intro__name {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+.vera-intro__role {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.vera-intro__close {
+  font-size: 18px;
+  line-height: 1;
+}
+.vera-intro__text {
+  margin: 10px 0 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  min-height: 3.1em;
+}
+.vera-intro__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--v-accent);
+  animation: vera-caret 0.9s steps(1) infinite;
+}
+.vera-intro__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.vera-intro__primary,
+.vera-intro__secondary {
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.vera-intro__primary {
+  border: 1px solid var(--v-accent);
+  background: var(--v-accent);
+  color: #fff;
+}
+.vera-intro__secondary {
+  border: 1px solid var(--v-line);
+  background: transparent;
+  color: var(--v-ink);
+}
+.vera-intro__primary:hover,
+.vera-intro__secondary:hover {
+  transform: translateY(-1px);
+}
+.vera-intro__primary:focus-visible,
+.vera-intro__secondary:focus-visible {
+  outline: 2px solid var(--v-accent);
+  outline-offset: 2px;
+}
+
+@keyframes vera-intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vera-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@media (max-width: 575px) {
+  .vera-intro {
+    right: 16px;
+    bottom: 88px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vera-intro,
+  .vera-intro__caret,
+  .vera-intro__mark,
+  .vera-intro__mark.is-speaking {
+    animation: none;
+  }
+}
+
 /* ═══ Launcher ═════════════════════════════════════════════════════════════ */
 
 .vera-launcher {

@@ -44,17 +44,29 @@ const multipart = (parts, file) => {
   return form;
 };
 
+/** axios's upload progress as a whole percentage, for the upload dialogs' bar. */
+const progressOf = (onProgress) =>
+  onProgress ? { onUploadProgress: (e) => e.total && onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))) } : {};
+
+/** Move a record's scan to another record (Developer or administrator). */
+export const moveRecordFile = async ({ serialNo, toSerialNo }) =>
+  (await client.post(`/records/${encodeURIComponent(serialNo)}/file/move`, { toSerialNo })).data;
+
+/** VERA's suggestions for the record a scan belongs to. */
+export const fetchMoveSuggestions = async (serialNo) =>
+  (await client.get(`/records/${encodeURIComponent(serialNo)}/file/move-suggestions`)).data;
+
 /** The serial the next record will get (claimed on save, not here). */
 export const fetchNextSerial = async () => (await client.get("/records/next-serial")).data.serialNo ?? null;
 
-export const uploadRecord = async ({ payload, file }) =>
-  (await client.post("/records/upload", multipart({ payload }, file))).data.record;
+export const uploadRecord = async ({ payload, file, onProgress }) =>
+  (await client.post("/records/upload", multipart({ payload }, file), progressOf(onProgress))).data.record;
 
 // Filing a scan against an existing record, opening a document and asking
 // to see one live in shared/api/recordDocuments: the establishment panel on
 // the planning screens uses them too. Re-exported so ERMS screens import
 // from one place.
-export { attachRecordFile, attachUnitFile, recordFileBase, requestDocumentAccess, unitFileBase, describeApiError } from "../../../shared/api/recordDocuments";
+export { attachRecordFile, attachUnitFile, recordFileBase, unitFileBase, describeApiError } from "../../../shared/api/recordDocuments";
 
 // --- the units: Legal Services and Laboratory --------------------------------------
 
@@ -68,8 +80,25 @@ export const fetchUnitDocuments = async (unit, params) =>
 export const fetchUnitDocument = async (unit, serialNo) =>
   (await client.get(`/units/${unit}/documents/${encodeURIComponent(serialNo)}`)).data;
 
-export const uploadUnitDocument = async ({ unit, docType, province, parentSerialNo, folder, fields, file }) =>
-  (await client.post(`/units/${unit}/documents`, multipart({ docType, province, parentSerialNo, folder, fields }, file))).data.document;
+/** A Legal or Laboratory document's history: its filing, edits, scans and views. */
+export const fetchUnitDocumentHistory = async (unit, serialNo) =>
+  (await client.get(`/units/${unit}/documents/${encodeURIComponent(serialNo)}/history`)).data.events;
+
+export const uploadUnitDocument = async ({ unit, docType, province, parentSerialNo, folder, subfolder, targetPath, fields, file, onProgress }) =>
+  (await client.post(`/units/${unit}/documents`, multipart({ docType, province, parentSerialNo, folder, subfolder, targetPath, fields }, file), progressOf(onProgress))).data.document;
+
+// --- the folder browser --------------------------------------------------------------
+// Any folder on the unit's share (relative to its root), and a new one inside
+// it; with province and date, also where the layout would file (`standard`).
+export const browseFolders = async (unit, params) =>
+  (await client.get(`/units/${unit}/browse`, { params: pruned(params) })).data;
+
+export const makeBrowseFolder = async ({ unit, path, name }) =>
+  (await client.post(`/units/${unit}/browse`, pruned({ path, name }))).data;
+
+/** Remove an empty folder from the unit's share; one with anything in it is refused (FOLDER_NOT_EMPTY). */
+export const removeBrowseFolder = async ({ unit, path }) =>
+  (await client.delete(`/units/${unit}/browse`, { data: { path } })).data;
 
 // --- the folder picker ------------------------------------------------------------
 // The project/company/station folders at the filing level for a province and
@@ -97,8 +126,8 @@ export const fetchUnitActivity = async (unit, params) =>
   (await client.get(`/units/${unit}/activity`, { params: pruned(params) })).data;
 export const fetchUnitDuplicateGroups = async (unit) => (await client.get(`/units/${unit}/duplicate-groups`)).data.groups;
 /** Values already on file, for the upload forms' autocomplete: [{ value, count, fill? }]. */
-export const fetchRecordSuggestions = async (field, q) =>
-  (await client.get("/records/suggest", { params: pruned({ field, q }) })).data.items;
+export const fetchRecordSuggestions = async (field, q, extra = {}) =>
+  (await client.get("/records/suggest", { params: pruned({ field, q, ...extra }) })).data.items;
 export const fetchUnitSuggestions = async (unit, field, q) =>
   (await client.get(`/units/${unit}/suggest`, { params: pruned({ field, q }) })).data.items;
 
@@ -148,24 +177,8 @@ export const saveLookupList = async ({ kind, items, description }) =>
   (await client.put(`/config/lookups/${kind}`, { items, description })).data;
 
 // --- document access ------------------------------------------------------------
-// Documents are view-only. The Records Unit opens them; anyone else asks, and
-// the Records Unit approves for a period or declines.
-
-// Sharing: the Records Unit opens a document for a named person — the same
-// approval a request ends in, granted without the asking.
-export const fetchSharePeople = async (q) => (await client.get("/share/people", { params: pruned({ q }) })).data.people;
-
-export const shareDocument = async ({ serialNo, ...body }) =>
-  (await client.post(`/records/${encodeURIComponent(serialNo)}/share`, pruned(body))).data;
-
-export const fetchAccessRequests = async (params) =>
-  (await client.get("/access-requests", { params: pruned(params) })).data;
-
-export const decideAccessRequest = async ({ id, ...decision }) =>
-  (await client.patch(`/access-requests/${id}`, decision)).data.request;
-
-export const revokeAccessRequest = async ({ id, note }) =>
-  (await client.post(`/access-requests/${id}/revoke`, { note })).data.request;
+// Documents are view-only. The Records Unit opens them; anyone else asks in
+// the Document Portal (modules/portal). There is no sharing from a record.
 
 // --- tracking ---------------------------------------------------------------
 

@@ -25,6 +25,10 @@ export default {
             // VERA builds modifier classes from state (`vera-msg--${role}`,
             // `vera-status-dot--${...}`), which no extractor can see whole.
             /^vera-/,
+            // pdf.js's text layer (PdfViewer, selectable): classes it sets itself.
+            /textLayer/,
+            /markedContent/,
+            /endOfContent/,
           ],
         },
         // Extract identifier-shaped tokens rather than everything between

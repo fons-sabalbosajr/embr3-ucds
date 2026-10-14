@@ -1,5 +1,5 @@
 const { connectToMongo, getDb } = require('../../../config/db');
-const { buildIndex, findMatch } = require('./permitMatch');
+const { buildIndex, findMatch, numbersIn, clean } = require('./permitMatch');
 
 // ---------------------------------------------------------------------------
 // The establishment register — UCDS's read API for other domains.
@@ -65,12 +65,15 @@ function candidatePattern(permitNumber) {
 }
 
 async function candidatesFor(permitNumber) {
-  const rx = candidatePattern(permitNumber);
-  if (!rx) return [];
+  // One pattern per number in the cell ("Amended: X Original: Y" holds two),
+  // each built from the cleaned spelling so a typed "RO3" still narrows.
+  const numbers = numbersIn(permitNumber);
+  const patterns = [...new Set([clean(permitNumber), ...numbers])].map(candidatePattern).filter(Boolean);
+  if (!patterns.length) return [];
   await connectToMongo();
   return register()
-    .find({ $or: [{ ecc_cnc: rx }, { haz_id: rx }] }, { projection: REF_PROJECTION })
-    .limit(CANDIDATE_LIMIT)
+    .find({ $or: patterns.flatMap((rx) => [{ ecc_cnc: rx }, { haz_id: rx }]) }, { projection: REF_PROJECTION })
+    .limit(CANDIDATE_LIMIT * patterns.length)
     .toArray();
 }
 

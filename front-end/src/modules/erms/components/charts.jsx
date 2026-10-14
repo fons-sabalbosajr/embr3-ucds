@@ -1,5 +1,6 @@
 import { Empty } from "antd";
 import { Bar, Column, Pie } from "@ant-design/plots";
+import useScreen from "../../../shared/useScreen";
 
 // ---------------------------------------------------------------------------
 // The ERMS dashboards' charts (@ant-design/plots), shared by the Records,
@@ -20,11 +21,37 @@ const CATEGORICAL = {
 
 const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
 
+// The floating labels — tooltips — wrap instead of running off the card: a
+// project type or a document kind can be sixty characters long, and G2 keeps
+// its tooltip title on one line, cut with an ellipsis, by default. Narrower
+// than the screen on a phone.
+const WRAP = { "white-space": "normal", "overflow-wrap": "anywhere", "word-break": "break-word", "text-overflow": "clip", overflow: "visible" };
+const interaction = {
+  tooltip: {
+    css: {
+      ".g2-tooltip": { "max-width": "min(280px, 80vw)", "white-space": "normal" },
+      ".g2-tooltip-title": WRAP,
+      ".g2-tooltip-list-item-name-label": WRAP,
+    },
+  },
+};
+
+// A category axis whose labels are names, not numbers: wrapped onto up to
+// three lines, then cut — never laid over the bars or each other.
+/** A chart's height: as asked on a larger screen, no more than 220px on a phone. */
+const useHeight = (height) => {
+  const { phone } = useScreen();
+  return phone ? Math.min(height, 220) : height;
+};
+
+const nameAxis = { title: false, labelFontSize: 11, labelAutoWrap: { wordWrapWidth: 110, maxLines: 3 }, labelAutoEllipsis: true };
+
 /**
  * A donut of parts of a whole. `rows`: [{ key, label, count }] in the fixed
  * order the palette follows; beyond seven, the rest fold into "Other".
  */
-export const DonutChart = ({ rows, total, dark, height = 260 }) => {
+export const DonutChart = ({ rows, total, dark, height: asked = 260 }) => {
+  const height = useHeight(asked);
   const nonEmpty = (rows || []).filter((r) => r.count > 0);
   if (!nonEmpty.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing filed yet" />;
   const head = nonEmpty.slice(0, 6);
@@ -47,12 +74,14 @@ export const DonutChart = ({ rows, total, dark, height = 260 }) => {
       legend={{ color: { position: "bottom", itemLabelFontSize: 11 } }}
       tooltip={{ title: (d) => d.type, items: [{ field: "value", name: "Documents", valueFormatter: (v) => fmt(v) }] }}
       animate={false}
+      interaction={interaction}
     />
   );
 };
 
 /** Horizontal bars, largest first. `rows`: [{ label, count }]. */
-export const MagnitudeBars = ({ rows, color, dark, height = 260, name = "Documents" }) => {
+export const MagnitudeBars = ({ rows, color, dark, height: asked = 260, name = "Documents" }) => {
+  const height = useHeight(asked);
   if (!rows?.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing filed yet" />;
   const data = [...rows].map((r) => ({ label: r.label, count: r.count })).sort((a, b) => b.count - a.count);
   return (
@@ -63,9 +92,10 @@ export const MagnitudeBars = ({ rows, color, dark, height = 260, name = "Documen
       height={height}
       theme={dark ? "classicDark" : "classic"}
       style={{ fill: color, radiusTopRight: 4, radiusBottomRight: 4, maxWidth: 22 }}
-      axis={{ x: { title: false, labelFontSize: 11 }, y: { title: false, grid: true, labelFormatter: (v) => fmt(v), labelFontSize: 11 } }}
+      axis={{ x: nameAxis, y: { title: false, grid: true, labelFormatter: (v) => fmt(v), labelFontSize: 11 } }}
       tooltip={{ title: (d) => d.label, items: [{ field: "count", name, valueFormatter: (v) => fmt(v) }] }}
       animate={false}
+      interaction={interaction}
     />
   );
 };
@@ -77,7 +107,8 @@ export const MagnitudeBars = ({ rows, color, dark, height = 260, name = "Documen
  * six, the rest fold into "Other", as the donut does). Each column's total
  * is labelled over it, so the counts never rest on colour alone.
  */
-export const MonthStack = ({ months, kinds, dark, height = 280, name = "Uploads" }) => {
+export const MonthStack = ({ months, kinds, dark, height: asked = 280, name = "Uploads" }) => {
+  const height = useHeight(asked);
   const rows = months || [];
   if (!rows.some((m) => m.total > 0)) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing uploaded in the last twelve months" />;
   // A kind's colour is its slot in the fixed order, whatever else was filed
@@ -126,13 +157,15 @@ export const MonthStack = ({ months, kinds, dark, height = 280, name = "Uploads"
         },
       ]}
       animate={false}
+      interaction={interaction}
       aria-label={`${name} per month`}
     />
   );
 };
 
 /** Columns per year, the most recent `years`. `rows`: [{ year, count }]. */
-export const YearColumns = ({ rows, color, dark, height = 260, years = 12, name = "Documents" }) => {
+export const YearColumns = ({ rows, color, dark, height: asked = 260, years = 12, name = "Documents" }) => {
+  const height = useHeight(asked);
   const data = [...(rows || [])]
     .filter((y) => y.year)
     .sort((a, b) => b.year - a.year)
@@ -151,6 +184,7 @@ export const YearColumns = ({ rows, color, dark, height = 260, years = 12, name 
       axis={{ x: { title: false, labelFontSize: 11 }, y: { title: false, grid: true, labelFormatter: (v) => fmt(v), labelFontSize: 11 } }}
       tooltip={{ title: (d) => d.year, items: [{ field: "count", name, valueFormatter: (v) => fmt(v) }] }}
       animate={false}
+      interaction={interaction}
     />
   );
 };

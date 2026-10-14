@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Input,
-  Modal,
   Select,
   Space,
   Table,
@@ -12,10 +11,10 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ShareAltOutlined, WarningOutlined } from "@ant-design/icons";
+import { CloudUploadOutlined, EditOutlined, EyeOutlined, LinkOutlined, WarningOutlined } from "@ant-design/icons";
+import UnitHeader from "../components/UnitHeader";
 import { useSearchParams } from "react-router-dom";
 import RecordDetail from "./RecordDetail";
-import ShareDocumentModal from "../components/ShareDocumentModal";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   PERMIT_TYPE_COLOR,
@@ -25,7 +24,9 @@ import {
   fetchRecords,
 } from "../api/ermsService";
 import RecordFormModal from "../components/RecordFormModal";
+import FloatingModal from "../../../shared/components/FloatingModal";
 import useFitHeight from "../../../shared/useFitHeight";
+import useScreen from "../../../shared/useScreen";
 import "./recordslist.css";
 
 // Below the table's top: its header row, the pagination, the card's own
@@ -77,10 +78,10 @@ const RecordsList = () => {
   // than on their own page, so the list is still there when it closes.
   const [creating, setCreating] = useState(searchParams.get("new") === "1");
   const [openSerial, setOpenSerial] = useState(null);
-  // The row being edited in the form, and the one being shared.
+  // The row being edited in the form.
   const [editing, setEditing] = useState(null);
-  const [sharing, setSharing] = useState(null);
   const [fitRef, fitHeight] = useFitHeight(TABLE_RESERVE);
+  const screen = useScreen();
 
   useEffect(() => {
     if (searchParams.get("new") === "1") setCreating(true);
@@ -103,7 +104,6 @@ const RecordsList = () => {
   // The API is the authority; these only avoid offering what it refuses.
   const writable = options?.writableProvinces;
   const canWrite = (row) => writable === null || (writable || []).includes(row.location?.province);
-  const canShare = options?.canShare === true;
 
   const address = (loc) =>
     [loc?.street, loc?.barangay, loc?.city, PROVINCE_LABEL[loc?.province] || loc?.provinceLabel || loc?.province]
@@ -168,13 +168,12 @@ const RecordsList = () => {
       title: "Project Details",
       dataIndex: "projectTitle",
       key: "projectTitle",
-      width: 350,
       sorter: true,
       render: (title, row) => (
         <div className="records-project-details">
           <Typography.Text strong>{title || "—"}</Typography.Text>
           <Typography.Text>{row.proponentName || "—"}</Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary">
             {address(row.location) || "—"}
           </Typography.Text>
         </div>
@@ -183,9 +182,10 @@ const RecordsList = () => {
     {
       title: "Project Type",
       key: "projectType",
-      width: 180,
+      width: 300,
+      responsive: ["lg"],
       render: (_, row) => (
-        <Typography.Text type={projectType(row.project) ? undefined : "secondary"} style={{ fontSize: 13, whiteSpace: "normal", wordBreak: "break-word" }}>
+        <Typography.Text type={projectType(row.project) ? undefined : "secondary"} style={{ whiteSpace: "normal", wordBreak: "break-word" }}>
           {projectType(row.project) || "—"}
         </Typography.Text>
       ),
@@ -193,7 +193,8 @@ const RecordsList = () => {
     {
       title: "Register",
       key: "ucdsRef",
-      width: 120,
+      width: 200,
+      responsive: ["md"],
       render: (_, row) =>
         row.ucdsRef?.sortKey ? (
           <Tooltip title={row.ucdsRef.nameSnapshot || ""}>
@@ -209,12 +210,13 @@ const RecordsList = () => {
       title: "Uploaded",
       dataIndex: ["document", "uploadedAt"],
       key: "uploadedAt",
-      width: 130,
+      width: 200,
       sorter: true,
+      responsive: ["sm"],
       render: (d, row) => (
         <Space direction="vertical" size={0}>
           <span>{d ? new Date(d).toLocaleDateString() : "—"}</span>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary">
             {row.document?.uploadedBy || ""}
           </Typography.Text>
         </Space>
@@ -223,7 +225,7 @@ const RecordsList = () => {
     {
       title: "Action",
       key: "actions",
-      width: 110,
+      width: 150,
       align: "center",
       render: (_, row) => (
         <Space size={4}>
@@ -233,11 +235,6 @@ const RecordsList = () => {
           {canWrite(row) && (
             <Tooltip title="Edit">
               <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} aria-label="Edit" />
-            </Tooltip>
-          )}
-          {canShare && row.document?.fileName && (
-            <Tooltip title="Share the document">
-              <Button size="small" icon={<ShareAltOutlined />} onClick={() => setSharing(row)} aria-label="Share" />
             </Tooltip>
           )}
         </Space>
@@ -259,29 +256,33 @@ const RecordsList = () => {
   };
 
   return (
-    <Card
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    <UnitHeader
+      unit="records"
       title="Document Library"
-      extra={
-        <Space size={12}>
+      description="Every permit and clearance on file, by its FSN. Open one for its scan, attachments and tracking."
+      actions={
+        <>
           <Typography.Text type="secondary">
             {data ? `${new Intl.NumberFormat().format(data.total)} records` : ""}
           </Typography.Text>
           {/* Offered only where the account may actually write. */}
           {(options?.writableProvinces === null ||
             (options?.writableProvinces || []).length > 0) && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-              New record
+            <Button type="primary" icon={<CloudUploadOutlined />} onClick={() => setCreating(true)}>
+              Upload record
             </Button>
           )}
-        </Space>
+        </>
       }
-    >
+    />
+    <Card size="small">
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
         <Space wrap size={8}>
           <Input.Search
             allowClear
             placeholder="Serial, permit number, proponent or project"
-            style={{ width: 320 }}
+            style={{ width: screen.phone ? "100%" : 320 }}
             value={searchDraft}
             onChange={(e) => setSearchDraft(e.target.value)}
             onSearch={(v) => patch({ search: v })}
@@ -376,12 +377,15 @@ const RecordsList = () => {
           size="small"
           bordered
           tableLayout="fixed"
+          className="records-table"
           loading={isFetching}
           columns={columns}
           dataSource={data?.items || []}
           onChange={onTableChange}
           onRow={(r) => ({ onDoubleClick: () => setOpenSerial(r.serialNo), style: { cursor: "pointer" } })}
-          scroll={{ x: 1000, y: fitHeight }}
+          // On a phone the page scrolls, not a box inside it; the table keeps
+          // the columns that fit (the rest drop out at md/lg, above).
+          scroll={screen.phone ? { x: 600 } : { x: 1000, y: fitHeight }}
           pagination={{
             current: data?.page || 1,
             pageSize: data?.pageSize || 25,
@@ -414,27 +418,20 @@ const RecordsList = () => {
         onClose={() => setEditing(null)}
       />
 
-      <ShareDocumentModal
-        open={Boolean(sharing)}
-        serialNo={sharing?.serialNo}
-        fileName={sharing?.document?.fileName}
-        onClose={() => setSharing(null)}
-      />
-
-      <Modal
+      {/* A window: moved, minimised or resized, so it can sit beside the
+          scan's own window. */}
+      <FloatingModal
         open={Boolean(openSerial)}
         onCancel={() => setOpenSerial(null)}
-        footer={null}
-        width="min(1100px, 96vw)"
-        style={{ top: 24 }}
-        // The record's own header names it; a title above would repeat it.
-        title={null}
-        styles={{ body: { paddingTop: 8 } }}
-        destroyOnHidden
+        width={1100}
+        maxHeight="88vh"
+        title={<Typography.Text type="secondary" style={{ fontSize: 13 }}>Record details · <span style={{ fontFamily: "monospace" }}>{openSerial}</span></Typography.Text>}
+        bodyStyle={{ paddingTop: 8 }}
       >
         {openSerial && <RecordDetail serialNo={openSerial} embedded onOpenRecord={setOpenSerial} />}
-      </Modal>
+      </FloatingModal>
     </Card>
+    </Space>
   );
 };
 

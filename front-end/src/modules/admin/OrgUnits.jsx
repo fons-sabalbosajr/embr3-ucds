@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  App as AntdApp,
   Button,
   Card,
   Form,
@@ -24,6 +23,7 @@ import {
   listOrgUnits,
   updateOrgUnit,
 } from "../../api/orgUnitService";
+import { message } from "../../shared/feedback";
 
 // ---------------------------------------------------------------------------
 // Offices, divisions and sections — shared master data.
@@ -42,7 +42,6 @@ const TYPE_COLOR = {
 };
 
 const OrgUnits = () => {
-  const { message } = AntdApp.useApp();
   const queryClient = useQueryClient();
 
   const [includeInactive, setIncludeInactive] = useState(false);

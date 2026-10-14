@@ -31,6 +31,11 @@ dotenv.config({ path: path.join(here, '..', '.env') });
 // read before AUTOMATION_AGENT_ENABLED (services/vera/provider.js).
 process.env.VERA_ENABLED = 'false';
 
+// HRPMS (services/hrpmsDirectory.js) is another system's production data:
+// the suite never reaches it, and the portal falls back to the test
+// database and then its built-in list.
+process.env.MONGO_URI_HRPMS = '';
+
 const productionUri = process.env.MONGO_URI;
 process.env.MONGO_URI = String(process.env.TEST_MONGO_URI || 'mongodb://127.0.0.1:27017').trim();
 process.env.MONGO_DB_NAME = String(process.env.TEST_MONGO_DB_NAME || 'universe-db-test').trim();
@@ -72,6 +77,11 @@ beforeAll(async () => {
     // would fail tests that file minimal records. Every run starts from the
     // defaults; the snapshot above puts the real settings back afterwards.
     await db.getDb().collection(PROTECTED_COLLECTION).deleteOne({ _id: 'erms-unit-settings' });
+    // What server.js does at startup and app.js (which the suite loads) does
+    // not: register the baseline year container when there is none. A copy of
+    // production already has its years and this changes nothing; an empty
+    // test database would otherwise have no year to sign in to.
+    await (await import('../services/yearService.js')).default.ensureSeeded();
   } catch {
     // No database in this environment; nothing to protect.
     snapshot = null;

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Alert, Form, Modal, Radio, Space, Upload } from "antd";
+import { Alert, Button, Form, Modal, Radio, Space, Upload } from "antd";
+import { UploadFooter } from "../components/UploadParts";
 import { InboxOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
 import { attachUnitFile, describeApiError } from "../api/ermsService";
-import FolderPicker from "../components/FolderPicker";
+import NasFolderBrowser from "../components/NasFolderBrowser";
 import { unitTheme } from "./unitTheme";
 
 // ---------------------------------------------------------------------------
@@ -22,6 +23,7 @@ const UnitScanModal = ({ unit, unitConfig, document, open, onClose }) => {
   const [oldFile, setOldFile] = useState("keep");
   const [folder, setFolder] = useState(null);
   const [subfolder, setSubfolder] = useState(null);
+  const [targetPath, setTargetPath] = useState(null);
   const [missing, setMissing] = useState(false);
   const hasFile = Boolean(document?.document?.fileName);
   const docType = unitConfig?.docTypes.find((t) => t.code === document?.docType);
@@ -38,8 +40,11 @@ const UnitScanModal = ({ unit, unitConfig, document, open, onClose }) => {
     setMissing(false);
   }, [open]);
 
+  // The upload's progress, 0–100, while the scan is on its way; null otherwise.
+  const [progress, setProgress] = useState(null);
   const save = useMutation({
-    mutationFn: () => attachUnitFile({ unit, serialNo: document.serialNo, file: scan, replace: hasFile ? oldFile : undefined, folder, subfolder }),
+    mutationFn: () => attachUnitFile({ unit, serialNo: document.serialNo, file: scan, replace: hasFile ? oldFile : undefined, folder, subfolder, targetPath, onProgress: setProgress }),
+    onSettled: () => setProgress(null),
     onSuccess: (result) => {
       message.success(hasFile ? `Re-uploaded the scan of ${document.serialNo}.` : `Filed the scan of ${document.serialNo}.`);
       const prev = result.previous;
@@ -70,9 +75,14 @@ const UnitScanModal = ({ unit, unitConfig, document, open, onClose }) => {
         </Space>
       }
       onCancel={() => onClose(null)}
-      onOk={submit}
-      okText={hasFile ? "Re-upload" : "File scan"}
-      confirmLoading={save.isPending}
+      footer={
+        <UploadFooter percent={progress}>
+          <Space>
+            <Button onClick={() => onClose(null)}>Cancel</Button>
+            <Button type="primary" loading={save.isPending} onClick={submit}>{hasFile ? "Re-upload" : "File scan"}</Button>
+          </Space>
+        </UploadFooter>
+      }
       width={720}
       destroyOnHidden
     >
@@ -111,17 +121,14 @@ const UnitScanModal = ({ unit, unitConfig, document, open, onClose }) => {
           </Form.Item>
         )}
 
-        <Form.Item label="Location on the share" extra="Choose or make the folders, or leave them to the layout.">
-          <FolderPicker
+        <Form.Item label="Folder on the share" extra="Open the folders and press File here, make a new folder inside one, or leave it to the standard place.">
+          <NasFolderBrowser
             unit={unit}
             province={document?.province}
             date={yearValue ? String(yearValue).slice(0, 10) : undefined}
-            hint={folderField ? document?.fields?.[folderField] || undefined : undefined}
-            typeFolder={docType?.folder || null}
-            value={folder}
-            onChange={setFolder}
-            subfolder={subfolder}
-            onSubfolderChange={setSubfolder}
+            value={targetPath}
+            onChange={setTargetPath}
+            standardHint={[folderField && document?.fields?.[folderField] ? `“${document.fields[folderField]}”` : null, docType?.folder || null].filter(Boolean).join(" \\ ") || null}
           />
         </Form.Item>
       </Form>

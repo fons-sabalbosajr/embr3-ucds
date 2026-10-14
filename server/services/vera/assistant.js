@@ -69,6 +69,30 @@ function sanitizeHistory(history) {
  */
 function contextFor(viewer = {}, page = '', settings = {}) {
   const support = String(settings.supportContact || '').trim() || K.DEFAULT_SUPPORT;
+  const website = String(settings.officeWebsite || '').trim() || K.DEFAULT_OFFICE_WEBSITE;
+  if (viewer.realm === 'public' && isPortalPage(page)) {
+    // The public Document Portal: still public — unidentified, every public
+    // guard — but documents and the room are what the visitor came for.
+    return {
+      realm: 'public',
+      role: 'public',
+      portal: true,
+      kb: [...K.PORTAL_KB, ...K.PUBLIC_KB.filter((e) => e.id === 'pub-what')],
+      scopeTerms: K.PORTAL_SCOPE_TERMS,
+      pageLabels: K.PORTAL_PAGE_LABELS,
+      greeting: K.PORTAL_GREETING_REPLY,
+      outOfScope: K.PORTAL_OUT_OF_SCOPE_REPLY,
+      cannotVerify: K.PORTAL_CANNOT_VERIFY_REPLY,
+      starters: K.PORTAL_STARTER_QUESTIONS,
+      blockedTerms: K.PORTAL_BLOCKED_TERMS,
+      blockedReply: K.PORTAL_BLOCKED_REPLY,
+      noLookupReply: K.PORTAL_NO_LOOKUP_REPLY,
+      appLabel: 'E-Universe Document Portal',
+      support: 'the office unit that keeps the document',
+      website,
+      countReply: K.publicCountReply(website, true),
+    };
+  }
   if (viewer.realm === 'public') {
     return {
       realm: 'public',
@@ -80,25 +104,37 @@ function contextFor(viewer = {}, page = '', settings = {}) {
       outOfScope: K.PUBLIC_OUT_OF_SCOPE_REPLY,
       cannotVerify: K.PUBLIC_CANNOT_VERIFY_REPLY,
       starters: K.PUBLIC_STARTER_QUESTIONS,
+      blockedTerms: K.PUBLIC_BLOCKED_TERMS,
+      blockedReply: K.PUBLIC_BLOCKED_REPLY,
+      noLookupReply: K.PUBLIC_NO_LOOKUP_REPLY,
       appLabel: 'E-Universe sign-in page',
       support,
+      website,
+      countReply: K.publicCountReply(website),
     };
   }
 
   const domains = Array.isArray(viewer.domains) ? viewer.domains : [];
   const role = viewer.role === 'developer' ? 'developer' : domains.includes('admin') ? 'admin' : 'staff';
+  // The ERMS unit(s) the account works in. One unit — an ERMS User — gets
+  // that unit's articles and suggestions only: a Legal clerk asking "how do
+  // I upload" is asking about a Notice of Violation, not a Records permit.
+  const units = Array.isArray(viewer.ermsUnits) ? viewer.ermsUnits : [];
+  const ownUnit = units.length === 1 ? units[0] : null;
+  const forUnits = (e) => !e.units || !units.length || e.units.some((u) => units.includes(u));
   const kb = [...K.COMMON_KB];
   const scopeTerms = [...K.COMMON_SCOPE_TERMS];
   const starters = [];
   if (domains.includes('ucds')) {
     kb.push(...K.UCDS_KB);
     scopeTerms.push(...K.UCDS_SCOPE_TERMS);
-    starters.push(...K.UCDS_STARTERS);
+    // Planning's own questions first when the register is their work.
+    starters.push(...(domains.includes('erms') ? K.UCDS_STARTERS : K.PLANNING_STARTERS));
   }
   if (domains.includes('erms')) {
-    kb.push(...K.ERMS_KB);
+    kb.push(...K.ERMS_KB.filter(forUnits));
     scopeTerms.push(...K.ERMS_SCOPE_TERMS);
-    starters.push(...K.ERMS_STARTERS);
+    starters.push(...(K.UNIT_STARTERS[ownUnit] || K.ERMS_STARTERS));
   }
   if (role === 'admin' || role === 'developer') {
     kb.push(...K.ADMIN_KB);
@@ -113,6 +149,7 @@ function contextFor(viewer = {}, page = '', settings = {}) {
     realm: 'staff',
     role,
     domains,
+    ermsUnit: ownUnit,
     kb,
     scopeTerms,
     pageLabels: K.PAGE_LABELS,
@@ -176,13 +213,27 @@ function isRestricted(message, role) {
   return false;
 }
 
-function isPublicBlockedTopic(message) {
+function isPublicBlockedTopic(message, terms = K.PUBLIC_BLOCKED_TERMS) {
   const l = String(message || '').toLowerCase();
-  return K.PUBLIC_BLOCKED_TERMS.some((t) => mentionsTerm(l, t));
+  return terms.some((t) => mentionsTerm(l, t));
 }
+
+/** The public Document Portal page (front-end veraService.pageKeyFromPath). */
+const isPortalPage = (page) => String(page || '').toLowerCase() === 'document-portal';
 
 // ── Public-realm lookup guards ───────────────────────────────────────────────
 // Deterministic, so the boundary does not depend on a provider being up.
+
+/**
+ * A public visitor asking for a number — how many, the total, the count, the
+ * statistics. Answered with the office's website, never a figure (staff get
+ * exact ones: services/vera/figures). "How much does it cost" is not a count.
+ */
+const PUBLIC_COUNT_RE =
+  /\b(?:how\s+many|number\s+of|no\.?\s+of|totals?|count\s+of|counts|statistics?|stats|figures|breakdown|percentage|ilan|ilang|bilang\s+ng|kabuuan)\b/i;
+function looksLikeCountQuestion(message) {
+  return PUBLIC_COUNT_RE.test(String(message || ''));
+}
 
 const STATUS_WORD_RE =
   /\b(?:registered|register|exist|exists|on\s+file|in\s+the\s+system|approved|approval|pending|processed|status|record|records|permit|document|how\s+much|total)/i;
@@ -343,6 +394,34 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
   const label = pageLabel(page, ctx.pageLabels);
   const kbText = hits.map(({ entry }) => `- [${entry.category}] ${entry.question}\n  ${entry.answer}`).join('\n');
 
+  if (ctx.realm === 'public' && ctx.portal) {
+    return [
+      `You are ${K.ASSISTANT_NAME}, the friendly guide on the DENR–EMB Region III ${ctx.appLabel}.`,
+      '',
+      'SCOPE — the visitor is NOT signed in and NOT identified. They came to ask EMB Region III for a scanned document — a Records Unit permit, ' +
+        'a Legal Services or Laboratory document, or another office document. ' +
+        'You help ONLY with using the Document Portal: finding a document by its reference or docket number or its title, filling in a request ' +
+        '(name, designation, purpose, duration), the room and the waiting line, approval, reading an approved document, and leaving. ' +
+        'Refuse anything else politely and briefly.',
+      '',
+      "YOU HAVE NO DATA ACCESS. You cannot see any request, document, record, permit or person — not the visitor's own request either. " +
+        'Never state or imply whether a document exists, what it says, whether a request is approved, or who is in the room. ' +
+        'Their own request is shown on the page, under "Your request"; point them there.',
+      'NEVER help anyone get around the rules: no way past approval, no downloading, printing, copying or screenshotting a document, ' +
+        "no reading someone else's request.",
+      'NEVER ask for, accept, repeat or store a password or code.',
+      `NEVER give a count or a figure — how many documents, requests, records, permits or people, a total, a statistic. You have none. Direct the visitor to the EMB Region III website, ${ctx.website}.`,
+      '',
+      'RULES:',
+      '- Answer ONLY from the KNOWLEDGE below. Never invent a requirement, a deadline, a time to approval or a contact detail.',
+      `- If the knowledge does not cover it, say so and direct the visitor to ${ctx.support}.`,
+      '- Warm, plain, non-technical language; short numbered steps; lead with the answer.',
+      '',
+      'KNOWLEDGE:',
+      kbText || `(no article matched — say what you can help with on this page and direct the visitor to ${ctx.support})`,
+    ].join('\n');
+  }
+
   if (ctx.realm === 'public') {
     return [
       `You are ${K.ASSISTANT_NAME}, the assistant on the DENR–EMB Region III ${ctx.appLabel}.`,
@@ -358,6 +437,7 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
       'YOU HAVE NO DATA ACCESS. You cannot see any account, establishment, permit, record or document. Never state or imply anything ' +
         'about one, even if the visitor insists or claims to be staff.',
       'DO NOT explain the inside of the system — the register, the documents, settings, permissions. Tell the visitor to sign in first.',
+      `NEVER give a count or a figure of anything. Direct the visitor to the EMB Region III website, ${ctx.website}.`,
       'NEVER ask for, accept, repeat or store a password or code. If one is sent, tell them not to share it and to change it.',
       '',
       'RULES:',
@@ -380,11 +460,23 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
         ? 'TONE — the user is an ADMINISTRATOR. Be operational: what a setting does, what it affects, and what to check.'
         : 'TONE — the user is a member of staff. Plain, friendly language and short numbered steps. No technical jargon.';
 
+  const UNIT_AREAS = {
+    records: "the Records Unit's ERMS work (uploading permits and clearances, attachments, the Document Library, tracking, archive boxes, Document Portal requests)",
+    legal: "the Legal Services Unit's ERMS work (Notices of Violation and the rest of a case by docket, attachments to a case, the Document Library, History, Document Portal requests)",
+    laboratory: "the Laboratory Unit's ERMS work (test results, chain-of-custody forms and the unit's other documents, the Document Library, History, Document Portal requests)",
+  };
   const areas = [
     ctx.domains.includes('ucds') ? 'the Universe Central DB register (establishments by province and year, permits, monitoring, datasets)' : '',
-    ctx.domains.includes('erms') ? 'the ERMS document library and units (filing scans, document requests, tracking, archive boxes, Legal and Laboratory documents)' : '',
+    ctx.domains.includes('erms') ? UNIT_AREAS[ctx.ermsUnit] || 'the ERMS document library and units (filing scans, document requests, tracking, archive boxes, Legal and Laboratory documents)' : '',
     ctx.role !== 'staff' ? 'administration (accounts, configuration)' : '',
   ].filter(Boolean);
+  // Who they are, so an example is about their own documents.
+  const UNIT_NAMES = { records: 'the Records Unit', legal: 'the Legal Services Unit', laboratory: 'the Laboratory Unit' };
+  const workplace = ctx.ermsUnit
+    ? `The user works in ${UNIT_NAMES[ctx.ermsUnit]}: answer for that unit's screens and documents, and do not walk them through another unit's.`
+    : ctx.domains.includes('ucds') && !ctx.domains.includes('erms')
+      ? 'The user works in the Planning Unit, on the register: answer for the Universe Central DB screens.'
+      : '';
 
   return [
     `You are ${K.ASSISTANT_NAME} (${K.ASSISTANT_FULL_NAME}), the assistant for EMB Region III's ${ctx.appLabel} — ` +
@@ -397,6 +489,7 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
       : '\nDo NOT explain how the system is built — source layout, API endpoints, database schema, deployment. Those are for developers. Explain how to USE it.',
     '',
     tone,
+    workplace ? `\n${workplace}` : '',
     '',
     'RULES:',
     '- Answer ONLY from the KNOWLEDGE below. Never invent a menu, screen, button, rule or permission that is not described there.',
@@ -466,9 +559,10 @@ function fallbackAnswer(message, hits, ctx, figures) {
 function guardReply(msg, ctx) {
   if (ctx.realm === 'public') {
     if (looksLikePastedCredential(msg)) return K.PUBLIC_CREDENTIAL_REPLY;
+    if (looksLikeCountQuestion(msg)) return ctx.countReply || K.publicCountReply(K.DEFAULT_OFFICE_WEBSITE);
     if (looksLikeAccountProbe(msg)) return K.PUBLIC_ACCOUNT_PROBE_REPLY;
-    if (looksLikeRecordLookup(msg)) return K.PUBLIC_NO_LOOKUP_REPLY;
-    if (isPublicBlockedTopic(msg)) return K.PUBLIC_BLOCKED_REPLY;
+    if (looksLikeRecordLookup(msg)) return ctx.noLookupReply || K.PUBLIC_NO_LOOKUP_REPLY;
+    if (isPublicBlockedTopic(msg, ctx.blockedTerms)) return ctx.blockedReply || K.PUBLIC_BLOCKED_REPLY;
   }
   if (isRestricted(msg, ctx.role)) return RESTRICTED_REPLY;
   return null;
@@ -548,6 +642,7 @@ module.exports = {
   looksLikeRecordLookup,
   looksLikePastedCredential,
   looksLikeAccountProbe,
+  looksLikeCountQuestion,
   retrieve,
   looksInScope,
   buildSystemPrompt,

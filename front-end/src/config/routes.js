@@ -10,6 +10,8 @@ export const ROUTES = {
   register: `${SITE_BASE}/register`,
   forgotPassword: `${SITE_BASE}/forgot-password`,
   resetPassword: `${SITE_BASE}/reset-password`,
+  // Public: anyone asks for a scanned document here, no account needed.
+  documentPortal: `${SITE_BASE}/document-portal`,
   selectYear: "/select-year",
   app: "/universe",
 };

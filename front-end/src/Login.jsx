@@ -7,6 +7,7 @@ import { ROUTES } from "./config/routes";
 import { API_BASE_URL } from "./config/api";
 import AuthShell, { AuthError } from "./components/AuthShell";
 import { setSessionToken } from "./shared/sessionToken";
+import { refreshPushRegistration } from "./shared/notifications/devicePush";
 import { useYear } from "./context/YearContext";
 
 const Login = () => {
@@ -15,7 +16,13 @@ const Login = () => {
   const navigate = useNavigate();
   const { refresh: refreshYears } = useYear();
   // Set by the reset-password page after a successful reset.
-  const presetUsername = useLocation().state?.username || "";
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  // ?user= and ?next= come from a device notice clicked for an account with
+  // no tab open (public/sw.js): the account filled in, and the page it
+  // concerns opened after signing in. Only an application path is followed.
+  const presetUsername = location.state?.username || query.get("user") || "";
+  const next = /^\/universe(\/|$)/.test(query.get("next") || "") && !/\/\//.test(query.get("next")) ? query.get("next") : null;
 
   const handleSubmit = async ({ username, password }) => {
     setIsLoading(true);
@@ -26,6 +33,8 @@ const Login = () => {
         // This tab is now this account, whatever the browser's other tabs do
         // (see shared/sessionToken). Set before the check below so it is sent.
         setSessionToken(responseData.sessionToken || null);
+        // A device that takes notices now takes this account's.
+        refreshPushRegistration();
         const check = await fetch(`${API_BASE_URL}/auth-check`, { credentials: "include" }).catch(() => null);
         if (!check || check.status === 401) {
           setError(
@@ -40,7 +49,7 @@ const Login = () => {
           // The year context last asked while signed out; let it learn the
           // container the server chose before the guard looks at it.
           await refreshYears();
-          navigate(ROUTES.app);
+          navigate(next || ROUTES.app);
         } else {
           navigate(ROUTES.selectYear);
         }

@@ -51,18 +51,19 @@ const FOLDER_TOKENS = ['{province}', '{yearRange}', '{year}', '{folder}', '{type
 
 const f = (key, label, type = 'text', extra = {}) => ({ key, label, type, required: false, ...extra });
 
-// The laws a legal case may cite; each is a free remark in the legacy data.
+// The laws a legal case may cite; each is a free remark in the legacy data —
+// often a sentence or two, so a text area of its own, one law to a row.
 const LAW_FIELDS = [
-  f('pd1586', 'PD 1586 (EIS)', 'text', { placeholder: 'Violation remark, or blank' }),
-  f('ra8749', 'RA 8749 (Clean Air)', 'text', { placeholder: 'Violation remark, or blank' }),
-  f('ra9275', 'RA 9275 (Clean Water)', 'text', { placeholder: 'Violation remark, or blank' }),
-  f('ra6969', 'RA 6969 (Toxic & Hazardous)', 'text', { placeholder: 'Violation remark, or blank' }),
+  f('pd1586', 'PD 1586 (EIS)', 'textarea', { placeholder: 'The violation of PD 1586 — e.g. operating without an ECC. Leave blank if not cited.' }),
+  f('ra8749', 'RA 8749 (Clean Air)', 'textarea', { placeholder: 'The violation of RA 8749 — e.g. no Permit to Operate air pollution source. Leave blank if not cited.' }),
+  f('ra9275', 'RA 9275 (Clean Water)', 'textarea', { placeholder: 'The violation of RA 9275 — e.g. discharging without a Discharge Permit. Leave blank if not cited.' }),
+  f('ra6969', 'RA 6969 (Toxic & Hazardous)', 'textarea', { placeholder: 'The violation of RA 6969 — e.g. no Hazardous Waste Generator ID. Leave blank if not cited.' }),
 ];
 const CASE_FIELDS = [
   f('docketNo', 'Docket number', 'text', { required: true, placeholder: 'EMBR3-2026-PA-001' }),
-  f('pabCaseNo', 'DENR-PAB case number'),
-  f('companyName', 'Company / project', 'text', { required: true }),
-  f('companyAddress', 'Address', 'textarea'),
+  f('pabCaseNo', 'DENR-PAB case number', 'text', { placeholder: 'e.g. 03-00007-26-A' }),
+  f('companyName', 'Company / project', 'text', { required: true, placeholder: 'Name of the company or project' }),
+  f('companyAddress', 'Address', 'textarea', { placeholder: 'Street, barangay, city or municipality, province' }),
 ];
 
 const DEFAULTS = {
@@ -256,6 +257,53 @@ const DEFAULTS = {
     allowedExtensions: ['.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.doc', '.docx', '.xls', '.xlsx'],
   },
 };
+
+// What each field's box says before anything is typed, by field — so every
+// unit's forms show an example of what goes there. A field that sets its own
+// placeholder above keeps it.
+const PLACEHOLDERS = {
+  // Legal
+  natureOfBusiness: 'Choose or type the nature of business',
+  dateOfReport: 'Date of the inspection report',
+  novDateIssued: 'Date the NOV was issued',
+  novDateReleased: 'Date the NOV was released',
+  daysProcessed: 'e.g. 5',
+  tcSchedule: 'Date of the technical conference',
+  tcActualDate: 'Date the conference was held',
+  legalOfficer: 'Choose or type the legal officer',
+  caseHandler: 'Choose or type the case handler',
+  status: 'Choose or type the case status',
+  orderDateIssued: 'Date the order was issued',
+  resolutionDateIssued: 'Date the resolution was issued',
+  documentType: 'Complaint letter, inspection report, ECC copy…',
+  dateApproved: 'Date of the document',
+  remarks: 'Anything the next person should know',
+  // Laboratory
+  firmName: 'e.g. COSMOS BOTTLING CORP',
+  address: 'Barangay, city or municipality, province',
+  dateOfSampling: 'Date the samples were taken',
+  parameters: 'Choose or type: PHY-CHEM, MICROBIOLOGICAL, AIR, METALS',
+  dateReported: 'Date the result was reported',
+  cocNo: 'e.g. 2026PC-0001',
+  receivedBy: 'Name of the person who received the samples',
+  dateReceived: 'Date the samples were received',
+  subject: 'What the document is about',
+  date: 'Date of the document',
+  orNumber: 'e.g. OR 1234567',
+  orDate: 'Date on the receipt',
+  referenceNo: 'Certificate reference number',
+  unitUnderTest: 'Instrument or equipment calibrated',
+  dateIssued: 'Date the certificate was issued',
+  dateCalibrated: 'Date of calibration',
+  dateDue: 'Date the next calibration is due',
+};
+for (const unitCfg of Object.values(DEFAULTS.units)) {
+  for (const type of unitCfg.docTypes || []) {
+    for (const field of type.fields || []) {
+      if (!field.placeholder && PLACEHOLDERS[field.key]) field.placeholder = PLACEHOLDERS[field.key];
+    }
+  }
+}
 
 // --- normalisation -----------------------------------------------------------
 

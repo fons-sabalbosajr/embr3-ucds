@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ConfigProvider, theme as antdTheme } from "antd";
 import { API_BASE_URL } from "../config/api";
 import { getPreference, setPreference } from "../shared/preferences";
+import useScreen from "../shared/useScreen";
 
 // ---------------------------------------------------------------------------
 // One theme for the whole application.
@@ -317,11 +318,25 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty("--eu-header-bg", nav.header);
     root.style.setProperty("--eu-nav-text", nav.text);
     root.style.setProperty("--eu-accent", accent);
+    // The accent lifted towards white: for type on the dark navigation (the
+    // "E" of E-Universe), where the accent itself is too dark to read.
+    root.style.setProperty("--eu-accent-light", mix(accent, "#ffffff", 0.5));
     root.style.setProperty("--highlight-color", accent);
     root.style.setProperty("--eu-radius", `${radius}px`);
     if (surfaceBg) root.style.setProperty("--eu-surface-bg", surfaceBg);
     else root.style.removeProperty("--eu-surface-bg");
   }, [nav, accent, radius, surfaceBg]);
+
+  // Smaller on a small screen: the person's density, but never larger than
+  // what fits a phone (or a tablet) — type, controls, headings, the figures
+  // on the dashboards and the room inside a card all come down together, so
+  // nothing has to scroll sideways and a card is not mostly padding.
+  const screen = useScreen();
+  const sized = useMemo(() => {
+    if (screen.phone) return { fontSize: Math.min(density.fontSize, 13), controlHeight: Math.min(density.controlHeight, 30), heading4: 17, heading5: 15, figure: 20, cardPad: 12, cardHead: 40 };
+    if (screen.tablet) return { fontSize: Math.min(density.fontSize, 14), controlHeight: density.controlHeight, heading4: 18, heading5: 15, figure: 22, cardPad: 16, cardHead: 46 };
+    return { fontSize: density.fontSize, controlHeight: density.controlHeight, heading4: 20, heading5: 16, figure: 24, cardPad: 24, cardHead: 56 };
+  }, [screen.phone, screen.tablet, density]);
 
   const themeConfig = useMemo(
     () => ({
@@ -331,8 +346,10 @@ export const ThemeProvider = ({ children }) => {
         colorPrimary: accent,
         colorInfo: accent,
         borderRadius: radius,
-        fontSize: density.fontSize,
-        controlHeight: density.controlHeight,
+        fontSize: sized.fontSize,
+        controlHeight: sized.controlHeight,
+        fontSizeHeading4: sized.heading4,
+        fontSizeHeading5: sized.heading5,
         ...(surfaceBg ? { colorBgLayout: surfaceBg } : {}),
         // Ant Design's own stack: the system face on every platform, no web
         // font to download and no Poppins to fall back from.
@@ -365,12 +382,20 @@ export const ThemeProvider = ({ children }) => {
           itemHeight: density.controlHeight + 4,
         },
         Button: { borderRadius: Math.max(radius - 2, 2), paddingInline: 14, fontWeight: 500 },
-        Card: { borderRadiusLG: radius + 4 },
+        Card: {
+          borderRadiusLG: radius + 4,
+          bodyPadding: sized.cardPad,
+          bodyPaddingSM: Math.min(12, sized.cardPad),
+          headerPadding: sized.cardPad,
+          headerHeight: sized.cardHead,
+        },
         Modal: { borderRadiusLG: radius + 4 },
-        Table: { borderRadius: radius },
+        Table: { borderRadius: radius, ...(screen.phone ? { cellPaddingInlineSM: 6, cellPaddingBlockSM: 6 } : {}) },
+        Statistic: { contentFontSize: sized.figure },
+        Tabs: screen.phone ? { horizontalItemGutter: 16 } : {},
       },
     }),
-    [isDark, accent, density, nav, radius, surfaceBg]
+    [isDark, accent, density, nav, radius, surfaceBg, sized, screen.phone]
   );
 
   const value = useMemo(

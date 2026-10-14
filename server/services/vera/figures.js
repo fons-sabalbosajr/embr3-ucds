@@ -13,6 +13,8 @@
 //                     account — refused for any other unit
 //   Central DB        establishments per province in the person's active
 //                     year, scoped exactly as the register screen is
+//   Document Portal   the room and its requests, for the units the person
+//                     decides for (portalService.sourcesFor) — nobody else
 //   Administration    accounts by role and how many are online, for the
 //                     admin domain only
 //   The application   how many screens this account can open, from VERA's
@@ -52,11 +54,12 @@ function topicsOf(message) {
     legal: /\b(legal|nov|notice of violation|docket|case|cases)\b/.test(m),
     laboratory: /\b(lab|laboratory|coc|sample|samples|test result)\b/.test(m),
     ucds: /\b(establishment|establishments|register|central db|ucds|firm|firms|monitoring)\b/.test(m),
+    portal: /\b(portal|room|seat|seats|waiting\s+line|queue|requesters?)\b/.test(m),
     accounts: /\b(user|users|account|accounts|online|people|staff)\b/.test(m),
     screens: /\b(screen|screens|page|pages|menu|menus|link|links|module|modules|feature|features)\b/.test(m),
   };
   const any = Object.values(named).some(Boolean);
-  return any ? named : { records: true, legal: true, laboratory: true, ucds: true, accounts: false, screens: false };
+  return any ? named : { records: true, legal: true, laboratory: true, ucds: true, portal: false, accounts: false, screens: false };
 }
 
 async function recordsBlock(user) {
@@ -115,6 +118,31 @@ async function ucdsBlock(user, activeYear) {
   ].filter(Boolean);
 }
 
+const UNIT_WORDS = { records: 'Records Unit', legal: 'Legal Services', laboratory: 'Laboratory' };
+
+async function portalBlock(user) {
+  const portal = require('../../modules/portal/services/portalService');
+  const sources = portal.sourcesFor(user);
+  if (!sources.length) return [];
+  await connectToMongo();
+  const col = getDb().collection(portal.COLLECTION);
+  const mine = portal.inReach(sources);
+  const [pending, approved, waiting, seated, today] = await Promise.all([
+    col.countDocuments({ ...mine, status: 'pending' }),
+    col.countDocuments({ ...mine, status: 'approved' }),
+    col.countDocuments({ ...mine, status: 'waiting' }),
+    col.countDocuments({ status: { $in: ['pending', 'approved'] } }),
+    portal.todayFigures(mine),
+  ]);
+  const whose = sources.length === portal.SOURCES.length ? 'all units' : sources.map((x) => UNIT_WORDS[x] || x).join(', ');
+  return [
+    `Document Portal (requests for ${whose}):`,
+    `- Room: ${fmt(seated)} of ${fmt(portal.CAPACITY)} seats taken (all units together)`,
+    `- Awaiting a decision: ${fmt(pending)}; reading now (approved): ${fmt(approved)}; in the waiting line: ${fmt(waiting)}`,
+    `- Today: ${fmt(today.requested)} requested, ${fmt(today.approved)} approved, ${fmt(today.declined)} declined, ${fmt(today.opened)} opened`,
+  ];
+}
+
 async function accountsBlock() {
   await connectToMongo();
   const users = getDb().collection('users');
@@ -154,6 +182,7 @@ async function figuresFor(message, user, { activeYear, pageLabels } = {}) {
   if (topics.legal && units.includes('legal')) jobs.push(unitBlock(user, 'legal'));
   if (topics.laboratory && units.includes('laboratory')) jobs.push(unitBlock(user, 'laboratory'));
   if (topics.ucds && domains.includes('ucds')) jobs.push(ucdsBlock(user, activeYear));
+  if (topics.portal && domains.includes('erms')) jobs.push(portalBlock(user));
   if (topics.accounts && domains.includes('admin')) jobs.push(accountsBlock());
   if (topics.screens) jobs.push(Promise.resolve(screensBlock(pageLabels)));
   if (!jobs.length) return null;

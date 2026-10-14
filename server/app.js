@@ -97,6 +97,8 @@ app.use(
   })
 );
 app.use(offerSessionToken);
+// The socket server reads sessions from the same store (services/notifier.js).
+app.locals.sessionStore = sessionStore;
 
 require("./middleware/auth").assertAuthNotBypassed();
 
@@ -137,11 +139,17 @@ app.use(yearRoutes);
 app.use(require("./routes/datasetRoutes"));
 // VERA, the in-app assistant (services/vera, controllers/veraController.js).
 app.use(require("./routes/veraRoutes"));
+app.use(require("./routes/notificationRoutes"));
 app.use(orgUnitRoutes);
 
 // Cross-domain routes. The establishment→records panel lives here rather than
 // in the ERMS module because it hangs off a UCDS screen and must keep working
 // when ERMS is switched off.
+// An ERMS unit the Developer has taken down (Admin Settings › ERMS Units)
+// answers 503 to everyone else — its screens, uploads and documents, here
+// and in the UCDS establishment panel below (services/ermsAvailability).
+app.use(require("./services/ermsAvailability").guard);
+
 app.use(require("./modules/ucds").routes);
 
 // The ERMS records module. Registered last so it cannot shadow an existing
@@ -150,6 +158,9 @@ app.use(require("./modules/ucds").routes);
 const erms = require("./modules/erms");
 if (erms.isEnabled()) {
   app.use(erms.routes);
+  // The Document Portal: anyone signed in asks for a Records scan and reads
+  // it there once the Records Unit approves (modules/portal).
+  app.use(require("./modules/portal").routes);
   console.log("ERMS module enabled");
 }
 

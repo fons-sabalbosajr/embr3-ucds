@@ -2,7 +2,7 @@
 /* eslint-disable no-console */
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '..', '.env') });
 const { connectToMongo, getDb } = require('../../../config/db');
-const { parseDate, clean } = require('../lib/source');
+const { parseDate, clean, provinceFolderOf } = require('../lib/source');
 const { PROVINCES } = require('../../../services/provinces');
 const units = require('../../../modules/erms/services/unitDocumentService');
 
@@ -35,8 +35,7 @@ const provinceFrom = (...candidates) => {
     if (!s) continue;
     const docket = /-(AU|BA|BU|NE|PA|TA|ZA)-/i.exec(s);
     if (docket) return PROVINCE_BY_DOCKET[docket[1].toUpperCase()];
-    const path = /Database\\([^\\]+)\\/i.exec(s);
-    const key = PROVINCE_BY_LABEL.get(String(path ? path[1] : s).toLowerCase().replace(/[^a-z]/g, ''));
+    const key = PROVINCE_BY_LABEL.get(String(provinceFolderOf(s) || s).toLowerCase().replace(/[^a-z]/g, ''));
     if (key) return key;
   }
   return null;

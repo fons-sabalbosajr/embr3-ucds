@@ -75,3 +75,10 @@
 .notification-action-item:hover {
   background: rgba(127, 127, 127, 0.1);
 }
+
+/* "Notify me on this device", under the tabs. */
+.device-notices {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ant-color-split, rgba(5, 5, 5, 0.06));
+}

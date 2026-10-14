@@ -76,7 +76,16 @@ const permitShape = z.object({
   processSource: optional(60),
   dateApproved: isoDate,
   dateAmended: isoDate,
+  // The record's other ECC Ref Nos, each with its date approved.
+  refs: z.array(z.object({ number: optional(120), dateApproved: isoDate, label: optional(60) })).max(20).optional(),
 });
+
+// On edit, the permit type is kept as stored. A migrated record may carry a
+// legacy or empty type the create form's codes do not cover; the office fixes
+// such records from the edit modal (see recordController.updateRecord), so the
+// whole update must not be refused over an unchanged, out-of-list type. New
+// records stay strict (permitShape above).
+const permitUpdateShape = permitShape.partial().extend({ type: optional(60) });
 
 const locationShape = z.object({
   province: z.enum(PROVINCE_KEYS),
@@ -107,6 +116,8 @@ const createSchema = z.object({
       folder: optional(120),
       // A folder inside the project folder (replacing the type folder).
       subfolder: optional(120),
+      // A folder browsed to on the unit's share, relative to its root.
+      targetPath: optional(600),
     })
     .optional(),
 });
@@ -117,7 +128,7 @@ const updateSchema = z
     proponentName: z.string().trim().min(1).max(300).optional(),
     projectTitle: z.string().trim().min(1).max(500).optional(),
     remarks: optional(2000),
-    permit: permitShape.partial().optional(),
+    permit: permitUpdateShape.optional(),
     project: z.object({ type: optional(200), otherType: optional(300) }).optional(),
     location: locationShape.partial().optional(),
     document: z
@@ -195,7 +206,7 @@ router.get('/api/erms/dashboard', ermsAccess, expensiveLimiter, ctrl.dashboard);
 router.get('/api/erms/filter-options', ermsAccess, ctrl.filterOptions);
 // Autocomplete on the upload forms: values already on file, within scope.
 const suggestQuery = (fields) => z.object({ field: z.enum(fields), q: z.string().trim().max(100).optional() });
-router.get('/api/erms/records/suggest', ermsAccess, validate(suggestQuery(['proponentName', 'projectTitle']), 'query'), ctrl.suggest);
+router.get('/api/erms/records/suggest', ermsAccess, validate(suggestQuery(['proponentName', 'projectTitle', 'specificProjectType', 'permitNumber']).extend({ projectType: z.string().trim().max(200).optional() }), 'query'), ctrl.suggest);
 // The desktop system's menus (project types, statuses, addresses), for the forms.
 router.get(
   '/api/erms/lookups',
@@ -239,6 +250,16 @@ router.get(
 );
 router.get('/api/erms/records/duplicate-groups', ermsAccess, expensiveLimiter, ctrl.duplicateGroups);
 router.post('/api/erms/records/upload', ermsWrite, requireNasActive, uploadOne, validateMultipartPayload, ctrl.uploadRecord);
+// Move a scan to the record it belongs to (the Developer's or an
+// administrator's; the controller checks), and VERA's suggestions for which.
+router.post(
+  '/api/erms/records/:serialNo/file/move',
+  ermsWrite,
+  validate(serialParam, 'params'),
+  validate(z.object({ toSerialNo: z.string().trim().min(3).max(60) })),
+  ctrl.moveRecordFile
+);
+router.get('/api/erms/records/:serialNo/file/move-suggestions', ermsAccess, validate(serialParam, 'params'), ctrl.moveRecordFileSuggestions);
 router.post(
   '/api/erms/records/:serialNo/upload',
   ermsWrite,
@@ -282,6 +303,11 @@ const folderLevelQuery = z.object({
   hint: z.string().trim().max(300).optional(),
 });
 const folderBody = folderLevelQuery.extend({ name: z.string().trim().min(1).max(120) });
+// The folder browser: any folder on the unit's share, and a new one inside it.
+router.get('/api/erms/units/:unit/browse', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(z.object({ path: z.string().max(600).optional(), province: z.enum(PROVINCE_KEYS).optional(), date: z.string().trim().max(40).optional() }), 'query'), unitCtrl.browseFolders);
+router.post('/api/erms/units/:unit/browse', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(z.object({ path: z.string().max(600).optional(), name: z.string().trim().min(1).max(120) })), unitCtrl.makeBrowseFolder);
+// Remove an empty folder (one made by mistake); one with anything in it is refused.
+router.delete('/api/erms/units/:unit/browse', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(z.object({ path: z.string().trim().min(1).max(600) })), unitCtrl.deleteBrowseFolder);
 router.get('/api/erms/units/:unit/folders', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(folderLevelQuery, 'query'), unitCtrl.listFolders);
 router.post('/api/erms/units/:unit/folders', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(folderBody), unitCtrl.createFolder);
 router.delete('/api/erms/units/:unit/folders', ermsAccess, requireNasActive, validate(folderUnitParam, 'params'), validate(folderBody), unitCtrl.deleteFolder);
@@ -366,13 +392,57 @@ router.get(
 router.post('/api/erms/units/:unit/documents', ermsAccess, requireNasActive, validate(unitParam, 'params'), uploadOne, unitCtrl.createDocument);
 router.get('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.getDocument);
 router.patch('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), validate(unitUpdateSchema), unitCtrl.updateDocument);
+router.get('/api/erms/units/:unit/documents/:serialNo/history', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.documentHistory);
 // File a scan against a document already on file, or replace its scan.
 router.post('/api/erms/units/:unit/documents/:serialNo/upload', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), uploadOne, unitCtrl.attachDocumentFile);
 router.get('/api/erms/units/:unit/documents/:serialNo/file', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), unitCtrl.getDocumentFileInfo);
 router.get('/api/erms/units/:unit/documents/:serialNo/file/preview', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), unitCtrl.viewDocumentFile);
-// Ask the administrators for every page of a document the viewer shows only in part.
-router.post('/api/erms/units/:unit/documents/:serialNo/full-access-request', ermsAccess, validate(unitSerialParam, 'params'), validate(z.object({ reason: optional(500) })), unitCtrl.requestFullAccess);
-router.post('/api/erms/records/:serialNo/full-access-request', ermsAccess, validate(serialParam, 'params'), validate(z.object({ reason: optional(500) })), unitCtrl.requestRecordFullAccess);
+
+// --- a unit taken down for maintenance (Admin Settings › ERMS Units) ----------------
+//
+// Read by anyone signed in — Planning too, whose establishment panel shows
+// Records documents — so the sidebar, the dashboards and the notification
+// counts stop asking a down unit for anything. Outside /api/erms/ for that
+// reason: every route there is the ERMS domain's. Changed by the Developer
+// only, under /api/dev/. The guard itself is services/ermsAvailability, in
+// app.js.
+
+const availability = require('../../services/ermsAvailability');
+const audit = require('../../shared/services/audit');
+const { isDeveloper } = require('../../services/authorization');
+const requireDeveloper = (req, res, next) =>
+  isDeveloper(principalOf(req)) ? next() : res.status(403).json({ code: 'DEVELOPER_ONLY', message: 'Only the Developer takes an ERMS unit down or brings it back.' });
+router.get('/api/erms-availability', authenticateSession, async (req, res, next) => {
+  try {
+    res.json({ units: await availability.read() });
+  } catch (error) {
+    next(error);
+  }
+});
+router.put(
+  '/api/dev/erms-availability/:unit',
+  authenticateSession,
+  requireDeveloper,
+  validate(unitParam, 'params'),
+  validate(z.object({ down: z.boolean(), reason: z.string().trim().max(300).optional() })),
+  async (req, res, next) => {
+    try {
+      const units = await availability.set(req.params.unit, req.body, principalOf(req));
+      await audit.record(req, {
+        domain: DOMAINS.ADMIN,
+        action: 'erms-availability',
+        label: `${req.params.unit} ${req.body.down ? 'taken down for maintenance' : 'brought back'}`,
+        collection: 'app-config',
+        documentId: availability.DOC_ID,
+        changes: { unit: req.params.unit, down: req.body.down, reason: req.body.reason || null },
+        includeBody: false,
+      });
+      return res.json({ units });
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
 
 // --- configuration (Admin Settings > ERMS Config) ------------------------------------
 
@@ -396,10 +466,8 @@ router.patch(
 // cannot read the record cannot read its document.
 //
 // View only. There is no download route: the office's rule is that scans are
-// read in the application, by the Records Unit or by whoever the Records Unit
-// has approved for that record (see services/accessRequestService.js). The
-// controller enforces the approval; a request that fails it gets 403
-// APPROVAL_REQUIRED with the state of the caller's own request.
+// read in the application by the Records Unit; anyone else asks in the
+// Document Portal. A caller who may not open it gets 403 APPROVAL_REQUIRED.
 router.get(
   '/api/erms/records/:serialNo/file',
   ermsAccess,
@@ -415,51 +483,10 @@ router.get(
   ctrl.viewRecordFile
 );
 
-// Asking for, and deciding on, document access. Asking needs only ERMS
-// access (and province scope on the record); deciding is refused in the
-// service to anyone but the Records Unit.
-const accessRequestSchema = z.object({ reason: optional(500), full: z.coerce.boolean().optional() });
-const accessDecisionSchema = z.object({
-  decision: z.enum(['approved', 'denied']),
-  durationHours: z.coerce.number().int().optional(),
-  note: optional(500),
-  // Every page, rather than the first few the unit's viewing rule allows.
-  fullAccess: z.coerce.boolean().optional(),
-});
-const requestIdParam = z.object({ id: z.string().regex(/^[a-f0-9]{24}$/i) });
-
-router.post(
-  '/api/erms/records/:serialNo/access-request',
-  ermsAccess,
-  validate(serialParam, 'params'),
-  validate(accessRequestSchema),
-  ctrl.requestDocumentAccess
-);
-// Sharing: the Records Unit opens a document for a named person — the same
-// approval a request would end in, granted without the asking.
-router.get('/api/erms/share/people', ermsAccess, validate(z.object({ q: z.string().trim().max(120).optional() }), 'query'), ctrl.sharePeople);
-router.post(
-  '/api/erms/records/:serialNo/share',
-  ermsAccess,
-  validate(serialParam, 'params'),
-  validate(z.object({ userId: z.string().regex(/^[a-f0-9]{24}$/i), durationHours: z.coerce.number().int().optional(), note: optional(500), fullAccess: z.coerce.boolean().optional() })),
-  ctrl.shareDocument
-);
-router.get('/api/erms/access-requests', ermsAccess, ctrl.listAccessRequests);
-router.patch(
-  '/api/erms/access-requests/:id',
-  ermsAccess,
-  validate(requestIdParam, 'params'),
-  validate(accessDecisionSchema),
-  ctrl.decideAccessRequest
-);
-router.post(
-  '/api/erms/access-requests/:id/revoke',
-  ermsAccess,
-  validate(requestIdParam, 'params'),
-  validate(z.object({ note: optional(500) })),
-  ctrl.revokeAccessRequest
-);
+// Asking for a document is done in the E-Universe Document Portal
+// (modules/portal) — for Records, Legal and Laboratory documents alike —
+// and decided there by the unit that keeps it. There is no request, share or
+// approval inbox here any more.
 
 // Tracking is append-only: no PATCH, no DELETE. A mistake is corrected by
 // recording a correction, not by rewriting the custody trail.

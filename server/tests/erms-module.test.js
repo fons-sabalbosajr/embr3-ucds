@@ -50,6 +50,34 @@ async function signIn(username) {
   return agent;
 }
 
+// The records these tests read, so they do not depend on what the database
+// happens to hold: enough in Bataan for a second page of five, one outside
+// the grant (Pampanga), one migrated from the desktop system (legacyId), and
+// one linked to a register establishment. On a copy of production they sit
+// alongside the real records and are removed afterwards.
+const FIXTURE = /^__TEST-EM-/;
+const fixtureRecords = () => {
+  const at = Date.now();
+  const record = (n, province, extra = {}) => ({
+    serialNo: `__TEST-EM-${String(n).padStart(3, '0')}`,
+    legacyId: `__legacy-em-${n}`,
+    proponentName: `__Test ERMS Module Proponent ${n}`,
+    projectTitle: `__Test ERMS Module Project ${n}`,
+    permit: { type: 'ecc-original', label: 'ECC', number: `__TEST-EM-ECC-${n}` },
+    location: { province, provinceLabel: province },
+    document: { fileName: `__test-em-${n}.pdf`, uploadedAt: new Date(at - n * 1000) },
+    dataQuality: { clean: true },
+    ucdsRef: null,
+    ...extra,
+  });
+  return [
+    ...Array.from({ length: 11 }, (_, i) =>
+      record(i + 1, 'bataan', i === 0 ? { ucdsRef: { sortKey: '__TEST-EM-FIRM', nameSnapshot: '__Test ERMS Module Firm' } } : {})
+    ),
+    record(99, 'pampanga'),
+  ];
+};
+
 beforeAll(async () => {
   await connectToMongo();
   const password = await bcrypt.hash(PASSWORD, 10);
@@ -59,11 +87,14 @@ beforeAll(async () => {
     base(RECORDS_NONE, { password, permission: 'records', domains: ['erms'] }),
     base(PLANNING, { password, permission: 'planning', domains: ['ucds'], bataan: 'readWrite' }),
   ]);
+  await collections.ermsRecords.deleteMany({ serialNo: FIXTURE });
+  await collections.ermsRecords.insertMany(fixtureRecords());
 }, 60000);
 
 afterAll(async () => {
   await collections.users.deleteMany({ username: { $in: USERNAMES } });
   await collections.loginStatus.deleteMany({ username: { $in: USERNAMES } });
+  await collections.ermsRecords.deleteMany({ serialNo: FIXTURE });
 }, 60000);
 
 suite('ERMS module', () => {

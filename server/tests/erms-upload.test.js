@@ -181,6 +181,96 @@ describe.skipIf(!shareReachable)('uploading a scan to the share', () => {
     expect(fs.existsSync(onDisk(b.document.sharePath))).toBe(true);
   });
 
+  it('browses the Records share, makes a folder, and files a scan into the folder chosen', async () => {
+    // Open where the layout would file for Bataan this year, as the form does.
+    const opened = await records.get('/api/erms/units/records/browse').query({ province: 'bataan' });
+    expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+    expect(opened.body.standard).toMatch(/^Bataan\\\d{4}-\d{4}\\\d{4}$/);
+
+    const made = await records.post('/api/erms/units/records/browse').send({ path: opened.body.standard, name: '__Browsed Folder' });
+    expect([200, 201]).toContain(made.status);
+    const inside = await records.get('/api/erms/units/records/browse').query({ path: opened.body.standard });
+    expect(inside.body.folders).toContain('__Browsed Folder');
+
+    const target = `${opened.body.standard}\\__Browsed Folder`;
+    const res = await records
+      .post('/api/erms/records/upload')
+      .field('payload', JSON.stringify(recordPayload({ document: { targetPath: target } })))
+      .attach('file', PDF, { filename: 'browsed.pdf', contentType: 'application/pdf' });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    createdRecords.push(res.body.record.serialNo);
+    const stored = await collections.ermsRecords.findOne({ serialNo: res.body.record.serialNo });
+    expect(stored.document.sharePath).toContain('\\__Browsed Folder\\');
+    expect(fs.existsSync(onDisk(stored.document.sharePath))).toBe(true);
+  });
+
+  it('removes a folder made by mistake, but only an empty one', async () => {
+    const opened = await records.get('/api/erms/units/records/browse').query({ province: 'bataan' });
+    const made = await records.post('/api/erms/units/records/browse').send({ path: opened.body.standard, name: '__Mistaken Folder' });
+    expect([200, 201]).toContain(made.status);
+
+    const removed = await records.delete('/api/erms/units/records/browse').send({ path: made.body.path });
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    expect(removed.body.parent).toBe(opened.body.standard);
+    const after = await records.get('/api/erms/units/records/browse').query({ path: opened.body.standard });
+    expect(after.body.folders).not.toContain('__Mistaken Folder');
+
+    // One with a scan in it stays, and says why.
+    const full = await records.delete('/api/erms/units/records/browse').send({ path: `${opened.body.standard}\\__Browsed Folder` });
+    expect(full.status).toBe(409);
+    expect(full.body.code).toBe('FOLDER_NOT_EMPTY');
+    // Not the unit's own top folder, not outside it, not another unit's.
+    expect((await records.delete('/api/erms/units/records/browse').send({ path: '' })).status).toBe(400);
+    expect((await records.delete('/api/erms/units/records/browse').send({ path: '..\\..' })).status).toBe(400);
+    expect((await legal.delete('/api/erms/units/records/browse').send({ path: opened.body.standard })).status).toBe(403);
+  });
+
+  it('keeps browsing inside the unit\'s share, and to the unit\'s own staff', async () => {
+    expect((await records.get('/api/erms/units/records/browse').query({ path: '..\\..' })).status).toBe(400);
+    expect((await records.post('/api/erms/units/records/browse').send({ path: '', name: '..' })).status).toBe(400);
+    expect((await legal.get('/api/erms/units/records/browse')).status).toBe(403);
+    expect((await planning.get('/api/erms/units/legal/browse')).status).toBe(403);
+  });
+
+  it("limits the Records Unit's own clerk to the first pages, watermarked with the app's name and the date", async () => {
+    const { PDFDocument } = require('pdf-lib');
+    const settings = require('../modules/erms/services/unitSettingsService.js');
+    const four = await PDFDocument.create();
+    for (let i = 0; i < 4; i++) four.addPage([300, 400]);
+    const bytes = Buffer.from(await four.save());
+    const saved = await settings.forUnit('records');
+    await settings.save('records', { pdfViewing: { previewPageLimit: 2, blurWithheldPages: true, exemptUnit: false }, privacy: { watermarkViewer: true } }, { username: 'test' });
+    try {
+      const up = await records
+        .post('/api/erms/records/upload')
+        .field('payload', JSON.stringify(recordPayload({ projectTitle: '__Test Upload Limited' })))
+        .attach('file', bytes, { filename: 'four pages.pdf', contentType: 'application/pdf' });
+      expect(up.status, JSON.stringify(up.body)).toBe(201);
+      const serialNo = up.body.record.serialNo;
+      createdRecords.push(serialNo);
+
+      const info = await records.get(`/api/erms/records/${encodeURIComponent(serialNo)}/file`);
+      expect(info.body.viewing.pageLimit).toBe(2);
+      expect(info.body.viewing.watermark).toMatch(/^E-Universe · [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+
+      const preview = await records
+        .get(`/api/erms/records/${encodeURIComponent(serialNo)}/file/preview`)
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => done(null, Buffer.concat(chunks)));
+        });
+      expect(preview.status).toBe(200);
+      expect(preview.headers['x-document-pages']).toBe('4');
+      expect(preview.headers['x-document-pages-shown']).toBe('2');
+      // Only the first two pages leave the server.
+      expect((await PDFDocument.load(preview.body)).getPageCount()).toBe(2);
+    } finally {
+      await settings.save('records', saved, { username: 'test' });
+    }
+  });
+
   it('opens the uploaded scan from the record for the Records Unit', async () => {
     const serialNo = createdRecords[0];
     const info = await records.get(`/api/erms/records/${encodeURIComponent(serialNo)}/file`);
@@ -257,6 +347,43 @@ describe.skipIf(!shareReachable)('uploading a scan to the share', () => {
     expect(fs.existsSync(onDisk(afterKeep.document.sharePath))).toBe(false);
     const afterDelete = await getDb().collection('erms-documents').findOne({ serialNo: legalSerial });
     expect(fs.readFileSync(onDisk(afterDelete.document.sharePath)).toString()).toMatch(/% delete/);
+  });
+
+  it('files a Legal attachment with its Notice of Violation: numbered after it, in its folder, listed inside it', async () => {
+    const novSerial = createdUnitDocs[0];
+    const nov = await getDb().collection('erms-documents').findOne({ serialNo: novSerial });
+    // Only the docket and what it is: the case's company comes with it.
+    const res = await legal
+      .post('/api/erms/units/legal/documents')
+      .field('docType', 'attachment')
+      .field('province', 'bataan')
+      .field('fields', JSON.stringify({ docketNo: nov.fields.docketNo, documentType: 'Inspection report' }))
+      .attach('file', PDF, { filename: 'Inspection.pdf', contentType: 'application/pdf' });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const att = res.body.document;
+    createdUnitDocs.push(att.serialNo);
+    expect(att.serialNo).toMatch(new RegExp(`^${novSerial} Att-\\d{5}$`));
+    expect(att.parentSerialNo).toBe(novSerial);
+    expect(att.fields.companyName).toBe(nov.fields.companyName);
+
+    // Beside the case: the NOV's company folder, in Attachments.
+    const caseDir = nov.document.sharePath.split('\\').slice(0, -2).join('\\');
+    expect(att.document.sharePath.startsWith(`${caseDir}\\Attachments\\`)).toBe(true);
+    expect(fs.existsSync(onDisk(att.document.sharePath))).toBe(true);
+
+    // Listed inside the case, not as a row of its own; opened with it.
+    const list = await legal.get('/api/erms/units/legal/documents').query({ pageSize: 100 });
+    expect(list.body.items.some((d) => d.serialNo === att.serialNo)).toBe(false);
+    const row = list.body.items.find((d) => d.serialNo === novSerial);
+    expect(row.attachments.map((a) => a.serialNo)).toContain(att.serialNo);
+    const opened = await legal.get(`/api/erms/units/legal/documents/${encodeURIComponent(novSerial)}`);
+    expect(opened.body.attachments.map((a) => a.serialNo)).toContain(att.serialNo);
+    // And on the case's History.
+    const history = await legal.get(`/api/erms/units/legal/documents/${encodeURIComponent(novSerial)}/history`);
+    expect(history.body.events.some((e) => e.action === 'attachment-filed' && e.detail === att.serialNo)).toBe(true);
+    // A search still finds the attachment itself.
+    const found = await legal.get('/api/erms/units/legal/documents').query({ search: 'Att-' });
+    expect(found.body.items.some((d) => d.serialNo === att.serialNo)).toBe(true);
   });
 
   it('files a scan against a Legal document the desktop system kept without one', async () => {

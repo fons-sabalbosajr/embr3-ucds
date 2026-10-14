@@ -1,5 +1,4 @@
 import {
-  App as AntdApp,
   Button,
   Card,
   Select,
@@ -11,10 +10,10 @@ import { InboxOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assignToBox, describeApiError, fetchBoxes } from "../api/ermsService";
+import { message } from "../../../shared/feedback";
 
 /** Where this record physically sits. */
 const BoxAssignment = ({ record, canWrite }) => {
-  const { message } = AntdApp.useApp();
   const queryClient = useQueryClient();
 
   const { data: boxes = [] } = useQuery({

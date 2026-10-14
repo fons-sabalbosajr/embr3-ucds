@@ -6,6 +6,7 @@ import AuthBrand from "./components/AuthBrand";
 import { useYear } from "./context/YearContext";
 import { logoutUserService } from "./api/universeService";
 import { clearSessionToken } from "./shared/sessionToken";
+import { pausePushForSignOut } from "./shared/notifications/devicePush";
 import { ROUTES } from "./config/routes";
 import "./yearselect.css";
 
@@ -44,6 +45,7 @@ const YearSelect = () => {
   };
 
   const handleSignOut = async () => {
+    await pausePushForSignOut();
     try {
       await logoutUserService();
     } catch {

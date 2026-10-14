@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  AutoComplete,
   Card,
   Form,
   Input,
@@ -31,10 +32,17 @@ import {
   CloseCircleTwoTone,
   WarningOutlined,
   FileSearchOutlined,
+  LinkOutlined,
+  NumberOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 
-import { getVeraConfig, updateVeraConfig, testVeraConnection, getVeraUsage } from "./veraService";
+import { getVeraConfig, updateVeraConfig, testVeraConnection, getVeraUsage, getCorrectionsPending, getRegisterLinksPending } from "./veraService";
+import VeraCorrections from "./VeraCorrections";
+import VeraRegisterLinks from "./VeraRegisterLinks";
+import VeraSerials from "./VeraSerials";
+import VeraProjectTypes from "./VeraProjectTypes";
+import { useQuery } from "@tanstack/react-query";
 import VeraLogs from "./VeraLogs";
 import { VeraEdgeBeam, VeraFlame } from "./VeraMark";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -42,6 +50,20 @@ import { message } from "../../shared/feedback";
 import "./vera.css";
 
 const { Paragraph, Text } = Typography;
+
+// Models offered in the picker. The Gemini ones were each tried with this
+// server's key; the free tier covers the Flash and Flash-Lite models only, so
+// the Pro models are left out. Any other name can still be typed.
+const MODEL_CHOICES = {
+  gemini: [
+    { value: "gemini-3.8-flash", tag: "Newest · free tier", tagColor: "green" },
+    { value: "gemini-3.5-flash", tag: "Free tier", tagColor: "green" },
+    { value: "gemini-2.5-flash", tag: "Previous", tagColor: "default" },
+    { value: "gemini-flash-latest", tag: "Moves with Google", tagColor: "gold" },
+    { value: "gemini-3.1-flash-lite", tag: "Lighter · free tier", tagColor: "blue" },
+  ],
+  anthropic: [{ value: "claude-opus-5-5" }, { value: "claude-sonnet-5-5" }, { value: "claude-haiku-5-5" }],
+};
 
 /** The flame's states, previewed in the header: what each one means in the chat. */
 const FLAME_STATES = [
@@ -72,6 +94,10 @@ export default function VeraSettings() {
   const [testResult, setTestResult] = useState(null);
   const [preview, setPreview] = useState("burning");
   const { mode } = useTheme();
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "configuration");
+  // Answers for the Developer only (403 otherwise), which also decides the tab.
+  const { data: pendingCorrections } = useQuery({ queryKey: ["vera", "corrections", "pending"], queryFn: getCorrectionsPending, retry: false, staleTime: 30 * 1000 });
+  const { data: pendingLinks } = useQuery({ queryKey: ["vera", "register-links", "pending"], queryFn: getRegisterLinksPending, retry: false, staleTime: 30 * 1000 });
   const accent = antdTheme.useToken().token.colorPrimary;
   const provider = Form.useWatch("provider", form);
 
@@ -323,6 +349,14 @@ export default function VeraSettings() {
               <Form.Item name="publicEnabled" label="VERA on the sign-in page" valuePropName="checked">
                 <Switch checkedChildren="Enabled" unCheckedChildren="Disabled" />
               </Form.Item>
+              <Form.Item
+                name="portalEnabled"
+                label="VERA on the Document Portal"
+                valuePropName="checked"
+                tooltip="The public portal where people request scanned documents. She introduces herself there and answers only questions about the portal; she cannot see any request or document."
+              >
+                <Switch checkedChildren="Enabled" unCheckedChildren="Disabled" />
+              </Form.Item>
             </Col>
             <Col xs={24} md={16}>
               <Form.Item name="publicWelcomeMessage" label="Sign-in page welcome message" tooltip="Blank uses the default.">
@@ -339,8 +373,25 @@ export default function VeraSettings() {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="model" label="Model" tooltip="Blank uses the model set in the server environment.">
-                <Input allowClear placeholder={selected?.defaultModel || "provider default"} />
+              <Form.Item
+                name="model"
+                label="Model"
+                tooltip="Pick one from the list or type a model name. Blank uses the model set in the server environment."
+              >
+                <AutoComplete
+                  allowClear
+                  placeholder={selected?.defaultModel || "provider default"}
+                  options={(MODEL_CHOICES[selected?.value] || []).map((m) => ({
+                    value: m.value,
+                    label: (
+                      <Space size={6}>
+                        <span>{m.value}</span>
+                        {m.tag && <Tag color={m.tagColor} style={{ marginInlineEnd: 0, fontSize: 11 }}>{m.tag}</Tag>}
+                      </Space>
+                    ),
+                  }))}
+                  filterOption={(input, option) => option.value.toLowerCase().includes(String(input || "").toLowerCase())}
+                />
               </Form.Item>
             </Col>
             <Col xs={12} md={4}>
@@ -388,6 +439,16 @@ export default function VeraSettings() {
             <Col xs={12} md={6}>
               <Form.Item name="supportContact" label="Who VERA points people to" tooltip="Used when VERA cannot answer. Blank: the E-Universe administrator (MIS).">
                 <Input allowClear maxLength={160} placeholder="the E-Universe administrator (MIS)" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="officeWebsite"
+                label="Office website"
+                tooltip="Public visitors (sign-in page, Document Portal) who ask for counts or figures get no numbers from VERA — she sends them here. Staff always get exact figures. Blank: https://r3.emb.gov.ph"
+                rules={[{ pattern: /^https?:\/\/[^\s/]+\.[^\s]+$/i, message: "A web address starting with http:// or https://" }]}
+              >
+                <Input allowClear maxLength={200} placeholder="https://r3.emb.gov.ph" />
               </Form.Item>
             </Col>
             <Col xs={24}>
@@ -479,10 +540,31 @@ export default function VeraSettings() {
         </div>
       </section>
       <Tabs
-        defaultActiveKey="configuration"
+        // The bell links to ?tab=corrections or ?tab=links; until that tab
+        // exists (the Developer check is still answering), Configuration shows.
+        activeKey={
+          ((tab === "corrections" || tab === "serials" || tab === "project-types") && pendingCorrections === undefined) || (tab === "links" && pendingLinks === undefined) ? "configuration" : tab
+        }
+        onChange={setTab}
         items={[
           { key: "configuration", label: <span><RobotOutlined /> Configuration</span>, children: configuration },
           { key: "logs", label: <span><FileSearchOutlined /> Activity Log</span>, children: <VeraLogs /> },
+          // VERA's report on the Records project types — the Developer's alone,
+          // shown when the server says this account may see it.
+          ...(pendingCorrections !== undefined
+            ? [{ key: "corrections", label: <span><ThunderboltOutlined /> Data corrections{pendingCorrections ? <Tag color="gold" style={{ marginInlineStart: 6 }}>{pendingCorrections}</Tag> : null}</span>, children: <VeraCorrections /> }]
+            : []),
+          ...(pendingLinks !== undefined
+            ? [{ key: "links", label: <span><LinkOutlined /> Register links{pendingLinks ? <Tag color="gold" style={{ marginInlineStart: 6 }}>{pendingLinks}</Tag> : null}</span>, children: <VeraRegisterLinks /> }]
+            : []),
+          // Serial numbers across the three ERMS units — the Developer's, like the two above.
+          ...(pendingCorrections !== undefined
+            ? [{ key: "serials", label: <span><NumberOutlined /> Serial numbers</span>, children: <VeraSerials /> }]
+            : []),
+          // Each record's project type, read against its document.
+          ...(pendingCorrections !== undefined
+            ? [{ key: "project-types", label: <span><FileSearchOutlined /> Project types</span>, children: <VeraProjectTypes /> }]
+            : []),
         ]}
       />
     </div>

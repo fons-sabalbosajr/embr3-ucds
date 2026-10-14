@@ -252,7 +252,13 @@ const apiLimiter = rateLimit({
   keyGenerator: byAccount,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'test' || /^\/(healthz|readyz)/.test(req.path),
+  // A PDF read by ranges is one view in many pieces: counting each piece
+  // ran a large scan into the limit, a piece was refused, and the viewer
+  // stopped at 99%. The first request of a view (no Range) still counts.
+  skip: (req) =>
+    process.env.NODE_ENV === 'test' ||
+    /^\/(healthz|readyz)/.test(req.path) ||
+    (req.method === 'GET' && Boolean(req.headers.range) && /\/file\/preview$/.test(req.path)),
   handler: (req, res) => res.status(429).json({ message: 'Too many requests. Please slow down and try again in a moment.' }),
 });
 

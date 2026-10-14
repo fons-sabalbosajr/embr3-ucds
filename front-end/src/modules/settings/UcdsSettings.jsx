@@ -18,7 +18,7 @@ import {
 } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { CloudUploadOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
-import { message } from "../../shared/feedback";
+import { message, modal } from "../../shared/feedback";
 import { fetchCurrentUser } from "../../api/universeService";
 import { API_BASE_URL } from "../../config/api";
 import ContentLoading from "../../shared/components/ContentLoading";
@@ -232,7 +232,7 @@ const DataManagement = ({ isDeveloper }) => {
   }, [load]);
 
   const importNow = (year, key, label) => {
-    Modal.confirm({
+    modal.confirm({
       title: key ? `Import ${label} (${year})?` : `Import every ${year} spreadsheet?`,
       content: "Rows already imported for the same dataset are replaced by the spreadsheet in the data folder. Edits made in the application since the last import are lost.",
       okText: "Import",

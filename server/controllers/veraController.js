@@ -28,7 +28,7 @@
 const crypto = require('crypto');
 const { connectToMongo, getDb } = require('../config/db');
 const { principalOf } = require('../middleware/auth');
-const { roleOf, domainsOf, ROLES } = require('../services/authorization');
+const { roleOf, domainsOf, ermsUnitsOf, ROLES } = require('../services/authorization');
 const provider = require('../services/vera/provider');
 const vera = require('../services/vera/assistant');
 const veraFigures = require('../services/vera/figures');
@@ -43,6 +43,20 @@ const VERA_ACTIONS = Object.freeze({
   'vera:public-chat': 'Chat (sign-in page)',
   'vera:test': 'Connection test',
   'vera:settings:updated': 'Settings changed',
+  'vera:corrections:scan': 'Data check (project types)',
+  'vera:corrections:apply': 'Corrections applied',
+  'vera:corrections:undo': 'Correction undone',
+  'vera:corrections:auto-fix': 'Data fixed by VERA',
+  'vera:serials:scan': 'Serial number check',
+  'vera:serials:fix': 'Serial counters fixed',
+  'vera:project-types:scan': 'Project type check',
+  'vera:project-types:settings': 'Project type check settings',
+  'vera:project-types:apply': 'Project types corrected',
+  'vera:project-types:undo': 'Project type correction undone',
+  'vera:project-types:dismiss': 'Project type proposal set aside',
+  'vera:links:scan': 'Data check (register links)',
+  'vera:links:apply': 'Register links applied',
+  'vera:links:undo': 'Register link undone',
 });
 
 async function loadConfig() {
@@ -81,6 +95,8 @@ function viewerFor(req, cfg) {
     realm: 'staff',
     role: role === ROLES.DEVELOPER && cfg?.developerMode !== false ? 'developer' : role,
     domains: domainsOf(user),
+    // Records, Legal Services or Laboratory: the suggestions and articles follow it.
+    ermsUnits: ermsUnitsOf(user),
   };
 }
 
@@ -194,12 +210,15 @@ async function chat(req, res) {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), provider.resolveTimeoutMs(cfg) + 2000);
+  let timer = null;
   const started = Date.now();
   // Kept outside the try so the help-library answer on failure can use them.
   let figures = null;
   try {
     figures = await countsFor(req, message, viewer, cfg);
+    // The model's time starts once the figures are counted: counting on a
+    // busy database used to eat into it and time the answer out.
+    timer = setTimeout(() => controller.abort(), provider.resolveTimeoutMs(cfg) + 2000);
     const result = await vera.answer({ message, history, page, config: cfg, viewer, figures, signal: controller.signal });
     log(req, 'vera:chat', {
       requestHash,
@@ -256,9 +275,13 @@ async function getConfig(req, res) {
         sendPageContext: cfg.sendPageContext !== false,
         developerMode: cfg.developerMode !== false,
         publicEnabled: cfg.publicEnabled === true,
+        // The public Document Portal: on unless turned off.
+        portalEnabled: cfg.portalEnabled !== false,
         welcomeMessage: cfg.welcomeMessage || '',
         publicWelcomeMessage: cfg.publicWelcomeMessage || '',
         supportContact: cfg.supportContact || '',
+        // Where public visitors asking for counts are sent (blank: the default).
+        officeWebsite: cfg.officeWebsite || '',
         updatedAt: cfg.updatedAt || null,
       },
       status: provider.safeStatus(cfg),
@@ -301,7 +324,7 @@ async function updateConfig(req, res) {
       if (b[k] !== undefined) next[k] = String(b[k] || '').trim().slice(0, max);
     };
 
-    ['enabled', 'showLauncher', 'sendPageContext', 'developerMode', 'publicEnabled'].forEach(bool);
+    ['enabled', 'showLauncher', 'sendPageContext', 'developerMode', 'publicEnabled', 'portalEnabled'].forEach(bool);
     number('maxTokens', 64, 8192);
     number('temperature', 0, 1);
     number('requestTimeoutMs', 5000, 120000);
@@ -311,6 +334,11 @@ async function updateConfig(req, res) {
     text('welcomeMessage', 600);
     text('publicWelcomeMessage', 600);
     text('supportContact', 160);
+    if (b.officeWebsite !== undefined) {
+      const site = String(b.officeWebsite || '').trim().slice(0, 200);
+      if (site && !/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(site)) errors.push('officeWebsite must be a web address starting with http:// or https://');
+      else next.officeWebsite = site;
+    }
     if (b.provider !== undefined) {
       if (!provider.PROVIDERS[b.provider]) errors.push('provider must be one of: anthropic, gemini');
       else next.provider = b.provider;
@@ -458,7 +486,7 @@ async function getLogs(req, res) {
         at: r.timestamp,
         action: r.actionType,
         actionLabel: VERA_ACTIONS[r.actionType] || r.actionType,
-        user: r.actionType === 'vera:public-chat' ? 'Sign-in page visitor' : r.username || '—',
+        user: r.actionType === 'vera:public-chat' ? (isPortalPage(r.details?.page) ? 'Document Portal visitor' : 'Sign-in page visitor') : r.username || '—',
         role: r.details?.role || '',
         page: r.details?.page || '',
         source: r.details?.source || '',
@@ -511,13 +539,19 @@ function checkPublicRate(ip) {
   return { ok: true };
 }
 
-const publicEnabled = (cfg) => cfg.enabled !== false && cfg.publicEnabled === true;
+// The sign-in pages need an administrator to turn VERA on for them; the
+// Document Portal has her whenever VERA is on, unless it is turned off there
+// (Admin Settings › VERA Assistant › Document Portal).
+const PORTAL_PAGE = 'document-portal';
+const isPortalPage = (page) => String(page || '').toLowerCase() === PORTAL_PAGE;
+const publicEnabled = (cfg, page) =>
+  cfg.enabled !== false && (isPortalPage(page) ? cfg.portalEnabled !== false : cfg.publicEnabled === true);
 
 // ── GET /api/vera/public-status ──────────────────────────────────────────────
 async function getPublicStatus(req, res) {
   try {
     const cfg = await loadConfig();
-    if (!publicEnabled(cfg)) return res.json({ success: true, available: false, showLauncher: false });
+    if (!publicEnabled(cfg, req.query?.page)) return res.json({ success: true, available: false, showLauncher: false });
     const ctx = vera.contextFor({ realm: 'public' }, req.query?.page, cfg);
     return res.json({
       success: true,
@@ -528,7 +562,10 @@ async function getPublicStatus(req, res) {
       modelAvailable: provider.isOperational(cfg),
       role: 'public',
       starters: ctx.starters,
-      welcomeMessage: String(cfg.publicWelcomeMessage || '').trim() || ctx.greeting,
+      // The portal introduces her in its own words; the sign-in pages may use the administrator's.
+      welcomeMessage: (ctx.portal ? '' : String(cfg.publicWelcomeMessage || '').trim()) || ctx.greeting,
+      // On the portal she says hello by herself (front-end VeraChat introduce).
+      introduce: Boolean(ctx.portal),
       maxInputChars: vera.MAX_INPUT_CHARS,
       sendPageContext: true,
     });
@@ -550,7 +587,7 @@ async function publicChat(req, res) {
   } catch {
     cfg = {};
   }
-  if (!publicEnabled(cfg)) return res.status(404).json({ success: false, code: 'disabled', message: 'The assistant is not available on this page.' });
+  if (!publicEnabled(cfg, req.body?.page)) return res.status(404).json({ success: false, code: 'disabled', message: 'The assistant is not available on this page.' });
 
   const gate = checkPublicRate(req.ip || 'unknown');
   if (!gate.ok) {
@@ -602,7 +639,243 @@ async function publicChat(req, res) {
   }
 }
 
+// ── Data corrections (Developer) ─────────────────────────────────────────────
+// VERA's report on the Records project types and specific project types, and
+// applying or undoing what it proposes. See services/vera/dataCorrections.
+
+const corrections = require('../services/vera/dataCorrections');
+
+async function correctionsReport(req, res, next) {
+  try {
+    return res.json(await corrections.latest());
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function correctionsScan(req, res, next) {
+  try {
+    const cfg = await loadConfig();
+    const run = await corrections.scan({ cfg, by: principalOf(req)?.username || null });
+    await log(req, 'vera:corrections:scan', { proposals: run.totals.proposals, records: run.totals.records });
+    return res.json(await corrections.latest());
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function correctionsApply(req, res, next) {
+  try {
+    const ids = req.body?.all === true ? 'all' : (Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger);
+    if (ids !== 'all' && !ids.length) return res.status(400).json({ message: 'Choose the corrections to apply.' });
+    const result = await corrections.apply(req.params.id, ids, principalOf(req));
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:corrections:apply', { report: req.params.id, applied: result.applied, records: result.changed });
+    return res.json({ ...result, report: await corrections.latest() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function correctionsUndo(req, res, next) {
+  try {
+    const result = await corrections.undo(req.params.id, Number(req.body?.proposalId), principalOf(req));
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:corrections:undo', { report: req.params.id, proposal: Number(req.body?.proposalId), records: result.restored });
+    return res.json({ ...result, report: await corrections.latest() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function correctionsAutoFix(req, res, next) {
+  try {
+    const cfg = await loadConfig();
+    const who = principalOf(req);
+    const result = await corrections.autoFix({ cfg, by: who?.username || null, user: who });
+    await log(req, 'vera:corrections:auto-fix', { applied: result.applied, records: result.changed, left: result.left });
+    return res.json({ ...result, report: await corrections.latest() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// ── Serial numbers (Developer) ── see services/vera/serialCheck ─────────────
+const serialCheck = require('../services/vera/serialCheck');
+
+async function serialsReport(req, res, next) {
+  try {
+    return res.json({ report: await serialCheck.latest() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function serialsScan(req, res, next) {
+  try {
+    const report = await serialCheck.scan({ by: principalOf(req)?.username || null });
+    await log(req, 'vera:serials:scan', report.totals);
+    return res.json({ report });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function serialsFix(req, res, next) {
+  try {
+    const { fixed, report } = await serialCheck.fix({ by: principalOf(req)?.username || null });
+    await log(req, 'vera:serials:fix', { fixed, ...report.totals });
+    return res.json({ fixed, report });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// ── Project types from the document (Developer) ── services/vera/projectTypeCheck ─
+const projectTypeCheck = require('../services/vera/projectTypeCheck');
+
+async function projectTypesReport(req, res, next) {
+  try {
+    const cfg = await loadConfig();
+    return res.json({ settings: projectTypeCheck.settingsOf(cfg), operational: provider.isOperational(cfg), ...(await projectTypeCheck.report()) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function projectTypesSettings(req, res, next) {
+  try {
+    const settings = projectTypeCheck.cleanSettings(req.body || {});
+    await patchConfig({ projectTypeCheck: settings });
+    await log(req, 'vera:project-types:settings', settings);
+    return res.json({ settings });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function projectTypesScan(req, res, next) {
+  try {
+    const result = await projectTypeCheck.scan({ cfg: await loadConfig(), by: principalOf(req)?.username || null });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:project-types:scan', result.totals);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function projectTypesApply(req, res, next) {
+  try {
+    const serials = req.body?.all === true ? 'all' : (Array.isArray(req.body?.serialNos) ? req.body.serialNos : []).map(String).slice(0, 500);
+    if (serials !== 'all' && !serials.length) return res.status(400).json({ message: 'Choose the proposals to apply.' });
+    const result = await projectTypeCheck.apply(serials, principalOf(req));
+    await log(req, 'vera:project-types:apply', result);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function projectTypesSettle(req, res, next) {
+  try {
+    const action = req.params.action === 'undo' ? 'undo' : 'dismiss';
+    const result = await projectTypeCheck.settle(String(req.params.serialNo), action, principalOf(req));
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, `vera:project-types:${action}`, { serialNo: req.params.serialNo });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/** For the bell: how many proposals wait. */
+async function correctionsPending(req, res, next) {
+  try {
+    return res.json({ pending: await corrections.pendingCount() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// ── Register links (Developer) ───────────────────────────────────────────────
+// VERA's report on Records Document Library entries not linked to their
+// establishment in the central register. See services/vera/registerLinks.
+
+const registerLinks = require('../services/vera/registerLinks');
+
+async function linksReport(req, res, next) {
+  try {
+    return res.json(await registerLinks.latest());
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function linksScan(req, res, next) {
+  try {
+    const cfg = await loadConfig();
+    const run = await registerLinks.scan({ cfg, by: principalOf(req)?.username || null });
+    await log(req, 'vera:links:scan', { unlinked: run.totals.unlinked, proposals: run.totals.proposals });
+    return res.json(await registerLinks.latest());
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function linksApply(req, res, next) {
+  try {
+    const ids = req.body?.all === true ? 'all' : (Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger);
+    if (ids !== 'all' && !ids.length) return res.status(400).json({ message: 'Choose the links to apply.' });
+    const result = await registerLinks.apply(req.params.id, ids, principalOf(req));
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:links:apply', { report: req.params.id, applied: result.applied, skipped: result.skipped });
+    return res.json({ ...result, report: await registerLinks.latest() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function linksUndo(req, res, next) {
+  try {
+    const result = await registerLinks.undo(req.params.id, Number(req.body?.proposalId), principalOf(req));
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:links:undo', { report: req.params.id, proposal: Number(req.body?.proposalId), records: result.restored });
+    return res.json({ ...result, report: await registerLinks.latest() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/** For the bell: how many links wait. */
+async function linksPending(req, res, next) {
+  try {
+    return res.json({ pending: await registerLinks.pendingCount() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
+  projectTypesReport,
+  projectTypesSettings,
+  projectTypesScan,
+  projectTypesApply,
+  projectTypesSettle,
+  correctionsAutoFix,
+  serialsReport,
+  serialsScan,
+  serialsFix,
+  linksReport,
+  linksScan,
+  linksApply,
+  linksUndo,
+  linksPending,
+  correctionsReport,
+  correctionsScan,
+  correctionsApply,
+  correctionsUndo,
+  correctionsPending,
   getStatus,
   chat,
   getConfig,

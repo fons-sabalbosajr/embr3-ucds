@@ -1,0 +1,669 @@
+/* The E-Universe Document Portal. Colours that must follow the theme come
+   from antd tokens in the components; what is here reads in either theme. */
+
+/* The public page: its own frame, no E-Universe shell around it. */
+.portal-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.portal-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.portal-topbar-inner {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* The portal's own brand: the two seals side by side, then the office and
+   the portal's name. Colours come from the theme (DocumentPortal TopBar). */
+.portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.portal-brand-seals {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.portal-brand-seals img {
+  height: 42px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+.portal-brand-divider {
+  width: 1px;
+  height: 32px;
+}
+.portal-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.portal-brand-agency {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.portal-brand-product {
+  font-size: 17px;
+  font-weight: 500;
+}
+.portal-brand-product b {
+  font-weight: 700;
+}
+@media (max-width: 520px) {
+  .portal-brand-seals img {
+    height: 34px;
+  }
+  .portal-brand-agency {
+    font-size: 10.5px;
+  }
+  .portal-brand-product {
+    font-size: 15px;
+  }
+}
+
+/* Designation suggestions: full names, wrapping rather than cut off. */
+.portal-designation-option {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+/* The terms modal: a banner naming the law, then the terms to read to the end. */
+.portal-terms-modal .ant-modal-content {
+  padding-top: 0;
+  overflow: hidden;
+}
+.portal-terms-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 -24px;
+  padding: 22px 24px;
+  color: #fff;
+}
+.portal-terms-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.portal-terms-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.portal-terms-heading {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.portal-terms-step {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.portal-terms-scroll {
+  margin-top: 12px;
+  max-height: min(46vh, 420px);
+  overflow: auto;
+  padding: 14px 18px;
+  border: 1px solid var(--portal-line, rgba(15, 23, 42, 0.08));
+  border-radius: 10px;
+  background: var(--portal-soft, rgba(15, 23, 42, 0.03));
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.portal-terms-scroll:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+.portal-terms-scroll ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.portal-terms-scroll li + li {
+  margin-top: 8px;
+}
+body[data-theme="dark"] .portal-terms-scroll {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* The Records Unit desk's filters, and an approved seat's change log. */
+.portal-desk-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.portal-adjustments {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed rgba(128, 128, 128, 0.35);
+}
+
+/* The tour's "Don't show again". */
+.portal-tour-never,
+.portal-tour-never .ant-checkbox + span {
+  color: inherit;
+  font-size: 12px;
+}
+
+/* The room's designation tags: full section names are long. */
+.portal-seat-main .ant-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portal-footer {
+  text-align: center;
+  padding: 28px 0 8px;
+}
+
+.portal {
+  --portal-line: rgba(15, 23, 42, 0.08);
+  --portal-soft: rgba(15, 23, 42, 0.03);
+  --portal-mine: rgba(22, 119, 255, 0.08);
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+  flex: 1;
+}
+body[data-theme="dark"] .portal {
+  --portal-line: rgba(255, 255, 255, 0.1);
+  --portal-soft: rgba(255, 255, 255, 0.03);
+  --portal-mine: rgba(64, 150, 255, 0.16);
+}
+
+/* Header */
+/* A compact band: the name, one line on what the portal is, and the room's
+   figures — the request form below is what the visitor came for. */
+.portal-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+}
+.portal-hero-text {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.portal-hero-tagline {
+  font-size: 12px;
+}
+.portal-hero-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  flex: none;
+}
+.portal-hero-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.portal-stat {
+  min-width: 104px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+.portal-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.portal-stat-value {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.portal-stat-value small {
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+.portal-stat .ant-progress {
+  margin: 2px 0 0;
+}
+
+/* Cards */
+.portal-card {
+  border-radius: 12px;
+}
+.portal-card > .ant-card-head {
+  min-height: 52px;
+}
+.portal-steps {
+  margin-bottom: 20px;
+}
+.portal-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  margin: 20px 0 10px;
+}
+
+/* Search results */
+.portal-results {
+  margin-top: 10px;
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--portal-line);
+  border-radius: 10px;
+  padding: 4px;
+}
+/* Kinds of document, in their laws' colours (docTypes.js). */
+.portal-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.portal-category {
+  --cat: #8c8c8c;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--portal-line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.portal-category b {
+  font-weight: 600;
+  opacity: 0.7;
+}
+.portal-category:hover {
+  border-color: var(--cat);
+}
+.portal-category.is-on {
+  background: var(--cat);
+  border-color: var(--cat);
+  color: #fff;
+}
+.portal-category.is-on b {
+  opacity: 0.9;
+}
+.portal-category:not([style]).is-on {
+  background: #1677ff;
+  border-color: #1677ff;
+}
+.portal-category-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cat);
+}
+.portal-category.is-on .portal-category-dot {
+  background: #fff;
+}
+.portal-group + .portal-group {
+  margin-top: 6px;
+}
+.portal-group-head {
+  --cat: #8c8c8c;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cat) 14%, var(--portal-group-bg, #fff));
+  border-inline-start: 4px solid var(--cat);
+  font-size: 12.5px;
+}
+body[data-theme="dark"] .portal-group-head {
+  --portal-group-bg: #1f1f1f;
+}
+.portal-group-law {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cat);
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+.portal-group-title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+.portal-group-count {
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.portal-hint {
+  display: block;
+  padding: 14px;
+  font-size: 12px;
+}
+.portal-result.ant-list-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border-block-end: none;
+  transition: background 0.15s;
+}
+.portal-result:hover,
+.portal-result:focus-visible {
+  background: var(--portal-soft);
+  outline: none;
+}
+.portal-result.is-selected {
+  background: var(--portal-mine);
+}
+.portal-doc-avatar {
+  background: rgba(22, 119, 255, 0.12);
+  color: #1677ff;
+}
+.portal-selected-mark {
+  color: #1677ff;
+  font-size: 20px;
+}
+.portal-chosen {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: var(--portal-soft);
+  border: 1px solid var(--portal-line);
+}
+.portal-chosen > .anticon {
+  font-size: 20px;
+  margin-top: 2px;
+  color: #1677ff;
+}
+
+/* My request */
+.portal-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--portal-soft);
+  border: 1px solid var(--portal-line);
+}
+.portal-state.is-approved {
+  border-color: rgba(56, 158, 13, 0.35);
+  background: rgba(56, 158, 13, 0.06);
+}
+.portal-state-icon {
+  font-size: 36px;
+  color: #8c8c8c;
+}
+.portal-state-icon.is-pending {
+  color: #d48806;
+}
+.portal-mine-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.portal-clock {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The room */
+.portal-room-list {
+  max-height: 520px;
+  overflow: auto;
+}
+.portal-seat.ant-list-item {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+  padding: 10px 16px;
+}
+.portal-seat.is-mine {
+  background: var(--portal-mine);
+}
+.portal-seat-no {
+  width: 22px;
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.portal-seat-avatar {
+  flex: none;
+  background: #d48806;
+}
+.portal-seat-avatar.approved {
+  background: #389e0d;
+}
+.portal-seat-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.portal-seat-clock {
+  flex: none;
+  font-weight: 600;
+}
+.portal-line {
+  border-top: 1px solid var(--portal-line);
+  padding: 12px 16px 14px;
+}
+.portal-line-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+.portal-line-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 0;
+}
+.portal-line-row.is-mine {
+  font-weight: 600;
+}
+
+/* Safeguards */
+.portal-safeguards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.portal-safeguards li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.portal-safeguards li > .anticon {
+  color: #389e0d;
+  margin-top: 4px;
+}
+
+/* Desk */
+.portal-decide-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--portal-soft);
+  border: 1px solid var(--portal-line);
+}
+
+/* The viewer */
+.portal-viewer-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+.portal-viewer-body {
+  position: relative;
+  padding: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.portal-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 24px;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@media (max-width: 640px) {
+  .portal,
+  .portal-topbar-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .portal-hero {
+    padding: 10px 12px;
+  }
+  .portal-hero-stats {
+    width: 100%;
+  }
+  .portal-stat {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* ── The conversation about a request (ChatThread) ───────────────────────── */
+.portal-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.portal-chat-note .ant-alert-description {
+  font-size: 12px;
+}
+.portal-chat-messages {
+  flex: 1;
+  min-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+}
+.portal-chat-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+}
+.portal-chat-row.is-mine {
+  align-items: flex-end;
+}
+.portal-chat-bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 14px 14px 14px 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.portal-chat-row.is-mine .portal-chat-bubble {
+  border-radius: 14px 14px 4px 14px;
+}
+.portal-chat-meta {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ── The Developer's room settings (RecordsDesk) ──────────────────────────── */
+.portal-setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.portal-setting-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.08));
+  color: var(--ant-color-primary, #1677ff);
+}

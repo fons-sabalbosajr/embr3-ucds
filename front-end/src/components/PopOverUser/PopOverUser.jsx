@@ -14,7 +14,7 @@ import Profile from "../Settings/Profile/Profile";
 import Help from "../Settings/Help/Help";
 import Suggestion from "../Settings/Suggestion/Suggestion";
 import AvatarWithName from "../AvatarwithName";
-import { accountType } from "../../shared/accountTypes";
+import { accountTypeFor } from "../../shared/accountTypes";
 import { useTheme } from "../../theme/ThemeProvider";
 import { fetchUserByUsername } from "../../api/userService";
 import "./popoveruser.css";
@@ -40,7 +40,7 @@ const UserPopover = ({ name, userHandle, handleLogout, userData, division, role,
   }, []);
 
   const modalWidth = modal === "help" ? 700 : modal === "feature" ? 600 : windowWidth <= 1080 ? 600 : 420;
-  const type = accountType(role || userData?.role || userData?.permission);
+  const type = accountTypeFor(role || userData?.role || userData?.permission, userData?.ermsUnit);
 
   const go = (path) => {
     onNavigate?.();

@@ -80,6 +80,12 @@ const Landing = () => {
         </a>
       </li>
       <li>
+        {/* Public: ask the Records Unit for a scanned document, no account needed. */}
+        <Link to={ROUTES.documentPortal} onClick={() => setMenuOpen(false)}>
+          Document Portal
+        </Link>
+      </li>
+      <li>
         <a href="#about" onClick={() => setMenuOpen(false)}>
           About
         </a>
@@ -155,6 +161,9 @@ const Landing = () => {
               </Link>
               <Link to={ROUTES.register}>
                 <Button size="large">Request an account</Button>
+              </Link>
+              <Link to={ROUTES.documentPortal}>
+                <Button size="large">Request a document</Button>
               </Link>
             </div>
 

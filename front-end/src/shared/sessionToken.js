@@ -13,10 +13,13 @@ import { API_BASE_URL, SOCKET_URL } from "../config/api";
 //
 // What that means in practice:
 //   - three tabs, three accounts: each tab is the account it signed in as
-//   - a duplicated tab (Ctrl+Shift+K, "Duplicate") copies sessionStorage and
-//     so stays the same account
-//   - a freshly opened tab has no token; it uses the cookie, which is the most
-//     recent sign-in, and pins itself to that session on first load
+//   - a new tab (typed address, bookmark) is signed out until someone signs
+//     in there, whatever other tabs are signed in as. It used to take on the
+//     most recent sign-in silently, and switching it to another account meant
+//     signing out — which ended the other tab's session as well
+//   - a link opened in a new tab from inside the application (Ctrl/Cmd+click,
+//     middle click) keeps this tab's account (shared/sameAccountTabs), as
+//     does a duplicated tab
 //   - signing out ends only this tab's session
 //
 // The value is the session cookie's own value, no more; it is stored as is.
@@ -25,6 +28,8 @@ import { API_BASE_URL, SOCKET_URL } from "../config/api";
 const KEY = "eu.session";
 export const HEADER = "X-Session-Token";
 export const QUERY = "st";
+// What a tab that has not signed in sends instead of a token.
+export const NO_SESSION = "none";
 
 const safe = (fn, fallback) => {
   try {
@@ -40,17 +45,6 @@ export const setSessionToken = (token) =>
   safe(() => (token ? sessionStorage.setItem(KEY, token) : sessionStorage.removeItem(KEY)), undefined);
 
 export const clearSessionToken = () => setSessionToken(null);
-
-/**
- * Pin a tab that has no token yet to the session that just answered it. The
- * server offers the cookie's session this way on every response to a
- * token-less signed-in request, so a fresh tab is pinned by its first API
- * call, whichever screen it landed on. A tab that already holds a token
- * keeps it.
- */
-export const adoptSessionToken = (offered) => {
-  if (offered && !getSessionToken()) setSessionToken(offered);
-};
 
 const apiOrigins = new Set(
   [API_BASE_URL, SOCKET_URL].map((u) => safe(() => new URL(u, window.location.href).origin, null)).filter(Boolean)

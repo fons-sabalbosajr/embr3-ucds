@@ -1,6 +1,7 @@
 const nas = require('../services/nasStorage');
 const elevation = require('../services/nasElevation');
 const { principalOf } = require('../middleware/auth');
+const { isDeveloper } = require('../services/authorization');
 const { recordFileEvent } = require('../services/nasAudit');
 const activation = require('../services/nasActivation');
 const credentials = require('../services/nasCredentials');
@@ -484,8 +485,11 @@ async function readByPath(req, res, next) {
 
     const safeName = file.fileName.replace(/["\\]/g, '_');
     // Staff view, never download: /api/storage/file (req.container set) is
-    // always inline. Only the Developer's elevated explorer may save a file.
-    const disposition = req.query.download === '1' && !req.container ? 'attachment' : 'inline';
+    // inline for everyone but the Developer, who may save a file from
+    // Storage as from the elevated explorer. A download is its own entry in
+    // the trail.
+    const download = req.query.download === '1' && (!req.container || isDeveloper(principalOf(req)));
+    const disposition = download ? 'attachment' : 'inline';
     res.setHeader('Content-Type', file.contentType);
     res.setHeader(
       'Content-Disposition',
@@ -496,7 +500,7 @@ async function readByPath(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
     await recordFileEvent(req, {
-      operation: req.container ? 'storage-file-read' : 'nas-file-read',
+      operation: download ? (req.container ? 'storage-file-download' : 'nas-file-download') : req.container ? 'storage-file-read' : 'nas-file-read',
       containerKey: key,
       fileName: file.fileName,
       success: true,
@@ -531,12 +535,16 @@ async function setActivation(req, res, next) {
   try {
     const user = principalOf(req);
     const result = await activation.setActivation(req.body || {}, user);
+    // The period as stored: the evaluated state leaves out the end date while
+    // another rule (an outage, the schedule) is holding access off, which
+    // logged a five-day window as "no expiry".
+    const stored = result.ok ? await activation.readState() : null;
 
     await recordFileEvent(req, {
       operation: req.body?.enabled ? 'nas-activate' : 'nas-deactivate',
       success: result.ok === true,
       detail: result.ok
-        ? `until ${result.state.endsAt ? new Date(result.state.endsAt).toISOString() : 'no expiry'}`
+        ? `until ${stored?.endsAt ? new Date(stored.endsAt).toISOString() : 'no expiry'}`
         : result.code,
     });
 

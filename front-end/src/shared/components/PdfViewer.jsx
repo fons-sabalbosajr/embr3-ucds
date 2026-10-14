@@ -4,8 +4,16 @@ import { CheckCircleOutlined, ClockCircleOutlined, ColumnWidthOutlined, LockOutl
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useViewOnly } from "./viewOnly";
+import { HEADER, getSessionToken } from "../sessionToken";
+import "./pdftext.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+
+// Read a piece at a time: 1 MB per request, only what the pages in view need.
+// (256 KB meant a couple of hundred requests for a large scan.)
+const RANGE_CHUNK = 1024 * 1024;
+// No new piece for this long: the reading has stalled; fetch the whole file.
+const STALL_MS = 12000;
 
 const { Text } = Typography;
 
@@ -22,10 +30,10 @@ const { Text } = Typography;
 //
 // A page limit is enforced on the server: the PDF arrives already cut to its
 // first N pages, with the full count in a header, so nothing beyond the
-// limit is in the browser at all. The withheld pages are drawn as blurred
-// placeholders (or, when the unit turned blurring off, as one note at the
-// end), each with a way to ask the people who can grant it for the whole
-// document — `request`.
+// limit is in the browser at all. After the last page shown comes one
+// blurred placeholder page (or, when the unit turned blurring off, a note)
+// saying how many more there are, with a way to ask the people who can grant
+// it for the whole document — `request`. A 5-page limit shows 6 pages.
 //
 // Fast to open: the download is shown as a percentage, and pages are drawn
 // only as they come near the visible area — one at a time, nearest first —
@@ -72,7 +80,7 @@ const RequestFull = ({ request, owner, compact = false, onPaper = false }) => {
 };
 
 /** A page-shaped placeholder for a page the server withheld. */
-const WithheldPage = ({ number, total, width, height, request, owner }) => (
+const WithheldPage = ({ number, total, width, height, request, owner, more = 0 }) => (
   <div
     style={{ width, height, position: "relative", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", overflow: "hidden" }}
     aria-label={`Page ${number} of ${total}, withheld`}
@@ -86,6 +94,11 @@ const WithheldPage = ({ number, total, width, height, request, owner }) => (
     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10, background: "rgba(255,255,255,.4)", padding: 16, textAlign: "center" }}>
       <LockOutlined style={{ fontSize: 28, color: "#6b7280" }} />
       <Text strong style={{ color: "#1f2937" }}>Page {number} of {total} — not included in your access</Text>
+      {more > 0 && (
+        <Text style={{ color: "#374151", fontSize: 12 }}>
+          {more} more page{more === 1 ? "" : "s"} after this one {more === 1 ? "is" : "are"} not shown.
+        </Text>
+      )}
       <RequestFull request={request} owner={owner} compact onPaper />
     </div>
   </div>
@@ -126,8 +139,13 @@ async function readWithProgress(res, onProgress) {
  * @param request       { state: "idle"|"sending"|"pending"|"sent", send, label, note } — how to ask for the
  *                      rest; null to only say whom to ask
  * @param owner         who grants it, in words ("the Records Unit")
+ * @param ranged        read the PDF by byte ranges (no page limit applies): the first page shows
+ *                      once its own bytes are in, instead of after the whole scan has downloaded —
+ *                      a large scan took about ten seconds to open the other way
+ * @param selectable    the pages' text can be selected and copied (the Developer's): a text layer
+ *                      over each page, and the right-click menu left alone
  */
-const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, request = null, owner = "the unit that keeps it" }) => {
+const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, request = null, owner = "the unit that keeps it", ranged = false, selectable = false }) => {
   const containerRef = useRef(null);
   const viewOnly = useViewOnly();
   const { token } = antdTheme.useToken();
@@ -146,11 +164,71 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
   useEffect(() => {
     let cancelled = false;
     let opened = null;
+    let task = null;
     setDoc(null);
     drawn.current = new Map();
     setPhase({ stage: "download", percent: 0 });
+    let watchdog = null;
+
+    // By ranges: pdf.js asks the server for the pieces it needs (the server
+    // honours Range on this route). Resolves to the open document, or null
+    // when the reading stalls — a piece refused or never answered used to
+    // leave the bar at 99% for good — so the whole file is fetched instead.
+    const openRanged = () =>
+      new Promise((resolve) => {
+        const token = getSessionToken();
+        task = pdfjsLib.getDocument({
+          url: new URL(src, window.location.href).href,
+          withCredentials: true,
+          httpHeaders: token ? { [HEADER]: token } : undefined,
+          rangeChunkSize: RANGE_CHUNK,
+          disableAutoFetch: true,
+          disableStream: true,
+        });
+        let last = Date.now();
+        task.onProgress = ({ loaded, total }) => {
+          last = Date.now();
+          if (!cancelled && total) setPhase({ stage: "download", percent: Math.min(99, Math.round((loaded / total) * 100)) });
+        };
+        watchdog = setInterval(() => {
+          if (Date.now() - last < STALL_MS) return;
+          clearInterval(watchdog);
+          const stalled = task;
+          task = null;
+          stalled.destroy().catch(() => {});
+          resolve(null);
+        }, 2000);
+        task.promise
+          .then(async (pdf) => {
+            await pdf.getPage(1); // the first page's bytes, before "ready"
+            clearInterval(watchdog);
+            resolve(pdf);
+          })
+          .catch(() => {
+            clearInterval(watchdog);
+            // Any failure (a piece refused, cut off, the file gone): the
+            // whole-file fetch below, which says in words what went wrong.
+            resolve(null);
+          });
+      });
+
     (async () => {
       try {
+        if (ranged) {
+          opened = await openRanged();
+          if (cancelled) return;
+          if (opened) {
+            const first = await opened.getPage(1);
+            if (cancelled) return;
+            const vp = first.getViewport({ scale: 1 });
+            setRatio(vp.height / vp.width);
+            setWithheld({ total: opened.numPages, shown: opened.numPages });
+            setDoc(opened);
+            setPhase({ stage: "ready" });
+            return;
+          }
+          setPhase({ stage: "download", percent: 0 });
+        }
         const res = await fetch(src, { credentials: "include" });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -162,6 +240,8 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
           if (!cancelled) setPhase({ stage: "download", percent });
         });
         if (cancelled) return;
+        // Downloaded: the rest is reading it, said as such rather than a bar at 100%.
+        setPhase({ stage: "download", percent: 100, opening: true });
         opened = await pdfjsLib.getDocument({ data }).promise;
         if (cancelled) return;
         const first = await opened.getPage(1);
@@ -177,9 +257,11 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
     })();
     return () => {
       cancelled = true;
+      clearInterval(watchdog);
       if (opened) opened.destroy().catch(() => {});
+      else if (task) task.destroy().catch(() => {});
     };
-  }, [src]);
+  }, [src, ranged]);
 
   // The width "fit" means, from the viewer's own width.
   useEffect(() => {
@@ -242,10 +324,31 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
           for (let y = -viewport.height; y <= viewport.height; y += step) ctx.fillText(watermark, -textWidth / 2, y);
           ctx.restore();
         }
+        // Selectable: the page's text, invisible, laid exactly over the
+        // drawn page, so it can be selected and copied. A scan with no text
+        // in it simply has nothing to select.
+        let sheet = canvas;
+        if (selectable) {
+          sheet = document.createElement("div");
+          sheet.style.position = "relative";
+          sheet.style.width = canvas.style.width;
+          sheet.style.height = canvas.style.height;
+          sheet.appendChild(canvas);
+          const layer = document.createElement("div");
+          layer.className = "textLayer";
+          const cssViewport = page.getViewport({ scale: width / base.width });
+          layer.style.setProperty("--scale-factor", String(cssViewport.scale));
+          sheet.appendChild(layer);
+          try {
+            await new pdfjsLib.TextLayer({ textContentSource: page.streamTextContent(), container: layer, viewport: cssViewport }).render();
+          } catch {
+            /* no text to offer */
+          }
+        }
         page.cleanup();
         // Zoomed while it was drawing: throw it away, the new size is queued.
         if (key !== drawKeyRef.current) continue;
-        drawn.current.set(n, canvas);
+        drawn.current.set(n, sheet);
         setVersion((v) => v + 1);
       }
     } catch (err) {
@@ -293,7 +396,7 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
   const zi = ZOOMS.indexOf(zoom);
 
   return (
-    <div {...viewOnly} style={{ height, display: "flex", flexDirection: "column", background: token.colorFillTertiary, borderRadius: 6, overflow: "hidden", border: `1px solid ${token.colorBorderSecondary}` }}>
+    <div {...(selectable ? {} : viewOnly)} style={{ height, display: "flex", flexDirection: "column", background: token.colorFillTertiary, borderRadius: 6, overflow: "hidden", border: `1px solid ${token.colorBorderSecondary}` }}>
       {/* Zoom and the page count — and nothing to download or print. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 12px", background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorderSecondary}`, flexWrap: "wrap" }}>
         <Space size={4}>
@@ -315,7 +418,7 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
             </Text>
           ) : null}
           <Text type="secondary" style={{ fontSize: 12 }}>
-            <LockOutlined /> View only
+            {selectable ? <>Text can be copied</> : <><LockOutlined /> View only</>}
           </Text>
         </Space>
       </div>
@@ -323,8 +426,8 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
       <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, position: "relative" }}>
         {busy && (
           <div style={{ position: "sticky", top: 0, left: 0, zIndex: 2, background: token.colorBgElevated, borderRadius: 6, padding: "8px 12px", marginBottom: 12, boxShadow: token.boxShadowTertiary }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Downloading the document</Text>
-            <Progress percent={phase.percent} size="small" status="active" />
+            <Text type="secondary" style={{ fontSize: 12 }}>{phase.opening ? "Opening the document…" : "Downloading the document"}</Text>
+            <Progress percent={phase.percent} size="small" status="active" showInfo={!phase.opening} />
           </div>
         )}
         {phase.stage === "error" && <Alert type="error" showIcon message={phase.message} />}
@@ -356,9 +459,18 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
             ))}
             {withheldCount > 0 &&
               (blurWithheld ? (
-                Array.from({ length: withheldCount }, (_, i) => (
-                  <WithheldPage key={`w${i}`} number={withheld.shown + i + 1} total={withheld.total} width={Math.max(pageWidth, 360)} height={Math.round(Math.max(pageWidth, 360) * ratio)} request={request} owner={owner} />
-                ))
+                // One blurred page after the limit — page 6 of a 5-page limit —
+                // and nothing after it: enough to show the document goes on,
+                // without a scroll of placeholders for the rest.
+                <WithheldPage
+                  number={withheld.shown + 1}
+                  total={withheld.total}
+                  more={withheldCount - 1}
+                  width={Math.max(pageWidth, 360)}
+                  height={Math.round(Math.max(pageWidth, 360) * ratio)}
+                  request={request}
+                  owner={owner}
+                />
               ) : (
                 <div style={{ width: Math.max(pageWidth, 360), maxWidth: "100%", padding: 16, background: token.colorBgContainer, borderRadius: 6, textAlign: "center" }}>
                   <Space direction="vertical" size={8}>

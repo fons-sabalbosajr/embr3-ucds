@@ -35,7 +35,14 @@ async function connectWithRetry(attempt = 0) {
     await require("./services/menuItems").ensureIndexes();
     await require("./services/signInHistory").ensureIndexes();
     const erms = require("./modules/erms");
-    if (erms.isEnabled()) await erms.ensureIndexes();
+    if (erms.isEnabled()) {
+      await erms.ensureIndexes();
+      // The Document Portal's room: its indexes, then the clock that ends
+      // approvals on time and seats the waiting line.
+      const portal = require("./modules/portal");
+      await portal.ensureIndexes();
+      portal.start();
+    }
   } catch (error) {
     const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
     console.error(`MongoDB connection failed (${error.name}: ${error.message}); retrying in ${delay / 1000}s.`);
@@ -104,6 +111,9 @@ server.headersTimeout = 66 * 1000;
 const io = setupSocket(server, allowedOrigins);
 // Sign-ins and sign-outs reach open screens as they happen (services/presence.js).
 require("./services/presence").attach(io);
+// Notices to the person they concern, on their screens and devices (services/notifier.js).
+require("./services/notifier").attach(io, app.locals.sessionStore);
+connectToMongo().then(() => require("./services/notifier").ensureIndexes()).catch((err) => console.warn("[notifier] indexes:", err.message));
 // Watch the NAS bridge and push its state to open screens (see services/nasBridge.js).
 connectToMongo().then(() => require("./services/nasBridge").start(io)).catch((err) => console.warn("[NAS bridge] not started:", err.message));
 

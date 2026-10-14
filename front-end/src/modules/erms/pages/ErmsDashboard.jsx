@@ -9,7 +9,6 @@ import {
   Row,
   Skeleton,
   Space,
-  Statistic,
   Table,
   Tag,
   Tooltip,
@@ -24,19 +23,26 @@ import {
   LinkOutlined,
   MailOutlined,
   RightOutlined,
+  SettingOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { DonutChart, MagnitudeBars, MonthStack, YearColumns } from "../components/charts";
-import { AttentionTile } from "../components/dashboardTiles";
+import { DonutChart, MagnitudeBars, YearColumns } from "../components/charts";
+import ChartCard, { MonthStackCard } from "../components/ChartCard";
+import { AttentionTile, StatTile } from "../components/dashboardTiles";
+import UnitHeader from "../components/UnitHeader";
+import { unitTheme } from "../units/unitTheme";
+import { settingsPath } from "../settingsPath";
 import { useTheme } from "../../../theme/ThemeProvider";
+import PortalSummaryCard from "../../portal/PortalSummaryCard";
+import DocTitle from "../../portal/DocTitle";
+import { fetchDesk } from "../../portal/portalService";
 import {
   PERMIT_OPTIONS,
   PERMIT_TYPE_COLOR,
   PROVINCE_LABEL,
   describeApiError,
-  fetchAccessRequests,
   fetchDashboard,
 } from "../api/ermsService";
 
@@ -44,8 +50,8 @@ import {
 // The Records Unit's landing page.
 //
 // For an ERMS User this is the main Dashboard — they have no planning
-// dashboard — so it opens on what the day's work is: the upload, the inbox
-// of document requests, records that need review. (The "overdue loans" tile
+// dashboard — so it opens on what the day's work is: the upload, the
+// Document Portal requests waiting for a decision, records that need review. (The "overdue loans" tile
 // was removed: the office no longer tracks paper loans from here.)
 // The counts and distributions that describe the collection follow.
 //
@@ -54,7 +60,7 @@ import {
 // and a word, never on their own.
 // ---------------------------------------------------------------------------
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const PERMIT_LABEL = Object.fromEntries(PERMIT_OPTIONS.map((o) => [o.value, o.label]));
 const TYPE_ORDER = PERMIT_OPTIONS.map((o) => o.value);
@@ -65,15 +71,16 @@ const when = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 
 
 const ErmsDashboard = () => {
   const { token } = antdTheme.useToken();
+  const navigate = useNavigate();
   const isDark = useTheme().mode === "dark";
+  // The charts in the unit's own colour, as Legal and Laboratory draw theirs.
+  const { accent } = unitTheme("records");
   const stats = useQuery({ queryKey: ["erms", "dashboard"], queryFn: fetchDashboard });
-  // The inbox is the Records Unit's work; for anyone else the
-  // inbox is their own requests, which is still worth a glance.
-  const inbox = useQuery({
-    queryKey: ["erms", "access-requests", "pending", "dashboard"],
-    queryFn: () => fetchAccessRequests({ status: "pending", limit: 5 }),
-    refetchInterval: 60000,
-  });
+  // Document Portal requests waiting for this unit (the server refuses the
+  // desk to anyone who decides none — then there is nothing to show).
+  // The Records Unit's own: a Developer, who decides for every unit, sees
+  // Legal's and the Laboratory's on their dashboards.
+  const inbox = useQuery({ queryKey: ["portal", "desk", "records"], queryFn: () => fetchDesk({ source: "records" }), refetchInterval: 30000, retry: false });
 
   if (stats.error) {
     return (
@@ -91,8 +98,11 @@ const ErmsDashboard = () => {
   const thisYear = new Date().getFullYear();
   const approvedThisYear = data?.byYear?.find((y) => y._id === thisYear)?.count || 0;
   const linkedPct = data?.total ? Math.round((data.linked / data.total) * 100) : 0;
-  const pending = inbox.data?.pending || 0;
-  const canDecide = inbox.data?.canDecide === true;
+  const pending = inbox.data?.pending?.length || 0;
+  const canDecide = Boolean(inbox.data);
+  const typeRows = [...(data?.byType || [])].sort((a, b) => TYPE_ORDER.indexOf(a._id) - TYPE_ORDER.indexOf(b._id)).map((r) => ({ key: r._id || "none", label: PERMIT_LABEL[r._id] || r._id || "Unknown", count: r.count }));
+  const provinceRows = (data?.byProvince || []).map((r) => ({ key: r._id || "none", label: PROVINCE_LABEL[r._id] || r._id || "Unknown", count: r.count }));
+  const yearRows = (data?.byYear || []).map((y) => ({ year: y._id, count: y.count }));
 
   const recentColumns = [
     {
@@ -129,17 +139,10 @@ const ErmsDashboard = () => {
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       {/* The day's work first. */}
-      <Card
-        size="small"
-        styles={{ body: { padding: "16px 20px" } }}
-        style={{ background: token.colorFillQuaternary }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <Title level={4} style={{ margin: 0 }}>Records Unit</Title>
-            <Text type="secondary">Environmental records: permits, clearances and the scans filed against them.</Text>
-          </div>
-          <Space wrap>
+      <UnitHeader
+        unit="records"
+        actions={
+          <>
             <Link to="/universe/erms/records?new=1">
               <Button type="primary" icon={<CloudUploadOutlined />}>Upload record</Button>
             </Link>
@@ -149,24 +152,29 @@ const ErmsDashboard = () => {
             <Link to="/universe/erms/archive">
               <Button icon={<InboxOutlined />}>Archive boxes</Button>
             </Link>
-            <Link to="/universe/erms/access-requests">
-              <Badge count={canDecide ? pending : 0} size="small" offset={[-2, 2]}>
-                <Button icon={<MailOutlined />}>Document requests</Button>
-              </Badge>
+            {canDecide && (
+              <Link to="/universe/erms/portal-requests">
+                <Badge count={pending} size="small" offset={[-2, 2]}>
+                  <Button icon={<MailOutlined />}>Portal requests</Button>
+                </Badge>
+              </Link>
+            )}
+            <Link to={settingsPath("records")}>
+              <Button icon={<SettingOutlined />}>Settings</Button>
             </Link>
-          </Space>
-        </div>
-      </Card>
+          </>
+        }
+      />
 
       {/* What needs attention. */}
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={8}>
           <AttentionTile
             icon={<MailOutlined />}
-            label={canDecide ? "Document requests waiting" : "My pending requests"}
+            label="Portal requests waiting"
             value={pending}
             tone="warning"
-            to="/universe/erms/access-requests"
+            to="/universe/erms/portal-requests"
             loading={inbox.isLoading}
             hint={pending ? "to decide" : "none"}
           />
@@ -195,75 +203,95 @@ const ErmsDashboard = () => {
         </Col>
       </Row>
 
+      {/* The public Document Portal: who is in the room, what waits, the day's figures. */}
+      {canDecide && <PortalSummaryCard source="records" accent={accent} />}
+
       {/* The collection. */}
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
-          <Card size="small">
-            {loading ? <Skeleton active paragraph={false} /> : <Statistic title="Records" value={data.total} formatter={fmt} />}
-          </Card>
+          <StatTile title="Records" value={data?.total} loading={loading} onClick={() => navigate("/universe/erms/records")} />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
-            {loading ? (
-              <Skeleton active paragraph={false} />
-            ) : (
-              <Tooltip title="Records whose permit number resolves to an establishment in the Universe register">
-                <Statistic
-                  title="Linked to the register"
-                  value={data.linked}
-                  formatter={fmt}
-                  prefix={<LinkOutlined style={{ fontSize: 16, color: token.colorTextTertiary }} />}
-                  suffix={<Text type="secondary" style={{ fontSize: 14 }}>{`${linkedPct}%`}</Text>}
-                />
-              </Tooltip>
-            )}
-          </Card>
+          <Tooltip title="Records whose permit number resolves to an establishment in the Universe register">
+            <div style={{ height: "100%" }}>
+              <StatTile
+                title="Linked to the register"
+                value={data?.linked}
+                loading={loading}
+                prefix={<LinkOutlined style={{ fontSize: 16, color: token.colorTextTertiary }} />}
+                suffix={<Text type="secondary" style={{ fontSize: 14 }}>{`${linkedPct}%`}</Text>}
+                onClick={() => navigate("/universe/erms/records?linked=linked")}
+              />
+            </div>
+          </Tooltip>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
-            {loading ? <Skeleton active paragraph={false} /> : <Statistic title={`Permits approved in ${thisYear}`} value={approvedThisYear} formatter={fmt} />}
-          </Card>
+          <StatTile title={`Permits approved in ${thisYear}`} value={approvedThisYear} loading={loading} />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
-            {loading ? (
-              <Skeleton active paragraph={false} />
-            ) : (
-              <Statistic title="Provinces with records" value={data.byProvince?.filter((p) => p._id).length || 0} suffix={<Text type="secondary" style={{ fontSize: 14 }}>of 7</Text>} />
-            )}
-          </Card>
+          <StatTile title="Provinces with records" value={data?.byProvince?.filter((p) => p._id).length || 0} suffix={<Text type="secondary" style={{ fontSize: 14 }}>of 7</Text>} loading={loading} />
         </Col>
       </Row>
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={8}>
-          <Card title="By permit type" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>share of {fmt(data?.total)}</Text>}>
-            {loading ? <Skeleton active /> : <DonutChart rows={[...data.byType].sort((a, b) => TYPE_ORDER.indexOf(a._id) - TYPE_ORDER.indexOf(b._id)).map((r) => ({ key: r._id, label: PERMIT_LABEL[r._id] || r._id || "Unknown", count: r.count }))} total={data.total} dark={isDark} />}
-          </Card>
+          <ChartCard
+            title="By permit type"
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>share of {fmt(data?.total)}</Text>}
+            loading={loading}
+            labelTitle="Permit type"
+            countTitle="Records"
+            rows={typeRows}
+            total={data?.total}
+            render={(full) => <DonutChart rows={typeRows} total={data.total} dark={isDark} height={full ? 380 : undefined} />}
+          />
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By province" size="small" style={{ height: "100%" }}>
-            {loading ? <Skeleton active /> : <MagnitudeBars rows={data.byProvince.map((r) => ({ label: PROVINCE_LABEL[r._id] || r._id || "Unknown", count: r.count }))} color={token.colorPrimary} dark={isDark} name="Records" />}
-          </Card>
+          <ChartCard
+            title="By province"
+            loading={loading}
+            labelTitle="Province"
+            countTitle="Records"
+            rows={provinceRows}
+            render={(full) => <MagnitudeBars rows={provinceRows} color={accent} dark={isDark} name="Records" height={full ? 380 : undefined} />}
+          />
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By year approved" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 years</Text>}>
-            {loading ? <Skeleton active /> : <YearColumns rows={(data.byYear || []).map((y) => ({ year: y._id, count: y.count }))} color={token.colorPrimary} dark={isDark} name="Permits approved" />}
-          </Card>
+          <ChartCard
+            title="By year approved"
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 years</Text>}
+            loading={loading}
+            labelTitle="Year approved"
+            countTitle="Permits approved"
+            rows={[...yearRows].sort((a, b) => b.year - a.year).map((y) => ({ key: y.year, label: String(y.year), count: y.count }))}
+            render={(full) => <YearColumns rows={yearRows} color={accent} dark={isDark} name="Permits approved" years={full ? 100 : 12} height={full ? 380 : undefined} />}
+          />
         </Col>
       </Row>
 
       {/* The desktop system's monthly upload figures and its project-type chart. */}
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={15}>
-          <Card title="Uploads per month" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 months, by permit type</Text>}>
-            {loading ? <Skeleton active /> : <MonthStack months={data.byMonth} kinds={PERMIT_KINDS} dark={isDark} />}
-          </Card>
+          <MonthStackCard
+            title="Uploads per month"
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 months, by permit type</Text>}
+            loading={loading}
+            months={data?.byMonth || []}
+            kinds={PERMIT_KINDS}
+            dark={isDark}
+          />
         </Col>
         <Col xs={24} lg={9}>
-          <Card title="Most filed project types" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>top 10</Text>}>
-            {loading ? <Skeleton active /> : <MagnitudeBars rows={data.byProjectType || []} color={token.colorPrimary} dark={isDark} height={280} name="Records" />}
-          </Card>
+          {/* The card shows the top ten; See more, all the server sends (fifty). */}
+          <ChartCard
+            title="Most filed project types"
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>top 10</Text>}
+            loading={loading}
+            labelTitle="Project type"
+            countTitle="Records"
+            rows={data?.byProjectType || []}
+            render={(full) => <MagnitudeBars rows={full ? data.byProjectType || [] : (data.byProjectType || []).slice(0, 10)} color={accent} dark={isDark} height={full ? Math.max(380, (data.byProjectType || []).length * 26) : 280} name="Records" />}
+          />
         </Col>
       </Row>
 
@@ -287,7 +315,7 @@ const ErmsDashboard = () => {
               title="Waiting for a decision"
               size="small"
               style={{ height: "100%" }}
-              extra={<Link to="/universe/erms/access-requests">Inbox <RightOutlined style={{ fontSize: 10 }} /></Link>}
+              extra={<Link to="/universe/erms/portal-requests">Portal requests <RightOutlined style={{ fontSize: 10 }} /></Link>}
             >
               {inbox.isLoading ? (
                 <Skeleton active />
@@ -295,21 +323,16 @@ const ErmsDashboard = () => {
                 <List
                   size="small"
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing waiting" /> }}
-                  dataSource={inbox.data?.requests || []}
+                  dataSource={(inbox.data?.pending || []).slice(0, 5)}
                   renderItem={(r) => (
                     <List.Item>
                       <List.Item.Meta
-                        title={
-                          <Space size={6}>
-                            <Link to={`/universe/erms/records/${encodeURIComponent(r.serialNo)}`}>{r.serialNo}</Link>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{r.proponentName}</Text>
-                          </Space>
-                        }
+                        title={<DocTitle doc={r} strong={false} />}
                         description={
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            {r.requestedBy?.name || r.requestedBy?.username}
-                            {r.requestedBy?.division ? ` · ${r.requestedBy.division}` : ""} · {when(r.requestedAt)}
-                            {r.reason ? ` — “${r.reason}”` : ""}
+                            {r.requesterName}
+                            {r.designation ? ` · ${r.designation}` : ""} · {when(r.createdAt)}
+                            {r.purpose ? ` — “${r.purpose}”` : ""}
                           </Text>
                         }
                       />

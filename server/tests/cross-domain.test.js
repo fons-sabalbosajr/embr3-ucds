@@ -58,6 +58,43 @@ async function signIn(username) {
   return agent;
 }
 
+// The establishment and the record linked to it, made here so the suite does
+// not depend on what the database holds: a register entry whose permit number
+// is written the register's way (ECC-OL-R03-…) and an ERMS record holding the
+// same number written ERMS's way (R03-…), linked to it as the migration
+// links them. Around it, enough unrelated register entries for "a handful of
+// candidates, not the register" to mean something.
+const FIRM = '__TEST-XD-FIRM';
+const FIRM_PERMIT = 'R03-2099-0917';
+const FILLER_KEYS = /^__TEST-XD-/;
+const FIXTURE_SERIAL = '__TEST-XD-REC-1';
+
+async function seedRegisterAndRecord() {
+  await collections.ucds.deleteMany({ sort_key: FILLER_KEYS });
+  await collections.ermsRecords.deleteMany({ serialNo: FIXTURE_SERIAL });
+  await collections.ucds.insertMany([
+    { sort_key: FIRM, name: '__Test Cross Domain Firm', title: '__Test Cross Domain Plant', province: 'Bataan', city: 'Mariveles', ecc_cnc: `ECC-OL-${FIRM_PERMIT}` },
+    ...Array.from({ length: 150 }, (_, i) => ({
+      sort_key: `__TEST-XD-${String(i).padStart(3, '0')}`,
+      name: `__Test Register Filler ${i}`,
+      province: 'Bataan',
+      ecc_cnc: `ECC-OL-R03-1999-${String(5000 + i)}`,
+    })),
+  ]);
+  await collections.ermsRecords.insertOne({
+    serialNo: FIXTURE_SERIAL,
+    proponentName: '__Test Cross Domain Firm',
+    projectTitle: '__Test Cross Domain Plant',
+    permit: { type: 'ecc-original', label: 'ECC', number: FIRM_PERMIT },
+    location: { province: 'bataan', provinceLabel: 'Bataan' },
+    document: { fileName: '__test-xd.pdf', uploadedAt: new Date() },
+    // As the migration records it: the ERMS spelling differs from the
+    // register's, so the two were matched on the permit's digits.
+    ucdsRef: { sortKey: FIRM, nameSnapshot: '__Test Cross Domain Firm', matchedOn: 'digits' },
+  });
+  return collections.ermsRecords.findOne({ serialNo: FIXTURE_SERIAL });
+}
+
 beforeAll(async () => {
   await connectToMongo();
   const password = await bcrypt.hash(PASSWORD, 10);
@@ -68,13 +105,15 @@ beforeAll(async () => {
     base(RECORDS_ONLY, { password, permission: 'records', domains: ['erms'] }),
   ]);
 
-  linkedSample = await collections.ermsRecords.findOne({ 'ucdsRef.sortKey': { $ne: null } });
+  linkedSample = await seedRegisterAndRecord();
   expect(linkedSample).toBeTruthy();
 }, 60000);
 
 afterAll(async () => {
   await collections.users.deleteMany({ username: { $in: USERNAMES } });
   await collections.loginStatus.deleteMany({ username: { $in: USERNAMES } });
+  await collections.ucds.deleteMany({ sort_key: FILLER_KEYS });
+  await collections.ermsRecords.deleteMany({ serialNo: FIXTURE_SERIAL });
   if (createdSerials.length) {
     await collections.ermsRecords.deleteMany({ serialNo: { $in: createdSerials } });
   }

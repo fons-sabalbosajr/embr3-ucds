@@ -3,10 +3,13 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { installSessionTransport } from "./shared/sessionTransport";
+import { installSameAccountTabs } from "./shared/sameAccountTabs";
 import "./index.css";
 
 // Before anything can make a request: each tab sends its own sign-in.
 installSessionTransport();
+// Links opened in a new tab from inside the application keep this tab's account.
+installSameAccountTabs();
 
 const queryClient = new QueryClient();
 

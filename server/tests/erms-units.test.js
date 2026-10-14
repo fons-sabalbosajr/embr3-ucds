@@ -164,6 +164,136 @@ describe('filing a document', () => {
   });
 });
 
+describe('a document’s history', () => {
+  const SERIAL = '__TEST-UNITS-HIST-1';
+
+  beforeAll(async () => {
+    await getDb().collection('erms-documents').deleteOne({ serialNo: SERIAL });
+    await getDb().collection('erms-documents').insertOne({
+      unit: 'legal', docType: 'nov', docTypeLabel: 'Notice of Violation', serialNo: SERIAL, province: 'bataan',
+      fields: { docketNo: 'EMBR3-1999-BA-001', companyName: 'History Co.', novDateIssued: new Date('1999-01-02'), status: 'FOR TECHNICAL CONFERENCE' },
+      document: { fileName: 'NOV_History Co.pdf', uploadedAt: new Date('1999-01-05T02:00:00Z'), uploadedBy: 'Desktop Clerk' },
+      legacy: { table: 'tb_records_NOV', systemId: 1 },
+      createdAt: new Date('1999-01-05T02:00:00Z'), createdBy: 'Desktop Clerk',
+    });
+  });
+
+  afterAll(async () => {
+    await getDb().collection('erms-documents').deleteOne({ serialNo: SERIAL });
+    await getDb().collection('app-logs').deleteMany({ documentId: SERIAL });
+  });
+
+  it('begins with the desktop filing and records each edit with what it changed', async () => {
+    const edit = await legal.agent.patch(`/api/erms/units/legal/documents/${SERIAL}`).send({ fields: { status: 'RESOLUTION ISSUED' } });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+
+    const res = await legal.agent.get(`/api/erms/units/legal/documents/${SERIAL}/history`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const [latest, ...older] = res.body.events;
+    expect(latest.action).toBe('document-update');
+    expect(latest.who).toBe(LEGAL);
+    expect(latest.changes).toEqual({ status: { from: 'FOR TECHNICAL CONFERENCE', to: 'RESOLUTION ISSUED' } });
+    const filed = older.find((e) => e.action === 'legacy-filed');
+    expect(filed.who).toBe('Desktop Clerk');
+    expect(filed.detail).toBe('from tb_records_NOV');
+  });
+
+  it('is the unit’s own: another unit’s user cannot read it', async () => {
+    const res = await lab.agent.get(`/api/erms/units/legal/documents/${SERIAL}/history`);
+    expect(res.status).toBe(403);
+  });
+
+  describe('sharing through the Document Portal', () => {
+    const { ObjectId } = db;
+    const legalRequest = new ObjectId();
+    const recordsRequest = new ObjectId();
+    const at = (min) => new Date(Date.UTC(2001, 0, 1, 0, min));
+
+    beforeAll(async () => {
+      await getDb().collection('erms-records').deleteOne({ serialNo: SERIAL });
+      await getDb().collection('erms-records').insertOne({
+        serialNo: SERIAL, proponentName: 'History', projectTitle: 'History', permit: { type: 'cnc', number: null },
+        location: { province: 'bataan' }, document: {},
+      });
+      // The same serial asked for twice: once from Legal, once from Records.
+      await getDb().collection('portal-requests').insertMany([
+        { _id: legalRequest, serialNo: SERIAL, source: 'legal', requesterName: 'Ana Reyes', designation: 'DENR-PENRO', status: 'approved', createdAt: at(1) },
+        { _id: recordsRequest, serialNo: SERIAL, source: 'records', requesterName: 'Ben Cruz', designation: 'Student', status: 'declined', createdAt: at(1) },
+      ]);
+      const log = (id, actionType, username, changes, min) => ({
+        domain: 'erms', actionType, actionLabel: actionType, targetCollection: 'portal-requests', documentId: String(id), username, changes, timestamp: at(min),
+      });
+      await getDb().collection('app-logs').insertMany([
+        log(legalRequest, 'portal-request', null, { serialNo: SERIAL, requesterName: 'Ana Reyes', designation: 'DENR-PENRO', purpose: 'Case review' }, 2),
+        log(legalRequest, 'portal-decision', LEGAL, { serialNo: SERIAL, for: 'Ana Reyes', status: 'approved', grantedMinutes: 30, pages: '1-3' }, 3),
+        { domain: 'nas', operation: 'portal-view', actionType: 'NAS', serialNo: SERIAL, container: 'legal', detail: `request ${legalRequest} (Ana Reyes, DENR-PENRO); pages 1-3 of 9`, success: true, timestamp: at(4) },
+        log(recordsRequest, 'portal-decision', RECORDS, { serialNo: SERIAL, for: 'Ben Cruz', status: 'declined' }, 5),
+      ]);
+    });
+
+    afterAll(async () => {
+      await getDb().collection('erms-records').deleteOne({ serialNo: SERIAL });
+      await getDb().collection('portal-requests').deleteMany({ _id: { $in: [legalRequest, recordsRequest] } });
+      await getDb().collection('app-logs').deleteMany({ $or: [{ documentId: { $in: [String(legalRequest), String(recordsRequest)] } }, { serialNo: SERIAL }] });
+    });
+
+    it('is on the document’s History: who asked, who approved it and for how long, each open', async () => {
+      const res = await legal.agent.get(`/api/erms/units/legal/documents/${SERIAL}/history`);
+      const shared = res.body.events.filter((e) => e.shared);
+      expect(shared.map((e) => e.action)).toEqual(['portal-view', 'portal-decision', 'portal-request']);
+      const decision = shared.find((e) => e.action === 'portal-decision');
+      expect(decision.who).toBe(LEGAL);
+      expect(decision.detail).toMatch(/for Ana Reyes \(DENR-PENRO\).*approved.*30 min.*pages 1-3/);
+      expect(shared.find((e) => e.action === 'portal-request').who).toBe('Ana Reyes (Document Portal)');
+      // The Records request for the same serial is the Records Unit's, not this document's.
+      expect(res.body.events.some((e) => /Ben Cruz/.test(e.detail || ''))).toBe(false);
+    });
+
+    it('is on a record’s Tracking for the Records Unit', async () => {
+      const res = await records.agent.get(`/api/erms/records/${SERIAL}`);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      const shared = res.body.tracking.filter((t) => t.source === 'portal');
+      expect(shared).toHaveLength(1);
+      expect(shared[0]).toMatchObject({ action: 'portal-decision', actionLabel: 'Sharing decided', createdBy: RECORDS });
+      expect(shared[0].purpose).toMatch(/for Ben Cruz.*declined/);
+    });
+  });
+});
+
+describe('a unit taken down for maintenance', () => {
+  afterAll(async () => {
+    await getDb().collection('app-config').deleteOne({ _id: 'erms-availability' });
+  });
+
+  it('is the Developer’s to switch', async () => {
+    const refused = await legal.agent.put('/api/dev/erms-availability/legal').send({ down: true });
+    expect(refused.status).toBe(403);
+    const res = await developer.agent.put('/api/dev/erms-availability/legal').send({ down: true, reason: 'Moving the Legal share' });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.units.legal).toMatchObject({ down: true, reason: 'Moving the Legal share', by: DEVELOPER });
+    expect(res.body.units.records.down).toBe(false);
+  });
+
+  it('answers 503 to everyone but the Developer, and leaves the other units alone', async () => {
+    const down = await legal.agent.get('/api/erms/units/legal/documents');
+    expect(down.status).toBe(503);
+    expect(down.body).toMatchObject({ code: 'ERMS_UNIT_DOWN', unit: 'legal' });
+    expect(down.body.message).toMatch(/Moving the Legal share/);
+    // Everyone signed in can see that it is down.
+    const seen = await records.agent.get('/api/erms-availability');
+    expect(seen.body.units.legal.down).toBe(true);
+    // The Developer can still look; the Laboratory is untouched.
+    expect((await developer.agent.get('/api/erms/units/legal/documents')).status).toBe(200);
+    expect((await lab.agent.get('/api/erms/units/laboratory/documents')).status).toBe(200);
+  });
+
+  it('comes back when switched on again', async () => {
+    const res = await developer.agent.put('/api/dev/erms-availability/legal').send({ down: false });
+    expect(res.body.units.legal.down).toBe(false);
+    expect((await legal.agent.get('/api/erms/units/legal/documents')).status).toBe(200);
+  });
+});
+
 describe('Admin Settings > User Accounts: the System on an account', () => {
   it('is set by the Developer and applies at once', async () => {
     const refused = await legal.agent.put(`/api/users/${legalId}/erms-unit`).send({ ermsUnit: 'laboratory' });

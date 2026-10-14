@@ -39,8 +39,18 @@ async function signIn(username) {
   return agent;
 }
 
+// Two register entries of its own, so the province scope has something to
+// show and something to withhold whatever else the database holds: one in a
+// province the Planning account holds, one in a province it does not.
+const REGISTER_FIXTURE = /^__TEST-DB-/;
+
 beforeAll(async () => {
   await connectToMongo();
+  await collections.ucds.deleteMany({ sort_key: REGISTER_FIXTURE });
+  await collections.ucds.insertMany([
+    { sort_key: '__TEST-DB-1', name: '__Test Domain Boundary Firm (Bataan)', province: 'Bataan' },
+    { sort_key: '__TEST-DB-2', name: '__Test Domain Boundary Firm (Aurora)', province: 'Aurora' },
+  ]);
   const password = await bcrypt.hash(PASSWORD, 10);
   await collections.users.deleteMany({ username: { $in: USERNAMES } });
   await collections.users.insertMany([
@@ -64,6 +74,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await collections.users.deleteMany({ username: { $in: USERNAMES } });
   await collections['loginStatus'].deleteMany({ username: { $in: USERNAMES } });
+  await collections.ucds.deleteMany({ sort_key: REGISTER_FIXTURE });
 }, 60000);
 
 describe('unauthenticated access', () => {

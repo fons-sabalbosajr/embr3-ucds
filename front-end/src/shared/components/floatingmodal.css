@@ -1,0 +1,59 @@
+/* FloatingModal: a dialog that moves, minimises and resizes. */
+
+/* No mask: the page behind stays usable; only the window takes clicks. */
+.eu-float-wrap {
+  pointer-events: none;
+}
+.eu-float-wrap .ant-modal {
+  pointer-events: auto;
+}
+
+/* The title bar: the title, what sits at its right, then the window's own
+   buttons — minimise/restore and close — in one centred row. */
+.eu-float-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin: -4px -8px -4px 0;
+  user-select: none;
+}
+.eu-float-title--movable {
+  cursor: move;
+  touch-action: none;
+}
+.eu-float-title__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eu-float-title__extra {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.eu-float-title__buttons {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(128, 128, 128, 0.25);
+}
+.eu-float-title__buttons .ant-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.eu-float-title__close:hover {
+  color: #fff !important;
+  background: #d4380d !important;
+}

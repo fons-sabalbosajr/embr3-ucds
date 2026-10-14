@@ -1,5 +1,6 @@
 const { connectToMongo, getDb } = require('../../../config/db');
 const { notFoundError, badRequest } = require('../../../shared/middleware/errorHandler');
+const shareTrail = require('./shareTrail');
 
 // ---------------------------------------------------------------------------
 // Records tracking — where a record went and who holds it.
@@ -136,17 +137,39 @@ async function legacyEvents(record) {
 }
 
 /**
+ * How the record was shared through the Document Portal (shareTrail), as
+ * entries on its trail: who asked, who approved or declined it and for how
+ * long, access changed or withdrawn, every time the requester opened it.
+ */
+async function shareEntries(serialNo) {
+  const events = await shareTrail.shareEvents('records', serialNo);
+  return events.map((e) => ({
+    _id: e.id,
+    source: 'portal',
+    action: e.action,
+    actionLabel: e.label,
+    fromParty: null,
+    toParty: null,
+    purpose: e.detail,
+    remarks: null,
+    dueDate: null,
+    createdAt: e.at instanceof Date ? e.at : new Date(e.at),
+    createdBy: e.who,
+  }));
+}
+
+/**
  * Everything that happened to a record, newest first: the custody trail kept
- * here and, when `record` is given, the desktop system's events for it.
+ * here, how it was shared, and, when `record` is given, the desktop system's
+ * events for it.
  */
 async function listForRecord(serialNo, record = null) {
   await connectToMongo();
-  const own = await collection().find({ recordSerialNo: serialNo }).sort({ createdAt: -1 }).toArray();
+  const [own, shared] = await Promise.all([collection().find({ recordSerialNo: serialNo }).sort({ createdAt: -1 }).toArray(), shareEntries(serialNo)]);
   const native = own.map((e) => ({ ...e, source: 'custody' }));
-  if (!record) return native;
-  const legacy = await legacyEvents(record);
+  const legacy = record ? await legacyEvents(record) : [];
   const time = (e) => (e.createdAt instanceof Date ? e.createdAt.getTime() : 0);
-  return [...native, ...legacy].sort((a, b) => time(b) - time(a));
+  return [...native, ...shared, ...legacy].sort((a, b) => time(b) - time(a));
 }
 
 /**

@@ -12,10 +12,9 @@ const { connectToMongo, collections, getDb } = db;
 // The page limit, and asking for the whole document.
 //
 // With a limit set, the viewer shows the unit's own staff the first pages
-// too — only the Developer and administrators (and anyone granted the whole
-// document) see every page. "Request full access" from a member of staff
-// sends an ERMS message to the administrators, once a day per document per
-// person, and is refused to anyone outside the unit.
+// too — only the Developer and administrators see every page. The old
+// "Request full access" button is gone: more pages are asked for in the
+// Document Portal.
 // ---------------------------------------------------------------------------
 
 const PASSWORD = 'FullAccessPw!x9';
@@ -50,7 +49,6 @@ const cleanUp = async () => {
 };
 
 let asker;
-let outsider;
 let recordsClerk;
 
 beforeAll(async () => {
@@ -66,7 +64,7 @@ beforeAll(async () => {
   ]);
   await getDb().collection('erms-documents').insertOne({ unit: 'legal', serialNo: SERIAL, docType: 'nov', title: 'Test firm', fields: {}, province: 'bataan', document: { fileName: 'test.pdf' }, createdAt: new Date() });
   await getDb().collection('erms-records').insertOne({ serialNo: RECORD, proponentName: 'Test', projectTitle: 'Test project', permit: { type: 'cnc' }, location: { province: 'bataan' }, document: { fileName: 'rec.pdf' } });
-  [asker, outsider, recordsClerk] = await Promise.all([signIn(ASKER), signIn(OUTSIDER), signIn(RECORDS)]);
+  [asker, recordsClerk] = await Promise.all([signIn(ASKER), signIn(RECORDS)]);
 }, 90000);
 
 afterAll(async () => {
@@ -85,33 +83,12 @@ describe('the page limit reaches the unit\'s own staff', () => {
   });
 });
 
-describe('request full access', () => {
-  const unitPath = `/api/erms/units/legal/documents/${encodeURIComponent(SERIAL)}/full-access-request`;
-
-  it('sends a Legal officer\'s request to the administrators', async () => {
-    const res = await asker.post(unitPath).send({ reason: 'For the hearing.' });
-    expect(res.status).toBe(200);
-    expect(res.body.sent).toBeGreaterThanOrEqual(1);
-    const msg = await getDb().collection('erms-messages').findOne({ 'from.username': ASKER, 'to.username': ADMIN });
-    expect(msg?.purpose).toBe('Request');
-    expect(msg?.subject).toContain(SERIAL);
-    expect(msg?.details).toContain('For the hearing.');
-  });
-
-  it('does not send it again the same day', async () => {
-    const res = await asker.post(unitPath).send({});
-    expect(res.status).toBe(200);
-    expect(res.body.already).toBe(true);
-    expect(await getDb().collection('erms-messages').countDocuments({ 'from.username': ASKER, 'to.username': ADMIN })).toBe(1);
-  });
-
-  it('is refused to someone outside the unit', async () => {
-    expect((await outsider.post(unitPath).send({})).status).toBe(403);
-  });
-
-  it('takes a Records clerk\'s request for a record to the administrators too', async () => {
-    const res = await recordsClerk.post(`/api/erms/records/${encodeURIComponent(RECORD)}/full-access-request`).send({});
-    expect(res.status).toBe(200);
-    expect(await getDb().collection('erms-messages').countDocuments({ 'from.username': RECORDS, 'to.username': ADMIN, subject: { $regex: RECORD } })).toBe(1);
+describe('asking for the whole document is gone', () => {
+  // Anyone who needs more pages asks in the Document Portal now; the in-app
+  // "Request full access" message to the administrators was removed.
+  it('no longer sends a request from the unit viewer or the record', async () => {
+    expect((await asker.post(`/api/erms/units/legal/documents/${encodeURIComponent(SERIAL)}/full-access-request`).send({})).status).toBe(404);
+    expect((await recordsClerk.post(`/api/erms/records/${encodeURIComponent(RECORD)}/full-access-request`).send({})).status).toBe(404);
+    expect(await getDb().collection('erms-messages').countDocuments({ 'from.username': { $in: USERNAMES } })).toBe(0);
   });
 });

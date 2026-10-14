@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Card, Empty, Modal, Space, Spin, Tag, Typography } from "antd";
+import { Alert, Card, Empty, Space, Spin, Tag, Typography } from "antd";
 import { CalendarOutlined, DisconnectOutlined, FolderOpenOutlined } from "@ant-design/icons";
 import { initializeSocket, getSocket } from "../../api/socketService";
 import NasFileExplorer from "../admin/developer/NasFileExplorer";
 import { API_BASE_URL } from "../../config/api";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCurrentUser } from "../../api/universeService";
+import { modal } from "../../shared/feedback";
 
 const { Paragraph, Text } = Typography;
 
@@ -21,6 +24,8 @@ const { Paragraph, Text } = Typography;
 // ---------------------------------------------------------------------------
 
 const StorageBrowser = () => {
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: fetchCurrentUser, staleTime: 5 * 60 * 1000, retry: false });
+  const isDeveloper = me?.role === "developer";
   const [state, setState] = useState({ loading: true, active: false, containers: [], error: null, reason: null, message: null, nextOpensAt: null });
 
   // Whether the NAS is offered changes under the page: the Developer flips a
@@ -76,7 +81,7 @@ const StorageBrowser = () => {
     // Once per outage, not on every poll.
     if (promptedFor.current === state.reason) return;
     promptedFor.current = state.reason;
-    Modal.info({
+    modal.info({
       title: "NAS files are not available right now",
       icon: bridgeDown ? <DisconnectOutlined /> : <CalendarOutlined />,
       content: (
@@ -172,6 +177,8 @@ const StorageBrowser = () => {
           endpoint="/api/storage"
           title="Shared files"
           initialContainer={state.containers[0].key}
+          // The Developer may download the ERMS documents from here.
+          allowDownload={isDeveloper}
         />
       )}
     </Space>

@@ -16,14 +16,10 @@ const records = require('../erms/controllers/recordController');
 //
 // The register lookups sit on an ERMS screen, so they require the ERMS domain.
 //
-// The documents behind the panel follow the Records Unit's rule (see
-// erms/services/accessRequestService.js): a Planning Admin or an Encoder
-// asks, the Records Unit approves for a period, and the approved person
-// views in the browser. Those four routes are the ERMS handlers mounted for
-// the UCDS domain — same province scope, same approval check, same audit
-// trail — because the people who ask are exactly the ones who do not hold
-// ERMS. The request is the one write UCDS has into ERMS, and it creates
-// nothing but a request.
+// The documents behind the panel follow the Records Unit's rule: the Records
+// Unit opens them here; anyone else asks in the E-Universe Document Portal
+// (modules/portal). The two file routes are the ERMS handlers mounted for the
+// UCDS domain — same province scope, same check, same audit trail.
 // ---------------------------------------------------------------------------
 
 const ucdsAccess = [authenticateSession, requireDomain(DOMAINS.UCDS)];
@@ -32,14 +28,6 @@ const serialParam = z.object({ serialNo: z.string().trim().min(3).max(60) });
 
 router.get('/api/ucds/records/:serialNo/file', ucdsAccess, requireNasActive, validate(serialParam, 'params'), records.getRecordFileInfo);
 router.get('/api/ucds/records/:serialNo/file/preview', ucdsAccess, requireNasActive, validate(serialParam, 'params'), records.viewRecordFile);
-router.post(
-  '/api/ucds/records/:serialNo/access-request',
-  ucdsAccess,
-  validate(serialParam, 'params'),
-  validate(z.object({ reason: z.string().trim().max(500).optional().nullable(), full: z.coerce.boolean().optional() })),
-  records.requestDocumentAccess
-);
-router.get('/api/ucds/access-requests', ucdsAccess, records.listAccessRequests);
 
 router.get(
   '/api/ucds/establishments/:sortKey/records',

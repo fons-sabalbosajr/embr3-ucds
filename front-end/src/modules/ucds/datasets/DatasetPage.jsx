@@ -23,7 +23,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { message } from "../../../shared/feedback";
+import { message, modal } from "../../../shared/feedback";
 import { fetchCurrentUser } from "../../../api/universeService";
 import { useYear } from "../../../context/YearContext";
 import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
@@ -272,7 +272,7 @@ const DatasetPage = () => {
   };
 
   const runImport = () => {
-    Modal.confirm({
+    modal.confirm({
       title: dataset?.imported ? `Re-import ${dataset.label}?` : `Import ${dataset?.label}?`,
       content: dataset?.imported
         ? "The rows currently in the application for this year are replaced by the spreadsheet in the data folder. Edits made here since the last import are lost."

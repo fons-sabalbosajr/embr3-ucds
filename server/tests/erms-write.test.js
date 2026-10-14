@@ -155,12 +155,21 @@ suite('ERMS writes', () => {
     });
 
     it('continues the desktop application’s numbering rather than restarting it', async () => {
+      // The highest serial on file before this one — on a copy of production,
+      // the migrated extract's (it ends at FSN-0018030) or later; on an empty
+      // test database, the ones this file has just made.
+      const [highest] = await collections.ermsRecords
+        .find({ serialNo: /^FSN-\d+$/ }, { projection: { serialNo: 1 } })
+        .sort({ serialNo: -1 })
+        .limit(1)
+        .toArray();
+      const before = highest ? Number(highest.serialNo.replace(/\D/g, '')) : 0;
+
       const agent = await signIn(WRITER);
       const res = await agent.post('/api/erms/records').send(newRecord());
       created.serials.push(res.body.record.serialNo);
       const n = Number(res.body.record.serialNo.replace(/\D/g, ''));
-      // The migrated extract ends at FSN-0018030.
-      expect(n).toBeGreaterThan(18030);
+      expect(n).toBeGreaterThan(before);
     });
 
     it('refuses a permit number already on another record', async () => {

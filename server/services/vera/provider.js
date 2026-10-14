@@ -60,7 +60,10 @@ const ENV = {
   masterEnabled: () => env('VERA_ENABLED', 'AUTOMATION_AGENT_ENABLED').toLowerCase() === 'true',
   maxTokens: (p) => num(env('VERA_MAX_TOKENS', `${PROVIDERS[p].prefix}_MAX_TOKENS`), 1024),
   temperature: (p) => num(env('VERA_TEMPERATURE', `${PROVIDERS[p].prefix}_TEMPERATURE`), 0.2),
-  timeoutMs: (p) => num(env('VERA_TIMEOUT_MS', `${PROVIDERS[p].prefix}_TIMEOUT_MS`), 30000),
+  // 60s: the current Claude models think before they answer, and 30s was
+  // too short for a long question — the chat fell back to the help library
+  // with "did not respond in time".
+  timeoutMs: (p) => num(env('VERA_TIMEOUT_MS', `${PROVIDERS[p].prefix}_TIMEOUT_MS`), 60000),
   userDailyLimit: () => num(env('VERA_USER_DAILY_LIMIT', 'AUTOMATION_AGENT_USER_LIMIT'), 20),
   dailyLimit: () => num(env('VERA_DAILY_LIMIT', 'AUTOMATION_AGENT_DAILY_LIMIT'), 0),
 };
@@ -78,7 +81,14 @@ function resolveKey(cfg) {
 const resolveModel = (cfg) => String(cfg?.model || '').trim() || PROVIDERS[resolveProvider(cfg)].defaultModel();
 const resolveMaxTokens = (cfg) => num(cfg?.maxTokens, ENV.maxTokens(resolveProvider(cfg)));
 const resolveTemperature = (cfg) => num(cfg?.temperature, ENV.temperature(resolveProvider(cfg)));
-const resolveTimeoutMs = (cfg) => num(cfg?.requestTimeoutMs, ENV.timeoutMs(resolveProvider(cfg)));
+// Never below 45s for a model that thinks by default: a setting saved when
+// 15–30s was enough would time every answer out.
+const resolveTimeoutMs = (cfg) => {
+  const ms = num(cfg?.requestTimeoutMs, ENV.timeoutMs(resolveProvider(cfg)));
+  // Gemini too: its budget is shared between the chosen model and the
+  // fallback (see completeGemini), and 30s left neither enough.
+  return resolveProvider(cfg) === 'gemini' || thinksByDefault(resolveModel(cfg)) ? Math.max(ms, 45000) : ms;
+};
 const resolveUserDailyLimit = (cfg) => num(cfg?.perUserDailyLimit, ENV.userDailyLimit());
 const resolveDailyLimit = (cfg) => num(cfg?.dailyLimit, ENV.dailyLimit());
 
@@ -157,7 +167,11 @@ function sanitizeError(err) {
     /abort|timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed|ENOTFOUND/i.test(raw)
   ) {
     out = { code: 'timeout', message: 'The assistant did not respond in time. Please try again.' };
-  } else if (err instanceof Anthropic.APIError && status >= 500) {
+  } else if (status === 503 || /high demand|overloaded/i.test(raw)) {
+    // Gemini's "This model is currently experiencing high demand" — it used
+    // to come out as "The assistant request failed", which said nothing.
+    out = { code: 'overloaded', message: 'The AI model is overloaded right now (the provider reports high demand). Try again shortly, or choose another model in VERA settings.' };
+  } else if (status >= 500) {
     out = { code: 'provider_error', message: 'The model provider had a problem. Please try again shortly.' };
   }
 
@@ -168,15 +182,26 @@ function sanitizeError(err) {
   return out;
 }
 
-async function completeAnthropic({ key, model, maxTokens, temperature, timeoutMs, system, prompt, signal }) {
-  const client = new Anthropic({ apiKey: key, timeout: timeoutMs, maxRetries: 1 });
+async function completeAnthropic({ key, model, maxTokens, temperature, timeoutMs, system, prompt, signal, documents = [] }) {
+  // No SDK retry: the caller's budget is one timeout long, so a retry after a
+  // slow first attempt could only be cut off — it made a timeout take twice
+  // as long to report.
+  const client = new Anthropic({ apiKey: key, timeout: timeoutMs, maxRetries: 0 });
   const params = {
     model,
     // Models that think by default spend part of the budget thinking; leave
     // room for it so the visible answer is not cut short.
-    max_tokens: thinksByDefault(model) ? Math.max(maxTokens, 4096) : maxTokens,
+    max_tokens: thinksByDefault(model) ? Math.max(maxTokens, 2048) : maxTokens,
     ...(system ? { system } : {}),
-    messages: [{ role: 'user', content: String(prompt || '') }],
+    // A document (a scan's first pages) goes before the question about it.
+    messages: [
+      {
+        role: 'user',
+        content: documents.length
+          ? [...documents.map((d) => ({ type: 'document', source: { type: 'base64', media_type: d.mimeType, data: d.data } })), { type: 'text', text: String(prompt || '') }]
+          : String(prompt || ''),
+      },
+    ],
     ...(acceptsSampling(model) ? { temperature } : {}),
     // A help answer is short and routine: low effort is the right setting.
     ...(acceptsEffort(model) ? { output_config: { effort: 'low' } } : {}),
@@ -211,14 +236,49 @@ async function completeAnthropic({ key, model, maxTokens, temperature, timeoutMs
 const GEMINI_URL = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
-async function completeGemini({ key, model, maxTokens, temperature, timeoutMs, system, prompt, signal }) {
+// The model VERA turns to when the chosen Gemini model is overloaded or too
+// slow. On 14 Oct 2026 gemini-3.8-flash answered "This model is currently
+// experiencing high demand" (503) or took up to five minutes, and every chat
+// fell back to the help library; gemini-2.5-flash answered in a second.
+const GEMINI_FALLBACK = () => env('GEMINI_FALLBACK_MODEL') || 'gemini-2.5-flash';
+const overloaded = (err) => err?.status === 503 || err?.status === 429 || err?.status === 500 || /high demand|overloaded|unavailable|try again later/i.test(String(err?.message || ''));
+const timedOut = (err) => err?.name === 'TimeoutError' || err?.name === 'AbortError' || /timeout|aborted/i.test(String(err?.message || ''));
+
+/**
+ * The chosen model first, with part of the time; when it is overloaded or
+ * does not answer in that time, the fallback model with the rest. A caller's
+ * own abort (the request cancelled) stops both.
+ */
+// A model that just failed is skipped for a while: while it is overloaded,
+// waiting out its share of the time on every message made each answer slow.
+const SKIP_MS = 10 * 60 * 1000;
+const skipped = new Map(); // model -> until
+
+async function completeGemini(args) {
+  const fallback = GEMINI_FALLBACK();
+  if (!fallback || fallback === args.model) return geminiOnce(args);
+  if ((skipped.get(args.model) || 0) > Date.now()) return geminiOnce({ ...args, model: fallback });
+  const started = Date.now();
+  const first = Math.max(8000, Math.round(args.timeoutMs * 0.45));
+  try {
+    return await geminiOnce({ ...args, timeoutMs: first });
+  } catch (err) {
+    if (args.signal?.aborted || !(overloaded(err) || timedOut(err))) throw err;
+    skipped.set(args.model, Date.now() + SKIP_MS);
+    const left = args.timeoutMs - (Date.now() - started);
+    if (left < 5000) throw err;
+    return geminiOnce({ ...args, model: fallback, timeoutMs: left });
+  }
+}
+
+async function geminiOnce({ key, model, maxTokens, temperature, timeoutMs, system, prompt, signal, documents = [] }) {
   const timeout = AbortSignal.timeout(timeoutMs);
   const res = await fetch(GEMINI_URL(model), {
     method: 'POST',
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: String(prompt || '') }] }],
+      contents: [{ role: 'user', parts: [...documents.map((d) => ({ inline_data: { mime_type: d.mimeType, data: d.data } })), { text: String(prompt || '') }] }],
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       generationConfig: {
         maxOutputTokens: maxTokens,
@@ -255,7 +315,12 @@ async function completeGemini({ key, model, maxTokens, temperature, timeoutMs, s
  * One completion, the same shape from either vendor.
  * @returns {Promise<{text, inputTokens, outputTokens, stopReason, provider, model}>}
  */
-async function complete(cfg, { system, prompt, maxTokens, signal } = {}) {
+/**
+ * `documents`: [{ mimeType, data (base64) }] for the model to read with the
+ * prompt — a PDF, for VERA's project type check. Both providers read a PDF
+ * directly, scanned pages included.
+ */
+async function complete(cfg, { system, prompt, maxTokens, signal, documents } = {}) {
   const provider = resolveProvider(cfg);
   const { key } = resolveKey(cfg);
   if (!key) {
@@ -272,6 +337,7 @@ async function complete(cfg, { system, prompt, maxTokens, signal } = {}) {
     system,
     prompt,
     signal,
+    documents: documents || [],
   };
   return provider === 'gemini' ? completeGemini(args) : completeAnthropic(args);
 }

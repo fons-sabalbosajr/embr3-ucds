@@ -40,7 +40,11 @@ const SuggestInput = ({ id, value, onChange, fetcher, queryKey, onPick, placehol
       label: (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <span style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{it.value}</span>
-          {it.count > 1 && <Typography.Text type="secondary" style={{ fontSize: 12, flex: "none" }}>{it.count}×</Typography.Text>}
+          {it.source === "register" ? (
+            <Typography.Text type="secondary" style={{ fontSize: 12, flex: "none" }}>register</Typography.Text>
+          ) : (
+            it.count > 1 && <Typography.Text type="secondary" style={{ fontSize: 12, flex: "none" }}>{it.count}×</Typography.Text>
+          )}
         </div>
       ),
     }));

@@ -91,6 +91,15 @@ async function send(user, { to, purpose, subject, details }) {
     deletedBy: [],
   };
   const { insertedId } = await collection().insertOne(doc);
+  // The recipient hears of it now — an administrator asked for full access
+  // to a Legal or Laboratory document, among others.
+  require('../../../services/notifier').notifyLater([recipient.username], {
+    kind: purpose === 'Request' ? 'erms-request-message' : 'erms-message',
+    tag: `message-${insertedId}`,
+    title: `${purpose === 'Request' ? 'Request' : 'Message'} from ${doc.from?.name || doc.from?.username || 'an ERMS user'}`,
+    body: doc.subject,
+    url: '/universe/erms/messages',
+  });
   return view({ _id: insertedId, ...doc }, user);
 }
 

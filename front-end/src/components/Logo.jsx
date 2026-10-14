@@ -1,6 +1,7 @@
 import React from "react";
 import "./logo.css";
-import embLogo from "../assets/UCDSInformation.png";
+// The Bureau's seal is E-Universe's official logo, as on the public pages.
+import embLogo from "../assets/emblogo.svg";
 
 const Logo = ({ theme, collapsed }) => {
   return (
@@ -8,7 +9,7 @@ const Logo = ({ theme, collapsed }) => {
       <div className="logo-icon-row">
         <img
           src={embLogo}
-          alt="logo"
+          alt="E-Universe — Environmental Management Bureau"
           className={`logo-icon-img${collapsed ? " collapsed" : ""}`}
         />
         {!collapsed && (

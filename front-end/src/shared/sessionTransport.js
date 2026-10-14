@@ -1,4 +1,4 @@
-import { getSessionToken, adoptSessionToken, isApiUrl, HEADER } from "./sessionToken";
+import { getSessionToken, isApiUrl, HEADER, NO_SESSION } from "./sessionToken";
 
 // ---------------------------------------------------------------------------
 // Attach this tab's session token to every request to the API.
@@ -10,11 +10,12 @@ import { getSessionToken, adoptSessionToken, isApiUrl, HEADER } from "./sessionT
 // confusion the token exists to end. In the browser axios sends through
 // XMLHttpRequest, so wrapping fetch and XMLHttpRequest covers all of it.
 //
+// A tab that has not signed in says so (`X-Session-Token: none`), and the
+// server answers it as signed out rather than by the browser's cookie — so a
+// new tab is never silently another tab's account (shared/sessionToken).
+//
 // Only requests to the API origin get the header. Anything else — Google
 // Maps, a CDN — is left exactly as it was.
-//
-// The same two hooks read the token the server offers a token-less tab in
-// its responses, so a freshly opened tab pins itself on its first call.
 // ---------------------------------------------------------------------------
 
 let installed = false;
@@ -27,17 +28,9 @@ export function installSessionTransport() {
   window.fetch = (input, init) => {
     const url = typeof input === "string" || input instanceof URL ? input : input?.url;
     if (!isApiUrl(url)) return originalFetch(input, init);
-    const token = getSessionToken();
-    let options = init;
-    if (token) {
-      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
-      headers.set(HEADER, token);
-      options = { ...init, headers };
-    }
-    return originalFetch(input, options).then((response) => {
-      adoptSessionToken(response.headers.get(HEADER));
-      return response;
-    });
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    headers.set(HEADER, getSessionToken() || NO_SESSION);
+    return originalFetch(input, { ...init, headers });
   };
 
   const { open, send } = XMLHttpRequest.prototype;
@@ -46,11 +39,7 @@ export function installSessionTransport() {
     return open.call(this, method, url, ...rest);
   };
   XMLHttpRequest.prototype.send = function patchedSend(...args) {
-    if (this.__euApiRequest) {
-      const token = getSessionToken();
-      if (token) this.setRequestHeader(HEADER, token);
-      this.addEventListener("load", () => adoptSessionToken(this.getResponseHeader(HEADER)));
-    }
+    if (this.__euApiRequest) this.setRequestHeader(HEADER, getSessionToken() || NO_SESSION);
     return send.apply(this, args);
   };
 }

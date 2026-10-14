@@ -1,26 +1,31 @@
 import { useState } from "react";
-import { Alert, Button, Card, Descriptions, Divider, Skeleton, Space, Table, Tag, Typography } from "antd";
-import { ArrowLeftOutlined, CloudUploadOutlined, EditOutlined } from "@ant-design/icons";
+import { Alert, Badge, Button, Card, Skeleton, Space, Table, Tabs, Tag, Tooltip, Typography } from "antd";
+import { CloudUploadOutlined, EditOutlined, FileTextOutlined, HistoryOutlined, PaperClipOutlined, ProfileOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { describeApiError, fetchUnitDocument } from "../api/ermsService";
 import DocumentPanel from "../../../shared/components/DocumentPanel";
+import { DetailHeader, Field, FieldGroup, Grid } from "../components/DetailParts";
 import { useUnits } from "./useUnits";
 import { formatValue, groupFields, unitTheme } from "./unitTheme";
 import UnitUploadModal from "./UnitUploadModal";
 import UnitScanModal from "./UnitScanModal";
-
-const { Title, Text } = Typography;
+import UnitHistoryPanel from "./UnitHistoryPanel";
 
 // ---------------------------------------------------------------------------
-// One Legal or Laboratory document: its fields as the unit's form groups
-// them, the scan (view only), and the other documents on the same docket.
+// One Legal or Laboratory document, laid out as a Records record is (the
+// same DetailParts, the same tabs): its fields as the unit's form groups
+// them, the scan (view only), its attachments (a Legal case keeps them
+// together, and files new ones from here), the other documents on the same
+// docket, and the document's history.
 //
 // On its own page (`/erms/:unit/documents/:serialNo`) or embedded in a dialog
 // over the document list (`unit` + `serialNo` + `embedded`), as Records
 // does. Embedded, a link to another document hands its serial to
 // `onOpenDocument` instead of navigating, so the dialog follows it.
 // ---------------------------------------------------------------------------
+
+const dateTime = (d) => (d ? new Date(d).toLocaleString() : "");
 
 const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = false, onOpenDocument }) => {
   const params = useParams();
@@ -39,106 +44,196 @@ const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = f
   const unitConfig = unitOf(unit);
   const [editing, setEditing] = useState(false);
   const [filingScan, setFilingScan] = useState(false);
+  const [attaching, setAttaching] = useState(false);
+  const [tab, setTab] = useState("details");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["erms", "unit", unit, "document", serialNo],
     queryFn: () => fetchUnitDocument(unit, serialNo),
   });
 
-  if (isLoading) return <Skeleton active paragraph={{ rows: 8 }} />;
-  if (error) return <Alert type="error" showIcon message={describeApiError(error, "Could not load the document.")} />;
+  if (isLoading) return <Skeleton active paragraph={{ rows: 12 }} />;
+  if (error) return <Alert type="error" showIcon message="Could not load the document" description={describeApiError(error)} />;
 
   const doc = data.document;
   const docType = unitConfig?.docTypes.find((t) => t.code === doc.docType);
-  const sections = groupFields(unit, docType?.fields || Object.keys(doc.fields || {}).map((key) => ({ key, label: key, type: "text" })));
+  const fields = docType?.fields || Object.keys(doc.fields || {}).map((key) => ({ key, label: key, type: "text" }));
+  const sections = groupFields(unit, fields);
+  const canFile = Boolean(unitConfig?.canFile);
+  // What the document is known by besides its serial, as the list shows it.
+  const known = (unit === "legal" ? doc.fields?.docketNo : doc.fields?.cocNo) || doc.serialNo;
+  const related = data.related || [];
+  const attachments = data.attachments || [];
+  // A case document takes attachments where the unit files them (Legal).
+  const takesAttachments = !doc.parentSerialNo && Boolean(unitConfig?.docTypes.some((t) => t.code === "attachment"));
+  const docColumns = [
+    { title: "Serial", dataIndex: "serialNo", render: (s) => docLink(s) },
+    { title: "Type", dataIndex: "docTypeLabel", render: (v, r) => <Tag color={theme.color}>{r.fields?.documentType || v || r.docType}</Tag> },
+    { title: "Uploaded", dataIndex: "createdAt", responsive: ["sm"], render: (v, r) => formatValue({ type: "date" }, r.document?.uploadedAt || v) },
+    { title: "File", dataIndex: ["document", "fileName"], ellipsis: true, responsive: ["md"] },
+  ];
 
-  return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      {/* Embedded, the dialog's close button sits in this row's top-right corner. */}
-      <Space style={{ width: "100%", justifyContent: "space-between", paddingRight: embedded ? 36 : 0 }} wrap>
-        <Space>
-          {!embedded && (
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/universe/erms/${unit}/documents`)}>
-              Documents
-            </Button>
-          )}
-          <Title level={4} style={{ margin: 0 }}>
-            <span style={{ color: theme.accent, marginRight: 8 }}>{theme.icon}</span>
-            {doc.serialNo}
-          </Title>
-          <Tag color={theme.color}>{doc.docTypeLabel || doc.docType}</Tag>
-          {doc.legacy && <Tag>from the desktop ERMS</Tag>}
+  const tabs = [
+    {
+      key: "details",
+      label: (
+        <Space size={6}>
+          <ProfileOutlined />
+          Details
         </Space>
-        {unitConfig?.canFile && (
-          <Space>
-            <Button icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>
-              {doc.document?.fileName ? "Replace scan" : "Upload scan"}
-            </Button>
-            <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              Edit details
-            </Button>
-          </Space>
-        )}
-      </Space>
-
-      <Card size="small" title={doc.title} style={{ borderTop: `3px solid ${theme.accent}` }}>
-        <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} bordered>
-          <Descriptions.Item label="Province">{doc.provinceLabel || "—"}</Descriptions.Item>
-          <Descriptions.Item label="Filed">{formatValue({ type: "date" }, doc.createdAt)} by {doc.createdBy || "—"}</Descriptions.Item>
-          <Descriptions.Item label="File">{doc.document?.fileName || "—"}</Descriptions.Item>
-          {doc.parentSerialNo && (
-            <Descriptions.Item label="Attached to">
-              {docLink(doc.parentSerialNo)}
-            </Descriptions.Item>
-          )}
-        </Descriptions>
-        {sections.map((section, i) => (
-          <div key={section.title || i}>
-            <Divider orientation="left" plain>{section.title || "Details"}</Divider>
-            <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }}>
+      ),
+      children: (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Grid>
+            <Field label="Title" value={doc.title} span />
+            <Field label="Document type" value={doc.docTypeLabel || doc.docType} />
+            <Field label="Serial" value={doc.serialNo} mono />
+            <Field label="Province" value={doc.provinceLabel || "Unfiled"} />
+          </Grid>
+          {sections.map((section, i) => (
+            <FieldGroup key={section.title || i} title={section.title}>
               {section.fields.map((f) => (
-                <Descriptions.Item key={f.key} label={f.label}>
-                  {formatValue(f, doc.fields?.[f.key])}
-                  {doc.fields?.[`${f.key}Raw`] && <Text type="warning" style={{ marginLeft: 6, fontSize: 12 }}>(as written: {doc.fields[`${f.key}Raw`]})</Text>}
-                </Descriptions.Item>
+                <Field
+                  key={f.key}
+                  label={f.label}
+                  value={doc.fields?.[f.key] == null || doc.fields[f.key] === "" ? null : formatValue(f, doc.fields[f.key])}
+                  warning={doc.fields?.[`${f.key}Raw`]}
+                  span={f.type === "textarea"}
+                />
               ))}
-            </Descriptions>
-          </div>
-        ))}
-      </Card>
-
-      <Card size="small" title="Scanned document">
-        {!doc.document?.fileName && unitConfig?.canFile && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="No scan is filed for this document"
-            action={<Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>Upload scan</Button>}
-          />
-        )}
-        <DocumentPanel serialNo={doc.serialNo} fileName={doc.document?.fileName} unit={unit} />
-      </Card>
-
-      {data.related?.length > 0 && (
-        <Card size="small" title={`Same docket — ${doc.fields?.docketNo}`}>
+            </FieldGroup>
+          ))}
+          {doc.parentSerialNo && (
+            <Alert type="info" showIcon message={<span>This is an attachment of {docLink(doc.parentSerialNo)}.</span>} />
+          )}
+        </Space>
+      ),
+    },
+    {
+      key: "document",
+      label: (
+        <Space size={6}>
+          <FileTextOutlined />
+          Document
+        </Space>
+      ),
+      children: (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Grid>
+            <Field label="File name" value={doc.document?.fileName} path span />
+            <Field label="Uploaded" value={[dateTime(doc.document?.uploadedAt || doc.createdAt), doc.document?.uploadedBy || doc.createdBy].filter(Boolean).join(" by ")} />
+            {doc.legacy && <Field label="From" value={`the desktop ERMS (${doc.legacy.table})`} />}
+            {/* The API sends the path to developers only. */}
+            {doc.document?.sharePath && <Field label="Location on the share" value={doc.document.sharePath} mono path span />}
+          </Grid>
+          {!doc.document?.fileName && canFile && (
+            <Alert
+              type="warning"
+              showIcon
+              message="No scan is filed for this document"
+              action={<Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>Upload scan</Button>}
+            />
+          )}
+          <DocumentPanel serialNo={doc.serialNo} fileName={doc.document?.fileName} unit={unit} />
+          {doc.document?.fileName && canFile && (
+            <div>
+              <Button icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>Replace scan</Button>
+            </div>
+          )}
+        </Space>
+      ),
+    },
+    takesAttachments && {
+      key: "attachments",
+      label: (
+        <Space size={6}>
+          <PaperClipOutlined />
+          Attachments
+          {attachments.length > 0 && <Badge count={attachments.length} size="small" color={theme.accent} />}
+        </Space>
+      ),
+      children: (
+        <Card
+          size="small"
+          title={`Attachments (${attachments.length})`}
+          extra={
+            canFile && (
+              <Button size="small" icon={<PaperClipOutlined />} onClick={() => setAttaching(true)}>
+                Add attachment
+              </Button>
+            )
+          }
+        >
+          {attachments.length ? (
+            <Table rowKey="id" size="small" pagination={false} dataSource={attachments} columns={docColumns} />
+          ) : (
+            <Typography.Text type="secondary">An inspection report, a complaint, a letter or a copy filed with this case appears here, numbered after it.</Typography.Text>
+          )}
+        </Card>
+      ),
+    },
+    related.length > 0 && {
+      key: "docket",
+      label: (
+        <Space size={6}>
+          <ShareAltOutlined />
+          Same docket
+          <Badge count={related.length} size="small" color={theme.accent} />
+        </Space>
+      ),
+      children: (
+        <Card size="small" title={`Docket ${doc.fields?.docketNo}`}>
           <Table
             rowKey="id"
             size="small"
             pagination={false}
-            dataSource={data.related}
-            columns={[
-              { title: "Serial", dataIndex: "serialNo", render: (s) => docLink(s) },
-              { title: "Type", dataIndex: "docTypeLabel", render: (v, r) => <Tag color={theme.color}>{v || r.docType}</Tag> },
-              { title: "Filed", dataIndex: "createdAt", render: (v) => formatValue({ type: "date" }, v) },
-              { title: "File", dataIndex: ["document", "fileName"], ellipsis: true },
-            ]}
+            dataSource={related}
+            columns={docColumns}
           />
         </Card>
-      )}
+      ),
+    },
+    {
+      key: "history",
+      label: (
+        <Space size={6}>
+          <HistoryOutlined />
+          History
+        </Space>
+      ),
+      children: <UnitHistoryPanel unit={unit} serialNo={doc.serialNo} fields={fields} />,
+    },
+  ].filter(Boolean);
+
+  return (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <DetailHeader
+        unit={unit}
+        title={known}
+        typeLabel={doc.docTypeLabel || doc.docType}
+        serialNo={doc.serialNo}
+        tags={
+          doc.legacy && (
+            <Tooltip title="Filed in the desktop ERMS and migrated">
+              <Tag>desktop</Tag>
+            </Tooltip>
+          )
+        }
+        onBack={embedded ? null : () => navigate(`/universe/erms/${unit}/documents`)}
+        actions={
+          canFile && (
+            <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+          )
+        }
+      />
+
+      <Tabs activeKey={tab} onChange={setTab} items={tabs} />
 
       <UnitUploadModal unit={unit} unitConfig={unitConfig} open={editing} document={doc} onClose={() => setEditing(false)} />
       <UnitScanModal unit={unit} unitConfig={unitConfig} open={filingScan} document={doc} onClose={() => setFilingScan(false)} />
+      {takesAttachments && <UnitUploadModal unit={unit} unitConfig={unitConfig} open={attaching} attachTo={doc} onClose={() => setAttaching(false)} />}
     </Space>
   );
 };

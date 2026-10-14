@@ -36,6 +36,42 @@ export const getVeraUsage = async () => (await client.get("/usage")).data;
 /** Metadata only — no question or answer is ever stored, so none can be listed. */
 export const getVeraLogs = async (params) => (await client.get("/logs", { params })).data;
 
+// VERA's data corrections (the Developer's): the latest report on the Records
+// project types, a fresh check, and applying or undoing what it proposes.
+export const getCorrections = async () => (await client.get("/corrections")).data;
+export const getCorrectionsPending = async () => (await client.get("/corrections/pending")).data.pending;
+export const runCorrectionsCheck = async () => (await client.post("/corrections/scan")).data;
+export const applyCorrections = async ({ reportId, ids, all }) =>
+  (await client.post(`/corrections/${reportId}/apply`, all ? { all: true } : { ids })).data;
+export const undoCorrection = async ({ reportId, proposalId }) =>
+  (await client.post(`/corrections/${reportId}/undo`, { proposalId })).data;
+/** "Let VERA fix it": a fresh check, and every correction she is certain of applied. */
+export const autoFixCorrections = async () => (await client.post("/corrections/auto-fix", null, { timeout: 5 * 60 * 1000 })).data;
+
+// VERA's serial number check across Records, Legal Services and Laboratory.
+export const getSerialCheck = async () => (await client.get("/serials")).data.report;
+export const runSerialCheck = async () => (await client.post("/serials/scan")).data.report;
+export const fixSerials = async () => (await client.post("/serials/fix")).data;
+
+// VERA's check of each record's project type against its document.
+export const getProjectTypeCheck = async () => (await client.get("/project-types")).data;
+export const saveProjectTypeSettings = async (settings) => (await client.put("/project-types/settings", settings)).data;
+// One model call per document read: allow the time.
+export const runProjectTypeCheck = async () => (await client.post("/project-types/scan", null, { timeout: 15 * 60 * 1000 })).data;
+export const applyProjectTypes = async ({ serialNos, all }) => (await client.post("/project-types/apply", all ? { all: true } : { serialNos })).data;
+export const settleProjectType = async ({ serialNo, action }) => (await client.post(`/project-types/${encodeURIComponent(serialNo)}/${action}`)).data;
+
+// VERA's register links (the Developer's): records in the Document Library not
+// linked to the central register, and the links she proposes for them.
+export const getRegisterLinks = async () => (await client.get("/register-links")).data;
+export const getRegisterLinksPending = async () => (await client.get("/register-links/pending")).data.pending;
+// Reading with the AI model can take a minute or two.
+export const runRegisterLinksCheck = async () => (await client.post("/register-links/scan", null, { timeout: 5 * 60 * 1000 })).data;
+export const applyRegisterLinks = async ({ reportId, ids, all }) =>
+  (await client.post(`/register-links/${reportId}/apply`, all ? { all: true } : { ids })).data;
+export const undoRegisterLink = async ({ reportId, proposalId }) =>
+  (await client.post(`/register-links/${reportId}/undo`, { proposalId })).data;
+
 /**
  * A router path as the coarse screen key the server's PAGE_LABELS knows, so
  * VERA can tailor its directions. Never a record id or a query string.
@@ -43,7 +79,8 @@ export const getVeraLogs = async (params) => (await client.get("/logs", { params
 export const pageKeyFromPath = (pathname) => {
   const p = String(pathname || "").toLowerCase();
   const rules = [
-    // The sign-in pages first: they are the public surface.
+    // The public pages first. The Document Portal has VERA as its own guide.
+    [/\/document-portal\/?$/, "document-portal"],
     [/\/forgot-password\/?$/, "forgot-password"],
     [/\/reset-password\/?$/, "reset-password"],
     [/\/register\/?$/, "register"],
@@ -51,7 +88,7 @@ export const pageKeyFromPath = (pathname) => {
     [/select-year/, "year-select"],
     [/\/erms\/records\/[^/]+/, "record-detail"],
     [/\/erms\/records/, "document-library"],
-    [/\/erms\/access-requests/, "access-requests"],
+    [/\/erms\/portal-requests/, "portal-desk"],
     [/\/erms\/archive/, "archive"],
     [/\/erms\/upload-tally/, "upload-tally"],
     [/\/erms\/legal\/documents/, "legal-documents"],

@@ -1,6 +1,7 @@
 // src/api/socketService.js
 import { io } from "socket.io-client";
 import { SOCKET_URL } from "../config/api";
+import { getSessionToken } from "../shared/sessionToken";
 let socket = null;
 
 export const initializeSocket = (options = {}) => {
@@ -17,7 +18,17 @@ export const initializeSocket = (options = {}) => {
   // WebSocket first: one long-lived connection rather than long-polling
   // requests every few seconds. Polling stays as the fallback for a network
   // that blocks WebSockets.
-  socket = io(SOCKET_URL, { withCredentials: true, transports: ["websocket", "polling"], ...options });
+  // The tab's own sign-in (shared/sessionToken), read on every (re)connect,
+  // so notices meant for this account reach this tab and no other account's
+  // (server/services/notifier.js). A tab without one falls back to the cookie.
+  socket = io(SOCKET_URL, {
+    withCredentials: true,
+    transports: ["websocket", "polling"],
+    // perTab: with no token this tab is signed out — the server must not
+    // fall back to the browser's cookie, which is another tab's account.
+    auth: (cb) => cb({ token: getSessionToken(), perTab: true }),
+    ...options,
+  });
 
   socket.on("connect", () => {
     //console.log("[SocketService] Connected to socket server");

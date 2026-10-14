@@ -14,13 +14,13 @@ const { getDb, connectToMongo } = require('../../../config/db');
 const config = require('../services/configService');
 const lookups = require('../services/lookupService');
 const units = require('../services/unitDocumentService');
-const messages = require('../services/messageService');
 const filing = require('../services/filingService');
 const settings = require('../services/unitSettingsService');
 const dockets = require('../services/docketService');
 const tally = require('../services/uploadTallyService');
 const { streamInline } = require('../services/streamFile');
-const { PDFDocument } = require('pdf-lib');
+// The Document Portal's audit entries name this collection (modules/portal).
+const PORTAL_COLLECTION = 'portal-requests';
 
 // ---------------------------------------------------------------------------
 // The ERMS units — Legal Services and Laboratory documents, the upload, and
@@ -92,6 +92,15 @@ async function getDocument(req, res, next) {
   }
 }
 
+/** A document's history — the Legal and Laboratory counterpart of a record's Tracking panel. */
+async function documentHistory(req, res, next) {
+  try {
+    res.json(await units.history(await principalOf(req), req.params.unit, req.params.serialNo));
+  } catch (error) {
+    next(error);
+  }
+}
+
 // --- the folder picker ------------------------------------------------------------
 //
 // The desktop system had the clerk choose or make the project folder on the
@@ -140,6 +149,98 @@ const nasFailure = (res, result) => {
   const [status, code, message] = NAS_FAILURES[result.reason] || [502, 'NAS_ERROR', 'The share could not be changed.'];
   return res.status(status).json({ code, message });
 };
+
+// ---------------------------------------------------------------------------
+// The folder browser on the upload forms — the desktop ERMS's own step: the
+// clerk opens folders on their unit's share (Records, Legal or Laboratory,
+// by the account), makes one where they need it, and files the scan there.
+// Paths are relative to the unit's root; nothing above the root is
+// reachable, and only the unit's own staff may look.
+// ---------------------------------------------------------------------------
+
+async function browseLevel(req, res) {
+  const user = await principalOf(req);
+  const unit = req.params.unit;
+  if (!canFileIn(user, unit)) {
+    res.status(403).json({ code: 'UNIT_WRITE_FORBIDDEN', message: "Only the unit's own staff file its documents." });
+    return null;
+  }
+  const unitCfg = await config.unit(unit);
+  if (!unitCfg) {
+    res.status(404).json({ code: 'UNIT_UNKNOWN', message: 'Unknown unit.' });
+    return null;
+  }
+  const rawPath = req.query.path ?? req.body?.path ?? '';
+  const path = rawPath ? nas.safeRelativePath(rawPath) : '';
+  const dir = filing.underRoot(unitCfg, path);
+  if (path === null || !dir) {
+    res.status(400).json({ code: 'BAD_FOLDER', message: 'That folder cannot be opened.' });
+    return null;
+  }
+  return { user, unit, unitCfg, path, dir };
+}
+
+/** The folders inside one folder of the unit's share, and where the layout would file. */
+async function browseFolders(req, res, next) {
+  try {
+    const level = await browseLevel(req, res);
+    if (!level) return undefined;
+    const listing = await nas.listDirectory(level.dir, level.unitCfg.container);
+    if (!listing.ok && listing.reason !== 'missing') return nasFailure(res, listing);
+    const folders = listing.ok
+      ? listing.entries.filter((e) => e.type === 'directory').map((e) => e.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      : [];
+    const rootName = String(level.unitCfg.folder.root || '').split(/[\\/]+/).filter(Boolean).pop() || level.unitCfg.label;
+    return res.json({
+      unit: level.unit,
+      rootName,
+      path: level.path,
+      exists: listing.ok,
+      folders,
+      // Where the form's values would file it, so the browser can open there.
+      standard: req.query.province ? filing.standardLevel(level.unitCfg, { province: req.query.province, date: req.query.date }) : null,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Make a folder inside one folder of the unit's share. */
+async function makeBrowseFolder(req, res, next) {
+  try {
+    const level = await browseLevel(req, res);
+    if (!level) return undefined;
+    const name = nas.safeName(req.body?.name, 120);
+    if (!name || /^[. ]/.test(name)) return res.status(400).json({ code: 'BAD_NAME', message: 'Give the folder a name (letters, numbers, spaces).' });
+    const made = await nas.createDirectory(level.unitCfg.container, `${level.dir}\\${name}`);
+    if (!made.ok) return nasFailure(res, made);
+    await recordFileEvent(req, { operation: 'folder-create', containerKey: level.unitCfg.container, fileName: made.sharePath, success: true });
+    return res.status(made.existed ? 200 : 201).json({ folder: name, path: level.path ? `${level.path}\\${name}` : name, existed: made.existed === true });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * Remove a folder from the unit's share — one made by mistake on the upload
+ * form. Empty folders only: the share refuses one with anything in it
+ * (FOLDER_NOT_EMPTY), so no scan can be lost this way. Never the unit's
+ * root.
+ */
+async function deleteBrowseFolder(req, res, next) {
+  try {
+    const level = await browseLevel(req, res);
+    if (!level) return undefined;
+    if (!level.path) return res.status(400).json({ code: 'BAD_FOLDER', message: "The unit's own top folder cannot be removed." });
+    const removed = await nas.removeDirectory(level.unitCfg.container, level.dir);
+    if (!removed.ok) return nasFailure(res, removed);
+    await recordFileEvent(req, { operation: 'folder-delete', containerKey: level.unitCfg.container, fileName: removed.sharePath, success: true });
+    const parts = level.path.split('\\');
+    return res.json({ folder: parts[parts.length - 1], path: level.path, parent: parts.slice(0, -1).join('\\') });
+  } catch (error) {
+    return next(error);
+  }
+}
 
 /** The folders at the filing level for a province and date, and where they are. */
 async function listFolders(req, res, next) {
@@ -274,9 +375,20 @@ async function unitActivity(req, res, next) {
     await connectToMongo();
 
     // NAS events name the container; application events name the ERMS domain.
+    // The Document Portal serves the Records Unit's scans, so its requests,
+    // decisions and views are in the Records Unit's log and no other unit's.
+    // Each subsystem's log is its own: an application event belongs to the
+    // unit whose screens made it (its request path). Legal's log used to
+    // carry every ERMS event — the Records Unit's uploads and edits among them.
+    const otherUnits = /^\/api\/erms\/units\/(legal|laboratory)(\/|$)/;
     const filter = {
       timestamp: { $gte: since },
-      $or: [{ domain: 'nas', container: unit }, { domain: 'erms' }],
+      $or: [
+        { domain: 'nas', container: unit },
+        unit === 'records'
+          ? { domain: 'erms', path: { $not: otherUnits } }
+          : { domain: 'erms', targetCollection: { $ne: PORTAL_COLLECTION }, path: new RegExp(`^/api/erms/units/${unit}(/|$)`) },
+      ],
     };
     if (q) {
       const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -302,11 +414,15 @@ async function unitActivity(req, res, next) {
       ...rows.map((r) => ({
         id: String(r._id),
         at: r.timestamp,
-        who: r.username || null,
+        // A Document Portal requester has no account: the name they gave.
+        who:
+          r.username ||
+          (r.targetCollection === PORTAL_COLLECTION && r.changes?.requesterName ? `${r.changes.requesterName} (Document Portal)` : null) ||
+          (String(r.operation || '').startsWith('portal-') ? 'Document Portal visitor' : null),
         source: r.domain === 'nas' ? 'document' : 'application',
         action: r.operation || r.actionType || null,
         label: r.actionLabel || r.operation || r.actionType || null,
-        serialNo: r.serialNo || r.documentId || null,
+        serialNo: r.serialNo || r.changes?.serialNo || r.documentId || null,
         fileName: r.fileName || null,
         success: r.success !== false,
         detail: r.detail || null,
@@ -367,7 +483,7 @@ async function createDocument(req, res, next) {
     } catch {
       return res.status(400).json({ code: 'BAD_FIELDS', message: 'The form values could not be read.' });
     }
-    const input = { docType: req.body?.docType, province: req.body?.province, parentSerialNo: req.body?.parentSerialNo, folder: req.body?.folder, subfolder: req.body?.subfolder, fields };
+    const input = { docType: req.body?.docType, province: req.body?.province, parentSerialNo: req.body?.parentSerialNo, folder: req.body?.folder, subfolder: req.body?.subfolder, targetPath: req.body?.targetPath, fields };
     const document = await units.create(user, req.params.unit, input, req.file);
     await recordFileEvent(req, {
       operation: 'document-upload',
@@ -387,6 +503,18 @@ async function createDocument(req, res, next) {
       changes: { unit: document.unit, docType: document.docType, province: document.province, fileName: document.document.fileName },
       includeBody: false,
     });
+    // On the case's own History too: an attachment filed against it.
+    if (document.parentSerialNo) {
+      await audit.record(req, {
+        domain: DOMAINS.ERMS,
+        action: 'attachment-filed',
+        label: `attachment ${document.serialNo} filed`,
+        collection: units.COLLECTION,
+        documentId: document.parentSerialNo,
+        changes: { attachment: document.serialNo, fileName: document.document.fileName },
+        includeBody: false,
+      });
+    }
     res.status(201).json({ document });
   } catch (error) {
     if (error.code === 'VALIDATION') return res.status(400).json({ code: error.code, message: error.message, errors: error.errors });
@@ -396,13 +524,15 @@ async function createDocument(req, res, next) {
 
 async function updateDocument(req, res, next) {
   try {
-    const document = await units.update(await principalOf(req), req.params.unit, req.params.serialNo, req.body || {});
+    const { document, changes } = await units.update(await principalOf(req), req.params.unit, req.params.serialNo, req.body || {});
     await audit.record(req, {
       domain: DOMAINS.ERMS,
       action: 'document-update',
       label: 'document metadata changed',
       collection: units.COLLECTION,
       documentId: document.serialNo,
+      changes,
+      includeBody: false,
     });
     res.json({ document });
   } catch (error) {
@@ -421,6 +551,7 @@ async function attachDocumentFile(req, res, next) {
       replace: String(req.body?.replace || ''),
       folder: req.body?.folder || null,
       subfolder: req.body?.subfolder || null,
+      targetPath: req.body?.targetPath || null,
     });
     const { document, previous, container } = result;
     await recordFileEvent(req, {
@@ -487,96 +618,6 @@ async function resolveUnitFile(req, res) {
   return { doc, file, containerKey };
 }
 
-// ---------------------------------------------------------------------------
-// Asking for the whole of a document the viewer shows only in part.
-//
-// The unit's own staff are limited too (Settings › PDF viewing), and there
-// is no inbox for a member of staff asking about their own unit's document.
-// So the request goes to the administrators — the Developer and
-// Administrator accounts, who see every page and can change the setting —
-// as an ERMS message, purpose "Request". (Someone outside the Records Unit
-// viewing by approval asks the Records Unit instead, through its inbox.)
-// Once a day per document per person, so the button cannot flood an inbox.
-// ---------------------------------------------------------------------------
-
-const fullRequestSubject = (serialNo) => `Full access request: ${serialNo}`;
-
-/** When this person last asked for the whole of this document (within a day), or null. */
-async function fullRequestAt(user, serialNo) {
-  if (!user?.username) return null;
-  const last = await getDb()
-    .collection(messages.COLLECTION)
-    .findOne({ 'from.username': user.username, subject: fullRequestSubject(serialNo), sentAt: { $gte: new Date(Date.now() - 86400000) } }, { sort: { sentAt: -1 }, projection: { sentAt: 1 } });
-  return last?.sentAt || null;
-}
-
-/** The Developer and Administrator accounts that work in ERMS: who a full-access request goes to. */
-async function administrators(exceptUsername) {
-  const rows = await getDb()
-    .collection('users')
-    .find({ username: { $ne: exceptUsername }, permission: { $in: ['developer', 'admin'] } }, { projection: { username: 1, permission: 1, domains: 1, ermsUnit: 1 } })
-    .toArray();
-  return rows.filter((u) => canAccessAllYears(u) && (u.domains || []).includes(DOMAINS.ERMS));
-}
-
-/** Send the request; responds for the route. */
-async function askAdministrators(req, res, { user, serialNo, title, fileName, unitLabel }) {
-  const already = await fullRequestAt(user, serialNo);
-  if (already) return res.json({ sent: 0, already: true, at: already });
-  const admins = await administrators(user.username);
-  if (!admins.length) {
-    return res.status(409).json({ code: 'NO_RECIPIENT', message: 'There is no administrator to send the request to. Please tell the system developer.' });
-  }
-  const reason = String(req.body?.reason || '').trim().slice(0, 500);
-  const details = [
-    `${user.name || user.username} (${unitLabel}) asks to see every page of ${serialNo}${title ? ` (${title})` : ''}${fileName ? `, file ${fileName}` : ''}.`,
-    "The viewer shows them only the first pages under the unit's PDF viewing setting.",
-    reason ? `Their reason: ${reason}` : '',
-    "To grant it: Settings › PDF viewing for the unit (raise the limit, or let the unit's own staff see every page), or open the document with them.",
-  ].filter(Boolean).join('\n\n');
-  let sent = 0;
-  for (const to of admins.slice(0, 15)) {
-    try {
-      await messages.send(user, { to: to.username, purpose: 'Request', subject: fullRequestSubject(serialNo), details });
-      sent += 1;
-    } catch {
-      /* one recipient failing does not stop the others */
-    }
-  }
-  await audit.record(req, { domain: DOMAINS.ERMS, action: 'access-request', label: `full access to ${serialNo} requested from the administrators`, includeBody: false }).catch(() => {});
-  return res.json({ sent, to: 'the administrators', at: new Date() });
-}
-
-/** A Legal or Laboratory document. */
-async function requestFullAccess(req, res, next) {
-  try {
-    const user = await principalOf(req);
-    const { unit, serialNo } = req.params;
-    if (!canSeeUnit(user, unit)) return res.status(403).json({ code: 'UNIT_FORBIDDEN', message: 'This unit is not part of your account.' });
-    const doc = await getDb().collection(units.COLLECTION).findOne({ unit, serialNo }, { projection: { serialNo: 1, title: 1, 'document.fileName': 1 } });
-    if (!doc) return res.status(404).json({ code: 'DOCUMENT_NOT_FOUND', message: 'Document not found.' });
-    return askAdministrators(req, res, { user, serialNo, title: doc.title, fileName: doc.document?.fileName, unitLabel: ERMS_UNIT_LABELS[unit] || unit });
-  } catch (error) {
-    return next(error);
-  }
-}
-
-/** A Records document, asked by the Records Unit's own staff. */
-async function requestRecordFullAccess(req, res, next) {
-  try {
-    const user = await principalOf(req);
-    if (!canSeeUnit(user, 'records')) {
-      return res.status(403).json({ code: 'ASK_THE_RECORDS_UNIT', message: 'Ask the Records Unit for the whole document from its viewer.' });
-    }
-    const serialNo = req.params.serialNo;
-    const rec = await getDb().collection('erms-records').findOne({ serialNo }, { projection: { serialNo: 1, projectTitle: 1, 'document.fileName': 1 } });
-    if (!rec) return res.status(404).json({ code: 'RECORD_NOT_FOUND', message: 'Record not found.' });
-    return askAdministrators(req, res, { user, serialNo, title: rec.projectTitle, fileName: rec.document?.fileName, unitLabel: ERMS_UNIT_LABELS.records || 'Records Unit' });
-  } catch (error) {
-    return next(error);
-  }
-}
-
 async function getDocumentFileInfo(req, res, next) {
   try {
     const resolved = await resolveUnitFile(req, res);
@@ -590,7 +631,7 @@ async function getDocumentFileInfo(req, res, next) {
       previewable: file.previewable,
       modifiedAt: file.modifiedAt,
       downloadable: false,
-      access: { reason: 'unit', expiresAt: null, fullAccessRequestedAt: await fullRequestAt(await principalOf(req), doc.serialNo) },
+      access: { reason: 'unit', expiresAt: null },
       // The unit's viewing rules (Settings › ERMS › PDF viewing / Data
       // privacy): only the unit's own staff see these documents, so a page
       // limit applies only when the unit applied it to itself.
@@ -607,7 +648,7 @@ async function viewDocumentFile(req, res, next) {
     if (!resolved) return undefined;
     const { doc, file, containerKey } = resolved;
     const viewing = await unitViewingRules(req.params.unit, await principalOf(req));
-    const range = /^bytes=(d*)-(d*)$/.exec(req.headers.range || '');
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
     if (viewing.logViews && (!range || range[1] === '' || range[1] === '0')) {
       await recordFileEvent(req, { operation: 'document-view', serialNo: doc.serialNo, containerKey, fileName: file.fileName, success: true, bytes: file.size });
     }
@@ -631,31 +672,14 @@ async function unitViewingRules(unit, user) {
     pageLimit: limited ? cfg.pdfViewing.previewPageLimit : 0,
     blurWithheldPages: cfg.pdfViewing.blurWithheldPages,
     hideToolbar: cfg.pdfViewing.hideToolbar,
-    watermark: cfg.privacy.watermarkViewer ? `${user?.name || user?.username || 'viewer'} · ${new Date().toLocaleDateString()}` : null,
+    watermark: cfg.privacy.watermarkViewer ? require('../services/watermark').watermarkText() : null,
     logViews: cfg.auditing.logViews,
   };
 }
 
 /** The PDF cut to its first N pages (pdf-lib), page counts in headers; see recordController for the same. */
 async function streamPageLimited(res, file, pageLimit) {
-  const whole = await new Promise((resolve, reject) => {
-    const chunks = [];
-    nas.openStream(file.resolved).on('data', (c) => chunks.push(c)).on('end', () => resolve(Buffer.concat(chunks))).on('error', reject);
-  });
-  let out = whole;
-  let total = null;
-  try {
-    const src = await PDFDocument.load(whole, { ignoreEncryption: true });
-    total = src.getPageCount();
-    if (total > pageLimit) {
-      const cut = await PDFDocument.create();
-      const pages = await cut.copyPages(src, Array.from({ length: pageLimit }, (_, i) => i));
-      for (const p of pages) cut.addPage(p);
-      out = Buffer.from(await cut.save());
-    }
-  } catch (err) {
-    console.warn('PDF page limit not applied:', err.message);
-  }
+  const { out, total } = await require('../services/streamFile').pageLimitedPdf(file, pageLimit);
   const safeName = file.fileName.replace(/["\\]/g, '_');
   res.setHeader('Content-Type', file.contentType);
   res.setHeader('Content-Disposition', `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
@@ -865,6 +889,7 @@ module.exports = {
   listDocuments,
   suggest,
   getDocument,
+  documentHistory,
   createDocument,
   updateDocument,
   attachDocumentFile,
@@ -879,9 +904,9 @@ module.exports = {
   unitDuplicateCheck,
   getDocumentFileInfo,
   viewDocumentFile,
-  requestFullAccess,
-  requestRecordFullAccess,
-  fullRequestAt,
+  browseFolders,
+  makeBrowseFolder,
+  deleteBrowseFolder,
   getConfig,
   saveConfig,
   resetConfig,

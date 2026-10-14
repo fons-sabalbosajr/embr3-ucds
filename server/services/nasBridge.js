@@ -49,7 +49,7 @@ const DEFAULTS = {
   intervalSec: 30,
   timeoutMs: 4000,
   offlineMessage:
-    'The office computer that connects E-Universe to the file storage is turned off right now — after office hours, or because of a power interruption. Scanned documents will open again once it is back on. Everything else keeps working.',
+    'E-Universe cannot reach the office file storage right now. The usual causes: the office computer that connects to it is turned off (after office hours or a power interruption), the office internet is down, or the computer running E-Universe has lost its own connection. Scanned documents will open again once the connection is back; everything else keeps working.',
 };
 
 // Said when the NAS itself does not answer — with no bridge configured, or

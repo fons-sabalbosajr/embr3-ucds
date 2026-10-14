@@ -247,6 +247,9 @@ describe('attachments to a record', () => {
     created.records.push(att.serialNo);
     expect(att.serialNo).toMatch(new RegExp(`^${parent.serialNo} Att-\\d{5}$`));
     expect(att.attachmentNo).toMatch(/^Att-\d{5}$/);
+    // Above the desktop register's last number, Att-00098: 61 of its
+    // attachments were never linked to a record but keep their numbers.
+    expect(Number(att.attachmentNo.slice(4))).toBeGreaterThan(98);
     expect(att.isAttachment).toBe(true);
     expect(att.location.city).toBe('Balanga');
 

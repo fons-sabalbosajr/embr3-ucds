@@ -2,15 +2,15 @@ import axios from "axios";
 import { API_BASE } from "../../config/api";
 
 // ---------------------------------------------------------------------------
-// A record's scanned document: where it is served from, how to ask to see
-// it, how to file one.
+// A record's scanned document: where it is served from, and how to file one.
+// (Asking to see one is done in the E-Universe Document Portal.)
 //
 // Shared rather than ERMS-owned because two domains open the same document
 // under the same rule: the Records Unit views from the records register, and
 // a Planning Admin or Encoder asks from the establishment panel on a UCDS
 // screen. Each reaches it through the route its own domain holds
 // (`domain`: "erms" or "ucds"); the server applies the same province scope,
-// the same approval check and the same audit trail either way.
+// the same check and the same audit trail either way.
 // ---------------------------------------------------------------------------
 
 const prefix = (domain) => `${API_BASE}/${domain === "ucds" ? "ucds" : "erms"}`;
@@ -23,32 +23,6 @@ export const recordFileBase = (serialNo, { domain = "erms" } = {}) =>
 export const unitFileBase = (unit, serialNo) =>
   `${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/file`;
 
-/** Ask the Records Unit to open one record's document for the caller. */
-export const requestDocumentAccess = async ({ serialNo, reason, full, domain = "erms" }) =>
-  (
-    await axios.post(
-      `${prefix(domain)}/records/${encodeURIComponent(serialNo)}/access-request`,
-      { reason, full },
-      { withCredentials: true }
-    )
-  ).data;
-
-/** Ask the administrators for every page of a record (the Records Unit's own staff). */
-export const requestRecordFullAccess = async ({ serialNo, reason }) =>
-  (
-    await axios.post(`${API_BASE}/erms/records/${encodeURIComponent(serialNo)}/full-access-request`, { reason }, { withCredentials: true })
-  ).data;
-
-/** Ask the administrators for every page of a Legal or Laboratory document. */
-export const requestUnitFullAccess = async ({ unit, serialNo, reason }) =>
-  (
-    await axios.post(
-      `${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/full-access-request`,
-      { reason },
-      { withCredentials: true }
-    )
-  ).data;
-
 /**
  * File a scan against a record (Records Unit). `replace`: absent or
  * 'missing' for a record without a scan; 'keep' or 'delete' to re-upload
@@ -56,14 +30,19 @@ export const requestUnitFullAccess = async ({ unit, serialNo, reason }) =>
  * `folder`, `subfolder`: the project folder, and the folder inside it,
  * chosen on the form, if any.
  */
-export const attachRecordFile = async ({ serialNo, file, replace, folder, subfolder }) => {
+/** axios's upload progress as a whole percentage, for the upload dialogs' bar. */
+const progressOf = (onProgress) =>
+  onProgress ? { onUploadProgress: (e) => e.total && onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))) } : {};
+
+export const attachRecordFile = async ({ serialNo, file, replace, folder, subfolder, targetPath, onProgress }) => {
   const form = new FormData();
   if (replace) form.append("replace", replace);
   if (folder) form.append("folder", folder);
   if (subfolder) form.append("subfolder", subfolder);
+  if (targetPath) form.append("targetPath", targetPath);
   form.append("file", file, file.name);
   return (
-    await axios.post(`${API_BASE}/erms/records/${encodeURIComponent(serialNo)}/upload`, form, { withCredentials: true })
+    await axios.post(`${API_BASE}/erms/records/${encodeURIComponent(serialNo)}/upload`, form, { withCredentials: true, ...progressOf(onProgress) })
   ).data;
 };
 
@@ -72,14 +51,15 @@ export const attachRecordFile = async ({ serialNo, file, replace, folder, subfol
  * The same `replace` rule as a record: 'keep' or 'delete' when the
  * document already has a scan on the share.
  */
-export const attachUnitFile = async ({ unit, serialNo, file, replace, folder, subfolder }) => {
+export const attachUnitFile = async ({ unit, serialNo, file, replace, folder, subfolder, targetPath, onProgress }) => {
   const form = new FormData();
   if (replace) form.append("replace", replace);
   if (folder) form.append("folder", folder);
   if (subfolder) form.append("subfolder", subfolder);
+  if (targetPath) form.append("targetPath", targetPath);
   form.append("file", file, file.name);
   return (
-    await axios.post(`${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/upload`, form, { withCredentials: true })
+    await axios.post(`${API_BASE}/erms/units/${unit}/documents/${encodeURIComponent(serialNo)}/upload`, form, { withCredentials: true, ...progressOf(onProgress) })
   ).data;
 };
 

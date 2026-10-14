@@ -3,7 +3,7 @@ import source from '../scripts/migrate-erms/lib/source.js';
 import transform from '../scripts/migrate-erms/lib/transform.js';
 import matcher from '../modules/ucds/services/permitMatch.js';
 
-const { clean, parseDate, parseNumber, correctMonth } = source;
+const { clean, parseDate, parseNumber, correctMonth, provinceFolderOf } = source;
 const { permitTypeOf, splitSerial, sharePathOf, transformRow } = transform;
 const { buildIndex, findMatch, tokensOf, hwKey } = matcher;
 
@@ -97,6 +97,18 @@ describe('permitTypeOf', () => {
 
   it('marks anything else as other rather than dropping it', () => {
     expect(permitTypeOf('Some Future Permit').code).toBe('other');
+  });
+});
+
+describe('provinceFolderOf', () => {
+  it('reads the folder after the unit’s own Database folder, not after the first', () => {
+    expect(provinceFolderOf('LABORATORY\\Database\\Laboratory Database\\Pampanga\\1998\\COSMOS\\98-0050.pdf')).toBe('Pampanga');
+    expect(provinceFolderOf('Z:\\LEGAL\\Database\\Legal Database\\Nueva Ecija\\2023\\Co\\NOV\\x.pdf')).toBe('Nueva Ecija');
+  });
+
+  it('is null when there is no folder after it', () => {
+    expect(provinceFolderOf('LABORATORY\\Database\\Laboratory Database\\x.pdf')).toBeNull();
+    expect(provinceFolderOf(null)).toBeNull();
   });
 });
 

@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./src/assets/emblogo.svg">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>E-Universe | Unified Information and Records Management System</title>
+    <!-- Installable (Add to Home Screen), which an iPhone requires before it
+         shows E-Universe notices. See public/sw.js. -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/notice-icon.png">
+    <meta name="theme-color" content="#1f4e79">
+    <title>EMB R3 E-Universe (Unified Information and Records Management System)</title>
     <!-- VERA's display face. Loaded without blocking the first paint (media
          swap), so a network that cannot reach Google Fonts just keeps the
          system font instead of holding the page. -->

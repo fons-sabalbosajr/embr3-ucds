@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Alert,
-  App as AntdApp,
   Button,
   Card,
   Form,
@@ -28,6 +27,7 @@ import {
   fetchFilterOptions,
   updateBox,
 } from "../api/ermsService";
+import { message, modal } from "../../../shared/feedback";
 
 const STATUS_COLOR = {
   open: "green",
@@ -37,7 +37,6 @@ const STATUS_COLOR = {
 };
 
 const ArchiveBoxes = () => {
-  const { message, modal } = AntdApp.useApp();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState(null);

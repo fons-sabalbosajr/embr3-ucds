@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, AutoComplete, Badge, Button, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tabs, Tag, Tooltip, Typography, Upload } from "antd";
+import { Alert, Badge, Button, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tag, Tooltip, Typography, Upload } from "antd";
+import { UnitTabs, UploadFooter } from "../components/UploadParts";
+import ListInput from "../components/ListInput";
 import { InboxOutlined, NumberOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
 import { checkUnitDuplicates, claimDocket, describeApiError, fetchLookups, fetchNextDocket, fetchUnitSuggestions, uploadUnitDocument, updateUnitDocument } from "../api/ermsService";
-import FolderPicker from "../components/FolderPicker";
+import NasFolderBrowser from "../components/NasFolderBrowser";
 import SuggestInput from "../components/SuggestInput";
 import { PROVINCE_OPTIONS, groupFields, unitTheme } from "./unitTheme";
 import "./unitupload.css";
@@ -26,7 +28,6 @@ const { Text } = Typography;
 // stays where it was filed.
 // ---------------------------------------------------------------------------
 
-const contains = (input, option) => String(option?.value || "").toLowerCase().includes(String(input || "").toLowerCase());
 
 // The fields offered from what the unit already has on file (the server's
 // unitDocumentService.SUGGESTABLE). The rest are typed, or chosen from a list.
@@ -90,7 +91,29 @@ const DocketField = ({ value, onChange, onPick, yearField, placeholder }) => {
   );
 };
 
-const FieldInput = ({ field, lookups, unit, onPick, value, onChange, docket, ...rest }) => {
+/**
+ * What a field's box says before anything is typed: the field's own
+ * placeholder (ERMS Config), else a plain one from its label and kind — so
+ * no box on any unit's form is blank.
+ */
+const placeholderOf = (field) => {
+  if (field.placeholder) return field.placeholder;
+  const what = String(field.label || field.key || "").toLowerCase();
+  switch (field.type) {
+    case "date":
+      return `Select the ${what}`;
+    case "lookup":
+    case "select":
+      return `Choose or type the ${what}`;
+    case "number":
+      return "e.g. 0";
+    default:
+      return `Enter the ${what}`;
+  }
+};
+
+const FieldInput = ({ field: given, lookups, unit, onPick, value, onChange, docket, ...rest }) => {
+  const field = { ...given, placeholder: placeholderOf(given) };
   if (docket && field.key === "docketNo") {
     return <DocketField value={value} onChange={onChange} onPick={onPick} yearField={docket.yearField} placeholder={field.placeholder} />;
   }
@@ -111,9 +134,9 @@ const FieldInput = ({ field, lookups, unit, onPick, value, onChange, docket, ...
   const props = { value, onChange, ...rest };
   switch (field.type) {
     case "textarea":
-      return <Input.TextArea rows={2} placeholder={field.placeholder} {...props} />;
+      return <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder={field.placeholder} {...props} />;
     case "date":
-      return <DatePicker style={{ width: "100%" }} {...props} />;
+      return <DatePicker style={{ width: "100%" }} placeholder={field.placeholder} {...props} />;
     case "number":
       return <InputNumber style={{ width: "100%" }} placeholder={field.placeholder} {...props} />;
     case "checkbox":
@@ -122,22 +145,32 @@ const FieldInput = ({ field, lookups, unit, onPick, value, onChange, docket, ...
       return <Select allowClear options={(field.options || []).map((o) => ({ value: o, label: o }))} placeholder={field.placeholder} {...props} />;
     case "lookup": {
       const list = lookups?.[field.lookup] || [];
-      return <AutoComplete allowClear options={list.map((it) => ({ value: it.label }))} filterOption={contains} placeholder={field.placeholder || "Choose or type"} {...props} />;
+      return <ListInput options={list.map((it) => ({ value: it.label }))} placeholder={field.placeholder} {...props} />;
     }
     default:
       return <Input placeholder={field.placeholder} {...props} />;
   }
 };
 
-const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
+/**
+ * @param document  the document to edit; absent to upload a new one
+ * @param attachTo  a case to file an attachment against (Legal: its Notice of
+ *                  Violation) — the window opens on the Attachment type with
+ *                  the case's province, docket and company filled in, and the
+ *                  server numbers it after the case (FSN-NOV00432 Att-00240)
+ */
+const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }) => {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [docTypeCode, setDocTypeCode] = useState(null);
   const [scan, setScan] = useState(null);
-  // The company/station folder on the share the person chose (see
-  // FolderPicker); null files under the form's own value as before.
+  // The company/station folder and subfolder of the earlier picker: still
+  // accepted by the server, no longer chosen here (see targetPath below).
   const [folder, setFolder] = useState(null);
   const [subfolder, setSubfolder] = useState(null);
+  // A folder browsed to on the unit's share (relative to its root); null
+  // files in the standard place.
+  const [targetPath, setTargetPath] = useState(null);
   // The tab on show, and the tabs holding a field that failed its check.
   const [tab, setTab] = useState("section-0");
   const [errorTabs, setErrorTabs] = useState([]);
@@ -151,7 +184,19 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
   const yearValue = Form.useWatch(unitConfig?.folder?.yearField || "__none", form);
 
   const docTypes = useMemo(() => unitConfig?.docTypes || [], [unitConfig]);
-  const docType = docTypes.find((t) => t.code === (isEdit ? document.docType : docTypeCode)) || null;
+  const attaching = !isEdit && Boolean(attachTo);
+  const ATTACHMENT = "attachment";
+  const docType = docTypes.find((t) => t.code === (isEdit ? document.docType : attaching ? ATTACHMENT : docTypeCode)) || null;
+
+  // What an attachment starts from: the case it belongs to.
+  const attachValues = useMemo(() => {
+    if (!attachTo) return undefined;
+    const values = { province: attachTo.province };
+    for (const key of ["docketNo", "pabCaseNo", "companyName", "companyAddress", "natureOfBusiness"]) {
+      if (attachTo.fields?.[key]) values[key] = attachTo.fields[key];
+    }
+    return values;
+  }, [attachTo]);
 
   // What the edit form starts from: the document as stored. Given to the
   // form as its initial values, so they are there the moment it is built.
@@ -173,16 +218,18 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
     setScan(null);
     setFolder(null);
     setSubfolder(null);
+    setTargetPath(null);
     setTab("section-0");
     setErrorTabs([]);
     setScanMissing(false);
     if (document) {
       setDocTypeCode(document.docType);
     } else {
-      setDocTypeCode(docTypes[0]?.code || null);
+      setDocTypeCode(attachTo ? ATTACHMENT : docTypes[0]?.code || null);
       form.resetFields();
     }
-  }, [open, document, docTypes, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, document, attachTo, docTypes, form]);
 
   // The lookup lists the form's fields name: legal officers, statuses,
   // parameter groups. Fetched once; the address lists are not needed here.
@@ -227,9 +274,12 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
     form.resetFields();
     onClose(saved);
   };
+  // The upload's progress, 0–100, while a scan is on its way; null otherwise.
+  const [progress, setProgress] = useState(null);
   const create = useMutation({
-    mutationFn: uploadUnitDocument,
+    mutationFn: (vars) => uploadUnitDocument({ ...vars, onProgress: vars.file ? setProgress : undefined }),
     onSuccess: settle("Filed"),
+    onSettled: () => setProgress(null),
     onError: (e) => message.error(describeApiError(e, "The document could not be filed.")),
   });
   const update = useMutation({
@@ -297,7 +347,7 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
         message.error("Choose the scan to file.");
         return;
       }
-      create.mutate({ unit, docType: docType.code, province: v.province, folder, subfolder, fields, file: scan });
+      create.mutate({ unit, docType: docType.code, province: v.province, parentSerialNo: attaching ? attachTo.serialNo : undefined, folder, subfolder, targetPath, fields, file: scan });
     }
   };
 
@@ -307,7 +357,8 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
       title={
         <Space>
           <span style={{ color: theme.accent }}>{theme.icon}</span>
-          {isEdit ? `Edit ${document.serialNo}` : `File a document — ${theme.label}`}
+          {isEdit ? `Edit ${document.serialNo}` : attaching ? `Add attachment — ${theme.label}` : `Upload document — ${theme.label}`}
+          {attaching && <Tag color={theme.color} style={{ fontFamily: "monospace" }}>{attachTo.serialNo} Att-…</Tag>}
         </Space>
       }
       onCancel={() => {
@@ -316,14 +367,16 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
       }}
       // Step through the tabs, or file from any of them.
       footer={
+        <UploadFooter percent={progress}>
         <Space>
           <Button onClick={() => { form.resetFields(); onClose(null); }}>Cancel</Button>
           <Button disabled={step <= 0} onClick={() => setTab(tabKeys[step - 1])}>Back</Button>
           {step < tabKeys.length - 1 && <Button onClick={() => setTab(tabKeys[step + 1])}>Next</Button>}
           <Button type="primary" loading={create.isPending || update.isPending} onClick={submit}>
-            {isEdit ? "Save" : "File document"}
+            {isEdit ? "Save" : attaching ? "Upload attachment" : "Upload document"}
           </Button>
         </Space>
+        </UploadFooter>
       }
       width="min(1040px, 96vw)"
       style={{ top: 32 }}
@@ -331,13 +384,13 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
     >
       {/* Rebuilt for each document, and once the unit's field list is in,
           so the initial values always match the fields on show. */}
-      <Form key={isEdit ? `${document.serialNo}:${docTypes.length}` : "new"} form={form} layout="vertical" preserve={false} initialValues={editValues}>
+      <Form key={isEdit ? `${document.serialNo}:${docTypes.length}` : attaching ? `attach:${attachTo.serialNo}` : "new"} form={form} layout="vertical" preserve={false} initialValues={isEdit ? editValues : attachValues}>
         {/* What the document is and where it belongs: always in view. */}
         <div className="unit-upload-head">
           <Form.Item label="Document type">
             <Select placeholder="Choose the document type"
               value={docType?.code}
-              disabled={isEdit}
+              disabled={isEdit || attaching}
               onChange={(code) => {
                 setDocTypeCode(code);
                 setTab("section-0");
@@ -360,7 +413,8 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
           )}
         </div>
 
-        <Tabs
+        <UnitTabs
+          unit={unit}
           activeKey={tab}
           onChange={setTab}
           items={[
@@ -371,7 +425,7 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
               forceRender: true,
               label: (
                 <Badge dot={errorTabs.includes(`section-${i}`)} offset={[6, 0]}>
-                  <span>{`${i + 1}. ${section.title || "Details"}`}</span>
+                  <span>{section.title || "Details"}</span>
                 </Badge>
               ),
               children: (
@@ -399,12 +453,12 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
                     forceRender: true,
                     label: (
                       <Badge dot={scanMissing && !scan} offset={[6, 0]}>
-                        <span>{`${sections.length + 1}. Scan & location`}</span>
+                        <span>Upload Document</span>
                       </Badge>
                     ),
                     children: (
                       <div className="unit-upload-scan">
-                        <div>
+                        <div className="unit-upload-scan__file">
                           <Form.Item
                             label="Scanned document"
                             required
@@ -448,19 +502,16 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, onClose }) => {
                           )}
                         </div>
                         <Form.Item
-                          label="Location on the share"
-                          extra={scan ? `Where the scan files: the ${unit === "legal" ? "company" : "station"} folder under the province and year, and a folder inside it. Choose ones that exist, make new ones, or leave them to the layout.` : "Where the scan will file. Choose the province and the scan for it to apply."}
+                          label={`Folder on the ${theme.short || theme.label} share`}
+                          extra={scan ? "Open the folders and press File here — or make a new folder inside one — as in the desktop ERMS. Left alone, the scan files in the standard place." : "Where the scan will file. Choose the province and the scan for it to apply."}
                         >
-                          <FolderPicker
+                          <NasFolderBrowser
                             unit={unit}
                             province={province}
                             date={yearValue && typeof yearValue.format === "function" ? yearValue.format("YYYY-MM-DD") : yearValue || undefined}
-                            hint={typeof folderHint === "string" ? folderHint : undefined}
-                            typeFolder={docType?.folder || null}
-                            value={folder}
-                            onChange={setFolder}
-                            subfolder={subfolder}
-                            onSubfolderChange={setSubfolder}
+                            value={targetPath}
+                            onChange={setTargetPath}
+                            standardHint={[typeof folderHint === "string" && folderHint ? `“${folderHint}”` : null, docType?.folder || null].filter(Boolean).join(" \\ ") || null}
                           />
                         </Form.Item>
                       </div>

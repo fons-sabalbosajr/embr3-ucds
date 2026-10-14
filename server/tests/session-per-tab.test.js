@@ -81,6 +81,34 @@ describe('one sign-in per tab', () => {
     expect((await browser.get('/api/auth/me')).status).toBe(401);
   });
 
+  it('treats a new tab as signed out, so a second account can sign in there without touching the first', async () => {
+    const browser = request.agent(app);
+    const first = await browser.post('/login').send({ username: A, password: PASSWORD });
+    const tabA = first.body.sessionToken;
+
+    // A new tab: no token of its own. The cookie is A's, but the tab is not A.
+    const fresh = await browser.get('/api/auth/me').set('X-Session-Token', 'none');
+    expect(fresh.status).toBe(401);
+    expect(fresh.headers['x-session-token']).toBeUndefined();
+    expect((await browser.get('/auth-check').set('X-Session-Token', 'none')).status).toBe(401);
+
+    // It signs in as B: a session of its own; tab A is still A.
+    const second = await browser.post('/login').set('X-Session-Token', 'none').send({ username: B, password: PASSWORD });
+    expect(second.status).toBe(200);
+    const tabB = second.body.sessionToken;
+    expect(tabB).not.toBe(tabA);
+    expect((await browser.get('/api/auth/me').set('X-Session-Token', tabA)).body.user.username).toBe(A);
+    expect((await browser.get('/api/auth/me').set('X-Session-Token', tabB)).body.user.username).toBe(B);
+
+    // Signing out a tab that never signed in ends nobody's session.
+    expect((await browser.post('/logout').set('X-Session-Token', 'none')).status).toBeLessThan(500);
+    expect((await browser.get('/api/auth/me').set('X-Session-Token', tabA)).body.user.username).toBe(A);
+    // B signs out: A carries on.
+    await browser.post('/logout').set('X-Session-Token', tabB);
+    expect((await browser.get('/api/auth/me').set('X-Session-Token', tabB)).status).toBe(401);
+    expect((await browser.get('/api/auth/me').set('X-Session-Token', tabA)).body.user.username).toBe(A);
+  });
+
   it('gives a tab that arrived on the cookie alone a token to pin itself with', async () => {
     const browser = request.agent(app);
     const { body } = await browser.post('/login').send({ username: A, password: PASSWORD });

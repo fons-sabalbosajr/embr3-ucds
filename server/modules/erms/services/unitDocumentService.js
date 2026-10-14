@@ -7,6 +7,7 @@ const config = require('./configService');
 const filing = require('./filingService');
 const shortCache = require('../../../shared/services/shortCache');
 const { monthWindow } = require('./recordService');
+const shareTrail = require('./shareTrail');
 
 // ---------------------------------------------------------------------------
 // Unit documents: what the Legal Services and Laboratory units file.
@@ -30,6 +31,7 @@ const { monthWindow } = require('./recordService');
 
 const COLLECTION = 'erms-documents';
 const SEQUENCES = 'erms-sequences';
+const LOGS = 'app-logs';
 
 const collection = () => getDb().collection(COLLECTION);
 const sequences = () => getDb().collection(SEQUENCES);
@@ -42,7 +44,13 @@ async function ensureIndexes() {
   await collection().createIndex({ unit: 1, docType: 1, createdAt: -1 });
   await collection().createIndex({ unit: 1, province: 1 });
   await collection().createIndex({ unit: 1, 'fields.docketNo': 1 });
+  // A case's attachments, read with every page of the list.
+  await collection().createIndex({ unit: 1, parentSerialNo: 1 });
   await collection().createIndex({ unit: 1, searchText: 'text' });
+  // A document's history is read from the audit trail by its serial. Partial,
+  // so only the rows that name a document are indexed, not every log line.
+  await getDb().collection(LOGS).createIndex({ documentId: 1, timestamp: -1 }, { partialFilterExpression: { documentId: { $type: 'string' } } });
+  await getDb().collection(LOGS).createIndex({ serialNo: 1, timestamp: -1 }, { partialFilterExpression: { serialNo: { $type: 'string' } } });
 }
 
 // --- who may do what ----------------------------------------------------------
@@ -173,6 +181,12 @@ async function list(user, unitKey, query = {}) {
     filter.$or = [{ serialNo: re }, { title: re }, { 'document.fileName': re }, { 'fields.docketNo': re }, { 'fields.cocNo': re }];
   }
 
+  // Packed: a case's attachments are listed inside it, not as rows of their
+  // own — unless the person is looking for something (a type, a docket, a
+  // search, the files missing), when every match is a row.
+  const packed = !query.docType && !query.search && !query.docketNo && !query.missingFile;
+  if (packed) filter.parentSerialNo = { $in: [null] };
+
   const page = Math.max(1, Number(query.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 25));
   const sortBy = ['createdAt', 'serialNo', 'title', 'document.uploadedAt'].includes(query.sortBy) ? query.sortBy : 'createdAt';
@@ -182,7 +196,26 @@ async function list(user, unitKey, query = {}) {
     collection().find(filter).sort({ [sortBy]: sortDir, _id: -1 }).skip((page - 1) * pageSize).limit(pageSize).toArray(),
     collection().countDocuments(filter),
   ]);
-  return { items: items.map(publicView), total, page, pageSize };
+  const rows = items.map(publicView);
+  if (packed && rows.length) {
+    const children = await attachmentsOf(unit, rows.map((r) => r.serialNo));
+    for (const r of rows) r.attachments = children.get(r.serialNo) || [];
+  }
+  return { items: rows, total, page, pageSize, packed };
+}
+
+/** The attachments of these documents, by parent serial, oldest first. */
+async function attachmentsOf(unit, serials) {
+  const children = await collection()
+    .find({ unit, parentSerialNo: { $in: serials } }, { projection: { searchText: 0 } })
+    .sort({ serialNo: 1 })
+    .toArray();
+  const byParent = new Map();
+  for (const c of children) {
+    if (!byParent.has(c.parentSerialNo)) byParent.set(c.parentSerialNo, []);
+    byParent.get(c.parentSerialNo).push(publicView(c));
+  }
+  return byParent;
 }
 
 async function get(user, unitKey, serialNo) {
@@ -191,10 +224,15 @@ async function get(user, unitKey, serialNo) {
   await connectToMongo();
   const doc = await collection().findOne({ unit, serialNo });
   if (!doc) throw notFoundError('Document not found.', 'DOCUMENT_NOT_FOUND');
-  const related = doc.fields?.docketNo
-    ? await collection().find({ unit, 'fields.docketNo': doc.fields.docketNo, serialNo: { $ne: serialNo } }).sort({ createdAt: -1 }).limit(50).toArray()
-    : [];
-  return { document: publicView(doc), related: related.map(publicView) };
+  // Its own attachments apart; the rest of the docket (other documents of
+  // the case, and their attachments) as "Same docket".
+  const [related, attachments] = await Promise.all([
+    doc.fields?.docketNo
+      ? collection().find({ unit, 'fields.docketNo': doc.fields.docketNo, serialNo: { $ne: serialNo }, parentSerialNo: { $ne: serialNo } }).sort({ createdAt: -1 }).limit(50).toArray()
+      : [],
+    doc.parentSerialNo ? new Map() : attachmentsOf(unit, [serialNo]),
+  ]);
+  return { document: publicView(doc), related: related.map(publicView), attachments: attachments.get(serialNo) || [] };
 }
 
 /** Counts for the unit's dashboard. */
@@ -253,11 +291,89 @@ async function computeDashboard(unit) {
   };
 }
 
+// --- attachments ---------------------------------------------------------------------
+//
+// A Legal attachment (an inspection report, a complaint letter, an ECC copy)
+// belongs to a case: the desktop system filed each one against a Notice of
+// Violation and numbered it after it — "FSN-NOV00432 Att-00239" — in the
+// case's own folder (…\<company>\Attachments). All 554 migrated ones carry
+// their NOV as parentSerialNo. One filed here is kept the same way, so the
+// case and its attachments are always found, listed and opened together.
+
+const ATTACHMENT_TYPE = 'attachment';
+const isAttachmentType = (docType) => docType?.code === ATTACHMENT_TYPE;
+
+/**
+ * The case an attachment belongs to: the document named, else the latest
+ * case-opening document (unitCfg.docket.issueOn — the NOV) on its docket.
+ * Null when neither is found: the attachment is then filed on its own.
+ */
+async function attachmentParent(unit, input) {
+  const named = clean(input.parentSerialNo, 80);
+  let parent = null;
+  if (named) {
+    parent = await collection().findOne({ unit, serialNo: named });
+    if (!parent) throw notFoundError('The document to attach to was not found.', 'PARENT_NOT_FOUND');
+  } else if (input.fields?.docketNo) {
+    const opens = (await config.unit(unit))?.docket?.issueOn || [];
+    if (!opens.length) return null;
+    parent = await collection()
+      .find({ unit, docType: { $in: opens }, 'fields.docketNo': String(input.fields.docketNo).trim(), parentSerialNo: { $in: [null] } })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .next();
+  }
+  if (parent?.parentSerialNo) {
+    throw badRequest(`${parent.serialNo} is itself an attachment. Attach to ${parent.parentSerialNo} instead.`, 'PARENT_IS_ATTACHMENT');
+  }
+  return parent;
+}
+
+/**
+ * The next attachment number in a unit, Att-00240 after Att-00239 — one
+ * sequence across the unit's cases, as the desktop system kept it. Seeded
+ * from the attachments already on file, then an atomic $inc.
+ */
+async function nextAttachmentNo(unit) {
+  const id = `unit:${unit}:attachmentNo`;
+  const existing = await sequences().findOne({ _id: id });
+  if (!existing || typeof existing.seq !== 'number') {
+    const rows = await collection().find({ unit, serialNo: / Att-\d+$/ }, { projection: { serialNo: 1 } }).toArray();
+    const seed = rows.reduce((max, r) => Math.max(max, Number(/Att-(\d+)$/.exec(r.serialNo)?.[1]) || 0), 0);
+    await sequences().updateOne({ _id: id }, { $max: { seq: seed } }, { upsert: true });
+  }
+  const result = await sequences().findOneAndUpdate({ _id: id }, { $inc: { seq: 1 } }, { returnDocument: 'after', includeResultMetadata: false });
+  const seq = (result && typeof result.seq === 'number' ? result : result?.value)?.seq;
+  if (typeof seq !== 'number') throw new Error('Could not allocate an attachment number.');
+  return `Att-${String(seq).padStart(5, '0')}`;
+}
+
+/**
+ * Where an attachment goes when nobody chose a folder: beside its case, in
+ * the case folder's own Attachments folder — the folder the case's document
+ * sits in, less its type folder (NOV), plus the attachment type's folder.
+ * Null when the case has no usable path; the layout then decides.
+ */
+async function besideCase(unit, parent, docType) {
+  const unitCfg = await config.unit(unit);
+  const root = String(unitCfg?.folder?.root || '').split(/[\\/]+/).filter(Boolean);
+  const segments = String(parent.document?.sharePath || '').split(/[\\/]+/).filter(Boolean);
+  const under = root.every((s, i) => String(segments[i] || '').toLowerCase() === s.toLowerCase());
+  if (!under || segments.length < root.length + 2) return null;
+  let dirs = segments.slice(root.length, -1);
+  const parentType = await config.docType(unit, parent.docType);
+  if (parentType?.folder && dirs.length && dirs[dirs.length - 1].toLowerCase() === String(parentType.folder).toLowerCase()) dirs = dirs.slice(0, -1);
+  if (!dirs.length) return null;
+  return [...dirs, ...(docType.folder ? [docType.folder] : [])].join('\\');
+}
+
 // --- writes --------------------------------------------------------------------------
 
 /**
  * File a document: check the values against the type's form, write the
- * file to the unit's share, number it, store it.
+ * file to the unit's share, number it, store it. An attachment is filed
+ * against its case (see above): numbered after it, in its folder, and
+ * carrying its docket and company where the form left them out.
  */
 async function create(user, unitKey, input, upload) {
   const unit = assertUnit(unitKey);
@@ -267,7 +383,14 @@ async function create(user, unitKey, input, upload) {
   const province = PROVINCE_KEYS.includes(input.province) ? input.province : null;
   if (!province) throw badRequest('Choose the province.', 'PROVINCE_REQUIRED');
 
-  const { fields, errors } = validateFields(docType, input.fields || {});
+  await connectToMongo();
+  const parent = isAttachmentType(docType) ? await attachmentParent(unit, input) : null;
+  // The case's own values, under whatever the form filled in.
+  const given = Object.fromEntries(Object.entries(input.fields || {}).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+  const inherited = parent
+    ? Object.fromEntries(['docketNo', 'pabCaseNo', 'companyName', 'companyAddress', 'natureOfBusiness'].filter((k) => parent.fields?.[k]).map((k) => [k, parent.fields[k]]))
+    : {};
+  const { fields, errors } = validateFields(docType, { ...inherited, ...given });
   if (errors.length) {
     const err = badRequest('Some fields need attention.', 'VALIDATION');
     err.errors = errors;
@@ -275,7 +398,9 @@ async function create(user, unitKey, input, upload) {
   }
 
   // `folder`: the project/company folder the person picked on the form, if any.
-  const filed = await filing.file(unit, docType, { province, fields, folder: clean(input.folder, 120), subfolder: clean(input.subfolder, 120) }, upload);
+  const chosen = clean(input.folder, 120) || clean(input.subfolder, 120) || input.targetPath;
+  const targetPath = input.targetPath || (parent && !chosen ? await besideCase(unit, parent, docType) : null);
+  const filed = await filing.file(unit, docType, { province, fields, folder: clean(input.folder, 120), subfolder: clean(input.subfolder, 120), targetPath }, upload);
   if (!filed.ok) {
     const err = new Error(filed.message);
     err.status = filed.code === 'NO_FILE' || filed.code === 'FILE_TYPE' || filed.code === 'FILE_TOO_LARGE' ? 400 : 502;
@@ -283,15 +408,14 @@ async function create(user, unitKey, input, upload) {
     throw err;
   }
 
-  await connectToMongo();
-  const serialNo = await nextSerialNo(unit, docType);
+  const serialNo = parent ? `${parent.serialNo} ${await nextAttachmentNo(unit)}` : await nextSerialNo(unit, docType);
   const now = new Date();
   const doc = {
     unit,
     docType: docType.code,
     docTypeLabel: docType.label,
     serialNo,
-    parentSerialNo: clean(input.parentSerialNo, 60),
+    parentSerialNo: parent ? parent.serialNo : clean(input.parentSerialNo, 60),
     province,
     provinceLabel: PROVINCE_LABEL[province],
     title: titleOf(fields, serialNo),
@@ -331,7 +455,93 @@ async function update(user, unitKey, serialNo, input) {
   }
   set.searchText = searchTextOf({ ...before, ...set });
   await collection().updateOne({ _id: before._id }, { $set: set });
-  return publicView({ ...before, ...set });
+  // What changed, field by field, for the document's history: a case moving
+  // from FOR TECHNICAL CONFERENCE to RESOLUTION ISSUED is the point of it.
+  const changes = {};
+  for (const key of new Set([...Object.keys(before.fields || {}), ...Object.keys(fields)])) {
+    const from = before.fields?.[key] ?? null;
+    const to = fields[key] ?? null;
+    if (JSON.stringify(from) !== JSON.stringify(to)) changes[key] = { from, to };
+  }
+  if (set.province && set.province !== before.province) changes.province = { from: before.province || null, to: set.province };
+  return { document: publicView({ ...before, ...set }), changes };
+}
+
+/**
+ * Everything that happened to a document, newest first: its filing (in the
+ * desktop system or here), then what the audit trail holds for it — edits
+ * with their changes, scans filed or replaced, views, failed reads — and how
+ * it was shared through the Document Portal (shareTrail). The NAS events are
+ * matched on the unit's container as well as the serial, since a Legal
+ * serial (FSN-0000002) can read like a Records one.
+ */
+async function history(user, unitKey, serialNo) {
+  const unit = assertUnit(unitKey);
+  assertCanSee(user, unit);
+  await connectToMongo();
+  const doc = await collection().findOne({ unit, serialNo });
+  if (!doc) throw notFoundError('Document not found.', 'DOCUMENT_NOT_FOUND');
+  const unitCfg = await config.unit(unit);
+
+  const [rows, shared] = await Promise.all([
+    getDb()
+      .collection(LOGS)
+      .find(
+        {
+          $or: [
+            { domain: 'erms', targetCollection: COLLECTION, documentId: serialNo },
+            // A requester's opens come with their request, from shareTrail.
+            { domain: 'nas', serialNo, container: { $in: [...new Set([unitCfg?.container, doc.document?.container].filter(Boolean))] }, operation: { $nin: ['portal-view', 'portal-download'] } },
+          ],
+        },
+        { projection: { requestData: 0, userAgent: 0 } }
+      )
+      .sort({ timestamp: -1 })
+      .limit(300)
+      .toArray(),
+    shareTrail.shareEvents(unit, serialNo),
+  ]);
+
+  // The audit trail writes an upload twice — the file event and the record
+  // event — so the file event stands for both.
+  const events = rows
+    .filter((r) => !(r.domain === 'erms' && r.actionType === 'document-upload'))
+    .map((r) => ({
+      id: String(r._id),
+      at: r.timestamp,
+      who: r.username || null,
+      action: r.operation || r.actionType || null,
+      label: r.actionLabel || r.operation || r.actionType || null,
+      fileName: r.fileName || r.changes?.fileName || null,
+      success: r.success !== false,
+      detail: r.detail || (r.actionType === 'attachment-filed' ? r.changes?.attachment : null) || null,
+      // Field by field, for an edit; the other entries say what they did in `detail`.
+      changes: r.actionType === 'document-update' ? r.changes || null : null,
+      ip: r.ip || null,
+    }));
+  for (const s of shared) events.push({ ...s, fileName: null, changes: null, ip: null, shared: true });
+
+  // The filing itself. One filed here has its upload event above already,
+  // unless the trail has since been trimmed.
+  // The migration wrote createdAt as the epoch where the desktop gave no date.
+  const uploadedAt = doc.document?.uploadedAt || (doc.createdAt?.getTime?.() ? doc.createdAt : null);
+  const fromDesktop = Boolean(doc.legacy);
+  if (fromDesktop || !events.some((e) => e.action === 'document-upload')) {
+    events.push({
+      id: `filed-${serialNo}`,
+      at: uploadedAt,
+      who: doc.document?.uploadedBy || doc.createdBy || null,
+      action: fromDesktop ? 'legacy-filed' : 'filed',
+      label: fromDesktop ? 'Filed in the desktop ERMS' : 'Filed',
+      fileName: doc.document?.fileName || null,
+      success: true,
+      detail: fromDesktop && doc.legacy?.table ? `from ${doc.legacy.table}` : null,
+      changes: null,
+      ip: null,
+    });
+  }
+  const time = (e) => (e.at ? new Date(e.at).getTime() : 0);
+  return { serialNo, events: events.sort((a, b) => time(b) - time(a)) };
 }
 
 /**
@@ -349,7 +559,7 @@ async function update(user, unitKey, serialNo, input) {
  *
  * Returns { document, previous, existing } for the controller's trail.
  */
-async function attachFile(user, unitKey, serialNo, upload, { replace = '', folder = null, subfolder = null } = {}) {
+async function attachFile(user, unitKey, serialNo, upload, { replace = '', folder = null, subfolder = null, targetPath = null } = {}) {
   const unit = assertUnit(unitKey);
   assertCanFile(user, unit);
   await connectToMongo();
@@ -371,7 +581,7 @@ async function attachFile(user, unitKey, serialNo, upload, { replace = '', folde
     }
   }
 
-  const filed = await filing.file(unit, docType, { province: before.province, fields: before.fields || {}, folder: clean(folder, 120), subfolder: clean(subfolder, 120) }, upload);
+  const filed = await filing.file(unit, docType, { province: before.province, fields: before.fields || {}, folder: clean(folder, 120), subfolder: clean(subfolder, 120), targetPath }, upload);
   if (!filed.ok) {
     const err = new Error(filed.message);
     err.status = ['NO_FILE', 'FILE_TYPE', 'FILE_TOO_LARGE'].includes(filed.code) ? 400 : 502;
@@ -517,6 +727,7 @@ module.exports = {
   ensureIndexes,
   list,
   get,
+  history,
   dashboard,
   create: clearingDashboard(create),
   update: clearingDashboard(update),

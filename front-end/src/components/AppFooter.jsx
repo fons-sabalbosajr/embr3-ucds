@@ -28,7 +28,7 @@ const AppFooter = () => {
       <span className="app-footer-right">
         <strong style={{ color: token.colorTextSecondary }}>E-Universe</strong>
         <span aria-hidden="true">·</span>
-        For official use only
+        Unified Information and Records Management System
       </span>
     </Layout.Footer>
   );

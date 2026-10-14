@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Checkbox, DatePicker, Form, Input, Modal, Select, Space, Tag, Typography, Upload } from "antd";
+import { Alert, Badge, Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Typography, Upload } from "antd";
+import { UnitTabs, UploadFooter } from "./UploadParts";
 import { InboxOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
 import { PERMIT_OPTIONS, PROVINCE_LABEL, describeApiError, uploadRecord } from "../api/ermsService";
-import FolderPicker from "./FolderPicker";
+import { unitTheme } from "../units/unitTheme";
+import NasFolderBrowser from "./NasFolderBrowser";
+import "../units/unitupload.css";
 
 const { Text } = Typography;
 
@@ -13,28 +16,36 @@ const { Text } = Typography;
 //
 // An amendment, a certified copy, a letter: a second document filed against
 // a record that is already on file. It carries the record's proponent,
-// permit number and place, is numbered after it (FSN-0000206 Att-00012),
+// permit number and place, is numbered after it (FSN-0000206 Att-00099),
 // and its scan is filed beside the record's own unless another folder is
 // chosen.
+//
+// The same window as Upload record (RecordFormModal): numbered tabs, Back
+// and Next, the scan and the folder browser on the Document tab — so filing
+// an attachment is the same work as filing the record was.
 // ---------------------------------------------------------------------------
+
+const theme = unitTheme("records");
+const TAB_KEYS = ["attachment", "document"];
+const TAB_OF = { title: "attachment", permitType: "attachment", dateApproved: "attachment", remarks: "attachment" };
 
 const AttachmentModal = ({ open, parent, onClose }) => {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const [tab, setTab] = useState("attachment");
+  const [errorTabs, setErrorTabs] = useState([]);
   const [scan, setScan] = useState(null);
   const [missing, setMissing] = useState(false);
-  const [elsewhere, setElsewhere] = useState(false);
-  const [folder, setFolder] = useState(null);
-  const [subfolder, setSubfolder] = useState(null);
+  const [targetPath, setTargetPath] = useState(null);
   const province = parent?.location?.province;
 
   useEffect(() => {
     if (!open || !parent) return;
+    setTab("attachment");
+    setErrorTabs([]);
     setScan(null);
     setMissing(false);
-    setElsewhere(false);
-    setFolder(null);
-    setSubfolder(null);
+    setTargetPath(null);
   }, [open, parent]);
 
   // The starting values, given to the form when it is built (an effect that
@@ -45,8 +56,11 @@ const AttachmentModal = ({ open, parent, onClose }) => {
     [parent?.serialNo]
   );
 
+  // The upload's progress, 0–100, while the scan is on its way; null otherwise.
+  const [progress, setProgress] = useState(null);
   const save = useMutation({
-    mutationFn: ({ payload }) => uploadRecord({ payload, file: scan }),
+    mutationFn: ({ payload }) => uploadRecord({ payload, file: scan, onProgress: scan ? setProgress : undefined }),
+    onSettled: () => setProgress(null),
     onSuccess: (saved) => {
       message.success(`Filed ${saved.serialNo}.`);
       queryClient.invalidateQueries({ queryKey: ["erms"] });
@@ -55,12 +69,28 @@ const AttachmentModal = ({ open, parent, onClose }) => {
     onError: (e) => message.error(describeApiError(e, "The attachment could not be filed.")),
   });
 
+  const close = () => {
+    form.resetFields();
+    onClose(null);
+  };
+
   const submit = async () => {
-    const v = await form.validateFields();
-    if (!scan) {
-      setMissing(true);
+    let v;
+    try {
+      v = await form.validateFields();
+    } catch (err) {
+      const tabs = [...new Set((err?.errorFields || []).map((f) => TAB_OF[f.name?.[0]]).filter(Boolean))];
+      setErrorTabs(tabs);
+      if (tabs[0]) setTab(tabs[0]);
       return;
     }
+    if (!scan) {
+      setMissing(true);
+      setErrorTabs(["document"]);
+      setTab("document");
+      return;
+    }
+    setErrorTabs([]);
     save.mutate({
       payload: {
         parentSerialNo: parent.serialNo,
@@ -77,79 +107,126 @@ const AttachmentModal = ({ open, parent, onClose }) => {
         // The server files the attachment where the record is; this only
         // satisfies the form's shape.
         location: { province, provinceLabel: PROVINCE_LABEL[province] || null },
-        document: { fileName: scan.name, folder: elsewhere ? folder : null, subfolder: elsewhere ? subfolder : null },
+        document: { fileName: scan.name, targetPath: targetPath || null },
       },
     });
   };
 
-  return (
-    <Modal
-      open={open}
-      title={
-        <Space>
-          Add an attachment to
-          <Tag style={{ fontFamily: "monospace" }}>{parent?.serialNo}</Tag>
-        </Space>
-      }
-      okText="File attachment"
-      onOk={submit}
-      okButtonProps={{ disabled: !province }}
-      confirmLoading={save.isPending}
-      onCancel={() => onClose(null)}
-      width={720}
-      destroyOnHidden
-    >
-      {!province && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="This record has no province, so nothing can be filed against it. Set its province first." />}
-      <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-        Filed under the record&rsquo;s proponent and permit number{parent?.permit?.number ? ` (${parent.permit.number})` : ""}, and numbered after it.
-      </Text>
-      <Form key={parent?.serialNo || "none"} form={form} layout="vertical" preserve={false} initialValues={initialValues}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0 16px" }}>
+  const step = TAB_KEYS.indexOf(tab);
+  const tabLabel = (key, text) => (
+    <Badge dot={errorTabs.includes(key)} offset={[6, 0]}>
+      <span>{text}</span>
+    </Badge>
+  );
+
+  const tabs = [
+    {
+      key: "attachment",
+      label: tabLabel("attachment", "Attachment"),
+      forceRender: true,
+      children: (
+        <div className="unit-upload-grid">
           <Form.Item name="title" label="Title" rules={[{ required: true, message: "Give the attachment a title." }]} style={{ gridColumn: "1 / -1" }}>
             <Input placeholder="What the document is — e.g. the amended ECC, a certified true copy" />
           </Form.Item>
-          <Form.Item name="permitType" label="Kind of document" rules={[{ required: true }]}>
+          <Form.Item name="permitType" label="Kind of document" rules={[{ required: true, message: "Choose the kind of document." }]}>
             <Select placeholder="Select the kind of document" options={PERMIT_OPTIONS} />
           </Form.Item>
           <Form.Item name="dateApproved" label="Date of the document">
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item name="remarks" label="Remarks" style={{ gridColumn: "1 / -1" }}>
-            <Input.TextArea placeholder="Optional note" rows={2} />
+            <Input.TextArea placeholder="Anything the next person should know" rows={3} />
           </Form.Item>
         </div>
-        <Form.Item label="Scanned document" required validateStatus={missing && !scan ? "error" : undefined} help={missing && !scan ? "Choose the scan to file." : undefined}>
-          <Upload.Dragger
-            maxCount={1}
-            accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx"
-            beforeUpload={(file) => {
-              setScan(file);
-              return false;
-            }}
-            onRemove={() => setScan(null)}
-            fileList={scan ? [scan] : []}
+      ),
+    },
+    {
+      key: "document",
+      label: tabLabel("document", "Document"),
+      forceRender: true,
+      children: (
+        <div style={{ paddingTop: 8 }}>
+          <Form.Item
+            label="Scanned document"
+            required
+            validateStatus={missing && !scan ? "error" : undefined}
+            help={missing && !scan ? "Choose the scan to file." : undefined}
+            extra={!(missing && !scan) ? "Filed beside the record’s own scan, as the desktop system did, unless you choose another folder below." : undefined}
           >
-            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-            <p className="ant-upload-text">Click or drag the scan here</p>
-            <p className="ant-upload-hint">Filed in the same folder as the record&rsquo;s own scan.</p>
-          </Upload.Dragger>
-        </Form.Item>
-        <Checkbox checked={elsewhere} onChange={(e) => setElsewhere(e.target.checked)} style={{ marginBottom: elsewhere ? 8 : 0 }}>
-          File it in a different folder
-        </Checkbox>
-        {elsewhere && (
-          <FolderPicker
-            unit="records"
-            province={province}
-            date={parent?.permit?.dateApproved ? String(parent.permit.dateApproved).slice(0, 10) : undefined}
-            hint={parent?.projectTitle}
-            typeFolder={null}
-            value={folder}
-            onChange={setFolder}
-            subfolder={subfolder}
-            onSubfolderChange={setSubfolder}
-          />
-        )}
+            <Upload.Dragger
+              maxCount={1}
+              accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx"
+              beforeUpload={(file) => {
+                setScan(file);
+                setMissing(false);
+                setErrorTabs((t) => t.filter((k) => k !== "document"));
+                return false;
+              }}
+              onRemove={() => setScan(null)}
+              fileList={scan ? [scan] : []}
+            >
+              <p className="ant-upload-drag-icon">
+                <InboxOutlined />
+              </p>
+              <p className="ant-upload-text">Click or drag the scan here</p>
+              <p className="ant-upload-hint">PDF or image; one file per attachment.</p>
+            </Upload.Dragger>
+          </Form.Item>
+          <Form.Item
+            label="Folder on the Records share"
+            extra="Open the folders and press File here — or make a new folder inside one, or remove one made by mistake — as in the desktop ERMS. Left alone, the scan files beside the record’s own."
+          >
+            <NasFolderBrowser
+              unit="records"
+              province={province}
+              date={parent?.permit?.dateApproved ? String(parent.permit.dateApproved).slice(0, 10) : undefined}
+              value={targetPath}
+              onChange={setTargetPath}
+              standardHint="beside the record’s own scan"
+            />
+          </Form.Item>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <Modal
+      open={open}
+      title={
+        <Space wrap>
+          <span style={{ color: theme.accent }}>{theme.icon}</span>
+          {`Add attachment — ${theme.label}`}
+          <Tag color={theme.color} style={{ fontFamily: "monospace" }}>
+            {parent?.serialNo} Att-…
+          </Tag>
+        </Space>
+      }
+      onCancel={close}
+      // Step through the tabs, or file from either — as Upload record does.
+      footer={
+        <UploadFooter percent={progress}>
+        <Space wrap>
+          <Button onClick={close}>Cancel</Button>
+          <Button disabled={step <= 0} onClick={() => setTab(TAB_KEYS[step - 1])}>Back</Button>
+          {step < TAB_KEYS.length - 1 && <Button onClick={() => setTab(TAB_KEYS[step + 1])}>Next</Button>}
+          <Button type="primary" loading={save.isPending} disabled={!province} onClick={submit}>
+            Upload attachment
+          </Button>
+        </Space>
+        </UploadFooter>
+      }
+      width="min(1040px, 96vw)"
+      style={{ top: 32 }}
+      destroyOnHidden
+    >
+      {!province && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="This record has no province, so nothing can be filed against it. Set its province first." />}
+      <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+        Filed under the record&rsquo;s proponent and permit number{parent?.permit?.number ? ` (${parent.permit.number})` : ""}, and numbered after it when saved.
+      </Text>
+      <Form key={parent?.serialNo || "none"} form={form} layout="vertical" preserve={false} initialValues={initialValues}>
+        <UnitTabs unit="records" activeKey={tab} onChange={setTab} items={tabs} />
       </Form>
     </Modal>
   );

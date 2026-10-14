@@ -1,9 +1,11 @@
-import { Alert, Button, Card, Col, Row, Skeleton, Space, Table, Tag, Typography, theme as antdTheme } from "antd";
+import { Alert, Badge, Button, Card, Col, Empty, List, Row, Skeleton, Space, Table, Tag, Typography } from "antd";
 import {
   CalendarOutlined,
+  CloudUploadOutlined,
   DesktopOutlined,
   FileExclamationOutlined,
-  FileTextOutlined,
+  FileSearchOutlined,
+  MailOutlined,
   RightOutlined,
   SettingOutlined,
   UploadOutlined,
@@ -11,28 +13,33 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { describeApiError, fetchUnitDashboard } from "../api/ermsService";
-import { DonutChart, MagnitudeBars, MonthStack, YearColumns } from "../components/charts";
+import { DonutChart, MagnitudeBars, YearColumns } from "../components/charts";
+import ChartCard, { MonthStackCard } from "../components/ChartCard";
 import { AttentionTile, StatTile } from "../components/dashboardTiles";
+import UnitHeader from "../components/UnitHeader";
 import { useTheme } from "../../../theme/ThemeProvider";
 import { useUnits } from "./useUnits";
 import { formatValue, unitTheme } from "./unitTheme";
 import { settingsPath } from "../settingsPath";
+import PortalSummaryCard from "../../portal/PortalSummaryCard";
+import DocTitle from "../../portal/DocTitle";
+import { fetchDesk } from "../../portal/portalService";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
+const when = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 // ---------------------------------------------------------------------------
 // A unit's landing page — Legal Services or Laboratory — in the same shape as
 // the Records dashboard: the day's work first (file a document, the
-// documents), what needs attention, then the counts: every kind of document
-// the unit keeps, and how the collection is made up by kind, province and
-// year.
+// documents), what needs attention — the unit's Document Portal requests
+// among it — then the counts: every kind of document the unit keeps, and
+// how the collection is made up by kind, province and year.
 // ---------------------------------------------------------------------------
 
 const UnitDashboard = () => {
   const { unit } = useParams();
   const navigate = useNavigate();
-  const { token } = antdTheme.useToken();
   const isDark = useTheme().mode === "dark";
   const theme = unitTheme(unit);
   const { unit: unitOf } = useUnits();
@@ -43,6 +50,12 @@ const UnitDashboard = () => {
     queryFn: () => fetchUnitDashboard(unit),
     enabled: Boolean(unitConfig),
   });
+
+  // The unit's own Document Portal requests (the server refuses the desk to
+  // anyone who decides none — then there is nothing to show).
+  const inbox = useQuery({ queryKey: ["portal", "desk", unit], queryFn: () => fetchDesk({ source: unit }), refetchInterval: 30000, retry: false, enabled: Boolean(unitConfig) });
+  const pending = inbox.data?.pending?.length || 0;
+  const canDecide = Boolean(inbox.data);
 
   if (error) return <Alert type="error" showIcon message={describeApiError(error, "Could not load the dashboard.")} />;
 
@@ -67,56 +80,62 @@ const UnitDashboard = () => {
       render: (t, d) => <Tag color={theme.color}>{d.docTypeLabel || t}</Tag>,
     },
     { title: "Province", dataIndex: "provinceLabel", key: "province", width: 120, render: (p, d) => p || d.province || "—" },
-    { title: "Filed", dataIndex: "createdAt", key: "createdAt", width: 110, render: (d) => formatValue({ type: "date" }, d) },
+    { title: "Uploaded", dataIndex: ["document", "uploadedAt"], key: "uploadedAt", width: 110, render: (d, r) => formatValue({ type: "date" }, d || r.createdAt) },
   ];
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       {/* The day's work first. */}
-      <Card
-        size="small"
-        styles={{ body: { padding: "16px 20px" } }}
-        style={{ background: token.colorFillQuaternary, borderTop: `3px solid ${theme.accent}` }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <Title level={4} style={{ margin: 0 }}>
-              <span style={{ color: theme.accent, marginRight: 8 }}>{theme.icon}</span>
-              {unitConfig?.label || theme.label}
-            </Title>
-            <Text type="secondary">{theme.description}</Text>
-          </div>
-          <Space wrap>
+      <UnitHeader
+        unit={unit}
+        title={unitConfig?.label || theme.label}
+        actions={
+          <>
             {unitConfig?.canFile && (
-              <Button type="primary" icon={<UploadOutlined />} onClick={() => navigate(`${documentsUrl}?upload=1`)}>
-                File a document
-              </Button>
+              <Link to={`${documentsUrl}?upload=1`}>
+                <Button type="primary" icon={<CloudUploadOutlined />}>Upload document</Button>
+              </Link>
             )}
-            <Button icon={<FileTextOutlined />} onClick={() => navigate(documentsUrl)}>
-              Documents
-            </Button>
-            <Button icon={<SettingOutlined />} onClick={() => navigate(settingsPath(unit))}>
-              Unit settings
-            </Button>
-          </Space>
-        </div>
-      </Card>
+            <Link to={documentsUrl}>
+              <Button icon={<FileSearchOutlined />}>Document Library</Button>
+            </Link>
+            {canDecide && (
+              <Link to="/universe/erms/portal-requests">
+                <Badge count={pending} size="small" offset={[-2, 2]}>
+                  <Button icon={<MailOutlined />}>Portal requests</Button>
+                </Badge>
+              </Link>
+            )}
+            <Link to={settingsPath(unit)}>
+              <Button icon={<SettingOutlined />}>Settings</Button>
+            </Link>
+          </>
+        }
+      />
 
-      {/* What needs attention. */}
+      {/* What needs attention — sharing the row, however many there are. */}
       <Row gutter={[12, 12]}>
-        <Col xs={12} md={6}>
+        {canDecide && (
+          <Col flex="1 1 170px">
+            <AttentionTile icon={<MailOutlined />} label="Portal requests waiting" value={pending} tone="warning" to="/universe/erms/portal-requests" loading={inbox.isLoading} hint={pending ? "to decide" : "none"} />
+          </Col>
+        )}
+        <Col flex="1 1 170px">
           <AttentionTile icon={<UploadOutlined />} label="Filed here, last 30 days" value={data?.uploadedLast30Days || 0} tone="info" to={documentsUrl} loading={loading} hint="documents" />
         </Col>
-        <Col xs={12} md={6}>
+        <Col flex="1 1 170px">
           <AttentionTile icon={<CalendarOutlined />} label={`Filed in ${thisYear}`} value={data?.filedThisYear || 0} tone="ok" to={documentsUrl} loading={loading} hint="so far" />
         </Col>
-        <Col xs={12} md={6}>
+        <Col flex="1 1 170px">
           <AttentionTile icon={<FileExclamationOutlined />} label="Without a file on the share" value={data?.withoutFile || 0} tone="warning" to={documentsUrl} loading={loading} hint={data?.withoutFile ? "to file" : "none"} />
         </Col>
-        <Col xs={12} md={6}>
+        <Col flex="1 1 170px">
           <AttentionTile icon={<DesktopOutlined />} label="From the desktop system" value={data?.fromDesktop || 0} tone="info" loading={loading} hint="migrated" />
         </Col>
       </Row>
+
+      {/* The public Document Portal, for this unit's documents. */}
+      {canDecide && <PortalSummaryCard source={unit} accent={theme.accent} />}
 
       {/* Every kind of document the unit keeps, counted. */}
       <Row gutter={[12, 12]}>
@@ -135,46 +154,97 @@ const UnitDashboard = () => {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={8}>
-          <Card title="By document type" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>share of {fmt(data?.total)}</Text>}>
-            {loading ? <Skeleton active /> : <DonutChart rows={data.byType.map((t) => ({ key: t.docType, label: t.label, count: t.count }))} total={data.total} dark={isDark} />}
-          </Card>
+          <ChartCard
+            title="By document type"
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>share of {fmt(data?.total)}</Text>}
+            loading={loading}
+            labelTitle="Document type"
+            rows={(data?.byType || []).map((t) => ({ key: t.docType, label: t.label, count: t.count }))}
+            total={data?.total}
+            render={(full) => <DonutChart rows={data.byType.map((t) => ({ key: t.docType, label: t.label, count: t.count }))} total={data.total} dark={isDark} height={full ? 380 : undefined} />}
+          />
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By province" size="small" style={{ height: "100%" }}>
-            {loading ? <Skeleton active /> : <MagnitudeBars rows={data.byProvince} color={theme.accent} dark={isDark} />}
-          </Card>
+          <ChartCard
+            title="By province"
+            loading={loading}
+            labelTitle="Province"
+            rows={(data?.byProvince || []).map((p) => ({ key: p.province || "none", label: p.label, count: p.count }))}
+            render={(full) => <MagnitudeBars rows={data.byProvince} color={theme.accent} dark={isDark} height={full ? 380 : undefined} />}
+          />
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By year filed" size="small" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 years</Text>}>
-            {loading ? <Skeleton active /> : <YearColumns rows={data.byYear} color={theme.accent} dark={isDark} />}
-          </Card>
+          <ChartCard
+            title="By year filed"
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 years</Text>}
+            loading={loading}
+            labelTitle="Year"
+            rows={[...(data?.byYear || [])].sort((a, b) => b.year - a.year).map((y) => ({ key: y.year, label: String(y.year), count: y.count }))}
+            render={(full) => <YearColumns rows={data.byYear} color={theme.accent} dark={isDark} years={full ? 100 : 12} height={full ? 380 : undefined} />}
+          />
         </Col>
       </Row>
 
       {/* The desktop unit's monthly upload figures. */}
-      <Card title="Uploads per month" size="small" extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 months, by document type</Text>}>
-        {loading ? (
-          <Skeleton active />
-        ) : (
-          <MonthStack
-            months={data.byMonth}
-            kinds={(unitConfig?.docTypes || []).map((t) => ({ code: t.code, label: data.kindLabels?.[t.code] || t.label }))}
-            dark={isDark}
-          />
-        )}
-      </Card>
+      <MonthStackCard
+        title="Uploads per month"
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>last 12 months, by document type</Text>}
+        loading={loading}
+        months={data?.byMonth || []}
+        kinds={(unitConfig?.docTypes || []).map((t) => ({ code: t.code, label: data?.kindLabels?.[t.code] || t.label }))}
+        dark={isDark}
+      />
 
-      <Card
-        title="Most recently filed"
-        size="small"
-        extra={<Link to={documentsUrl}>All documents <RightOutlined style={{ fontSize: 10 }} /></Link>}
-      >
-        {loading ? (
-          <Skeleton active />
-        ) : (
-          <Table rowKey="serialNo" size="small" columns={recentColumns} dataSource={data.recent} pagination={false} scroll={{ x: "max-content" }} />
+      <Row gutter={[12, 12]}>
+        <Col xs={24} lg={canDecide ? 15 : 24}>
+          <Card
+            title="Recently uploaded"
+            size="small"
+            style={{ height: "100%" }}
+            extra={<Link to={documentsUrl}>Open the library <RightOutlined style={{ fontSize: 10 }} /></Link>}
+          >
+            {loading ? (
+              <Skeleton active />
+            ) : (
+              <Table rowKey="serialNo" size="small" columns={recentColumns} dataSource={data.recent} pagination={false} scroll={{ x: "max-content" }} />
+            )}
+          </Card>
+        </Col>
+        {canDecide && (
+          <Col xs={24} lg={9}>
+            <Card
+              title="Waiting for a decision"
+              size="small"
+              style={{ height: "100%" }}
+              extra={<Link to="/universe/erms/portal-requests">Portal requests <RightOutlined style={{ fontSize: 10 }} /></Link>}
+            >
+              {inbox.isLoading ? (
+                <Skeleton active />
+              ) : (
+                <List
+                  size="small"
+                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing waiting" /> }}
+                  dataSource={(inbox.data?.pending || []).slice(0, 5)}
+                  renderItem={(r) => (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={<DocTitle doc={r} strong={false} />}
+                        description={
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {r.requesterName}
+                            {r.designation ? ` · ${r.designation}` : ""} · {when(r.createdAt)}
+                            {r.purpose ? ` — “${r.purpose}”` : ""}
+                          </Text>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              )}
+            </Card>
+          </Col>
         )}
-      </Card>
+      </Row>
     </Space>
   );
 };

@@ -18,6 +18,9 @@ const corsOptions = {
     "Set-Cookie",
     // This tab's session (see middleware/sessionToken.js).
     "X-Session-Token",
+    // The public Document Portal's changes carry it, so another site cannot
+    // make a visitor's browser send them (modules/portal/routes.js).
+    "X-Portal-Request",
   ],
   credentials: true,
   exposedHeaders: ["Set-Cookie", "X-Session-Token"],

@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Input, Modal, Space, Spin, Tag, Typography, Upload } from "antd";
+import { Alert, Button, Space, Spin, Tag, Tooltip, Typography, Upload } from "antd";
 import {
-  ClockCircleOutlined,
   EyeOutlined,
   FileUnknownOutlined,
   LockOutlined,
   SendOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchCurrentUser } from "../../api/universeService";
+import FloatingModal from "./FloatingModal";
+import { Link } from "react-router-dom";
+import { ROUTES } from "../../config/routes";
 import { message } from "../feedback";
 import { withSessionToken } from "../sessionToken";
-import { attachRecordFile, describeApiError, recordFileBase, requestDocumentAccess, requestRecordFullAccess, requestUnitFullAccess, unitFileBase } from "../api/recordDocuments";
+import { attachRecordFile, describeApiError, recordFileBase, unitFileBase } from "../api/recordDocuments";
 import PdfViewer from "./PdfViewer";
 import { ViewOnlyImage } from "./viewOnly";
 import visibleInterval from "../visibleInterval";
@@ -29,9 +32,8 @@ const { Text, Paragraph } = Typography;
 // both go through the same province scope.
 //
 // View only. There is no download button and no download route: the office's
-// rule is that scans are read here, by the Records Unit, or by someone the
-// Records Unit has approved for this record for a period. Anyone else is
-// shown how to ask, and the state of their request.
+// rule is that scans are read here by the unit that keeps them. Anyone else
+// asks in the E-Universe Document Portal, and reads the document there.
 // ---------------------------------------------------------------------------
 
 // A record's document, or — with `unit` — a Legal/Laboratory document's.
@@ -61,97 +63,26 @@ const humanSize = (bytes) => {
 // Each failure means something different to the person reading it; the
 // sentences, in plain words, are in shared/nasWords.
 
-const when = (iso) => (iso ? new Date(iso).toLocaleString() : "");
-
-/** What a person outside the Records Unit sees: how to ask, or where their request stands. */
-const ApprovalPanel = ({ serialNo, fileName, reason, request, domain, onChanged }) => {
-  const [asking, setAsking] = useState(false);
-  const [why, setWhy] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState(null);
-
-  const send = async () => {
-    setSending(true);
-    setError(null);
-    try {
-      await requestDocumentAccess({ serialNo, reason: why, domain });
-      setAsking(false);
-      setWhy("");
-      onChanged();
-    } catch (e) {
-      setError(e?.response?.data?.message || "The request could not be sent.");
-    } finally {
-      setSending(false);
+/** What a person outside the Records Unit sees: where to ask — the Document Portal. */
+const ApprovalPanel = ({ serialNo, fileName }) => (
+  <Alert
+    type="warning"
+    showIcon
+    icon={<LockOutlined />}
+    style={{ marginTop: 12 }}
+    message={fileName || "Document"}
+    description={
+      <Space direction="vertical" style={{ width: "100%" }}>
+        <span>Only the Records Unit opens this document here. Request it in the E-Universe Document Portal, where you can read it once approved.</span>
+        <Link to={`${ROUTES.documentPortal}?serial=${encodeURIComponent(serialNo)}`}>
+          <Button type="primary" icon={<SendOutlined />}>
+            Request in the Document Portal
+          </Button>
+        </Link>
+      </Space>
     }
-  };
-
-  if (reason === "pending") {
-    return (
-      <Alert
-        type="info"
-        showIcon
-        icon={<ClockCircleOutlined />}
-        style={{ marginTop: 12 }}
-        message={fileName || "Document"}
-        description={
-          <>
-            Your request to view this document is with the Records Unit
-            {request?.requestedAt ? ` (sent ${when(request.requestedAt)})` : ""}. This page updates when they decide.
-          </>
-        }
-      />
-    );
-  }
-
-  const declined = reason === "denied" || reason === "revoked";
-  return (
-    <Alert
-      type="warning"
-      showIcon
-      icon={<LockOutlined />}
-      style={{ marginTop: 12 }}
-      message={fileName || "Document"}
-      description={
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <span>
-            Viewing this document needs the approval of the Records Unit.
-            {declined && request?.decidedAt && (
-              <>
-                {" "}Your last request was <b>{reason}</b> on {when(request.decidedAt)}
-                {request.decisionNote ? ` — “${request.decisionNote}”` : ""}.
-              </>
-            )}
-          </span>
-          {asking ? (
-            <>
-              <Input.TextArea
-                rows={2}
-                maxLength={500}
-                showCount
-                placeholder="Why you need to see it (optional, but it helps the Records Unit decide)"
-                value={why}
-                onChange={(e) => setWhy(e.target.value)}
-              />
-              {error && <Text type="danger">{error}</Text>}
-              <Space>
-                <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={send}>
-                  Send request
-                </Button>
-                <Button onClick={() => setAsking(false)} disabled={sending}>
-                  Cancel
-                </Button>
-              </Space>
-            </>
-          ) : (
-            <Button type="primary" icon={<SendOutlined />} onClick={() => setAsking(true)}>
-              {declined ? "Request again" : "Request access"}
-            </Button>
-          )}
-        </Space>
-      }
-    />
-  );
-};
+  />
+);
 
 /** File a scan against a record that has none, or whose scan is not on the share. */
 const FileScan = ({ serialNo, missing, onFiled }) => {
@@ -180,11 +111,15 @@ const FileScan = ({ serialNo, missing, onFiled }) => {
   );
 };
 
-const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) => {
+/**
+ * @param refNo  the document's reference number (a record's ECC Ref No), shown at the right of the viewer's title bar
+ */
+const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms", refNo }) => {
   const [state, setState] = useState({ status: "loading" });
   const [preview, setPreview] = useState(false);
-  const [requestingFull, setRequestingFull] = useState(false);
-  const [fullSentAt, setFullSentAt] = useState(null);
+  // The Developer may select and copy a scan's text; everyone else views only.
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: fetchCurrentUser, staleTime: 5 * 60 * 1000, retry: false });
+  const canCopy = me?.role === "developer";
 
   // `quiet`: a re-check in the background keeps what is on screen until the
   // answer is in. It used to reset to "loading" first, which unmounted the
@@ -197,8 +132,7 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (res.ok) setState({ status: "ready", info: data });
-        else if (data.code === "APPROVAL_REQUIRED")
-          setState({ status: "approval", reason: data.reason, request: data.request });
+        else if (data.code === "APPROVAL_REQUIRED") setState({ status: "approval" });
         else setState({ status: "unavailable", code: data.code, message: data.message });
       })
       .catch(() => {
@@ -216,9 +150,8 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
     return cancel;
   }, [load]);
 
-  // A pending request is decided elsewhere; look again now and then so the
-  // person does not have to reload the page to find out. Not while the
-  // document is open: nothing about it changes under a reader.
+  // The share can come back, or a scan be filed elsewhere; look again now
+  // and then. Not while the document is open: nothing changes under a reader.
   useEffect(() => {
     if (preview) return undefined;
     return visibleInterval(() => load(true), 45000);
@@ -234,16 +167,7 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
   }
 
   if (state.status === "approval") {
-    return (
-      <ApprovalPanel
-        serialNo={serialNo}
-        fileName={fileName}
-        reason={state.reason}
-        request={state.request}
-        domain={domain}
-        onChanged={() => load()}
-      />
-    );
+    return <ApprovalPanel serialNo={serialNo} fileName={fileName} />;
   }
 
   if (state.status === "unavailable") {
@@ -267,49 +191,8 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
   }
 
   const { info } = state;
-  const approvedUntil = info.access?.reason === "approved" ? info.access.expiresAt : null;
-
-  // Who can open the rest of a page-limited document, and how to ask them.
-  //   - someone viewing a record by approval: the Records Unit, through its
-  //     approval inbox (the same request, marked "every page");
-  //   - the unit's own staff — the Records Unit on a record, Legal or
-  //     Laboratory on theirs: the administrators, by an ERMS message.
-  const byApproval = !unit && info.access?.reason !== "records-unit";
-  const owner = byApproval ? "the Records Unit" : "the administrators";
-  const limited = info.contentType === "application/pdf" && info.viewing?.pageLimit > 0;
-  const askedAt = fullSentAt || info.access?.fullAccessRequestedAt || null;
-  const pending = byApproval ? info.access?.fullAccessRequested === true || Boolean(fullSentAt) : Boolean(askedAt);
-  const requestFullAccess = async () => {
-    setRequestingFull(true);
-    try {
-      if (byApproval) {
-        await requestDocumentAccess({ serialNo, domain, full: true, reason: "The whole document, asked from the viewer." });
-        setFullSentAt(new Date().toISOString());
-        message.success("Your request for the whole document was sent to the Records Unit.");
-        load(true);
-      } else {
-        const res = unit
-          ? await requestUnitFullAccess({ unit, serialNo, reason: "Asked from the document viewer." })
-          : await requestRecordFullAccess({ serialNo, reason: "Asked from the document viewer." });
-        setFullSentAt(res.at || new Date().toISOString());
-        message.success(res.already ? "You already asked the administrators today." : "Your request for the whole document was sent to the administrators.");
-      }
-    } catch (e) {
-      message.error(describeApiError(e, "The request could not be sent. Please try again."));
-    } finally {
-      setRequestingFull(false);
-    }
-  };
-  const fullRequest = !limited || info.access?.fullAccess === true
-    ? null
-    : pending
-      ? {
-          state: "pending",
-          note: byApproval
-            ? "Your request for the whole document is with the Records Unit. This updates when they decide."
-            : `You asked the administrators for the whole document${askedAt ? ` on ${when(askedAt)}` : ""}. They have it in their ERMS messages.`,
-        }
-      : { state: requestingFull ? "sending" : "idle", send: requestFullAccess, label: byApproval ? "Request full access from the Records Unit" : "Request full access from the administrator" };
+  // The rest of a page-limited document is the administrators' to open.
+  const owner = "the system administrator";
 
   return (
     <>
@@ -324,11 +207,6 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
         <Text type="secondary" style={{ fontSize: 12 }}>
           {humanSize(info.size)} · view only
         </Text>
-        {approvedUntil && (
-          <Tag icon={<ClockCircleOutlined />} color="green">
-            approved until {when(approvedUntil)}
-          </Tag>
-        )}
       </Space>
       {!info.previewable && (
         <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>
@@ -337,23 +215,29 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
         </Paragraph>
       )}
 
-      <Modal
+      {/* A window, not a dialog: moved aside, minimised or resized, so the
+          scan can be read next to the record's details. No mask — the
+          details behind it stay usable. */}
+      <FloatingModal
         open={preview}
         onCancel={() => setPreview(false)}
+        floating
+        width={1100}
+        height="86vh"
+        bodyStyle={{ display: "flex", flexDirection: "column" }}
         title={
-          <Space>
-            {info.fileName}
-            <Tag>view only</Tag>
+          <Space size={6}>
+            <Text strong ellipsis style={{ maxWidth: 520 }}>{info.fileName}</Text>
+            <Tag>{canCopy ? "copy allowed" : "view only"}</Tag>
           </Space>
         }
-        width="90vw"
-        style={{ top: 24 }}
-        footer={[
-          <Button key="close" type="primary" onClick={() => setPreview(false)}>
-            Close
-          </Button>,
-        ]}
-        destroyOnHidden
+        extra={
+          refNo ? (
+            <Tooltip title="ECC Ref No">
+              <Tag color="blue" style={{ marginInlineEnd: 0, fontFamily: "monospace" }}>{refNo}</Tag>
+            </Tooltip>
+          ) : null
+        }
       >
         {/* Every scan through a view-only viewer: no download, no print,
             no right-click save. A PDF is drawn by the application's own
@@ -363,10 +247,15 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
         {info.contentType === "application/pdf" ? (
           <PdfViewer
             src={`${fileBase(serialNo, unit, domain)}/preview`}
+            height="100%"
             watermark={info.viewing?.watermark || null}
             blurWithheld={info.viewing?.blurWithheldPages !== false}
-            request={fullRequest}
             owner={owner}
+            // No page limit for this viewer, and a large scan: read by
+            // ranges, the first page up as soon as its bytes are in. A small
+            // one is quicker in one request.
+            ranged={!(info.viewing?.pageLimit > 0) && info.size > 3 * 1024 * 1024}
+            selectable={canCopy}
           />
         ) : String(info.contentType || "").startsWith("image/") ? (
           <ViewOnlyImage src={previewUrl(serialNo, unit, domain, false)} alt={info.fileName} />
@@ -374,10 +263,10 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms" }) =
           <iframe
             title={info.fileName}
             src={previewUrl(serialNo, unit, domain, true)}
-            style={{ width: "100%", height: "78vh", border: "none" }}
+            style={{ width: "100%", height: "100%", minHeight: 400, border: "none" }}
           />
         )}
-      </Modal>
+      </FloatingModal>
     </>
   );
 };

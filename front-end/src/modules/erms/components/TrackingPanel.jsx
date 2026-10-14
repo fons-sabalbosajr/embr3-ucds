@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Alert,
-  App as AntdApp,
   Button,
   Card,
   DatePicker,
@@ -15,17 +14,21 @@ import {
   Timeline,
   Typography,
 } from "antd";
-import { DesktopOutlined, PlusOutlined } from "@ant-design/icons";
+import { DesktopOutlined, PlusOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { addTracking, describeApiError } from "../api/ermsService";
+import { message } from "../../../shared/feedback";
 
 // Custody history. Append-only — there is no edit or delete, here or in the
 // API. A mistake is corrected by recording a correction.
 //
-// Two sources on one timeline: the movements recorded here, and the desktop
-// system's own log for the record (who viewed, modified, requested or
-// uploaded its file, from its SQL tables). The desktop entries are marked as
-// such and cannot be added to — that system is closed.
+// Three sources on one timeline: the movements recorded here, how the
+// record was shared through the Document Portal (who asked, who approved or
+// declined it and for how long, access changed or withdrawn, each time the
+// requester opened it), and the desktop system's own log for the record
+// (who viewed, modified, requested or uploaded its file, from its SQL
+// tables). The desktop entries are marked as such and cannot be added to —
+// that system is closed.
 
 const ACTION_COLOR = {
   received: "green",
@@ -43,22 +46,31 @@ const ACTION_COLOR = {
   "legacy-requested": "purple",
   "legacy-viewed": "default",
   "legacy-other": "default",
+  "portal-request": "purple",
+  "portal-decision": "purple",
+  "portal-adjust": "purple",
+  "portal-revoke": "orange",
+  "portal-ended": "default",
+  "portal-leave": "default",
+  "portal-view": "purple",
+  "portal-download": "purple",
 };
 
 const SOURCE_OPTIONS = [
   { value: "all", label: "Everything" },
   { value: "custody", label: "Movements recorded here" },
+  { value: "portal", label: "Sharing (Document Portal)" },
   { value: "legacy", label: "Desktop system log" },
 ];
 
 const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrite }) => {
-  const { message } = AntdApp.useApp();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState("all");
   const [form] = Form.useForm();
 
   const legacyCount = tracking.filter((t) => t.source === "legacy").length;
+  const sharedCount = tracking.filter((t) => t.source === "portal").length;
   const shown = tracking.filter((t) => source === "all" || (t.source || "custody") === source);
 
   const mutation = useMutation({
@@ -89,8 +101,13 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
   return (
     <Card
       title={
-        <Space size={8}>
+        <Space size={8} wrap>
           <span>Tracking</span>
+          {sharedCount > 0 && (
+            <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: "normal" }}>
+              <ShareAltOutlined /> {sharedCount} sharing
+            </Typography.Text>
+          )}
           {legacyCount > 0 && (
             <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: "normal" }}>
               <DesktopOutlined /> {legacyCount} from the desktop system
@@ -100,8 +117,8 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
       }
       size="small"
       extra={
-        <Space size={8}>
-          {legacyCount > 0 && (
+        <Space size={8} wrap>
+          {(legacyCount > 0 || sharedCount > 0) && (
             <Select placeholder="Source" size="small" value={source} onChange={setSource} options={SOURCE_OPTIONS} style={{ width: 210 }} />
           )}
           {canWrite && (
@@ -136,7 +153,7 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
           items={shown.map((t, i) => ({
             key: t._id || `${t.source}-${i}`,
             color: ACTION_COLOR[t.action] || "gray",
-            dot: t.source === "legacy" ? <DesktopOutlined style={{ fontSize: 12 }} /> : undefined,
+            dot: t.source === "legacy" ? <DesktopOutlined style={{ fontSize: 12 }} /> : t.source === "portal" ? <ShareAltOutlined style={{ fontSize: 12 }} /> : undefined,
             children: (
               <Space direction="vertical" size={0}>
                 <Space size={6} wrap>

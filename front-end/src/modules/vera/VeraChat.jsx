@@ -79,7 +79,7 @@ function AnswerText({ children }) {
   );
 }
 
-export default function VeraChat({ variant = "staff" }) {
+export default function VeraChat({ variant = "staff", holdIntro = false }) {
   const isPublic = variant === "public";
   const fetchStatus = isPublic ? getVeraPublicStatus : getVeraStatus;
   const sendMessage = isPublic ? askVeraPublic : askVera;
@@ -126,6 +126,58 @@ export default function VeraChat({ variant = "staff" }) {
   }, [variant, isPublic, isPublic ? pageKey : null]);
 
   const name = status?.name || "VERA";
+
+  // Where the page asks for it (the Document Portal), VERA says hello by
+  // herself: a moment after the page settles, her flame ignites beside the
+  // launcher and her greeting types itself out. Once per tab: dismissed or
+  // opened, she waits to be asked after that.
+  const INTRO_KEY = `eu.vera.intro.${pageKey}`;
+  const [introReady, setIntroReady] = useState(false);
+  const [introDismissed, setIntroDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(`eu.vera.intro.${pageKeyFromPath(window.location.pathname)}`) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const dismissIntro = useCallback(() => {
+    setIntroDismissed(true);
+    try {
+      sessionStorage.setItem(INTRO_KEY, "1");
+    } catch {
+      /* private window: she may say hello again on reload */
+    }
+  }, [INTRO_KEY]);
+  // The page may ask her to wait (the portal's tour is showing).
+  useEffect(() => {
+    if (!status?.introduce || introDismissed || holdIntro) return undefined;
+    const t = setTimeout(() => setIntroReady(true), 1400);
+    return () => clearTimeout(t);
+  }, [status?.introduce, introDismissed, holdIntro]);
+  const introText = useMemo(() => String(status?.welcomeMessage || "").split(/\n\n/)[0] || "", [status?.welcomeMessage]);
+  const [typed, setTyped] = useState(0);
+  // Her mark comes alive while she introduces herself: it ignites, speaks
+  // while the greeting types out, then settles to its resting flame.
+  const [introFlame, setIntroFlame] = useState("igniting");
+  const speaking = introReady && typed < introText.length;
+  useEffect(() => {
+    if (!introReady || introDismissed) return undefined;
+    setTyped(0);
+    setIntroFlame("igniting");
+    const lit = setTimeout(() => setIntroFlame("working"), 1200);
+    const tick = setInterval(() => setTyped((n) => (n >= introText.length ? n : n + 2)), 28);
+    return () => {
+      clearTimeout(lit);
+      clearInterval(tick);
+    };
+  }, [introReady, introDismissed, introText]);
+  useEffect(() => {
+    if (introReady && introText && typed >= introText.length) {
+      const t = setTimeout(() => setIntroFlame("burning"), 600);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [introReady, typed, introText]);
 
   // Rotating "thinking" copy, so a slow model call does not look frozen.
   const thinkingMessages = useMemo(
@@ -215,6 +267,7 @@ export default function VeraChat({ variant = "staff" }) {
 
   if (!status?.available || status?.showLauncher === false) return null;
 
+  const showIntro = Boolean(status.introduce) && !open && !introDismissed && introReady;
   const starters = status.starters || [];
   const showGreeting = messages.length === 0;
   const modelOn = Boolean(status.modelAvailable);
@@ -223,6 +276,42 @@ export default function VeraChat({ variant = "staff" }) {
     // data-theme scopes the palette in vera.css, and is the [data-theme] the
     // canvases fall back to.
     <div className="vera-root" data-theme={mode}>
+      {showIntro && (
+        <div className="vera-intro" role="status" aria-live="polite">
+          <div className="vera-intro__head">
+            <span className={`vera-intro__mark${speaking ? " is-speaking" : ""}`}>
+              <VeraFlame size={52} state={introFlame} theme={mode} label="" />
+            </span>
+            <div className="vera-intro__who">
+              <span className="vera-intro__name">{name}</span>
+              <span className="vera-intro__role">{status.fullName || "Your guide"}</span>
+            </div>
+            <button type="button" className="vera-icon-btn vera-intro__close" aria-label="Dismiss" title="Dismiss" onClick={dismissIntro}>
+              ×
+            </button>
+          </div>
+          <p className="vera-intro__text">
+            {introText.slice(0, typed)}
+            {typed < introText.length ? <span className="vera-intro__caret" aria-hidden="true" /> : null}
+          </p>
+          <div className="vera-intro__actions">
+            <button
+              type="button"
+              className="vera-intro__primary"
+              onClick={() => {
+                dismissIntro();
+                setOpen(true);
+                setMinimized(false);
+              }}
+            >
+              Ask {name}
+            </button>
+            <button type="button" className="vera-intro__secondary" onClick={dismissIntro}>
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
       {!open && (
         <button
           type="button"
@@ -238,7 +327,7 @@ export default function VeraChat({ variant = "staff" }) {
           <VeraFlame size={isMobile ? 40 : 36} state="burning" theme={mode} glow={false} label="" />
           <span className="vera-launcher__text">
             <span className="vera-launcher__label">Ask {name}</span>
-            <span className="vera-launcher__sub">{modelOn ? "Your E-Universe assistant" : "Help library"}</span>
+            <span className="vera-launcher__sub">{status.introduce ? "Your Document Portal guide" : modelOn ? "Your E-Universe assistant" : "Help library"}</span>
           </span>
         </button>
       )}

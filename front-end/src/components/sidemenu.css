@@ -496,3 +496,26 @@
   margin: 0 4px 2px;
   padding: 2px 0;
 }
+
+/* ========== Phone: the navigation as a drawer ==========
+   SideMenu renders the sider with no width of its own on a phone (it would
+   otherwise take 220 of a 390px screen and leave the page a strip). Opened
+   from the header's menu button, it lies over the page with a backdrop
+   behind it; choosing somewhere, or tapping outside, closes it. */
+.ant-layout-sider.side-menu-drawer {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 1100;
+  box-shadow: 4px 0 18px rgba(0, 0, 0, 0.35);
+}
+
+.side-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1099;
+  background: rgba(0, 0, 0, 0.45);
+}

@@ -28,6 +28,20 @@
 const ASSISTANT_NAME = 'VERA';
 const ASSISTANT_FULL_NAME = 'Virtual Environmental Response Assistant';
 const DEFAULT_SUPPORT = 'the E-Universe administrator (MIS)';
+// Where a public visitor is sent for the office's figures (Admin Settings ›
+// VERA Assistant › Office website overrides it).
+const DEFAULT_OFFICE_WEBSITE = 'https://r3.emb.gov.ph';
+
+/**
+ * A public visitor asked for a number — how many documents, requests,
+ * permits, people… VERA gives no counts to anyone who is not signed in
+ * (she has none to give, and a figure without its context misleads): she
+ * points them to the office's website instead. Staff get exact figures.
+ */
+const publicCountReply = (website, portal = false) =>
+  "I don't give out counts or figures here. For the office's official numbers and reports, please visit the " +
+  `**EMB Region III website: ${website}**.` +
+  (portal ? '\n\nYour **own request** is always shown on this page, under **Your request**.' : '');
 
 // Page key -> the label VERA uses when it says "go to …". The client sends a
 // coarse key (front-end/src/api/veraService.js pageKeyFromPath), never a path
@@ -42,7 +56,7 @@ const PAGE_LABELS = Object.freeze({
   'erms-dashboard': 'ERMS › Dashboard',
   'document-library': 'ERMS › Document Library',
   'record-detail': 'ERMS › record detail',
-  'access-requests': 'ERMS › Document Requests',
+  'portal-desk': 'ERMS › Document Portal requests',
   archive: 'ERMS › Archive Boxes',
   'legal-dashboard': 'ERMS › Legal Services dashboard',
   'legal-documents': 'ERMS › Legal Services documents',
@@ -209,6 +223,452 @@ const PUBLIC_KB = Object.freeze([
     answer:
       'Contact the **E-Universe administrator (MIS)**. They approve account requests, set which parts of the system an account can see, and can confirm who you are before checking an account.',
     keywords: ['contact', 'who do i contact', 'administrator', 'admin', 'mis', 'help desk', 'support', 'account problem'],
+  },
+]);
+
+// ── PORTAL: the public Document Portal (/e-universe/document-portal) ─────────
+// Still the public realm — the visitor is not signed in and not identified,
+// and every public guard applies — but here the visitor came to ask for a
+// scanned office document (a Records Unit permit, a Legal Services or a
+// Laboratory document…), so documents and the room ARE the subject. VERA
+// explains how the portal works; she cannot see any request, document or
+// person in it, and gives a public visitor no counts.
+
+const PORTAL_PAGE_LABELS = Object.freeze({ 'document-portal': 'Document Portal' });
+
+// The first paragraph is her introduction on the page (VeraChat): short, and
+// about every kind of document, not one unit's.
+const PORTAL_GREETING_REPLY =
+  `Hi! I'm ${ASSISTANT_NAME}, your Document Portal guide. 👋 I can help you find an EMB Region III document, request it, and read it here once it is approved.\n\n` +
+  "I can't see anyone's request or any document, and I'll never ask for a password. What would you like to know?";
+
+const PORTAL_OUT_OF_SCOPE_REPLY =
+  'Here I can help with the Document Portal — finding a document, sending a request, the room and the waiting line, and reading an approved document. ' +
+  'For anything else, please contact the EMB Region III office.';
+
+const PORTAL_CANNOT_VERIFY_REPLY =
+  "I don't have anything that covers that, and I can't see any request, document or person from here. " +
+  'Please ask the office unit that keeps the document — they decide the requests.';
+
+const PORTAL_NO_LOOKUP_REPLY =
+  "I can't look up a request, a document or a person — I'm not given any of that, on purpose.\n\n" +
+  '**Your own request** is shown on this page, under **Your request**, and it updates by itself the moment it is decided. ' +
+  'If you need it checked, press **Messages** there to ask the unit that keeps the document.';
+
+const PORTAL_BLOCKED_REPLY =
+  "That's inside E-Universe rather than the Document Portal, so I can't help with it here. Please contact the EMB Region III office.";
+
+const PORTAL_STARTER_QUESTIONS = Object.freeze([
+  'How do I request a document?',
+  'What is the room, and why is there a waiting line?',
+  'How long until my request is approved?',
+  'Why can I only see some pages?',
+  'Can I download or print the document?',
+]);
+
+const PORTAL_SCOPE_TERMS = Object.freeze([
+  'portal', 'document', 'documents', 'request', 'requests', 'ecc', 'reference', 'ref no', 'serial', 'project', 'project title',
+  'permit', 'proponent', 'search', 'find', 'room', 'seat', 'seats', 'line', 'queue', 'waiting', 'wait', 'approve', 'approved',
+  'approval', 'declined', 'decline', 'records unit', 'designation', 'purpose', 'duration', 'how long',
+  'foi', 'freedom of information', 'privacy', 'data privacy', 'personal information', 'terms', 'consent', 'valid id', 'citizen',
+  'student', 'employee', 'agency', 'school',
+  'hours', 'pages', 'page', 'view', 'open', 'read', 'download', 'print', 'screenshot', 'watermark', 'expire', 'expired', 'time',
+  'leave', 'cancel', 'notify', 'notification', 'name', 'privacy', 'help', 'contact', 'scan', 'pdf',
+  'colour', 'color', 'kind', 'type', 'category', 'cnc', 'pto', 'hw', 'discharge', 'hazardous', 'certificate', 'copy', 'certified',
+  'fee', 'free', 'cost', 'appeal', 'refused', 'denied', 'withdrawn', 'revoked', 'lapsed', 'ended', 'estimate', 'full', 'seated',
+  'mistake', 'wrong', 'change', 'edit', 'error', 'load', 'hidden', 'dark', 'blank', 'tour', 'theme', 'light mode', 'phone', 'mobile',
+  'browser', 'computer', 'come back', 'office hours', 'working days', 'vera', 'who are you', 'agree', 'tick', 'checkbox', 'private',
+  '24 hours', 'extend', 'longer', 'chat', 'message', 'messages', 'reply', 'question', 'talk', 'conversation', 'weekend', 'weekends',
+  'saturday', 'sunday', 'closed', 'open', 'monday', 'legal', 'laboratory', 'lab', 'docket', 'case', 'clearer', 'clear', 'blurry',
+]);
+
+/** Inside-the-system topics still kept from an unidentified visitor on the portal. */
+const PORTAL_BLOCKED_TERMS = Object.freeze([
+  'register data', 'monitoring plan', 'document library settings', 'settings', 'permission', 'permissions', 'database',
+  'user list', 'all users', 'other user', 'someone else', 'audit', 'nas', 'share path', 'file path', 'server',
+]);
+
+const PORTAL_KB = Object.freeze([
+  {
+    id: 'portal-what',
+    category: 'About',
+    question: 'What is the Document Portal?',
+    answer:
+      'The **E-Universe Document Portal** is where anyone can ask EMB Region III for a scanned document — **Records Unit** permits and certificates, **Legal Services** cases and orders, and **Laboratory** reports — no E-Universe account needed. ' +
+      'You send a request, the unit that keeps the document approves it for a set time, and you read the document **here, on this page**. ' +
+      'The room is **closed on weekends**.',
+    keywords: ['what is', 'portal', 'document portal', 'about', 'what is this', 'account needed', 'no account'],
+  },
+  {
+    id: 'portal-how',
+    category: 'Requesting',
+    question: 'How do I request a document?',
+    answer:
+      '1. In **Find the document**, type its **reference or docket number** (an ECC or permit number, a Legal docket, a Laboratory reference) or part of its **title** (the company also works), then press **Select** on the right one.\n' +
+      '2. Choose who you are requesting as (**EMB Region III employee**, **government employee of another agency**, **student** or **private citizen**), then fill in **Requester name**, **Designation**, the **Purpose of request** and the **Desired duration**. ' +
+      'If you are not an EMB Region III employee, also give your **contact** and the **valid ID** you will present.\n' +
+      '3. Read the terms and tick to accept them — **Data Privacy** for everyone, and **Freedom of Information** too if you are not an employee.\n' +
+      '4. Press **Enter the room and send request**.\n\n' +
+      'Your name then appears in the room, and the unit that keeps the document is told straight away.',
+    keywords: ['how do i request', 'request a document', 'ask for', 'send request', 'steps', 'how to', 'get a document', 'find', 'search', 'ecc', 'project title', 'docket', 'reference number', 'title'],
+  },
+  {
+    id: 'portal-find',
+    category: 'Requesting',
+    question: "I can't find the document I need.",
+    answer:
+      'Search with at least **two characters** of the **reference or docket number** or the **title** — part of either is enough, and capital letters do not matter. ' +
+      'Only documents that already have a **scanned file** are listed. If it still does not show, the scan may not be filed yet: ask the office.',
+    keywords: ['cant find', "can't find", 'not found', 'no document', 'not listed', 'search', 'no results', 'missing'],
+  },
+  {
+    id: 'portal-designation',
+    category: 'Requesting',
+    question: 'What do I put in Designation?',
+    answer:
+      'First choose **who you are requesting as** — an **EMB Region III employee**, a **government employee of another agency**, a **student**, or a **private citizen**. Designation then asks for the right thing:\n' +
+      '- **EMB Region III employee**: your section, unit or division, written in full — start typing and choose it from the list, e.g. *Planning and Information System Management Unit*.\n' +
+      '- **Government employee (other agency)**: your agency and office.\n' +
+      '- **Student**: your school or university, and your course.\n' +
+      '- **Private citizen**: your occupation or affiliation.',
+    keywords: ['designation', 'section', 'unit', 'division', 'office', 'requester type', 'who am i', 'employee', 'student', 'citizen', 'agency', 'school'],
+  },
+  {
+    id: 'portal-foi',
+    category: 'Requesting',
+    question: 'I am not an EMB Region III employee — what do I need?',
+    answer:
+      'You ask as a member of the public, under the **Freedom of Information** order (**Executive Order No. 2, s. 2016**). The form then also asks for:\n' +
+      '1. A **contact** — your email address or mobile number.\n' +
+      '2. The **valid ID** you will present if the office asks (only the kind of ID is recorded, never its number).\n' +
+      '3. Your agreement to the **Freedom of Information** and **Data Privacy** terms — read them on the form, then tick both boxes.\n\n' +
+      'The office answers within **fifteen (15) working days**, which may be extended by up to twenty (20) for extensive or voluminous records. ' +
+      'Access can be refused for information under an exception (for example, personal information protected by law); a refusal is in writing with its reason, and can be appealed.',
+    keywords: ['foi', 'freedom of information', 'executive order', 'eo 2', 'not an employee', 'citizen', 'student', 'other agency', 'public', 'valid id', 'id', 'contact', 'working days', 'refused', 'exception', 'appeal'],
+  },
+  {
+    id: 'portal-privacy',
+    category: 'Privacy',
+    question: 'What happens to my personal information?',
+    answer:
+      'It is handled under the **Data Privacy Act of 2012 (Republic Act No. 10173)**. The office keeps your name, designation, purpose — and, for the public, your contact and ID type — only to decide your request, contact you about it and keep the required record. ' +
+      'Other people in the room never see your name or designation — only an unnamed seat and its clock. The unit that keeps the document and the system developer see who asked.\n\n' +
+      'You may ask to see or correct your information, or object to its use, through the **EMB Region III Data Protection Officer** via the office, and you may complain to the **National Privacy Commission**. ' +
+      'Every EMB Region III employee accepts the Data Privacy terms too; everyone else also accepts the FOI terms.',
+    keywords: ['privacy', 'data privacy', 'personal information', 'ra 10173', 'republic act', 'my data', 'who sees', 'national privacy commission', 'npc', 'data protection officer', 'consent', 'terms'],
+  },
+  {
+    id: 'portal-duration',
+    category: 'Requesting',
+    question: 'How long should I ask for?',
+    answer:
+      'Pick a time from the list, or choose **Custom** and enter hours or days — anything from 15 minutes to 30 days. Ask only for what the purpose needs: the office may approve a shorter time.\n\n' +
+      'If you are **not an EMB Region III employee**, **three (3) days is the recommended maximum** — longer requests are more likely to be questioned or shortened. ' +
+      'Remember that once you first open the document, your access ends 24 hours later anyway.',
+    keywords: ['duration', 'how long', 'desired duration', 'custom', 'days', 'hours', '3 days', 'three days', 'longer', 'extend'],
+  },
+  {
+    id: 'portal-room',
+    category: 'The room',
+    question: 'What is the room, and why is there a waiting line?',
+    answer:
+      'The **room** holds up to **50 people** at a time — everyone waiting for a decision or reading an approved document. ' +
+      "Each seat shows only a clock — other visitors never see anyone's name, designation, document or purpose; you see your own seat marked **You**.\n\n" +
+      'When the room is full, a new request joins the **waiting line**, with an estimate of how long until a seat frees. ' +
+      'You are **seated automatically** when one does, and the office is told then.',
+    keywords: ['room', 'waiting line', 'line', 'queue', 'full', 'seat', 'seats', '50', 'wait', 'position', 'estimate', 'my turn'],
+  },
+  {
+    id: 'portal-approval',
+    category: 'Approval',
+    question: 'How long until my request is approved?',
+    answer:
+      'The **unit that keeps the document** decides each request, during office hours — there is no fixed time. **This page updates by itself** the moment they decide, ' +
+      'and if you allowed notifications you also get one on your computer.\n\n' +
+      'If nobody decides within **a day**, the request lapses and your seat goes to the next person; you may simply ask again.',
+    keywords: ['how long', 'approved', 'approval', 'when', 'waiting for', 'decision', 'decide', 'pending', 'awaiting', 'lapsed', 'notify', 'notification'],
+  },
+  {
+    id: 'portal-declined',
+    category: 'Approval',
+    question: 'My request was declined — what now?',
+    answer:
+      'The office may add a **note** saying why; it shows on this page. You may send a **new request**, with more detail in the purpose — or ask the office directly.',
+    keywords: ['declined', 'decline', 'denied', 'rejected', 'withdrawn', 'ended my access'],
+  },
+  {
+    id: 'portal-viewing',
+    category: 'Reading',
+    question: 'How do I read the document once it is approved?',
+    answer:
+      'Under **Your request** press **Open document**. It opens here, on this page, for the time approved — the clock shows how long is left, and the document **closes by itself** when it runs out.\n\n' +
+      '**The first time you open it, your access is set to end 24 hours later** (or sooner, if the approved time ends first) — so open it when you are ready to read.\n\n' +
+      'Open it from the same computer and browser you asked from: the request belongs to that browser.',
+    keywords: ['open', 'read', 'view', 'approved', 'open document', 'how do i see', 'where is my document', 'another computer', 'browser'],
+  },
+  {
+    id: 'portal-pages',
+    category: 'Reading',
+    question: 'Why can I only see some pages?',
+    answer:
+      'The office can approve **all pages** or only **some** of them — just what your purpose needs. The pages not approved are not sent to your browser at all. ' +
+      'If you need more, send a new request saying which pages and why.',
+    keywords: ['pages', 'some pages', 'only some', 'missing pages', 'more pages', 'whole document', 'all pages'],
+  },
+  {
+    id: 'portal-no-download',
+    category: 'Reading',
+    question: 'Can I download or print the document?',
+    answer:
+      'Normally no — documents in the portal are **view only**: there is no download, print or copy, and the document is hidden when you switch to another window. ' +
+      'If you truly need the file, ask the office: only the system developer can turn on a **Download** button for a request. ' +
+      'The pages are shown **clean, without a watermark**, so they are easy to read — please do not photograph or screenshot them; every opening is recorded. ' +
+      'If you need an official copy, ask the office.',
+    keywords: ['download', 'print', 'save', 'copy', 'screenshot', 'photo', 'pdf', 'watermark', 'official copy', 'hidden', 'clear', 'clearer', 'blurry', 'name on the page'],
+  },
+  {
+    id: 'portal-leave',
+    category: 'The room',
+    question: 'How do I leave or cancel my request?',
+    answer:
+      'Under **Your request** press **Leave the room** (or **Leave the line**). Your seat goes to the next person. If you had an approved document, it closes, and you would need to ask again.',
+    keywords: ['leave', 'cancel', 'withdraw', 'stop', 'remove my request', 'leave the room', 'leave the line'],
+  },
+  {
+    id: 'portal-one',
+    category: 'Requesting',
+    question: 'Can I ask for more than one document?',
+    answer:
+      'One request at a time from a browser. When it ends — or after you leave the room — you can ask for the next document.',
+    keywords: ['more than one', 'two documents', 'another document', 'second request', 'multiple', 'already have a request'],
+  },
+  {
+    id: 'portal-kinds',
+    category: 'Finding a document',
+    question: 'What are the colours and kinds of document in the search?',
+    answer:
+      'Matches are grouped by the law each document is issued under, in the same colours the office uses for those laws:\n' +
+      '- **PD 1586 · ECC** (teal) — Environmental Compliance Certificates\n' +
+      '- **PD 1586 · CNC** (amber) — Certificates of Non-Coverage\n' +
+      '- **RA 8749 · PTO** (purple) — Permits to Operate (air)\n' +
+      '- **RA 9275 · DP** (red) — Discharge Permits (water)\n' +
+      '- **RA 6969 · HW** (green) — Hazardous Waste Generator Registrations\n' +
+      '- **Other** (brown) — other Records Unit documents\n' +
+      '- **Legal Services** (blue) — cases, orders, resolutions and other legal documents\n' +
+      '- **Laboratory** (pink) — laboratory reports and results\n\n' +
+      'Press a chip above the results to show only that kind.',
+    keywords: ['colour', 'color', 'colours', 'colors', 'kind', 'kinds', 'type', 'types', 'category', 'categories', 'group', 'cnc', 'pto', 'discharge', 'hazardous', 'hw', 'pd 1586', 'ra 8749', 'ra 9275', 'ra 6969', 'chip', 'filter', 'legal', 'laboratory', 'lab'],
+  },
+  {
+    id: 'portal-doc-terms',
+    category: 'Finding a document',
+    question: 'What are an ECC, a CNC, a PTO, a DP and an HW registration?',
+    answer:
+      '- **ECC** — *Environmental Compliance Certificate*, issued under the EIS System (PD 1586) for projects that need one.\n' +
+      '- **CNC** — *Certificate of Non-Coverage*, also under PD 1586, for projects found not to need an ECC.\n' +
+      '- **PTO** — *Permit to Operate* air pollution sources, under the Clean Air Act (RA 8749).\n' +
+      '- **DP** — *Discharge Permit* for wastewater, under the Clean Water Act (RA 9275).\n' +
+      '- **HW** — *Hazardous Waste Generator Registration*, under RA 6969.\n\n' +
+      'Each shows in its own colour in the search results.',
+    keywords: ['what is an ecc', 'what is a cnc', 'what is cnc', 'what is ecc', 'what is pto', 'what is a pto', 'what is dp', 'non-coverage', 'compliance certificate', 'permit to operate', 'discharge permit', 'hazardous waste generator', 'meaning', 'stands for', 'cnc', 'ecc'],
+  },
+  {
+    id: 'portal-ecc-number',
+    category: 'Finding a document',
+    question: 'What is the reference number, and where do I find it?',
+    answer:
+      'It is the number printed on the document itself — an ECC or permit number (e.g. *ECC-OL-R03-2017-0370*), a Legal Services docket number, or a Laboratory reference number. ' +
+      'You can type all of it or just part of it (the year and the last digits usually find it), or search by the **title** instead. ' +
+      'Each document in the portal is named by its reference number and its title.',
+    keywords: ['ecc reference', 'reference number', 'ref no', 'ecc number', 'where do i find', 'what is the ecc', 'permit number', 'certificate number'],
+  },
+  {
+    id: 'portal-terms-step',
+    category: 'Requesting',
+    question: 'Why do I have to agree to terms before sending?',
+    answer:
+      'When you press **Enter the room and send request**, the terms open one step at a time — **Freedom of Information** then **Data Privacy** if you are not an EMB Region III employee, **Data Privacy** only if you are. ' +
+      'Scroll each to the end, tick the box, and press **I agree**; the request is sent after the last step. ' +
+      'This is required: the office records which terms you accepted, and when. Press **Cancel** to go back and change your details.',
+    keywords: ['terms', 'agree', 'i agree', 'checkbox', 'tick', 'cannot tick', "can't tick", 'scroll', 'modal', 'consent', 'why agree', 'terms and conditions', 'greyed', 'disabled'],
+  },
+  {
+    id: 'portal-24h',
+    category: 'Reading',
+    question: 'Why did my access change to 24 hours after I opened the document?',
+    answer:
+      'Once you **first open** a document, your access ends **24 hours later** — or sooner, if the approved time ends first. The page tells you the new end time. ' +
+      'So open it when you are ready to read. If you need longer after that, ask the office.',
+    keywords: ['24 hours', '24 hrs', 'twenty-four', 'first open', 'opened', 'changed', 'shorter', 'cut', 'reduced', 'ends sooner', 'why did my time'],
+  },
+  {
+    id: 'portal-estimate',
+    category: 'The room',
+    question: 'How is the waiting time estimated?',
+    answer:
+      'From the seats in the room: each approved seat frees when its time ends, and a seat still waiting for a decision is counted as if approved now for the time it asked. ' +
+      'Your place in line takes the next seat to free. It is an **estimate** — it changes when people leave, are declined or are approved for a different time — and the page updates it by itself.',
+    keywords: ['estimate', 'estimated', 'how long wait', 'waiting time', 'when will i be seated', 'my turn', 'position', 'line', 'eta'],
+  },
+  {
+    id: 'portal-ended',
+    category: 'Approval',
+    question: 'My access ended early, or my request disappeared — why?',
+    answer:
+      'A request can end in a few ways, and the page says which:\n' +
+      '- **Expired** — the approved time ran out (or 24 hours passed since you first opened it).\n' +
+      '- **Withdrawn** — the office ended your access early; any note they left is shown.\n' +
+      '- **Declined** — the request was not approved.\n' +
+      '- **Lapsed** — nobody decided within a day, so your seat went to the next person.\n' +
+      '- **Left** — you left the room or the line.\n\n' +
+      'In every case you may send a new request.',
+    keywords: ['ended', 'ended early', 'withdrawn', 'revoked', 'disappeared', 'gone', 'lapsed', 'expired', 'closed', 'kicked out', 'removed', 'why did it end'],
+  },
+  {
+    id: 'portal-come-back',
+    category: 'The room',
+    question: 'Do I have to keep the page open? Can I come back later?',
+    answer:
+      'You may close the page and come back **on the same computer and browser** — your request is still there. It belongs to that browser, so another computer will not see it. ' +
+      'Press **Notify me on this computer** to get a notification the moment the office decides, even when the page is in the background.',
+    keywords: ['keep the page open', 'come back', 'close the page', 'later', 'another computer', 'other browser', 'phone', 'notify', 'notification', 'alert', 'lost my request', 'refresh'],
+  },
+  {
+    id: 'portal-hidden',
+    category: 'Reading',
+    question: 'Why does the document go dark or hide?',
+    answer:
+      'To protect it, the document is **hidden whenever this window is not in front** — for example when you switch to another program or press Print Screen. ' +
+      'Click the page to continue reading. Copying, printing and right-click are also turned off.',
+    keywords: ['dark', 'hidden', 'hides', 'blank', 'black', 'covered', 'switch window', 'print screen', 'screenshot', 'cannot see', 'disappears when'],
+  },
+  {
+    id: 'portal-trouble',
+    category: 'Help',
+    question: 'The document will not open or the page shows an error.',
+    answer:
+      '1. **Reload** the page — your request is kept.\n' +
+      '2. If it says scanned documents are **turned off** or the share **cannot be reached**, the office\'s storage is unavailable for the moment; try again later.\n' +
+      '3. If it says the time is **over**, your access has ended — send a new request.\n\n' +
+      'If it keeps happening, tell the office what the message says.',
+    keywords: ['error', 'not open', "won't open", 'will not open', 'does not load', 'not loading', 'blank page', 'stuck', 'problem', 'broken', 'failed', 'turned off', 'unavailable'],
+  },
+  {
+    id: 'portal-copy',
+    category: 'Reading',
+    question: 'How do I get a copy, or a certified copy?',
+    answer:
+      'The portal is for **reading** the document. For a **certified copy**, request it from the **office unit that keeps it** directly; reproduction may have a fee. ' +
+      'Only when the office allows it for your request does a **Download** button appear here.',
+    keywords: ['copy', 'certified', 'certified true copy', 'hard copy', 'photocopy', 'official copy', 'get the file', 'fee', 'fees'],
+  },
+  {
+    id: 'portal-free',
+    category: 'Requesting',
+    question: 'Is it free? When will my request be answered?',
+    answer:
+      'Reading a document in the portal is **free**. The office decides requests during **office hours**; under the Freedom of Information order they answer within **15 working days**, ' +
+      'extendable by up to 20 for extensive or voluminous records. Most requests are decided much sooner.',
+    keywords: ['free', 'cost', 'pay', 'payment', 'fee', 'office hours', 'when', 'how fast', 'working days', 'weekend', 'holiday'],
+  },
+  {
+    id: 'portal-appeal',
+    category: 'Approval',
+    question: 'Can I appeal a refusal?',
+    answer:
+      'Yes — a refusal under the Freedom of Information order is given in writing with its reason, and may be **appealed** as provided in the **DENR People\'s FOI Manual**. ' +
+      'Ask the office how to file it. You may also simply send a new request with more detail in the purpose.',
+    keywords: ['appeal', 'refused', 'refusal', 'denied', 'complain', 'complaint', 'unfair'],
+  },
+  {
+    id: 'portal-change',
+    category: 'Requesting',
+    question: 'I made a mistake in my request — can I change it?',
+    answer:
+      'A sent request cannot be edited. **Leave the room** (under Your request), then send a new one with the right details. ' +
+      'If you were already approved, leaving ends that access, so you will need a new approval.',
+    keywords: ['mistake', 'wrong', 'typo', 'change my request', 'edit', 'correct', 'wrong name', 'wrong document', 'wrong duration', 'update my request'],
+  },
+  {
+    id: 'portal-names',
+    category: 'Privacy',
+    question: 'Can other people see my name or what I asked for?',
+    answer:
+      'No. Other visitors see each seat only as **Private seat** with a clock — never a name, designation, document or purpose. You see your own seat marked **You**. ' +
+      'Only the unit that keeps the document and the system developer see who asked for what.',
+    keywords: ['see my name', 'other people', 'who can see', 'private seat', 'anonymous', 'privacy', 'visible', 'others see'],
+  },
+  {
+    id: 'portal-full',
+    category: 'The room',
+    question: 'The room is full — what happens?',
+    answer:
+      'Send your request anyway: you join the **waiting line** with an estimate of when a seat frees, and you are **seated automatically** — the office is told then. ' +
+      'You can leave the line at any time.',
+    keywords: ['full', 'room is full', '50', 'no seat', 'no space', 'waiting line', 'queue'],
+  },
+  {
+    id: 'portal-page-help',
+    category: 'Help',
+    question: 'How do I see the tour again, or switch to dark mode?',
+    answer:
+      'Press **Take the tour** at the top right to walk through the portal again. The **sun / moon** button beside it switches between light and dark mode. ' +
+      'If you ticked **Don\'t show again**, the tour no longer opens by itself on this browser — the button still works.',
+    keywords: ['tour', 'take the tour', 'guide', 'walkthrough', "don't show again", 'dark mode', 'light mode', 'theme', 'night mode'],
+  },
+  {
+    id: 'portal-phone',
+    category: 'Help',
+    question: 'Can I use the portal on my phone?',
+    answer:
+      'Yes, the portal works on a phone browser. Keep using the **same phone and browser** for your request — it belongs to the browser it was sent from — and remember that documents are shown for reading only.',
+    keywords: ['phone', 'mobile', 'cellphone', 'tablet', 'android', 'iphone'],
+  },
+  {
+    id: 'portal-vera',
+    category: 'Help',
+    question: 'Who are you?',
+    answer:
+      `I'm ${ASSISTANT_NAME}, your guide to the E-Universe Document Portal. I explain how to find a document, send a request, wait in the room and read an approved document. ` +
+      "I can't see anyone's request or any document, and I'll never ask for a password.",
+    keywords: ['who are you', 'what are you', 'vera', 'your name', 'are you a bot', 'are you human', 'assistant'],
+  },
+  {
+    id: 'portal-contact',
+    category: 'Help',
+    question: 'Who do I contact about a document?',
+    answer:
+      'The unit that keeps the document decides your request — the **Records Unit**, **Legal Services** or the **Laboratory**. ' +
+      'Once you have sent a request you can **message them right here**: press **Messages** under Your request.',
+    keywords: ['contact', 'who do i contact', 'records unit', 'help', 'support', 'ask someone'],
+  },
+  {
+    id: 'portal-chat',
+    category: 'Help',
+    question: 'Can I message the office about my request?',
+    answer:
+      'Yes. Once you have sent a request, press **Messages** under **Your request** to talk with the staff who decide it — they can ask you a question, and you can answer or ask yours. ' +
+      'A red badge shows new replies, and the page updates by itself.\n\n' +
+      'The conversation is **temporary**: if nobody writes for **12 hours**, it is deleted. Do not send passwords, ID numbers or other sensitive details.',
+    keywords: ['chat', 'message', 'messages', 'reply', 'talk', 'conversation', 'ask a question', 'question from', 'contact', 'deleted', '12 hours', 'idle', 'temporary'],
+  },
+  {
+    id: 'portal-weekend',
+    category: 'The room',
+    question: 'Is the portal open on weekends?',
+    answer:
+      'The room is **closed on Saturdays and Sundays** (Philippine time): new requests cannot be sent and documents cannot be opened until **Monday**. ' +
+      'A request already waiting keeps its place — weekend days do not count against the one day the office has to decide it. The page shows when the room opens again.',
+    keywords: ['weekend', 'weekends', 'saturday', 'sunday', 'closed', 'room closed', 'when open', 'opens', 'monday', 'holiday'],
+  },
+  {
+    id: 'portal-legal-lab',
+    category: 'Finding a document',
+    question: 'Can I ask for Legal Services or Laboratory documents?',
+    answer:
+      'Yes. The search covers **Records Unit** documents (by ECC or permit reference number and project title), **Legal Services** documents (by docket or reference number and title) and **Laboratory** documents (by reference number and title). ' +
+      'Each kind has its own colour in the results, and the request goes to the unit that keeps the document.',
+    keywords: ['legal', 'legal services', 'laboratory', 'lab', 'docket', 'case', 'order', 'resolution', 'lab result', 'analysis', 'other documents', 'all documents'],
   },
 ]);
 
@@ -381,8 +841,8 @@ const UCDS_KB = Object.freeze([
     category: 'Cross-domain',
     question: 'Can I see the ERMS documents of an establishment?',
     answer:
-      'Yes, by request. On an establishment, the **records panel** lists the ERMS records filed against it. Opening a document needs the **Records Unit\'s approval**: ' +
-      'request it there, and you are told when it is approved. Approved documents open **view-only**.',
+      'Yes, by request. On an establishment, the **records panel** lists the ERMS records filed against it. Only the Records Unit opens a scan inside E-Universe; ' +
+      'anyone else presses **Request in the Document Portal** and reads it there, view-only, once the unit that keeps it approves.',
     keywords: ['erms documents', 'documents of establishment', 'records panel', 'request document', 'see scan', 'ecc document', 'permit document', 'approval'],
   },
 ]);
@@ -391,7 +851,21 @@ const UCDS_KB = Object.freeze([
 
 const ERMS_KB = Object.freeze([
   {
+    id: 'erms-move-scan',
+    units: ['records'],
+    category: 'ERMS',
+    question: 'A scan is filed against the wrong record. How do I move it?',
+    answer:
+      'The **Developer** or an **administrator** moves it. Open the record that holds the scan (Document Library → the record), go to its **Document** tab and press ' +
+      '**Move scan to another record**. I list where it probably belongs: records whose permit number is in the file name, or whose proponent and project share its words, ' +
+      'those without a scan of their own first. Pick one, or type the FSN, and press **Move**. The file stays where it is on the share; only the record it is filed against ' +
+      'changes, and both records note the move in their history. A record that already has a scan cannot take another: move that one away first. ' +
+      'Anyone else: ask the Developer or an administrator, with the two FSNs.',
+    keywords: ['move scan', 'move file', 'wrong record', 'transfer document', 'reassign scan', 'filed wrong', 'move document', 'misfiled', 'transfer file'],
+  },
+  {
     id: 'erms-library',
+    units: ['records'],
     category: 'ERMS',
     question: 'How do I find a record in the Document Library?',
     answer:
@@ -402,14 +876,15 @@ const ERMS_KB = Object.freeze([
   },
   {
     id: 'erms-upload',
+    units: ['records'],
     category: 'ERMS',
     question: 'How do I upload (file) a new record?',
     answer:
-      'Choose **Upload record** in the menu (or **New record** in the Document Library). The window shows the **next FSN**, claimed when you save. Then:\n' +
+      'Choose **Upload record** in the menu (or in the Document Library). The window shows the **next FSN**, claimed when you save. Then, using **Next** and **Back** or the tabs:\n' +
       '1. **Proponent & permit** — proponent, project title, permit type and number, dates, project type. Proponent and project title suggest names already on file; pick one to keep the spelling consistent.\n' +
       '2. **Location** — province, city and barangay.\n' +
       '3. **Document** — drag the scan in. It is filed on the share under province, year and project, like the desktop system did; **Location on the share** lets you choose an existing folder.\n' +
-      '4. Save.\n\n' +
+      '4. **Upload record and scan** (or **Save record** to file the scan later).\n\n' +
       'The permit number is checked as you type and tells you which establishment it links to. A permit number already filed is flagged — find the existing record first.',
     keywords: ['upload', 'upload record', 'file record', 'new record', 'add record', 'scan', 'file a scan', 'next fsn', 'serial number', 'proponent', 'permit number', 'folder', 'location on the share'],
   },
@@ -425,14 +900,15 @@ const ERMS_KB = Object.freeze([
   {
     id: 'erms-requests',
     category: 'ERMS',
-    question: 'What are Document Requests?',
+    question: 'How does someone outside the unit get a document?',
     answer:
-      'Staff outside the Records Unit can see a record but need the **Records Unit\'s approval** to open its document. They request it from the record; the Records Unit sees it under **ERMS › Document Requests** and approves or declines it. ' +
-      'Approved documents open view-only for the person who asked.',
-    keywords: ['document requests', 'access request', 'request access', 'approve request', 'approval', 'decline', 'share document', 'pending requests'],
+      'Through the **E-Universe Document Portal** (/e-universe/document-portal). Staff outside the unit, other agencies, students and citizens ask there; the unit that keeps the document — Records, Legal Services or Laboratory — decides under **ERMS › Document Portal**, where it can also **message** the requester. ' +
+      'There is no separate request inbox inside ERMS any more.',
+    keywords: ['document requests', 'access request', 'request access', 'approve request', 'approval', 'decline', 'share document', 'pending requests', 'portal', 'document portal'],
   },
   {
     id: 'erms-tracking',
+    units: ['records'],
     category: 'ERMS',
     question: 'How do I record that a file was borrowed or moved?',
     answer:
@@ -442,6 +918,7 @@ const ERMS_KB = Object.freeze([
   },
   {
     id: 'erms-archive',
+    units: ['records'],
     category: 'ERMS',
     question: 'How do archive boxes work?',
     answer:
@@ -451,14 +928,16 @@ const ERMS_KB = Object.freeze([
   },
   {
     id: 'erms-units-file',
+    units: ['legal','laboratory'],
     category: 'Legal & Laboratory',
     question: 'How do I file a Legal or Laboratory document?',
     answer:
-      'Choose **File a document** in your unit\'s menu. At the top pick the **document type** and the **province**; the form below is in numbered **tabs** — for a Notice of Violation: ' +
-      'The case, Laws cited, Dates, Handling, then **Scan & location**. Use **Next** and **Back**, or click a tab.\n\n' +
+      'Choose **Upload document** in the menu (or in your unit\'s Document Library). At the top pick the **document type** and the **province**; the form below is in **tabs** — for a Notice of Violation: ' +
+      '**Basic Info**, **Laws Cited & Handling** (each law cited in a box of its own, then the legal officer, case handler and status), **Dates**, then **Upload Document** (the scan, and the folder below it). Use **Next** and **Back**, or click a tab.\n\n' +
       'Picking a **docket number** already on file fills in the company and address from the latest document on that docket; in the Laboratory, a **COC number** fills in the firm and address. ' +
-      'If something is missing when you press **File document**, the first tab with a problem opens and the others are marked with a red dot.',
-    keywords: ['file a document', 'legal', 'laboratory', 'lab', 'notice of violation', 'nov', 'technical conference', 'order', 'resolution', 'payment', 'docket', 'coc', 'test result', 'chain of custody', 'tabs', 'red dot'],
+      'If something is missing when you press **Upload document**, the first tab with a problem opens and the others are marked with a red dot.\n\n' +
+      'An open document has the same tabs as a Records record — **Details**, **Document**, **Same docket** (Legal) and **History**, which lists its filing, every edit with what it changed, and every view.',
+    keywords: ['file a document', 'upload document', 'history', 'legal', 'laboratory', 'lab', 'notice of violation', 'nov', 'technical conference', 'order', 'resolution', 'payment', 'docket', 'coc', 'test result', 'chain of custody', 'tabs', 'red dot'],
   },
   {
     id: 'erms-autocomplete',
@@ -486,6 +965,65 @@ const ERMS_KB = Object.freeze([
       'Filing and opening documents need the **NAS**. It is reached through the office server, which runs on **weekdays**, so documents can be unavailable outside office days or when that server is off. ' +
       'The banner under the header says which. Searching and editing record details still work.',
     keywords: ['cannot file', 'cannot upload', 'upload failed', 'nas unavailable', 'weekend', 'office hours', 'server off', 'document access'],
+  },
+  {
+    id: 'erms-units-find',
+    units: ['legal', 'laboratory'],
+    category: 'Legal & Laboratory',
+    question: 'How do I find a Legal case or a Laboratory result?',
+    answer:
+      "Open your unit's **Document Library**. The search box matches the **serial**, the **docket number** or **COC number**, the **company**, **firm** or **station**, and the file name — partial text works. " +
+      'Narrow it with **Document type** and **Province**; **Reset** clears everything.\n\n' +
+      'In Legal, a case\'s **attachments are listed inside it**: press the **+** at the start of a row to see them. Searching, or choosing a type, lists every match as its own row.',
+    keywords: ['find case', 'find document', 'search', 'docket', 'docket number', 'coc', 'coc number', 'firm', 'station', 'company', 'test result', 'library', 'document library'],
+  },
+  {
+    id: 'erms-legal-attachments',
+    units: ['legal'],
+    category: 'Legal & Laboratory',
+    question: 'How do I add an attachment to a Notice of Violation?',
+    answer:
+      'Open the case (the Notice of Violation) and go to its **Attachments** tab, then **Add attachment**. The upload window opens with **Attachment** chosen and the case\'s docket, company and address already filled in; add the **kind of attachment** and the scan, and press **Upload document**.\n\n' +
+      'The attachment is numbered after the case — **FSN-NOV00432 Att-00240** — and filed in the case\'s own **Attachments** folder on the share, as the desktop system did. ' +
+      'An attachment uploaded from the menu with a docket number is attached to that docket\'s Notice of Violation the same way.',
+    keywords: ['attachment', 'attachments', 'add attachment', 'attach', 'nov', 'notice of violation', 'case', 'docket', 'complaint', 'inspection report', 'att-'],
+  },
+  {
+    id: 'erms-record-attachments',
+    units: ['records'],
+    category: 'ERMS',
+    question: 'How do I add an attachment to a record?',
+    answer:
+      'Open the record, go to its **Document** tab and press **Add attachment**. The window works like **Upload record**: two tabs (**Attachment**, **Document**), **Next** and **Back**. ' +
+      'The attachment takes the record\'s proponent, permit number and place, is numbered after it (**FSN-0000206 Att-00099**), and its scan goes beside the record\'s own unless you choose another folder.',
+    keywords: ['attachment', 'attachments', 'add attachment', 'amendment', 'certified copy', 'letter', 'second document', 'att-'],
+  },
+  {
+    id: 'erms-history',
+    category: 'ERMS',
+    question: 'Where do I see who opened, changed or shared a document?',
+    answer:
+      "On the document itself: **History** for a Legal or Laboratory document, **Tracking** for a Records record. It lists when it was filed, every edit (with the old and new value), scans filed or replaced, who opened it — " +
+      'and how it was **shared through the Document Portal**: who asked and why, who approved or declined it, for how long and which pages, access changed or withdrawn, and each time the requester opened it.',
+    keywords: ['history', 'tracking', 'who opened', 'who viewed', 'who changed', 'shared', 'sharing', 'share', 'shared with', 'audit', 'log', 'trail', 'portal'],
+  },
+  {
+    id: 'erms-maintenance',
+    category: 'ERMS',
+    question: 'Why does my unit say it is under maintenance?',
+    answer:
+      'The Developer has taken the unit down for a while — to move or repair its share, or while it is not in use. Its menu section is greyed out and its screens show the reason and since when. ' +
+      'Nothing is lost: when it is brought back, every document, setting and history is as it was. Until then its documents cannot be opened, filed or asked for in the Document Portal; ask the Developer when it will be back.',
+    keywords: ['maintenance', 'under maintenance', 'unavailable', 'greyed out', 'grayed out', 'down', 'cannot open unit', 'unit is down'],
+  },
+  {
+    id: 'erms-folders',
+    category: 'ERMS',
+    question: 'How do I make or remove a folder when filing a scan?',
+    answer:
+      'In the upload window, under **Location on the share**, open the folders like the desktop system\'s. Type a name in **New folder** and press **Make folder** to start one where you are. ' +
+      'To remove a folder made by mistake, press the **bin** beside it (or **Remove this folder** while you are in it) and confirm. Only **empty** folders can be removed — one with any file in it is refused, so no scan can be lost this way.',
+    keywords: ['folder', 'make folder', 'new folder', 'create folder', 'remove folder', 'delete folder', 'wrong folder', 'empty folder', 'location on the share'],
   },
 ]);
 
@@ -632,7 +1170,39 @@ const ERMS_STARTERS = Object.freeze([
   'How do I upload a new record?',
   'How do I find a record?',
   'How do I file a Notice of Violation?',
-  'What are Document Requests?',
+  'How does someone outside the unit get a document?',
+]);
+
+// What each kind of account is offered first — its own unit's work, in its
+// own words. A Developer or Administrator who sees every unit gets
+// ERMS_STARTERS instead.
+const UNIT_STARTERS = Object.freeze({
+  records: Object.freeze([
+    'How do I upload a new record?',
+    'How do I find a record?',
+    'How do I add an attachment to a record?',
+    'Who has opened or shared this record?',
+    'How does someone outside the unit get a document?',
+  ]),
+  legal: Object.freeze([
+    'How do I file a Notice of Violation?',
+    'How do I add an attachment to a Notice of Violation?',
+    'How do I find a case by docket number?',
+    'Who has opened or shared this document?',
+    'How does someone outside the unit get a document?',
+  ]),
+  laboratory: Object.freeze([
+    'How do I upload a laboratory test result?',
+    'How do I find a result by COC number or firm?',
+    'Who has opened or shared this document?',
+    'How does someone outside the unit get a document?',
+  ]),
+});
+
+// Planning: the register, and the documents behind an establishment.
+const PLANNING_STARTERS = Object.freeze([
+  ...UCDS_STARTERS,
+  'Can I see the ERMS documents of an establishment?',
 ]);
 
 const ADMIN_STARTERS = Object.freeze([
@@ -645,6 +1215,8 @@ module.exports = {
   ASSISTANT_NAME,
   ASSISTANT_FULL_NAME,
   DEFAULT_SUPPORT,
+  DEFAULT_OFFICE_WEBSITE,
+  publicCountReply,
   PAGE_LABELS,
   PUBLIC_PAGE_LABELS,
   SIGNIN_PAGES,
@@ -659,6 +1231,16 @@ module.exports = {
   PUBLIC_SCOPE_TERMS,
   PUBLIC_BLOCKED_TERMS,
   PUBLIC_KB,
+  PORTAL_PAGE_LABELS,
+  PORTAL_GREETING_REPLY,
+  PORTAL_OUT_OF_SCOPE_REPLY,
+  PORTAL_CANNOT_VERIFY_REPLY,
+  PORTAL_NO_LOOKUP_REPLY,
+  PORTAL_BLOCKED_REPLY,
+  PORTAL_STARTER_QUESTIONS,
+  PORTAL_SCOPE_TERMS,
+  PORTAL_BLOCKED_TERMS,
+  PORTAL_KB,
   GREETING_REPLY,
   OUT_OF_SCOPE_REPLY,
   CANNOT_VERIFY_REPLY,
@@ -674,5 +1256,7 @@ module.exports = {
   DEV_SCOPE_TERMS,
   UCDS_STARTERS,
   ERMS_STARTERS,
+  UNIT_STARTERS,
+  PLANNING_STARTERS,
   ADMIN_STARTERS,
 };

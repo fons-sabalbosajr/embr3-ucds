@@ -41,8 +41,28 @@ function presentedToken(req) {
   return token && TOKEN_RE.test(token) && token.length < 256 ? token : null;
 }
 
+// A tab that has not signed in sends `X-Session-Token: none`. It is answered
+// as signed out, not by the cookie — the cookie belongs to whichever tab
+// signed in last, and a new tab silently becoming that account is what made
+// a second account in a second tab impossible: to sign in as someone else
+// there, the person had to sign out, which ended the first tab's session too.
+const NO_SESSION = 'none';
+
+/** The request without the session cookie, so express-session sees no session. */
+function withoutSessionCookie(req) {
+  const pairs = String(req.headers.cookie || '').split(';').map((s) => s.trim()).filter(Boolean);
+  const others = pairs.filter((s) => !s.startsWith(`${COOKIE_NAME}=`));
+  if (others.length) req.headers.cookie = others.join('; ');
+  else delete req.headers.cookie;
+}
+
 /** Mount before session(): substitutes the tab's token for the session cookie. */
 function sessionFromToken(req, res, next) {
+  if (req.get(HEADER) === NO_SESSION) {
+    withoutSessionCookie(req);
+    req.sessionToken = { token: null, matchesCookie: false, tabWithoutSession: true };
+    return next();
+  }
   const token = presentedToken(req);
   if (!token) return next();
 
@@ -89,4 +109,4 @@ function beginFreshSession(req) {
   req.sessionStore.generate(req);
 }
 
-module.exports = { sessionFromToken, offerSessionToken, tokenFor, beginFreshSession, COOKIE_NAME, HEADER, RESPONSE_HEADER, QUERY };
+module.exports = { sessionFromToken, offerSessionToken, tokenFor, beginFreshSession, COOKIE_NAME, HEADER, RESPONSE_HEADER, QUERY, NO_SESSION };

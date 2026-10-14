@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Navigate } from 'react-router-dom';
 import { App as AntdApp } from 'antd';
 import ThemeProvider from './theme/ThemeProvider';
@@ -17,6 +17,11 @@ import HomeForgotPassword from './HomeForgotPassword';
 import HomeResetPassword from './HomeResetPassword';
 import { ROUTES, SITE_BASE } from './config/routes';
 import axios from 'axios';
+import PageLoading from './shared/components/PageLoading';
+
+// The public Document Portal: its own chunk, so the landing and sign-in pages
+// do not carry the PDF viewer.
+const DocumentPortal = lazy(() => import('./modules/portal/DocumentPortal'));
 
 // Ensure axios sends credentials with requests
 axios.defaults.withCredentials = true;
@@ -55,6 +60,17 @@ const router = createBrowserRouter(
       <Route path={ROUTES.register} element={<Register />} />
       <Route path={ROUTES.forgotPassword} element={<HomeForgotPassword />} />
       <Route path={ROUTES.resetPassword} element={<HomeResetPassword />} />
+      {/* Public, outside the application: anyone asks for a scanned document
+          and reads it here once the Records Unit approves. No sign-in. */}
+      <Route
+        path={ROUTES.documentPortal}
+        element={
+          <Suspense fallback={<PageLoading tip="Opening the Document Portal" />}>
+            <DocumentPortal />
+          </Suspense>
+        }
+        errorElement={<RouteError />}
+      />
 
       {/* Legacy paths — kept so existing bookmarks and password-reset emails work */}
       <Route path='/' element={<RedirectTo to={ROUTES.landing} />} />
@@ -99,7 +115,9 @@ function App() {
   // shell was, and signing in felt like crossing between two applications.
   return (
     <ThemeProvider>
-      <AntdApp component={false}>
+      {/* Notices open below the 64px header, so one that stays until dismissed
+          (a document request) never covers the bell or the account menu. */}
+      <AntdApp component={false} notification={{ top: 76 }}>
         {/* Captures the context-aware message/notification/modal instances so
             code outside a component can use them without the static API's
             "cannot consume context" warning. Renders nothing. */}

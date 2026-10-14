@@ -5,7 +5,6 @@ import {
   Card,
   Descriptions,
   Empty,
-  Input,
   Result,
   Skeleton,
   Space,
@@ -17,7 +16,6 @@ import {
 } from "antd";
 import { useState } from "react";
 import {
-  ArrowLeftOutlined,
   EditOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
@@ -26,7 +24,7 @@ import {
   LinkOutlined,
   PaperClipOutlined,
   ProfileOutlined,
-  ShareAltOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -39,44 +37,26 @@ import {
 } from "../api/ermsService";
 import TrackingPanel from "../components/TrackingPanel";
 import RecordFormModal from "../components/RecordFormModal";
-import ShareDocumentModal from "../components/ShareDocumentModal";
 import BoxAssignment from "../components/BoxAssignment";
 import AttachmentModal from "../components/AttachmentModal";
 import DocumentPanel from "../../../shared/components/DocumentPanel";
+import MoveFileModal from "../components/MoveFileModal";
+import { fetchCurrentUser } from "../../../api/universeService";
+import { DetailHeader, Field, Grid } from "../components/DetailParts";
 
 const { Text } = Typography;
 
 const date = (d) => (d ? new Date(d).toLocaleDateString() : "");
 const dateTime = (d) => (d ? new Date(d).toLocaleString() : "");
-const text = (v) => (v === null || v === undefined ? "" : String(v));
 
 // ---------------------------------------------------------------------------
 // One record, laid out like the form that made it: the same fields, in the
-// same groups, as read-only text fields on tab pages — so a clerk reads a
-// record the way they typed it, and the Edit button opens the same layout
-// with the fields live. Tracking merges the custody trail kept here with the
-// desktop system's own log for the record (see trackingService).
+// same groups, as labelled text on tab pages (DetailParts — the Legal and
+// Laboratory documents are drawn from the same parts) — and the Edit button
+// opens the same layout with the fields live. Tracking merges the custody
+// trail kept here with the desktop system's own log for the record (see
+// trackingService).
 // ---------------------------------------------------------------------------
-
-/** A read-only text field with its label, as the form shows it. */
-const Field = ({ label, value, span, mono, warning }) => (
-  <div style={span ? { gridColumn: "1 / -1" } : undefined}>
-    <div style={{ fontSize: 12, marginBottom: 4 }}>
-      <Text type="secondary">{label}</Text>
-    </div>
-    {warning ? (
-      <Tooltip title="Could not be interpreted during migration. This is the original value.">
-        <Input readOnly value={text(warning)} status="warning" style={{ fontFamily: "monospace" }} />
-      </Tooltip>
-    ) : (
-      <Input readOnly value={text(value)} placeholder="—" style={mono ? { fontFamily: "monospace" } : undefined} />
-    )}
-  </div>
-);
-
-const Grid = ({ children }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "12px 16px" }}>{children}</div>
-);
 
 /**
  * One record. On its own page (`/erms/records/:serialNo`) or embedded in a
@@ -95,8 +75,11 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
   );
 
   const [editing, setEditing] = useState(false);
-  const [sharing, setSharing] = useState(false);
   const [attaching, setAttaching] = useState(false);
+  const [moving, setMoving] = useState(false);
+  // Moving a scan to another record is the Developer's or an administrator's.
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: fetchCurrentUser, staleTime: 5 * 60 * 1000, retry: false });
+  const canMove = ["developer", "admin"].includes(me?.role);
   const [tab, setTab] = useState("record");
 
   const { data, isLoading, error } = useQuery({
@@ -139,7 +122,6 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
   // A null writable list means unrestricted.
   const writable = options?.writableProvinces;
   const canWrite = writable === null || (writable || []).includes(location?.province);
-  const canShare = options?.canShare === true && Boolean(doc?.fileName);
 
   const attachmentColumns = [
     { title: "Serial", dataIndex: "serialNo", key: "serialNo", render: (s) => <RecordLink serial={s} /> },
@@ -167,7 +149,12 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
             <Field label="Serial (FSN)" value={record.serialNo} mono />
             <Field label="Date approved" value={date(permit?.dateApproved)} warning={permit?.dateApprovedRaw} />
             <Field label="Date amended" value={date(permit?.dateAmended)} warning={permit?.dateAmendedRaw} />
-            <Field label="Project type" value={project?.type || project?.otherType} span />
+            {/* The record's other ECC Ref Nos — an amendment's, a re-issue's — each with its date approved. */}
+            {(permit?.refs || []).map((r, i) => (
+              <Field key={`ref${i}`} label={r.label ? `Other Ref. No. (${r.label})` : "Other Ref. No."} value={[r.number, r.dateApproved ? `approved ${date(r.dateApproved)}` : null].filter(Boolean).join(" · ")} mono span />
+            ))}
+            <Field label="Project type" value={project?.type} span />
+            <Field label="Specific project type" value={project?.otherType} span />
             <Field label="Remarks" value={record.remarks} span />
           </Grid>
           {record.isAttachment && record.parentSerialNo && (
@@ -246,15 +233,30 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
       children: (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Grid>
-            <Field label="File name" value={doc?.fileName} span />
+            <Field label="File name" value={doc?.fileName} path span />
             <Field label="Classification" value={doc?.fileClass} />
             <Field label="Uploaded" value={[dateTime(doc?.uploadedAt), doc?.uploadedBy].filter(Boolean).join(" by ")} />
             {/* The API sends the path to developers only — it describes the
                 internal layout of the share, and nobody filing a record
                 needs it. Absent for everyone else. */}
-            {doc?.sharePath && <Field label="Location on the share" value={doc.sharePath} mono span />}
+            {doc?.sharePath && <Field label="Location on the share" value={doc.sharePath} mono path span />}
           </Grid>
-          <DocumentPanel serialNo={record.serialNo} fileName={doc?.fileName} canFile={canWrite} />
+          <DocumentPanel serialNo={record.serialNo} fileName={doc?.fileName} canFile={canWrite} refNo={permit?.number} />
+          {canMove && (doc?.fileName || doc?.sharePath) && (
+            <Space size={8} wrap>
+              <Button icon={<SwapOutlined />} onClick={() => setMoving(true)}>
+                Move scan to another record
+              </Button>
+              <Text type="secondary" style={{ fontSize: 12 }}>Filed against the wrong record? VERA suggests where it belongs.</Text>
+            </Space>
+          )}
+          {(doc?.movedFrom || doc?.movedTo) && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {doc.movedFrom ? `Scan moved here from ${doc.movedFrom}` : `Scan moved to ${doc.movedTo}`}
+              {doc.movedBy ? ` by ${doc.movedBy}` : ""}
+              {doc.movedAt ? ` on ${dateTime(doc.movedAt)}` : ""}.
+            </Text>
+          )}
           {(attachments?.length > 0 || (canWrite && !record.isAttachment)) && (
             <Card
               title={`Attachments (${attachments?.length || 0})`}
@@ -310,30 +312,24 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
 
   return (
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
-        <Space size={8} wrap>
-          {!embedded && (
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/universe/erms/records")}>
-              Back to records
-            </Button>
-          )}
-          <Text strong style={{ fontSize: 16 }}>{permit?.number || record.serialNo}</Text>
-          <Tag color={PERMIT_TYPE_COLOR[permit?.type]}>{permit?.label || permit?.type}</Tag>
-          {permit?.number && <Text type="secondary" style={{ fontFamily: "monospace", fontSize: 12 }}>{record.serialNo}</Text>}
-        </Space>
-        <Space size={8}>
-          {canShare && (
-            <Button icon={<ShareAltOutlined />} onClick={() => setSharing(true)}>
-              Share
-            </Button>
-          )}
-          {canWrite && (
+      <DetailHeader
+        unit="records"
+        title={permit?.number || record.serialNo}
+        typeLabel={permit?.label || permit?.type}
+        typeColor={PERMIT_TYPE_COLOR[permit?.type]}
+        serialNo={record.serialNo}
+        onBack={embedded ? null : () => navigate("/universe/erms/records")}
+        // In the dialog the right edge is the close X's: the Edit button sits
+        // on the left, with the title, rather than crowded against it.
+        actionsFirst={embedded}
+        actions={
+          canWrite && (
             <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
               Edit
             </Button>
-          )}
-        </Space>
-      </div>
+          )
+        }
+      />
 
       {dataQuality?.clean === false && (
         <Alert
@@ -356,8 +352,8 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
       <Tabs activeKey={tab} onChange={setTab} items={tabs} />
 
       <RecordFormModal open={editing} record={record} writableProvinces={writable} onClose={() => setEditing(false)} />
-      <ShareDocumentModal open={sharing} serialNo={record.serialNo} fileName={doc?.fileName} onClose={() => setSharing(false)} />
       <AttachmentModal open={attaching} parent={record} onClose={() => setAttaching(false)} />
+      <MoveFileModal open={moving} record={record} onClose={(res) => { setMoving(false); if (res && embedded && onOpenRecord) onOpenRecord(res.to); }} />
     </Space>
   );
 };

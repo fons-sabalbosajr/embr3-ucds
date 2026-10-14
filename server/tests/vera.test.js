@@ -83,6 +83,28 @@ describe('knowledge follows the account', () => {
     expect(r.kb.some((e) => e.id.startsWith('admin-') || e.id.startsWith('dev-'))).toBe(false);
   });
 
+  it('suggests each kind of account its own work: Records, Legal, Laboratory, Planning', () => {
+    const recordsClerk = vera.contextFor({ ...records, ermsUnits: ['records'] });
+    const legalClerk = vera.contextFor({ ...records, ermsUnits: ['legal'] });
+    const labClerk = vera.contextFor({ ...records, ermsUnits: ['laboratory'] });
+    expect(recordsClerk.starters).toContain('How do I upload a new record?');
+    expect(legalClerk.starters).toContain('How do I add an attachment to a Notice of Violation?');
+    expect(legalClerk.starters).not.toContain('How do I upload a new record?');
+    expect(labClerk.starters).toContain('How do I upload a laboratory test result?');
+    expect(vera.contextFor(planning).starters).toContain('Can I see the ERMS documents of an establishment?');
+    // The articles follow the unit too; a Developer seeing every unit keeps them all.
+    expect(legalClerk.kb.some((e) => e.id === 'erms-upload')).toBe(false);
+    expect(legalClerk.kb.some((e) => e.id === 'erms-legal-attachments')).toBe(true);
+    expect(recordsClerk.kb.some((e) => e.id === 'erms-legal-attachments')).toBe(false);
+    expect(vera.contextFor({ ...developer, ermsUnits: ['records', 'legal', 'laboratory'] }).kb.some((e) => e.id === 'erms-legal-attachments')).toBe(true);
+  });
+
+  it('answers a Legal clerk about attachments, and anyone about sharing history', async () => {
+    const legalClerk = { ...records, ermsUnits: ['legal'] };
+    expect((await ask('how do I add an attachment to a notice of violation?', legalClerk)).hitIds[0]).toBe('erms-legal-attachments');
+    expect((await ask('who has opened or shared this document?', legalClerk)).hitIds[0]).toBe('erms-history');
+  });
+
   it('carries no credential or environment value in any article', () => {
     const all = [...K.PUBLIC_KB, ...K.COMMON_KB, ...K.UCDS_KB, ...K.ERMS_KB, ...K.ADMIN_KB, ...K.DEV_KB];
     const text = JSON.stringify(all);

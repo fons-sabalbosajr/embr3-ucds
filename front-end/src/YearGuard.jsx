@@ -2,7 +2,7 @@ import React from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useYear } from "./context/YearContext";
 import { ROUTES } from "./config/routes";
-import Z_CustomSpinner from "./Z_CustomSpinner";
+import PageLoading from "./shared/components/PageLoading";
 
 /**
  * Keeps the application out of an undefined year context.
@@ -13,7 +13,7 @@ import Z_CustomSpinner from "./Z_CustomSpinner";
 const YearGuard = () => {
   const { activeYear, loading } = useYear();
 
-  if (loading) return <Z_CustomSpinner />;
+  if (loading) return <PageLoading tip="Opening your year" />;
   if (!activeYear) return <Navigate to={ROUTES.selectYear} replace />;
 
   return <Outlet />;

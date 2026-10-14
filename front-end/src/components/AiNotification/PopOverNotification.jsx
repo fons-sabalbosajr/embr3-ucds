@@ -23,6 +23,7 @@ import {
   ReloadOutlined,
   SettingOutlined,
   UserAddOutlined,
+  RobotOutlined,
   FileSearchOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -32,6 +33,7 @@ import { useNavigate } from "react-router-dom";
 // eslint-disable-next-line no-restricted-imports
 import ProvinceModal from "../../modules/ucds/province/ProvinceModal";
 import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
+import DeviceNoticesToggle from "../../shared/notifications/DeviceNoticesToggle";
 import "./popovernotification.css";
 
 const { Panel } = Collapse;
@@ -39,12 +41,15 @@ const { Panel } = Collapse;
 // An action item's icon and colour, by kind: what it is at a glance, with the
 // words beside it so colour never carries the meaning alone.
 const ITEM_LOOK = {
-  "erms-access": [FileSearchOutlined, "gold"],
   "erms-message": [MailOutlined, "blue"],
   "erms-review": [ExclamationCircleOutlined, "red"],
   "erms-legal-scan": [FileExclamationOutlined, "orange"],
   "erms-lab-scan": [FileExclamationOutlined, "orange"],
   "admin-signup": [UserAddOutlined, "green"],
+  "vera-corrections": [RobotOutlined, "purple"],
+  "vera-links": [RobotOutlined, "purple"],
+  "portal-decide": [FileSearchOutlined, "gold"],
+  "portal-chat": [MailOutlined, "blue"],
 };
 
 // Define prefixToProvince outside the component to make it a stable constant
@@ -651,7 +656,9 @@ const NotificationsPopover = ({
   // encoder sees the register.
   const hasUcds = domains.includes("ucds");
   const hasErms = domains.includes("erms");
-  const hasAccounts = ermsNotifications.some((i) => i.group === "Accounts");
+  const hasAdmin = ermsNotifications.some((i) => i.group === "Admin");
+  // The Document Portal is everyone's, so its tab shows whenever it has something.
+  const portalCount = ermsNotifications.filter((i) => i.group === "Document Portal").length;
   const registerCount = groupedKeys.length;
   const duplicateCount = processedComputedWarnings.length;
   const ermsCount = ermsNotifications.filter((i) => i.group === "ERMS").length;
@@ -662,13 +669,14 @@ const NotificationsPopover = ({
     </span>
   );
   const tabItems = [
+    portalCount > 0 && { key: "portal", label: label("Portal", portalCount), children: actionGroup("Document Portal") },
     hasErms && { key: "erms", label: label("ERMS", ermsCount), children: actionGroup("ERMS") },
     hasUcds && { key: "register", label: label("Register", registerCount), children: notificationsContent },
     hasUcds && { key: "duplicates", label: label("Duplicates", duplicateCount), children: warningsContent },
-    hasAccounts && { key: "accounts", label: label("Accounts", ermsNotifications.filter((i) => i.group === "Accounts").length), children: actionGroup("Accounts") },
+    hasAdmin && { key: "admin", label: label("Admin", ermsNotifications.filter((i) => i.group === "Admin").length), children: actionGroup("Admin") },
   ].filter(Boolean);
   // Open on the first tab with something in it.
-  const firstBusy = tabItems.find((t) => (t.key === "erms" ? ermsCount : t.key === "register" ? registerCount : t.key === "duplicates" ? duplicateCount : 1))?.key;
+  const firstBusy = tabItems.find((t) => (t.key === "erms" ? ermsCount : t.key === "register" ? registerCount : t.key === "duplicates" ? duplicateCount : t.key === "portal" ? portalCount : 1))?.key;
   const activeTab = tabItems.some((t) => t.key === tab) ? tab : firstBusy || tabItems[0]?.key;
   const total = registerCount + duplicateCount + ermsNotifications.length;
   const busy = isLoading || isProcessingNotifications || isProcessingWarnings;
@@ -691,6 +699,7 @@ const NotificationsPopover = ({
       ) : (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No notifications for your account." />
       )}
+      <DeviceNoticesToggle />
     </div>
   );
 
@@ -707,12 +716,15 @@ const NotificationsPopover = ({
       >
         {/* Wrap trigger in a native element so Popover can attach a ref without findDOMNode */}
         <span style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
-          {/* Ant Design's own badge: red pill, white count, overflow at 99+,
-              nothing while the counts are still being worked out. */}
+          {/* A small count in the button's top-right corner, ringed in the
+              header colour so it reads as its own mark, not over the bell;
+              99+ past 99, nothing while the counts are still being worked out. */}
           <Badge
+            className="header-bell-badge"
+            size="small"
             count={busy ? 0 : total}
             overflowCount={99}
-            offset={[-4, 4]}
+            offset={[-3, 3]}
             title={`${total} notification${total === 1 ? "" : "s"}`}
           >
             <button type="button" aria-label="Notifications" className="header-control" style={{ cursor: "pointer" }}>

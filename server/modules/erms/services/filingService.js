@@ -129,7 +129,29 @@ async function file(unitKey, docType, values, upload) {
   if (!unitCfg) return { ok: false, code: 'UNIT_UNKNOWN', message: 'Unknown unit.' };
   const check = await checkUpload(upload);
   if (!check.ok) return check;
+  // A folder the person browsed to and chose — the desktop ERMS's way —
+  // files the scan exactly there; otherwise the layout decides.
+  if (values.targetPath) {
+    const target = nas.safeRelativePath(values.targetPath);
+    if (!target) return { ok: false, code: 'BAD_FOLDER', message: 'The chosen folder cannot be used. Choose another.' };
+    return writeInto(unitCfg, joinShare(unitCfg.folder.root, target), docType, upload);
+  }
   return writeInto(unitCfg, directoryFor(unitCfg, docType, values), docType, upload);
+}
+
+/** A directory under the unit's root, from a path relative to it ('' = the root); null when unusable. */
+function underRoot(unitCfg, relative) {
+  if (!relative) return unitCfg.folder.root;
+  const safe = nas.safeRelativePath(relative);
+  return safe ? joinShare(unitCfg.folder.root, safe) : null;
+}
+
+/** Where the layout would file for these values — the level the project folders are in — relative to the unit's root. */
+function standardLevel(unitCfg, values) {
+  const parent = parentDirectoryFor(unitCfg, values);
+  if (!parent) return '';
+  const root = String(unitCfg.folder.root || '').split(/[\\/]+/).filter(Boolean);
+  return parent.split('\\').slice(root.length).join('\\');
 }
 
 /**
@@ -179,4 +201,4 @@ async function writeInto(unitCfg, dir, docType, upload) {
   };
 }
 
-module.exports = { yearRange, yearFor, folderFor, directoryFor, parentDirectoryFor, fileNameFor, checkUpload, file, fileBeside };
+module.exports = { yearRange, yearFor, folderFor, directoryFor, parentDirectoryFor, fileNameFor, checkUpload, file, fileBeside, underRoot, standardLevel };

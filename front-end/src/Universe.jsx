@@ -7,8 +7,11 @@ import {
   getPreference,
   setPreference,
 } from "./shared/preferences";
-import { UserOutlined, SunOutlined, MoonOutlined } from "@ant-design/icons";
-import { Routes, Route, useNavigate, useParams, Navigate } from "react-router-dom";
+import { UserOutlined, SunOutlined, MoonOutlined, MenuOutlined } from "@ant-design/icons";
+import useScreen from "./shared/useScreen";
+import { fetchErmsAvailability } from "./shared/ermsAvailability";
+import { UnitGate } from "./shared/components/UnitGate";
+import { Routes, Route, useNavigate, useParams, useLocation, Navigate } from "react-router-dom";
 import {
   fetchCurrentUser,
   fetchDataValidationIssues,
@@ -29,7 +32,6 @@ const ErmsDashboard = lazy(() => import("./modules/erms/pages/ErmsDashboard"));
 const RecordsList = lazy(() => import("./modules/erms/pages/RecordsList"));
 const RecordDetail = lazy(() => import("./modules/erms/pages/RecordDetail"));
 const ArchiveBoxes = lazy(() => import("./modules/erms/pages/ArchiveBoxes"));
-const AccessRequests = lazy(() => import("./modules/erms/pages/AccessRequests"));
 const UnitDashboard = lazy(() => import("./modules/erms/units/UnitDashboard"));
 const UnitDocuments = lazy(() => import("./modules/erms/units/UnitDocuments"));
 const UnitDocumentDetail = lazy(() => import("./modules/erms/units/UnitDocumentDetail"));
@@ -38,6 +40,7 @@ const VeraSettings = lazy(() => import("./modules/vera/VeraSettings"));
 const ErmsSettings = lazy(() => import("./modules/erms/pages/ErmsSettings"));
 const UploadTally = lazy(() => import("./modules/erms/pages/UploadTally"));
 const Messages = lazy(() => import("./modules/erms/pages/Messages"));
+const PortalDesk = lazy(() => import("./modules/portal/PortalDesk"));
 const SignInHistory = lazy(() => import("./modules/admin/users/SignInHistory"));
 const CustomItemPage = lazy(() => import("./modules/ucds/custom/CustomItemPage"));
 const Report = Admin;
@@ -48,8 +51,10 @@ const SystemSettings = lazy(() => import("./modules/admin/SystemSettings"));
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
+import useRealtimeNotices from "./shared/notifications/useRealtimeNotices";
+import { pausePushForSignOut } from "./shared/notifications/devicePush";
 import UserPopover from "./components/PopOverUser/PopOverUser";
-import Z_CustomSpinner from "./Z_CustomSpinner";
+import PageLoading from "./shared/components/PageLoading";
 import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import NasStatusBanner from "./components/NasStatusBanner";
@@ -64,16 +69,18 @@ import DomainGuard from "./auth/DomainGuard";
 import NotFound from "./shared/components/NotFound";
 import ContentLoading from "./shared/components/ContentLoading";
 import { useYear } from "./context/YearContext";
-import { accountType } from "./shared/accountTypes";
-import { getSessionToken, setSessionToken, clearSessionToken } from "./shared/sessionToken";
+import { subsystemOf } from "./shared/subsystems";
+import { clearSessionToken } from "./shared/sessionToken";
 import RoleGuard from "./auth/RoleGuard";
 import Forbidden from "./shared/components/Forbidden";
 const OrgUnits = lazy(() => import("./modules/admin/OrgUnits"));
 import GeneralSettings from "./modules/settings/GeneralSettings";
 const UcdsSettings = lazy(() => import("./modules/settings/UcdsSettings"));
 import { settingsPath } from "./modules/erms/settingsPath";
-import { fetchAccessRequests, fetchRecords, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
+import { fetchRecords, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
 import visibleInterval from "./shared/visibleInterval";
+import { getCorrectionsPending, getRegisterLinksPending } from "./modules/vera/veraService";
+import { fetchChatSummary, fetchDesk as fetchPortalDesk } from "./modules/portal/portalService";
 
 const { Header, Content } = Layout;
 
@@ -98,7 +105,14 @@ const Universe = () => {
   // ThemeProvider, so the login and year-selection screens share them rather
   // than rendering in Ant Design's defaults.
   const { mode: theme, toggleMode: toggleTheme, bindAccount, unbindAccount } = useTheme();
-  const [collapsed, setCollapsed] = useState(false);
+  // The navigation: open on a desktop, icons only on a tablet, a closed
+  // drawer on a phone — and again whenever the screen changes kind (a tablet
+  // turned, a window narrowed).
+  const screen = useScreen();
+  const [collapsed, setCollapsed] = useState(() => !screen.desktop);
+  useEffect(() => {
+    setCollapsed(!screen.desktop);
+  }, [screen.phone, screen.tablet, screen.desktop]);
   const { activeYear } = useYear();
   // Named capability flags, replacing the positional boolean array this used to
   // build (permissions[2] meant "admin panel", permissions[i+5] meant
@@ -127,6 +141,7 @@ const Universe = () => {
 
   // backendUrl is now imported from universeService
   const navigate = useNavigate();
+  const location = useLocation();
   const encryptionKey = import.meta.env.VITE_CRYPTOJS_ENCRYPTION_KEY;
   const [provinceAccess, setProvinceAccess] = useState({
     aurora: false,
@@ -160,10 +175,6 @@ const Universe = () => {
       setUserRole(data.role || "viewer");
       setUserHandle(data.user?.username);
       setDivision(data.user?.division || "");
-      // A tab opened fresh has no token of its own and arrived here on the
-      // cookie — the browser's most recent sign-in. Pin it to that session
-      // now, so it stays this account whatever other tabs sign in as.
-      if (!getSessionToken() && data.sessionToken) setSessionToken(data.sessionToken);
       // The look stored on the account, and from here on every change goes back to it.
       bindAccount(data.theme || null);
 
@@ -312,13 +323,17 @@ const Universe = () => {
   // ---------------------------------------------------------------------------
   const ermsUnitsKey = (erms.units || []).join(",");
   const isManager = ["developer", "admin"].includes(String(userRole || "").toLowerCase());
+  const isDeveloperAccount = String(userRole || "").toLowerCase() === "developer";
   const fetchActionItems = useCallback(async () => {
     if (!auth) return;
-    const units = ermsUnitsKey ? ermsUnitsKey.split(",") : [];
-    const seesRecords = hasErms && (units.includes("records") || !units.length);
+    // A unit taken down for maintenance is not asked for anything.
+    const down = hasErms ? Object.entries((await fetchErmsAvailability().catch(() => null)) || {}).filter(([, s]) => s?.down).map(([u]) => u) : [];
+    const units = (ermsUnitsKey ? ermsUnitsKey.split(",") : []).filter((u) => !down.includes(u));
+    const seesRecords = hasErms && !down.includes("records") && (units.includes("records") || !ermsUnitsKey);
     const count = (promise, pick) => promise.then(pick).catch(() => 0);
-    const [access, unread, flagged, legalNoScan, labNoScan, signUps] = await Promise.all([
-      hasErms ? fetchAccessRequests({ status: "pending" }).catch(() => null) : null,
+    // The Document Portal desk shows each unit its own requests (the Developer every unit's).
+    const decidesPortal = hasErms && (units.length > 0 || isDeveloperAccount);
+    const [unread, flagged, legalNoScan, labNoScan, signUps, corrections, links, portalDesk, portalChats] = await Promise.all([
       hasErms ? count(fetchUnreadMessages(), (n) => Number(n) || 0) : 0,
       seesRecords ? count(fetchRecords({ flagged: true, page: 1, pageSize: 1 }), (r) => r?.total || 0) : 0,
       hasErms && units.includes("legal") ? count(fetchUnitDocuments("legal", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
@@ -326,14 +341,29 @@ const Universe = () => {
       isManager
         ? count(fetch(`${backendUrl}/api/sign-up`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])), (rows) => (Array.isArray(rows) ? rows.length : 0))
         : 0,
+      // VERA's data corrections waiting for review: the Developer's.
+      isDeveloperAccount ? count(getCorrectionsPending(), (n) => Number(n) || 0) : 0,
+      // VERA's proposed links to the central register: the Developer's.
+      isDeveloperAccount ? count(getRegisterLinksPending(), (n) => Number(n) || 0) : 0,
+      // The Document Portal: requests waiting for this account's unit (refused to anyone who decides none).
+      decidesPortal ? fetchPortalDesk().catch(() => null) : null,
+      // Messages from people in the room, not read yet.
+      decidesPortal ? count(fetchChatSummary(), (chats) => (chats || []).reduce((n, c) => n + (c.unread || 0), 0)) : 0,
     ]);
     const items = [];
-    const pending = Number(access?.pending ?? access?.requests?.length ?? 0);
-    if (pending > 0) {
+    const portalPending = portalDesk?.pending?.length || 0;
+    if (portalPending > 0) {
       items.push({
-        type: "erms-access", group: "ERMS", tone: "warning", count: pending, href: "/universe/erms/access-requests",
-        title: access?.canDecide ? `${pending} document ${pending === 1 ? "request" : "requests"} to decide` : `${pending} of your document ${pending === 1 ? "request is" : "requests are"} waiting`,
-        description: access?.canDecide ? "People are waiting to view scanned documents." : "The Records Unit has not decided yet.",
+        type: "portal-decide", group: "Document Portal", tone: "warning", count: portalPending, href: "/universe/erms/portal-requests",
+        title: `${portalPending} Document Portal ${portalPending === 1 ? "request" : "requests"} to decide`,
+        description: "People in the room are waiting for a decision.",
+      });
+    }
+    if (portalChats > 0) {
+      items.push({
+        type: "portal-chat", group: "Document Portal", tone: "info", count: portalChats, href: "/universe/erms/portal-requests",
+        title: `${portalChats} unread ${portalChats === 1 ? "message" : "messages"} from the Document Portal`,
+        description: "A requester wrote about their request.",
       });
     }
     if (unread > 0) {
@@ -349,10 +379,16 @@ const Universe = () => {
       items.push({ type: "erms-lab-scan", group: "ERMS", tone: "warning", count: labNoScan, href: "/universe/erms/laboratory/settings/data", title: `${labNoScan} Laboratory ${labNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
     }
     if (signUps > 0) {
-      items.push({ type: "admin-signup", group: "Accounts", tone: "info", count: signUps, href: "/universe/admin/users", title: `${signUps} account ${signUps === 1 ? "request" : "requests"} to review`, description: "People asking for an E-Universe account." });
+      items.push({ type: "admin-signup", group: "Admin", tone: "info", count: signUps, href: "/universe/admin/users", title: `${signUps} account ${signUps === 1 ? "request" : "requests"} to review`, description: "People asking for an E-Universe account." });
+    }
+    if (corrections > 0) {
+      items.push({ type: "vera-corrections", group: "Admin", tone: "info", count: corrections, href: "/universe/admin/vera?tab=corrections", title: `VERA found ${corrections} project type ${corrections === 1 ? "correction" : "corrections"}`, description: "Spellings to unify in the Document Library. Review and apply them in VERA Assistant." });
+    }
+    if (links > 0) {
+      items.push({ type: "vera-links", group: "Admin", tone: "info", count: links, href: "/universe/admin/vera?tab=links", title: `VERA can link ${links} ${links === 1 ? "record" : "records"} to the central register`, description: "Records whose reference number did not find their establishment. Review and link them in VERA Assistant." });
     }
     setErmsNotifications(items);
-  }, [auth, hasErms, ermsUnitsKey, isManager]);
+  }, [auth, hasErms, ermsUnitsKey, isManager, isDeveloperAccount]);
 
   useEffect(() => {
     if (!auth) return undefined;
@@ -363,7 +399,9 @@ const Universe = () => {
     fetchDataIssues();
     fetchActionItems();
   }, [fetchDataIssues, fetchActionItems]);
-
+  // A request, message or decision for this account: shown at once, and the
+  // bell's counts refreshed rather than waiting for the next poll.
+  useRealtimeNotices({ enabled: Boolean(auth), username: userHandle, onNotice: fetchActionItems });
   // Whether the one-off "Toggle Theme" hint has been dismissed for good.
   //
   // This used to store an AES-encrypted "true" and only read it back when the
@@ -408,6 +446,9 @@ const Universe = () => {
     // tab's token, which is what names the session to end, so the token must
     // still be here when it goes out. Bounded, so a stalled request cannot
     // hold the tab; the client signs out either way.
+    // No device notices for this account here once it has signed out (it
+    // resumes on signing back in). Asked first, while the session is alive.
+    await pausePushForSignOut();
     await Promise.race([
       logoutUserService().catch((err) => console.error("Logout API call failed:", err)),
       new Promise((resolve) => setTimeout(resolve, 3000)),
@@ -431,7 +472,7 @@ const Universe = () => {
     setShowThemeHint(false);
   };
 
-  if (loading) return <Z_CustomSpinner />;
+  if (loading) return <PageLoading />;
 
   if (!auth) {
     return (
@@ -471,20 +512,35 @@ const Universe = () => {
               theme={theme}
               collapsed={collapsed}
               setCollapsed={setCollapsed}
+              mobile={screen.phone}
               currentUser={currentUser}
               provinceAccess={provinceAccess}
             />
             <Layout>
               <Header className={`header-container ${theme}-theme`}>
                 <div className="header-content">
+                  {/* On a phone the navigation is a drawer: this opens it. */}
+                  {screen.phone && (
+                    <Button
+                      className="theme-button header-menu-button"
+                      type="text"
+                      onClick={() => setCollapsed(false)}
+                      aria-label="Open the menu"
+                      icon={<MenuOutlined style={{ fontSize: 15 }} />}
+                    />
+                  )}
                   <div
                     className="profile_container"
                     style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
                     <span className="user-name" style={{ whiteSpace: "nowrap" }}>
                       {now.format("MMMM DD, YYYY hh:mm A")} | {name} | {division}
-                      <Tag color={accountType(userRole).color} className="header-role" title="Account type">
-                        {accountType(userRole).label}
+                      {/* Where you are: the subsystem this address belongs to —
+                          ERMS · Records / Legal Services / Laboratory, Storage,
+                          Universe Central DB — not the account's fixed type.
+                          The account type still shows in the account panel. */}
+                      <Tag color={subsystemOf(location.pathname).color} className="header-role" title="Subsystem">
+                        {subsystemOf(location.pathname).name}
                       </Tag>
                     </span>
 
@@ -738,28 +794,39 @@ const Universe = () => {
                       Developer and a Records Admin hold it; the API refuses
                       everyone else regardless. */}
                   <Route element={<DomainGuard domain="erms" user={currentUser} />}>
-                    <Route path="erms/dashboard" element={<ErmsDashboard />} />
-                    <Route path="erms/records" element={<RecordsList />} />
-                    <Route path="erms/records/:serialNo" element={<RecordDetail />} />
-                    <Route path="erms/archive" element={<ArchiveBoxes />} />
+                    {/* A unit taken down for maintenance shows its notice
+                        instead (shared/ermsAvailability); the Developer still
+                        reaches it. */}
+                    <Route element={<UnitGate unit="records" bypass={isDeveloperAccount} />}>
+                      <Route path="erms/dashboard" element={<ErmsDashboard />} />
+                      <Route path="erms/records" element={<RecordsList />} />
+                      <Route path="erms/records/:serialNo" element={<RecordDetail />} />
+                      <Route path="erms/archive" element={<ArchiveBoxes />} />
+                      <Route path="erms/settings/:section?" element={<ErmsSettings unit="records" />} />
+                    </Route>
                     {/* Reports were removed from the menu; a bookmark lands on the dashboard. */}
                     <Route path="erms/reports" element={<Navigate to="/universe/erms/dashboard" replace />} />
-                    <Route path="erms/access-requests" element={<AccessRequests />} />
+                    {/* The Document Portal's requests, decided by the Records Unit; the portal itself is public (/e-universe/document-portal). */}
+                    <Route path="erms/portal-requests" element={<PortalDesk />} />
+                    <Route path="erms/access-requests" element={<Navigate to="/universe/erms/portal-requests" replace />} />
                     {/* Uploads per person per day and their check — every unit,
                         so not under a unit's own path (erms/records/:serialNo
                         would take "records/upload-tally" for a serial). */}
-                    <Route path="erms/upload-tally/:unit" element={<UploadTally />} />
+                    <Route element={<UnitGate bypass={isDeveloperAccount} />}>
+                      <Route path="erms/upload-tally/:unit" element={<UploadTally />} />
+                    </Route>
                     <Route path="erms/messages" element={<Messages />} />
                     {/* The Legal Services and Laboratory units. Which units
                         the person may see is decided by the server; the
                         screens explain when one is not theirs. */}
-                    <Route path="erms/:unit/dashboard" element={<UnitDashboard />} />
-                    <Route path="erms/:unit/documents" element={<UnitDocuments />} />
-                    <Route path="erms/:unit/documents/:serialNo" element={<UnitDocumentDetail />} />
-                    {/* Each unit's own settings, read by its members and set
-                        by its staff: Records', then Legal's and Laboratory's. */}
-                    <Route path="erms/settings/:section?" element={<ErmsSettings unit="records" />} />
-                    <Route path="erms/:unit/settings/:section?" element={<ErmsSettings />} />
+                    <Route element={<UnitGate bypass={isDeveloperAccount} />}>
+                      <Route path="erms/:unit/dashboard" element={<UnitDashboard />} />
+                      <Route path="erms/:unit/documents" element={<UnitDocuments />} />
+                      <Route path="erms/:unit/documents/:serialNo" element={<UnitDocumentDetail />} />
+                      {/* Each unit's own settings, read by its members and set
+                          by its staff (Records' are with its screens above). */}
+                      <Route path="erms/:unit/settings/:section?" element={<ErmsSettings />} />
+                    </Route>
                     <Route
                       path="erms"
                       element={

@@ -83,10 +83,72 @@ body {
   align-items: center;
 }
 
-/* A phone has no room for both halves on one line; the attribution stays. */
-@media (max-width: 600px) {
+/* A phone or a narrow tablet has no room for both halves on one line; the
+   attribution stays. */
+@media (max-width: 900px) {
   .app-footer-right {
     display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Small screens. The theme already brings type, controls and card padding
+   down (ThemeProvider, useScreen); this is the layout around them: less
+   gutter, a shorter footer, dialogs that fit the screen, and nothing wider
+   than the window.
+   --------------------------------------------------------------------------- */
+
+/* The phone's menu button sits at the left of the header, the controls at the right. */
+.header-container .header-menu-button {
+  margin-right: auto;
+}
+
+@media (max-width: 1199px) {
+  .ant-layout-content.content-container {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 767px) {
+  .ant-layout-content.content-container {
+    padding: 8px;
+  }
+
+  .app-footer.ant-layout-footer {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  .app-footer.ant-layout-footer > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* A dialog is the screen less a small margin, from the top. */
+  .ant-modal {
+    max-width: calc(100vw - 12px) !important;
+    margin: 0 auto;
+    top: 6px !important;
+    padding-bottom: 6px;
+  }
+  .ant-modal .ant-modal-content {
+    padding: 14px 12px;
+  }
+  .ant-modal .ant-modal-footer .ant-space {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  /* Tabs scroll rather than squeeze. */
+  .ant-tabs-nav .ant-tabs-tab {
+    font-size: 13px;
+  }
+
+  /* Breadcrumbs and long names break rather than push the page wide. */
+  .ant-breadcrumb ol {
+    flex-wrap: wrap;
   }
 }
 
@@ -242,7 +304,9 @@ body {
     padding: 0 10px;
   }
 
-  .user-name {
+  /* As specific as the inline-flex rule above, which otherwise kept it. */
+  .user-name,
+  .header-container .profile_container > .user-name {
     display: none;
   }
 
@@ -384,5 +448,50 @@ body[data-theme="dark"] {
     top: 40px;
     left: 40px;
     font: 16px sans-serif;
+  }
+}
+
+/* The bell's count: small, in the button's top-right corner, with a ring in
+   the header's own colour so it separates from the button edge instead of
+   sitting on the bell or running off the top of the header. */
+.header-bell-badge .ant-badge-count {
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  box-shadow: 0 0 0 2px var(--eu-header-bg, #1f242c);
+}
+
+.header-bell-badge .ant-badge-count .ant-scroll-number-only,
+.header-bell-badge .ant-badge-count .ant-scroll-number-only-unit {
+  height: 16px;
+  line-height: 16px;
+}
+
+/* A folder in the upload forms' folder browser: the whole row opens it. */
+.nas-folder-row {
+  transition: background 0.12s ease;
+}
+
+.nas-folder-row:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+/* A folder's remove button shows on the row under the pointer — and always
+   on a touch screen, which has no pointer to hover. */
+.nas-folder-row .nas-folder-remove {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.nas-folder-row:hover .nas-folder-remove,
+.nas-folder-row .nas-folder-remove:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .nas-folder-row .nas-folder-remove {
+    opacity: 1;
   }
 }
