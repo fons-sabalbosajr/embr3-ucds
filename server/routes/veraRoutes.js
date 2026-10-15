@@ -48,6 +48,12 @@ router.post('/api/vera/serials/fix', developer, ctrl.serialsFix);
 // VERA's check of each record's project type against its document, its
 // settings, and applying, undoing or setting aside what she proposes.
 router.get('/api/vera/project-types', developer, ctrl.projectTypesReport);
+
+// VERA reads a scan's text so the library can search inside it: one document
+// (Developer or administrator; checked in the controller), or the next few.
+const signedIn = [authenticateSession];
+router.post('/api/vera/scan-text/:unit(records|legal|laboratory)/:serialNo', signedIn, ctrl.scanTextOne);
+router.post('/api/vera/scan-text/next', developer, ctrl.scanTextNext);
 router.put('/api/vera/project-types/settings', developer, ctrl.projectTypesSettings);
 router.post('/api/vera/project-types/scan', developer, ctrl.projectTypesScan);
 router.post('/api/vera/project-types/apply', developer, ctrl.projectTypesApply);
@@ -60,5 +66,16 @@ router.get('/api/vera/register-links/pending', developer, ctrl.linksPending);
 router.post('/api/vera/register-links/scan', developer, ctrl.linksScan);
 router.post('/api/vera/register-links/:id/apply', developer, ctrl.linksApply);
 router.post('/api/vera/register-links/:id/undo', developer, ctrl.linksUndo);
+
+// VERA's check of the Universe Central DB register — the active year's —
+// and applying or undoing the fixes she proposes. Changes the register, so
+// the Developer and administrators, inside a selected year.
+const { resolveYearContext } = require('../middleware/auth');
+const ucdsMaintainer = [authenticateSession, requireRole('developer', 'admin'), requireDomain(DOMAINS.UCDS), resolveYearContext];
+router.get('/api/vera/ucds-check', ucdsMaintainer, ctrl.ucdsCheckReport);
+router.post('/api/vera/ucds-check/scan', ucdsMaintainer, ctrl.ucdsCheckScan);
+router.post('/api/vera/ucds-check/auto-fix', ucdsMaintainer, ctrl.ucdsCheckAutoFix);
+router.post('/api/vera/ucds-check/:id/apply', ucdsMaintainer, ctrl.ucdsCheckApply);
+router.post('/api/vera/ucds-check/:id/undo', ucdsMaintainer, ctrl.ucdsCheckUndo);
 
 module.exports = router;

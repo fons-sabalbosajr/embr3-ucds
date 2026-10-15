@@ -39,11 +39,14 @@ const ErmsConfig = lazy(() => import("./modules/admin/erms/ErmsConfig"));
 const VeraSettings = lazy(() => import("./modules/vera/VeraSettings"));
 const ErmsSettings = lazy(() => import("./modules/erms/pages/ErmsSettings"));
 const UploadTally = lazy(() => import("./modules/erms/pages/UploadTally"));
+const ErmsReports = lazy(() => import("./modules/erms/pages/ErmsReports"));
 const Messages = lazy(() => import("./modules/erms/pages/Messages"));
 const PortalDesk = lazy(() => import("./modules/portal/PortalDesk"));
 const SignInHistory = lazy(() => import("./modules/admin/users/SignInHistory"));
 const CustomItemPage = lazy(() => import("./modules/ucds/custom/CustomItemPage"));
-const Report = Admin;
+// Universe Central DB › Reports (it used to open the user list).
+const Report = lazy(() => import("./modules/ucds/reports/UcdsReports"));
+const UcdsVeraCheck = lazy(() => import("./modules/ucds/vera/UcdsVeraCheck"));
 const Posting = lazy(() => import("./modules/admin/posting/Posting"));
 import ActivityLog from "./components/ActivityLog/ActivityLog";
 const RegisterSettings = lazy(() => import("./modules/admin/RegisterSettings"));
@@ -77,7 +80,7 @@ const OrgUnits = lazy(() => import("./modules/admin/OrgUnits"));
 import GeneralSettings from "./modules/settings/GeneralSettings";
 const UcdsSettings = lazy(() => import("./modules/settings/UcdsSettings"));
 import { settingsPath } from "./modules/erms/settingsPath";
-import { fetchRecords, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
+import { fetchRecords, fetchUnitDashboard, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
 import visibleInterval from "./shared/visibleInterval";
 import { getCorrectionsPending, getRegisterLinksPending } from "./modules/vera/veraService";
 import { fetchChatSummary, fetchDesk as fetchPortalDesk } from "./modules/portal/portalService";
@@ -354,38 +357,45 @@ const Universe = () => {
     const portalPending = portalDesk?.pending?.length || 0;
     if (portalPending > 0) {
       items.push({
-        type: "portal-decide", group: "Document Portal", tone: "warning", count: portalPending, href: "/universe/erms/portal-requests",
+        type: "portal-decide", group: "Document Portal", tone: "warning", count: portalPending, href: "/e-universe/erms/portal-requests",
         title: `${portalPending} Document Portal ${portalPending === 1 ? "request" : "requests"} to decide`,
         description: "People in the room are waiting for a decision.",
       });
     }
     if (portalChats > 0) {
       items.push({
-        type: "portal-chat", group: "Document Portal", tone: "info", count: portalChats, href: "/universe/erms/portal-requests",
+        type: "portal-chat", group: "Document Portal", tone: "info", count: portalChats, href: "/e-universe/erms/portal-requests",
         title: `${portalChats} unread ${portalChats === 1 ? "message" : "messages"} from the Document Portal`,
         description: "A requester wrote about their request.",
       });
     }
     if (unread > 0) {
-      items.push({ type: "erms-message", group: "ERMS", tone: "info", count: unread, href: "/universe/erms/messages", title: `${unread} unread ${unread === 1 ? "message" : "messages"}`, description: "In the ERMS Action Center." });
+      items.push({ type: "erms-message", group: "ERMS", tone: "info", count: unread, href: "/e-universe/erms/messages", title: `${unread} unread ${unread === 1 ? "message" : "messages"}`, description: "In the ERMS Action Center." });
     }
     if (flagged > 0) {
-      items.push({ type: "erms-review", group: "ERMS", tone: "danger", count: flagged, href: "/universe/erms/records?flagged=1", title: `${flagged} ${flagged === 1 ? "record needs" : "records need"} review`, description: "Values that could not be read during migration — usually a date." });
+      items.push({ type: "erms-review", group: "ERMS", tone: "danger", count: flagged, href: "/e-universe/erms/records?flagged=1", title: `${flagged} ${flagged === 1 ? "record needs" : "records need"} review`, description: "Values that could not be read during migration — usually a date." });
     }
     if (legalNoScan > 0) {
-      items.push({ type: "erms-legal-scan", group: "ERMS", tone: "warning", count: legalNoScan, href: "/universe/erms/legal/settings/data", title: `${legalNoScan} Legal ${legalNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
+      items.push({ type: "erms-legal-scan", group: "ERMS", tone: "warning", count: legalNoScan, href: "/e-universe/erms/legal/settings/data", title: `${legalNoScan} Legal ${legalNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
     }
     if (labNoScan > 0) {
-      items.push({ type: "erms-lab-scan", group: "ERMS", tone: "warning", count: labNoScan, href: "/universe/erms/laboratory/settings/data", title: `${labNoScan} Laboratory ${labNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
+      items.push({ type: "erms-lab-scan", group: "ERMS", tone: "warning", count: labNoScan, href: "/e-universe/erms/laboratory/settings/data", title: `${labNoScan} Laboratory ${labNoScan === 1 ? "document has" : "documents have"} no scan`, description: "Kept without a scanned file. File the scan from the document." });
+    }
+    // Calibration certificates past or near their due date (the Laboratory dashboard's figures, cached there).
+    if (hasErms && units.includes("laboratory")) {
+      const due = await fetchUnitDashboard("laboratory").then((d) => d?.calibrationDue).catch(() => null);
+      if (due && due.overdue + due.soon > 0) {
+        items.push({ type: "erms-lab-calibration", group: "ERMS", tone: due.overdue ? "danger" : "warning", count: due.overdue + due.soon, href: "/e-universe/erms/laboratory/dashboard", title: `${due.overdue ? `${due.overdue} calibration certificate${due.overdue === 1 ? "" : "s"} overdue` : ""}${due.overdue && due.soon ? ", " : ""}${due.soon ? `${due.soon} due within ${due.windowDays} days` : ""}`, description: "Laboratory calibration certificates, by their date due." });
+      }
     }
     if (signUps > 0) {
-      items.push({ type: "admin-signup", group: "Admin", tone: "info", count: signUps, href: "/universe/admin/users", title: `${signUps} account ${signUps === 1 ? "request" : "requests"} to review`, description: "People asking for an E-Universe account." });
+      items.push({ type: "admin-signup", group: "Admin", tone: "info", count: signUps, href: "/e-universe/admin/users", title: `${signUps} account ${signUps === 1 ? "request" : "requests"} to review`, description: "People asking for an E-Universe account." });
     }
     if (corrections > 0) {
-      items.push({ type: "vera-corrections", group: "Admin", tone: "info", count: corrections, href: "/universe/admin/vera?tab=corrections", title: `VERA found ${corrections} project type ${corrections === 1 ? "correction" : "corrections"}`, description: "Spellings to unify in the Document Library. Review and apply them in VERA Assistant." });
+      items.push({ type: "vera-corrections", group: "Admin", tone: "info", count: corrections, href: "/e-universe/admin/vera?tab=corrections", title: `VERA found ${corrections} project type ${corrections === 1 ? "correction" : "corrections"}`, description: "Spellings to unify in the Document Library. Review and apply them in VERA Assistant." });
     }
     if (links > 0) {
-      items.push({ type: "vera-links", group: "Admin", tone: "info", count: links, href: "/universe/admin/vera?tab=links", title: `VERA can link ${links} ${links === 1 ? "record" : "records"} to the central register`, description: "Records whose reference number did not find their establishment. Review and link them in VERA Assistant." });
+      items.push({ type: "vera-links", group: "Admin", tone: "info", count: links, href: "/e-universe/admin/vera?tab=links", title: `VERA can link ${links} ${links === 1 ? "record" : "records"} to the central register`, description: "Records whose reference number did not find their establishment. Review and link them in VERA Assistant." });
     }
     setErmsNotifications(items);
   }, [auth, hasErms, ermsUnitsKey, isManager, isDeveloperAccount]);
@@ -631,11 +641,17 @@ const Universe = () => {
                   {/* Land people where they can actually work: a Records
                       clerk has no UCDS domain, so the planning dashboard
                       would only tell them they are not allowed. */}
+                  {/* "home" too: /e-universe/home is the app's own home now that
+                      bare /e-universe is the public landing page. */}
+                  {["/", "home"].map((p) => (
                   <Route
-                    path="/"
+                    key={p}
+                    path={p}
                     element={
                       <Navigate
-                        to={
+                        // Absolute: relative to "home" these resolved to
+                        // /e-universe/home/dashboard, which is no page.
+                        to={`${ROUTES.app}/${
                           // An ERMS User lands in their own unit; anyone else
                           // with UCDS lands on the planning dashboard.
                           erms.skipYearSelect && erms.unit
@@ -645,11 +661,12 @@ const Universe = () => {
                               : domains.includes("erms")
                                 ? erms.unit && erms.unit !== "records" ? `erms/${erms.unit}/dashboard` : "erms/dashboard"
                                 : "dashboard"
-                        }
+                        }`}
                         replace
                       />
                     }
                   />
+                  ))}
 
                   {/* UCDS planning routes. Guarded as a group rather than one
                       at a time — the API refuses these to a non-UCDS user
@@ -714,11 +731,11 @@ const Universe = () => {
                   />
                   <Route
                     path="accounts"
-                    element={<Navigate to="/universe/admin/users" replace />}
+                    element={<Navigate to="/e-universe/admin/users" replace />}
                   />
                   <Route
                     path="activity-log"
-                    element={<Navigate to="/universe/admin/audit" replace />}
+                    element={<Navigate to="/e-universe/admin/audit" replace />}
                   />
                   {/* The register behind Monitoring Plan: configuration, its
                       activity trail, and duplicate reconciliation. Three
@@ -745,23 +762,23 @@ const Universe = () => {
                       a bookmark lands where the screen actually is rather than
                       at the top of a merged page. */}
                   {[
-                    ["register/config", "/universe/admin/register?tab=config"],
-                    ["records/config", "/universe/admin/register?tab=config"],
-                    ["register/activity", "/universe/admin/register?tab=activity"],
-                    ["records/activity", "/universe/admin/register?tab=activity"],
-                    ["admin/duplicates", "/universe/admin/register?tab=duplicates"],
-                    ["duplicates", "/universe/admin/register?tab=duplicates"],
-                    ["admin/developer/database-settings", "/universe/admin/system?tab=database"],
-                    ["developer/database-settings", "/universe/admin/system?tab=database"],
-                    ["admin/developer/activity-history", "/universe/admin/system?tab=audit"],
-                    ["developer/activity-history", "/universe/admin/system?tab=audit"],
+                    ["register/config", "/e-universe/admin/register?tab=config"],
+                    ["records/config", "/e-universe/admin/register?tab=config"],
+                    ["register/activity", "/e-universe/admin/register?tab=activity"],
+                    ["records/activity", "/e-universe/admin/register?tab=activity"],
+                    ["admin/duplicates", "/e-universe/admin/register?tab=duplicates"],
+                    ["duplicates", "/e-universe/admin/register?tab=duplicates"],
+                    ["admin/developer/database-settings", "/e-universe/admin/system?tab=database"],
+                    ["developer/database-settings", "/e-universe/admin/system?tab=database"],
+                    ["admin/developer/activity-history", "/e-universe/admin/system?tab=audit"],
+                    ["developer/activity-history", "/e-universe/admin/system?tab=audit"],
                     // Field Management and PDF Forms were removed. Their URLs
                     // point at the screen that absorbed the rest of that
                     // section rather than 404ing on a bookmark.
-                    ["admin/developer/field-management", "/universe/admin/system"],
-                    ["developer/field-management", "/universe/admin/system"],
-                    ["admin/developer/pdf-forms", "/universe/admin/system"],
-                    ["developer/pdf-forms", "/universe/admin/system"],
+                    ["admin/developer/field-management", "/e-universe/admin/system"],
+                    ["developer/field-management", "/e-universe/admin/system"],
+                    ["admin/developer/pdf-forms", "/e-universe/admin/system"],
+                    ["developer/pdf-forms", "/e-universe/admin/system"],
                   ].map(([from, to]) => (
                     <Route key={from} path={from} element={<Navigate to={to} replace />} />
                   ))}
@@ -805,10 +822,10 @@ const Universe = () => {
                       <Route path="erms/settings/:section?" element={<ErmsSettings unit="records" />} />
                     </Route>
                     {/* Reports were removed from the menu; a bookmark lands on the dashboard. */}
-                    <Route path="erms/reports" element={<Navigate to="/universe/erms/dashboard" replace />} />
+                    <Route path="erms/reports" element={<ErmsReports />} />
                     {/* The Document Portal's requests, decided by the Records Unit; the portal itself is public (/e-universe/document-portal). */}
                     <Route path="erms/portal-requests" element={<PortalDesk />} />
-                    <Route path="erms/access-requests" element={<Navigate to="/universe/erms/portal-requests" replace />} />
+                    <Route path="erms/access-requests" element={<Navigate to="/e-universe/erms/portal-requests" replace />} />
                     {/* Uploads per person per day and their check — every unit,
                         so not under a unit's own path (erms/records/:serialNo
                         would take "records/upload-tally" for a serial). */}
@@ -822,6 +839,7 @@ const Universe = () => {
                     <Route element={<UnitGate bypass={isDeveloperAccount} />}>
                       <Route path="erms/:unit/dashboard" element={<UnitDashboard />} />
                       <Route path="erms/:unit/documents" element={<UnitDocuments />} />
+                      <Route path="erms/:unit/archive" element={<ArchiveBoxes />} />
                       <Route path="erms/:unit/documents/:serialNo" element={<UnitDocumentDetail />} />
                       {/* Each unit's own settings, read by its members and set
                           by its staff (Records' are with its screens above). */}
@@ -831,7 +849,7 @@ const Universe = () => {
                       path="erms"
                       element={
                         <Navigate
-                          to={erms.unit && erms.unit !== "records" ? `/universe/erms/${erms.unit}/dashboard` : "/universe/erms/dashboard"}
+                          to={erms.unit && erms.unit !== "records" ? `/e-universe/erms/${erms.unit}/dashboard` : "/e-universe/erms/dashboard"}
                           replace
                         />
                       }
@@ -877,7 +895,7 @@ const Universe = () => {
                   />
                   <Route
                     path="settings"
-                    element={<Navigate to="/universe/settings/general" replace />}
+                    element={<Navigate to="/e-universe/settings/general" replace />}
                   />
 
                   {/* Duplicate data is now a tab of Admin Settings > Register,
@@ -926,7 +944,7 @@ const Universe = () => {
                       key={from}
                       path={from}
                       element={
-                        <Navigate to="/universe/admin/developer/storage-config" replace />
+                        <Navigate to="/e-universe/admin/developer/storage-config" replace />
                       }
                     />
                   ))}
@@ -938,14 +956,18 @@ const Universe = () => {
                   {/* Items people added to the year's menu: folders and their own tables. */}
                   <Route path="custom/:id" element={<CustomItemPage />} />
                   <Route path="report" element={<Report theme={theme} />} />
+                  {/* VERA's check of the register: the Developer and administrators. */}
+                  <Route element={<RoleGuard roles={["developer", "admin"]} user={currentUser} />}>
+                    <Route path="vera-check" element={<UcdsVeraCheck />} />
+                  </Route>
                   <Route
                     path="posting"
-                    element={<Navigate to="/universe/admin/posting" replace />}
+                    element={<Navigate to="/e-universe/admin/posting" replace />}
                   />
                   {/* Old location, kept as a redirect so one page has one URL. */}
                   <Route
                     path="duplicates"
-                    element={<Navigate to="/universe/admin/duplicates" replace />}
+                    element={<Navigate to="/e-universe/admin/duplicates" replace />}
                   />
                   </Route>
 

@@ -275,7 +275,7 @@ describe('a record’s tracking reads the desktop system’s log', () => {
     expect(Array.isArray(res.body.tracking)).toBe(true);
     // The test record has no legacy log; a migrated one does when the
     // legacy tables were loaded. Either way the shape is one timeline.
-    for (const t of res.body.tracking) expect(['custody', 'legacy']).toContain(t.source);
+    for (const t of res.body.tracking) expect(['custody', 'legacy', 'activity', 'portal']).toContain(t.source);
   });
 });
 

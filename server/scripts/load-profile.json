@@ -16,7 +16,7 @@
    "GET /api/permits-summary?page=1&pageSize=10&prefixes=AU,BA,BU,NE,PA,TA,ZA&filterEstablishmentsByExpiryStatus=true",
    "POST /api/check-data"
   ],
-  "/universe/dashboard": [
+  "/e-universe/dashboard": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -32,7 +32,7 @@
    "GET /api/daily_notices",
    "GET /api/permits-summary?page=1&pageSize=10&prefixes=AU,BA,BU,NE,PA,TA,ZA&filterEstablishmentsByExpiryStatus=true"
   ],
-  "/universe/province/Bataan": [
+  "/e-universe/province/Bataan": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -44,7 +44,7 @@
    "GET /api/ucds/duplicates",
    "GET /api/get-province-data?province=Bataan"
   ],
-  "/universe/province/Pampanga": [
+  "/e-universe/province/Pampanga": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -56,7 +56,7 @@
    "GET /api/ucds/duplicates",
    "GET /api/get-province-data?province=Pampanga"
   ],
-  "/universe/survey": [
+  "/e-universe/survey": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -67,7 +67,7 @@
    "POST /api/check-data",
    "GET /api/ucds/duplicates"
   ],
-  "/universe/healthcare": [
+  "/e-universe/healthcare": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -78,7 +78,7 @@
    "POST /api/check-data",
    "GET /api/ucds/duplicates"
   ],
-  "/universe/chemicals": [
+  "/e-universe/chemicals": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -91,7 +91,7 @@
   ]
  },
  "admin": {
-  "/universe/dashboard": [
+  "/e-universe/dashboard": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -107,7 +107,7 @@
    "GET /api/daily_notices",
    "GET /api/permits-summary?page=1&pageSize=10&prefixes=AU,BA,BU,NE,PA,TA,ZA&filterEstablishmentsByExpiryStatus=true"
   ],
-  "/universe/admin/users": [
+  "/e-universe/admin/users": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -132,7 +132,7 @@
    "GET /api/users?username=__load_3",
    "GET /api/users?username=__load_4"
   ],
-  "/universe/admin/audit": [
+  "/e-universe/admin/audit": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -144,7 +144,7 @@
    "GET /api/logs",
    "GET /api/ucds/duplicates"
   ],
-  "/universe/province/Bulacan": [
+  "/e-universe/province/Bulacan": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -158,7 +158,7 @@
   ]
  },
  "records": {
-  "/universe/erms/dashboard": [
+  "/e-universe/erms/dashboard": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -168,7 +168,7 @@
    "GET /api/erms/access-requests?status=pending&limit=5",
    "GET /api/erms/tracking/overdue"
   ],
-  "/universe/erms/records": [
+  "/e-universe/erms/records": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -179,7 +179,7 @@
   ]
  },
  "legal": {
-  "/universe/erms/legal/dashboard": [
+  "/e-universe/erms/legal/dashboard": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -188,7 +188,7 @@
    "GET /api/erms/units",
    "GET /api/erms/units/legal/dashboard"
   ],
-  "/universe/erms/legal/documents": [
+  "/e-universe/erms/legal/documents": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -199,7 +199,7 @@
   ]
  },
  "laboratory": {
-  "/universe/erms/laboratory/dashboard": [
+  "/e-universe/erms/laboratory/dashboard": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",
@@ -208,7 +208,7 @@
    "GET /api/erms/units",
    "GET /api/erms/units/laboratory/dashboard"
   ],
-  "/universe/erms/laboratory/documents": [
+  "/e-universe/erms/laboratory/documents": [
    "GET /auth-check",
    "GET /api/years",
    "GET /api/auth/me",

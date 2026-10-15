@@ -304,7 +304,9 @@ suite('ERMS writes', () => {
       expect(add.status).toBe(201);
 
       const { body } = await agent.get(`/api/erms/records/${serialNo}/tracking`);
-      expect(body.tracking).toHaveLength(1);
+      // The custody trail, with the file's own activity (created, edited…) beside it.
+      expect(body.tracking.filter((t) => t.source === 'custody')).toHaveLength(1);
+      expect(body.tracking.some((t) => t.source === 'activity' && t.actionLabel === 'Record created')).toBe(true);
       expect(body.custody.heldBy).toBe('Records Section');
     });
 
@@ -315,7 +317,7 @@ suite('ERMS writes', () => {
         .send({ action: 'released', toParty: 'Legal Unit', purpose: 'Review' });
 
       const { body } = await agent.get(`/api/erms/records/${serialNo}/tracking`);
-      expect(body.tracking).toHaveLength(2);
+      expect(body.tracking.filter((t) => t.source === 'custody')).toHaveLength(2);
       expect(body.custody.released).toBe(true);
     });
 

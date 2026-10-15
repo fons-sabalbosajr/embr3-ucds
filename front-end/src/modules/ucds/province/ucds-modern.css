@@ -1,0 +1,140 @@
+/* The Universe Central DB in the application's own look (the ERMS pages'):
+   the shared page header above, a toolbar card, a table in one type size,
+   permit tags as small pills. Loaded after province.css and overriding it;
+   colours come from the theme tokens Ant Design publishes, so light and dark
+   follow without a second set. */
+
+/* The page: header, toolbar and table, spaced as the ERMS pages are. */
+.province-container-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+/* Who else is viewing this province — under the header, only when someone is. */
+.province-container-card .header-content.ucds-viewers-row {
+  min-height: 0;
+  margin: -4px 0 0;
+}
+.province-container-card .header-content.ucds-viewers-row:empty {
+  display: none;
+}
+.province-container-card .header-content .header-title {
+  display: none;
+}
+
+/* The toolbar: the count, keyword search, paging, filters and the section chips. */
+.ucds-toolbar .total-count-label {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 12px 0 0;
+}
+.ucds-toolbar .section-result {
+  margin: 6px 0 0;
+}
+.ucds-toolbar .section-breakdown {
+  gap: 6px;
+}
+.ucds-toolbar .section-item {
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* The table: one type size in every cell (13px), headers a notch smaller
+   and set apart, rows kept tight so more of the register fits on screen. */
+.ucds-table .ant-table-thead > tr > th,
+.custom-table.ucds-table .ant-table-thead > tr > th {
+  font-size: 12.5px !important;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.ucds-table .ant-table-tbody > tr > td {
+  font-size: 13px;
+  vertical-align: top;
+  padding: 5px 8px !important;
+  line-height: 1.4;
+}
+.ucds-table .ant-table-thead > tr > th {
+  padding: 6px 8px !important;
+}
+.ucds-table .ant-table-tbody > tr > td * {
+  font-size: inherit;
+}
+.custom-table.ucds-table .ant-table-tbody > tr {
+  height: auto;
+}
+
+/* Permit tags: small pills, readable (they were 9px). */
+.ucds-table .permits-clearances-container {
+  gap: 4px;
+}
+.ucds-table [class*="custom-span-"] {
+  font-size: 11px !important;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 4px;
+  line-height: 18px;
+}
+
+/* The ERMS anchor beside a permit: a green check when it is on file. */
+.ucds-erms-anchor {
+  color: #52c41a;
+  font-size: 13px !important;
+  align-self: center;
+  cursor: help;
+}
+body[data-theme="dark"] .ucds-erms-anchor {
+  color: #73d13d;
+}
+
+/* The toolbar card, tighter. */
+.ucds-toolbar.ant-card .ant-card-body {
+  padding: 8px 12px !important;
+}
+
+/* The record window: tabs down the left, the record beside them, filling
+   the window; actions at the foot of the tab rail. */
+.ucds-record-tabs {
+  height: 100%;
+}
+.ucds-record-tabs.ant-tabs-left > .ant-tabs-nav {
+  min-width: 210px;
+}
+.ucds-record-tabs.ant-tabs-left > .ant-tabs-nav .ant-tabs-tab,
+.ucds-record-tabs.ant-tabs-left > .ant-tabs-nav .ant-tabs-tab-btn {
+  font-size: 14.5px;
+  padding: 10px 18px 10px 12px;
+  margin: 2px 0 0 !important;
+  text-align: left;
+}
+.ucds-record-actions {
+  width: 100%;
+  padding: 12px 12px 4px 0;
+}
+.ucds-record-actions .ant-btn {
+  width: 100%;
+}
+.ucds-record-tabs > .ant-tabs-content-holder {
+  overflow: auto;
+}
+.ucds-record-tabs .ant-tabs-tabpane {
+  font-size: 13.5px;
+}
+.ucds-record-tabs .ant-tabs-tabpane .ant-form-item-label > label,
+.ucds-record-tabs .ant-tabs-tabpane .ant-descriptions-item-label {
+  font-size: 13px;
+}
+.ucds-record-tabs .ant-tabs-tabpane .ant-input,
+.ucds-record-tabs .ant-tabs-tabpane .ant-select,
+.ucds-record-tabs .ant-tabs-tabpane .ant-picker-input > input,
+.ucds-record-tabs .ant-tabs-tabpane .ant-descriptions-item-content {
+  font-size: 13.5px;
+}

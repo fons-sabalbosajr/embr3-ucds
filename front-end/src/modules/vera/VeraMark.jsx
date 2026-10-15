@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 
 // ---------------------------------------------------------------------------
 // React wrappers for VERA's two canvas animations: the dotted flame
@@ -98,4 +98,44 @@ export function VeraEdgeBeam({ radius = "pill", pad = 10, type = "rotate", color
   // size is given outright: the parent's plus the pad on each side.
   const grow = `calc(100% + ${pad * 2}px)`;
   return <canvas ref={ref} className="vera-edge-beam" style={{ top: -pad, left: -pad, width: grow, height: grow }} />;
+}
+
+// ---------------------------------------------------------------------------
+// VERA's orb (thinking-orbs, libraries.dev/orbs): the animated mark on her
+// launcher, in her "thinking" bubble and on the settings page, in place of
+// the border beam. Her states map onto the orb's own hand-tuned ones:
+//
+//   burning (at rest)  → breathing     a face-on ring, slowly morphing
+//   listening (typing) → listening     a waveform through latitude rings
+//   thinking           → working       particles on tilted orbits
+//   searching          → searching     a scan sweeping a dotted globe
+//   working            → composing     an undulating multi-band sash
+//
+// Loaded on first use, in its own chunk; until then an empty box of the
+// final size holds its place, so nothing shifts.
+// ---------------------------------------------------------------------------
+
+const ThinkingOrb = lazy(() => import("thinking-orbs").then((m) => ({ default: m.ThinkingOrb })));
+
+const ORB_STATE = { burning: "breathing", listening: "listening", thinking: "working", searching: "searching", working: "composing" };
+const ORB_SIZES = [20, 32, 64];
+
+export function VeraOrb({ state = "burning", size = 32, theme = "auto", color, speed = 1, label = "VERA", className = "", style }) {
+  const tuned = ORB_SIZES.includes(size) ? size : 32;
+  const holder = <span className={`vera-orb ${className}`.trim()} style={{ width: tuned, height: tuned, display: "inline-block", flex: "none", ...style }} aria-hidden={!label} />;
+  return (
+    <Suspense fallback={holder}>
+      <span className={`vera-orb ${className}`.trim()} style={{ width: tuned, height: tuned, display: "inline-flex", flex: "none", ...style }}>
+        <ThinkingOrb
+          state={ORB_STATE[state] || state}
+          size={tuned}
+          theme={theme === "dark" || theme === "light" ? theme : "auto"}
+          color={color}
+          speed={speed}
+          aria-label={label || undefined}
+          aria-hidden={label ? undefined : true}
+        />
+      </span>
+    </Suspense>
+  );
 }

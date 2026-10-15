@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { Layout, Menu, Button, Avatar, Tooltip, Badge, Tag } from "antd";
+import { Layout, Menu, Button, Tooltip, Badge, Tag } from "antd";
 import {
   MessageOutlined,
   DashboardFilled,
@@ -22,6 +22,9 @@ import {
   InboxOutlined,
   BarChartOutlined,
   SettingOutlined,
+  FileTextOutlined,
+  FireOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 // Known boundary debt: the shared layout drives province selection, but the
@@ -34,8 +37,6 @@ import {
   initializeSocket,
   emitJoinProvince,
   emitLeaveProvince,
-  onProvinceViewersUpdate, // Corrected typo here
-  onMbuViewersUpdate, // Corrected typo here
   onSocketConnect,
   // onSocketDisconnect, // If needed
 } from "../api/socketService"; // Import socket service
@@ -80,8 +81,6 @@ const PROVINCE_MENU = [
 const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false }) => {
   const [siderWidth, setSiderWidth] = useState(230);
   const [openKeys, setOpenKeys] = useState([]);
-  const [provinceViewers, setProvinceViewers] = useState({});
-  const [mbuViewers, setMbuViewers] = useState([]);
   const [currentProvince, setCurrentProvinceState] = useState(null);
   // Year containers and what each year's folder holds, for the Universe
   // Central DB tree. The registry is names only and is fetched once.
@@ -113,7 +112,6 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   const capabilities = currentUser?.capabilities || {};
   const grantedProvinces = currentUser?.provinces || [];
   const canViewAdminPanel = capabilities.canViewAdminPanel === true;
-  const canViewDataHistory = capabilities.canViewDataHistory === true;
 
   // Domain entitlement decides which business modules appear at all, so a
   // Records user is not shown the planning register and vice versa. The API
@@ -145,9 +143,9 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   // has no planning dashboard to see, so theirs is the first item rather
   // than an entry inside the ERMS section.
   const ermsHome = ermsUnits.includes("records") || !ermsUnits.length
-    ? "/universe/erms/dashboard"
-    : `/universe/erms/${ermsUnits[0]}/dashboard`;
-  const mainDashboard = hasUcds ? "/universe/dashboard" : hasErms ? ermsHome : null;
+    ? "/e-universe/erms/dashboard"
+    : `/e-universe/erms/${ermsUnits[0]}/dashboard`;
+  const mainDashboard = hasUcds ? "/e-universe/dashboard" : hasErms ? ermsHome : null;
   // Whether a unit's own Dashboard entry is already the main one above.
   const unitDashboardIsMain = (path) => mainDashboard === path;
   // The unit whose upload is a main entry of its own: the person's unit, or
@@ -177,33 +175,42 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
     const open = ermsUnits.filter((u) => !unitClosed(u));
     return hasErms && open.length ? (open.includes("records") ? "records" : open[0]) : null;
   })();
-  const uploadPath = (u) => (u === "records" ? "/universe/erms/records?new=1" : `/universe/erms/${u}/documents?upload=1`);
+  const uploadPath = (u) => (u === "records" ? "/e-universe/erms/records?new=1" : `/e-universe/erms/${u}/documents?upload=1`);
 
   // A unit's settings page has one menu entry and a tab per section in the
   // path (…/settings/privacy); the entry stays lit on every tab.
-  const selectedKey = location.pathname.replace(/^(\/universe\/erms(?:\/[a-z]+)?\/settings)\/[^/]+$/, "$1");
+  const selectedKey = location.pathname.replace(/^(\/e-universe\/erms(?:\/[a-z]+)?\/settings)\/[^/]+$/, "$1");
 
   useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith("/universe/dashboard") || (mainDashboard && path === mainDashboard)) {
+    if (path.startsWith("/e-universe/dashboard") || (mainDashboard && path === mainDashboard)) {
       setOpenKeys([]);
-    } else if (path.startsWith("/universe/province/") || path.startsWith("/universe/datasets/")) {
-      setOpenKeys(["ucds-db", `year-${activeYear}`]);
-      // } else if (path.startsWith("/universe/mbu")) {
+    } else if (/^\/e-universe\/(province|datasets|custom|report|vera-check)(\/|$)/.test(path)) {
+      // Inside the Universe Central DB: its section, the active year and (on a
+      // province) the Monitoring Plan open — added to whatever folders are
+      // already open there, never closing them. Moving from Aurora to Bataan
+      // used to fold the Monitoring Plan away under the click.
+      const ucdsOpen = (keys) => keys.filter((k) => k === "ucds-db" || k.startsWith("year-") || k.startsWith("custom-"));
+      const needed = ["ucds-db", `year-${activeYear}`, ...(path.startsWith("/e-universe/province/") ? [`year-${activeYear}-monitoring`] : [])];
+      setOpenKeys((prev) => [...new Set([...ucdsOpen(prev), ...needed])]);
+      // } else if (path.startsWith("/e-universe/mbu")) {
       //   setOpenKeys([]);
-    } else if (path.startsWith("/universe/erms/messages")) {
+    } else if (path.startsWith("/e-universe/erms/messages")) {
       setOpenKeys([]);
-    } else if (path.startsWith("/universe/erms/legal") || path.startsWith("/universe/erms/upload-tally/legal")) {
+    } else if (flatErms && /^\/e-universe\/erms(\/[a-z]+)?\/settings(\/|$)/.test(path)) {
+      // An ERMS User's unit settings are under Settings, beside General.
+      setOpenKeys(["settings"]);
+    } else if (path.startsWith("/e-universe/erms/legal") || path.startsWith("/e-universe/erms/upload-tally/legal")) {
       setOpenKeys(["erms-legal"]);
-    } else if (path.startsWith("/universe/erms/laboratory") || path.startsWith("/universe/erms/upload-tally/laboratory")) {
+    } else if (path.startsWith("/e-universe/erms/laboratory") || path.startsWith("/e-universe/erms/upload-tally/laboratory")) {
       setOpenKeys(["erms-laboratory"]);
-    } else if (path.startsWith("/universe/erms/")) {
+    } else if (path.startsWith("/e-universe/erms/")) {
       setOpenKeys(["erms"]);
-    } else if (path.startsWith("/universe/settings/")) {
+    } else if (path.startsWith("/e-universe/settings/")) {
       setOpenKeys(["settings"]);
     } else if (
-      path.startsWith("/universe/admin/") ||
-      path.startsWith("/universe/register/")
+      path.startsWith("/e-universe/admin/") ||
+      path.startsWith("/e-universe/register/")
     ) {
       setOpenKeys(["admin"]);
     } else {
@@ -231,7 +238,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       cancelled = true;
       stop();
     };
-  }, [hasErms, location.pathname === "/universe/erms/messages"]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasErms, location.pathname === "/e-universe/erms/messages"]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hasUcds) return undefined;
@@ -301,7 +308,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       <span className="menu-item-actions" onClick={stop}>
         {item.kind === "folder" && (
           <Tooltip title="Add inside">
-            <button type="button" className="menu-item-action" aria-label="Add inside" onClick={() => addItem(year, item.id)}>+</button>
+            <button type="button" className="menu-item-action" aria-label="Add inside" onClick={() => addItem(year, item.id)}><PlusOutlined /></button>
           </Tooltip>
         )}
         <Tooltip title="Rename or move">
@@ -331,9 +338,9 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
               children: customEntries(year, item.id, isActive),
             }
           : {
-              key: isActive ? `/universe/custom/${item.id}` : `y${year}/custom/${item.id}`,
+              key: isActive ? `/e-universe/custom/${item.id}` : `y${year}/custom/${item.id}`,
               className: "custom-table",
-              onClick: () => openInYear(year, `/universe/custom/${item.id}`),
+              onClick: () => openInYear(year, `/e-universe/custom/${item.id}`),
               label: (
                 <div className="menu-label-wrapper submenu-item-label custom-item">
                   <span className="custom-item-name">{item.label}</span>
@@ -379,10 +386,9 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   useEffect(() => {
     initializeSocket();
 
-    const cleanups = [
-      onProvinceViewersUpdate(setProvinceViewers),
-      onMbuViewersUpdate(setMbuViewers),
-    ];
+    // Who is viewing a province shows on the province page itself; the
+    // sidebar no longer carries avatars on its entries.
+    const cleanups = [];
 
     const handleSocketReconnect = () => {
       //console.log("[SideMenu] Socket reconnected. Re-joining rooms...");
@@ -398,10 +404,10 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
         // currentProvince is from component's state
         emitJoinProvince(currentProvince, userPayload);
       }
-      // if (location.pathname === "/universe/mbu") {
+      // if (location.pathname === "/e-universe/mbu") {
       //   emitJoinMbu(userPayload);
       // }
-      if (location.pathname === "/universe/admin") {
+      if (location.pathname === "/e-universe/admin") {
         // Add admin room join/leave if needed
       }
     };
@@ -418,7 +424,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   // Centralized effect for province join/leave based on URL changes
   useEffect(() => {
     const extractProvinceFromPath = (path) => {
-      const match = path.match(/\/universe\/province\/([^/]+)/);
+      const match = path.match(/\/e-universe\/province\/([^/]+)/);
       return match ? match[1] : null;
     };
     if (!currentUser?.username) {
@@ -467,8 +473,8 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
 
   //   let didJoinMbuThisEffect = false;
 
-  //   if (location.pathname === "/universe/mbu") {
-  //     //console.log("[SideMenu] Path is /universe/mbu, attempting to joinMbu.");
+  //   if (location.pathname === "/e-universe/mbu") {
+  //     //console.log("[SideMenu] Path is /e-universe/mbu, attempting to joinMbu.");
   //     emitJoinMbu({
   //       // Corrected payload, removed path
   //       username: currentUser.username,
@@ -488,60 +494,8 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   const handleProvinceSelect = (province) => {
     setCurrentProvinceState(province);
     setCurrentProvince(province);
-    navigate(`/universe/province/${province}`);
+    navigate(`/e-universe/province/${province}`);
   };
-
-  const renderAvatars = (viewers) =>
-    canViewDataHistory && viewers.length > 0 ? (
-      <Avatar.Group
-        max={{
-          count: 1,
-          style: {
-            color: "#f56a00",
-            backgroundColor: "#fde3cf",
-            fontSize: 11,
-          },
-        }}
-        size={18}
-        style={{
-          marginLeft: 8,
-          alignSelf: "center",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        {viewers.map((user) => (
-          <Tooltip
-            key={user.username}
-            title={
-              <span
-                style={{ fontSize: "9px" }}
-              >{`${user.username} is here`}</span>
-            }
-          >
-            <Avatar
-              src={user.avatar}
-              style={{
-                verticalAlign: "middle",
-                backgroundColor: "#1890ff",
-                fontSize: 10,
-              }}
-            >
-              {!user.avatar && user.username
-                ? user.username[0].toUpperCase()
-                : ""}
-            </Avatar>
-          </Tooltip>
-        ))}
-      </Avatar.Group>
-    ) : null;
-
-  const LabelWithAvatars = ({ to, label, viewers }) => (
-    <div className="menu-label-wrapper submenu-item-label">
-      <Link to={to}>{label}</Link>
-      {renderAvatars(viewers)}
-    </div>
-  );
 
   // ERMS, one section per unit the person may see. The Developer, who sees
   // all three, keeps them grouped — ERMS · Records, · Legal, · Laboratory.
@@ -557,6 +511,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
     "Portal Requests": <MailOutlined />,
     "Archive Boxes": <InboxOutlined />,
     "Upload Tally": <BarChartOutlined />,
+    Reports: <FileTextOutlined />,
     Settings: <SettingOutlined />,
   };
   const unitPages = (u) =>
@@ -564,29 +519,33 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       ? [
           // The unit's dashboard, unless it is already the main Dashboard above.
           // (Upload record is a main entry of its own, above.)
-          !unitDashboardIsMain("/universe/erms/dashboard") && ["/universe/erms/dashboard", "Dashboard"],
+          !unitDashboardIsMain("/e-universe/erms/dashboard") && ["/e-universe/erms/dashboard", "Dashboard"],
           // The library is the register: every document, by its FSN.
-          ["/universe/erms/records", "Document Library"],
+          ["/e-universe/erms/records", "Document Library"],
           // Requests from the public Document Portal (/e-universe/document-portal).
-          ["/universe/erms/portal-requests", "Portal Requests"],
-          ["/universe/erms/archive", "Archive Boxes"],
+          ["/e-universe/erms/portal-requests", "Portal Requests"],
+          ["/e-universe/erms/archive", "Archive Boxes"],
           // Uploads per person per day, and the supervisor's check.
-          ["/universe/erms/upload-tally/records", "Upload Tally"],
+          ["/e-universe/erms/upload-tally/records", "Upload Tally"],
+          // Ready-made lists of the collection, downloadable as CSV.
+          ["/e-universe/erms/reports", "Reports"],
           // The Records Unit's own settings (Legal and Laboratory have theirs).
-          ["/universe/erms/settings", "Settings"],
+          ["/e-universe/erms/settings", "Settings"],
         ]
       : [
-          !unitDashboardIsMain(`/universe/erms/${u}/dashboard`) && [`/universe/erms/${u}/dashboard`, "Dashboard"],
+          !unitDashboardIsMain(`/e-universe/erms/${u}/dashboard`) && [`/e-universe/erms/${u}/dashboard`, "Dashboard"],
           // Unless it is the main Upload entry above, as Records' is.
-          uploadUnit !== u && [`/universe/erms/${u}/documents?upload=1`, "Upload document"],
+          uploadUnit !== u && [`/e-universe/erms/${u}/documents?upload=1`, "Upload document"],
           // Named as Records names its own: every document, by its serial.
-          [`/universe/erms/${u}/documents`, "Document Library"],
+          [`/e-universe/erms/${u}/documents`, "Document Library"],
+          // Where the unit's paper files sit, as the Records Unit's boxes.
+          [`/e-universe/erms/${u}/archive`, "Archive Boxes"],
           // Portal requests for this unit's documents (the desk shows each unit its own).
-          ["/universe/erms/portal-requests", "Portal Requests"],
+          ["/e-universe/erms/portal-requests", "Portal Requests"],
           // Shared with the Records Unit's, so its path is not under the unit.
-          ["/universe/erms/upload-tally/" + u, "Upload Tally"],
+          ["/e-universe/erms/upload-tally/" + u, "Upload Tally"],
           // This unit's own settings, separate from the other units'.
-          [`/universe/erms/${u}/settings`, "Settings"],
+          [`/e-universe/erms/${u}/settings`, "Settings"],
         ]
     ).filter(Boolean);
   const ermsUnitsShown = hasErms ? ["records", "legal", "laboratory"].filter((u) => ermsUnits.includes(u)) : [];
@@ -595,7 +554,9 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
     const key = u === "records" ? "erms" : `erms-${u}`;
     if (unitClosed(u)) return [closedSection(key, UNIT_ICON[u], UNIT_NAME[u])];
     if (flatErms) {
-      return unitPages(u).map(([to, label]) => ({
+      // Settings is not a main entry of its own here: it goes under the one
+      // Settings section below, so the menu has a single "Settings".
+      return unitPages(u).filter(([, label]) => label !== "Settings").map(([to, label]) => ({
         key: to,
         icon: PAGE_ICON[label],
         label: (
@@ -669,7 +630,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
             canManageMenu ? (
               <span className="menu-item-actions" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
                 <Tooltip title={title}>
-                  <button type="button" className="menu-item-action" aria-label={title} onClick={() => addItem(y.year, parent)}>+</button>
+                  <button type="button" className="menu-item-action" aria-label={title} onClick={() => addItem(y.year, parent)}><PlusOutlined /></button>
                 </Tooltip>
               </span>
             ) : null;
@@ -688,14 +649,12 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
                   ),
                   children: [
                     ...visibleProvinces.map((province) => ({
-                      key: isActive ? `/universe/province/${province}` : `y${y.year}/province/${province}`,
-                      onClick: () => openInYear(y.year, `/universe/province/${province}`),
+                      key: isActive ? `/e-universe/province/${province}` : `y${y.year}/province/${province}`,
+                      onClick: () => openInYear(y.year, `/e-universe/province/${province}`),
                       label: isActive ? (
-                        <LabelWithAvatars
-                          to={`/universe/province/${province}`}
-                          label={province}
-                          viewers={provinceViewers[province] || []}
-                        />
+                        <div className="menu-label-wrapper submenu-item-label">
+                          <Link to={`/e-universe/province/${province}`}>{province}</Link>
+                        </div>
                       ) : (
                         <div className="menu-label-wrapper submenu-item-label">{province}</div>
                       ),
@@ -705,8 +664,8 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
                 },
                 ...customEntries(y.year, "root", isActive),
                 ...tables.map((d) => ({
-                  key: isActive ? `/universe/datasets/${d.key}` : `y${y.year}/datasets/${d.key}`,
-                  onClick: () => openInYear(y.year, `/universe/datasets/${d.key}`),
+                  key: isActive ? `/e-universe/datasets/${d.key}` : `y${y.year}/datasets/${d.key}`,
+                  onClick: () => openInYear(y.year, `/e-universe/datasets/${d.key}`),
                   label: (
                     <div className="menu-label-wrapper submenu-item-label" title={d.imported ? `${d.rowCount} rows` : "Not imported yet"}>
                       {d.label}
@@ -733,16 +692,39 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
             ),
             children,
           };
-        }),
+        })
+        .concat([
+          // The register's reports: the Monitoring Plan as Excel, the
+          // accomplishment, permits to renew, and the ERMS validation list.
+          {
+            key: "/e-universe/report",
+            icon: <FileTextOutlined />,
+            label: (
+              <div className="menu-label-wrapper submenu-item-label">
+                <Link to="/e-universe/report">Reports</Link>
+              </div>
+            ),
+          },
+          // VERA's check of the register: the Developer and administrators.
+          (isDeveloper || role === "admin") && {
+            key: "/e-universe/vera-check",
+            icon: <FireOutlined />,
+            label: (
+              <div className="menu-label-wrapper submenu-item-label">
+                <Link to="/e-universe/vera-check">VERA check</Link>
+              </div>
+            ),
+          },
+        ].filter(Boolean)),
     },
     ...ermsSections,
     // The Action Center: messages between the people who work in ERMS.
     hasErms && {
-      key: "/universe/erms/messages",
+      key: "/e-universe/erms/messages",
       icon: <MessageOutlined />,
       label: (
         <div className="menu-label-wrapper main">
-          <Link to="/universe/erms/messages">
+          <Link to="/e-universe/erms/messages">
             Messages <Badge count={unreadMessages} size="small" offset={[4, -2]} />
           </Link>
         </div>
@@ -756,15 +738,15 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       icon: <FileProtectOutlined />,
       label: <div className="menu-label-wrapper main">ERMS</div>,
       children: [
-        { key: "/universe/erms/records", label: <div className="menu-label-wrapper submenu-item-label"><Link to="/universe/erms/records">Document Library</Link></div> },
+        { key: "/e-universe/erms/records", label: <div className="menu-label-wrapper submenu-item-label"><Link to="/e-universe/erms/records">Document Library</Link></div> },
       ],
     },
     storageContainers.length > 0 && {
-      key: "/universe/storage",
+      key: "/e-universe/storage",
       icon: <FolderOpenOutlined />,
       label: (
         <div className="menu-label-wrapper main">
-          <Link to="/universe/storage">Storage</Link>
+          <Link to="/e-universe/storage">Storage</Link>
         </div>
       ),
     },
@@ -787,24 +769,38 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       label: <div className="menu-label-wrapper main">Settings</div>,
       children: [
         {
-          key: "/universe/settings/general",
+          key: "/e-universe/settings/general",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/settings/general">General</Link>
+              <Link to="/e-universe/settings/general">General</Link>
             </div>
           ),
         },
         hasUcds && {
-          key: "/universe/settings/ucds",
+          key: "/e-universe/settings/ucds",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/settings/ucds">Universe Central DB</Link>
+              <Link to="/e-universe/settings/ucds">Universe Central DB</Link>
             </div>
           ),
         },
-        // An ERMS unit's settings are not here: each unit has its own, under
-        // its own section above (ERMS · Records › Settings, and so on), so a
-        // Legal officer never wades through the Records Unit's rules.
+        // An ERMS User's own unit settings, here beside General rather than a
+        // second "Settings" in the menu. The Developer, who sees all three
+        // units, finds each unit's under that unit's section above.
+        ...(flatErms && !unitClosed(ermsUnitsShown[0])
+          ? [
+              {
+                key: ermsUnitsShown[0] === "records" ? "/e-universe/erms/settings" : `/e-universe/erms/${ermsUnitsShown[0]}/settings`,
+                label: (
+                  <div className="menu-label-wrapper submenu-item-label">
+                    <Link to={ermsUnitsShown[0] === "records" ? "/e-universe/erms/settings" : `/e-universe/erms/${ermsUnitsShown[0]}/settings`}>
+                      ERMS {UNIT_NAME[ermsUnitsShown[0]]}
+                    </Link>
+                  </div>
+                ),
+              },
+            ]
+          : []),
       ].filter(Boolean),
     },
     hasAdmin && canViewAdminPanel && {
@@ -813,85 +809,85 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       label: <div className="menu-label-wrapper main">Admin Settings</div>,
       children: [
         {
-          key: "/universe/admin/users",
+          key: "/e-universe/admin/users",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/users">User Accounts</Link>
+              <Link to="/e-universe/admin/users">User Accounts</Link>
             </div>
           ),
         },
         // Who signed in and out, when and from where.
         {
-          key: "/universe/admin/sign-in-history",
+          key: "/e-universe/admin/sign-in-history",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/sign-in-history">Sign-in History</Link>
+              <Link to="/e-universe/admin/sign-in-history">Sign-in History</Link>
             </div>
           ),
         },
         {
-          key: "/universe/admin/org-units",
+          key: "/e-universe/admin/org-units",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/org-units">Organizational Units</Link>
+              <Link to="/e-universe/admin/org-units">Organizational Units</Link>
             </div>
           ),
         },
         // Monitoring Config, Register Activity and Duplicate Data were three
         // entries about one thing: the register behind Monitoring Plan.
         hasUcds && {
-          key: "/universe/admin/register",
+          key: "/e-universe/admin/register",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/register">Register</Link>
+              <Link to="/e-universe/admin/register">Register</Link>
             </div>
           ),
         },
         {
-          key: "/universe/admin/posting",
+          key: "/e-universe/admin/posting",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/posting">Post to Bulletin</Link>
+              <Link to="/e-universe/admin/posting">Post to Bulletin</Link>
             </div>
           ),
         },
         // Database status and audit configuration are both "how the system
         // behaves", so they are tabs of one System screen.
         {
-          key: "/universe/admin/system",
+          key: "/e-universe/admin/system",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/system">System</Link>
+              <Link to="/e-universe/admin/system">System</Link>
             </div>
           ),
         },
         // Everything ERMS is configured with: the units, their document
         // types and forms, the filing layout on the shares, the menus.
         {
-          key: "/universe/admin/erms-config",
+          key: "/e-universe/admin/erms-config",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/erms-config">ERMS Config</Link>
+              <Link to="/e-universe/admin/erms-config">ERMS Config</Link>
             </div>
           ),
         },
         // VERA, the assistant: on/off, the model, limits, the sign-in page
         // surface, and its activity log.
         {
-          key: "/universe/admin/vera",
+          key: "/e-universe/admin/vera",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/vera">VERA Assistant</Link>
+              <Link to="/e-universe/admin/vera">VERA Assistant</Link>
             </div>
           ),
         },
         // The records share. Developer-only on top of the admin domain,
         // because an Admin is not a developer.
         isDeveloper && {
-          key: "/universe/admin/developer/storage-config",
+          key: "/e-universe/admin/developer/storage-config",
           label: (
             <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/universe/admin/developer/storage-config">
+              <Link to="/e-universe/admin/developer/storage-config">
                 Storage Configuration
               </Link>
             </div>
@@ -900,11 +896,11 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       ].filter(Boolean),
     },
     // canViewAdminPanel && {
-    //   key: "/universe/mbu",
+    //   key: "/e-universe/mbu",
     //   icon: <EnvironmentFilled />,
     //   label: (
     //     <div className="menu-label-wrapper main">
-    //       <Link to="/universe/mbu">Manila Bay Pipeline</Link>
+    //       <Link to="/e-universe/mbu">Manila Bay Pipeline</Link>
     //       {renderAvatars(mbuViewers)}
     //     </div>
     //   ),
@@ -986,7 +982,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
         inlineCollapsed={collapsed}
         items={menuItems}
         onClick={({ key }) => {
-          if (key.startsWith("/universe/province/")) {
+          if (key.startsWith("/e-universe/province/")) {
             const province = key.split("/").pop();
             handleProvinceSelect(province);
           }

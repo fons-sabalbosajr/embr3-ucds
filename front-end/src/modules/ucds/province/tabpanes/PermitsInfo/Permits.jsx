@@ -53,7 +53,7 @@ const PD1586_COLUMNS = [
             components: {
               AutoComplete: {
                 optionFontSize: 10,
-                fontSize: "11px",
+                fontSize: 13,
                 boxShadow: "none",
               },
             },
@@ -62,7 +62,7 @@ const PD1586_COLUMNS = [
           <AutoComplete
             style={{
               width: "100%",
-              fontSize: "11px",
+              fontSize: 13,
             }}
             options={ECCOptions}
             value={value}
@@ -311,7 +311,7 @@ const RA6969_COLUMNS = [
     render: (value, record) =>
       record.isEditing ? (
         <AutoComplete
-          style={{ width: "100%", fontSize: "11px" }}
+          style={{ width: "100%", fontSize: 13 }}
           options={HAZ_PROCESS_OPTIONS}
           value={value}
           onChange={(val) =>

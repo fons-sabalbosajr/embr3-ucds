@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, Badge, Button, Card, Skeleton, Space, Table, Tabs, Tag, Tooltip, Typography } from "antd";
-import { CloudUploadOutlined, EditOutlined, FileTextOutlined, HistoryOutlined, PaperClipOutlined, ProfileOutlined, ShareAltOutlined } from "@ant-design/icons";
+import { CloudUploadOutlined, EditOutlined, FileTextOutlined, HistoryOutlined, InboxOutlined, PaperClipOutlined, ProfileOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { describeApiError, fetchUnitDocument } from "../api/ermsService";
@@ -11,6 +11,11 @@ import { formatValue, groupFields, unitTheme } from "./unitTheme";
 import UnitUploadModal from "./UnitUploadModal";
 import UnitScanModal from "./UnitScanModal";
 import UnitHistoryPanel from "./UnitHistoryPanel";
+import TrackingPanel from "../components/TrackingPanel";
+import BoxAssignment from "../components/BoxAssignment";
+import PrintLabel from "../components/PrintLabel";
+import ScanTextPanel from "../components/ScanTextPanel";
+import { fetchUnitTracking } from "../api/ermsService";
 
 // ---------------------------------------------------------------------------
 // One Legal or Laboratory document, laid out as a Records record is (the
@@ -32,7 +37,7 @@ const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = f
   const unit = unitProp || params.unit;
   const serialNo = serialProp || params.serialNo;
   const navigate = useNavigate();
-  const pageOf = (serial) => `/universe/erms/${unit}/documents/${encodeURIComponent(serial)}`;
+  const pageOf = (serial) => `/e-universe/erms/${unit}/documents/${encodeURIComponent(serial)}`;
   const docLink = (serial) =>
     embedded && onOpenDocument ? (
       <Typography.Link onClick={() => onOpenDocument(serial)}>{serial}</Typography.Link>
@@ -51,6 +56,8 @@ const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = f
     queryKey: ["erms", "unit", unit, "document", serialNo],
     queryFn: () => fetchUnitDocument(unit, serialNo),
   });
+  // Its custody trail, for the Tracking tab.
+  const { data: custodyTrail } = useQuery({ queryKey: ["erms", "unit", unit, "tracking", serialNo], queryFn: () => fetchUnitTracking(unit, serialNo), enabled: Boolean(serialNo) });
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 12 }} />;
   if (error) return <Alert type="error" showIcon message="Could not load the document" description={describeApiError(error)} />;
@@ -135,6 +142,7 @@ const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = f
             />
           )}
           <DocumentPanel serialNo={doc.serialNo} fileName={doc.document?.fileName} unit={unit} />
+          <ScanTextPanel unit={unit} serialNo={doc.serialNo} text={doc.scanText} readAt={doc.scanTextAt} hasScan={Boolean(doc.document?.fileName)} />
           {doc.document?.fileName && canFile && (
             <div>
               <Button icon={<CloudUploadOutlined />} onClick={() => setFilingScan(true)}>Replace scan</Button>
@@ -194,14 +202,38 @@ const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = f
       ),
     },
     {
+      key: "box",
+      label: (
+        <Space size={6}>
+          <InboxOutlined />
+          Archive box
+          {doc.archive?.boxCode && <Tag style={{ marginInlineEnd: 0 }}>{doc.archive.boxCode}</Tag>}
+        </Space>
+      ),
+      children: <BoxAssignment unit={unit} record={doc} canWrite={canFile} />,
+    },
+    {
       key: "history",
       label: (
         <Space size={6}>
           <HistoryOutlined />
-          History
+          Tracking
         </Space>
       ),
-      children: <UnitHistoryPanel unit={unit} serialNo={doc.serialNo} fields={fields} />,
+      children: (
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          {/* Who holds the paper file, and its movements — as a record's. */}
+          <TrackingPanel
+            unit={unit}
+            serialNo={doc.serialNo}
+            tracking={custodyTrail?.tracking || []}
+            custody={custodyTrail?.custody}
+            actions={custodyTrail?.actions || []}
+            canWrite={canFile}
+          />
+          <UnitHistoryPanel unit={unit} serialNo={doc.serialNo} fields={fields} />
+        </Space>
+      ),
     },
   ].filter(Boolean);
 
@@ -219,13 +251,20 @@ const UnitDocumentDetail = ({ unit: unitProp, serialNo: serialProp, embedded = f
             </Tooltip>
           )
         }
-        onBack={embedded ? null : () => navigate(`/universe/erms/${unit}/documents`)}
+        onBack={embedded ? null : () => navigate(`/e-universe/erms/${unit}/documents`)}
         actions={
-          canFile && (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          )
+          <>
+            {canFile && (
+              <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            )}
+            <PrintLabel
+              code={doc.serialNo}
+              path={`/e-universe/erms/${unit}/documents/${encodeURIComponent(doc.serialNo)}`}
+              lines={[doc.docTypeLabel || doc.docType, doc.fields?.docketNo || doc.fields?.cocNo, doc.title]}
+            />
+          </>
         }
       />
 

@@ -69,7 +69,7 @@ router.post('/api/notifications/test', authenticateSession, async (req, res, nex
     const result = await notifier.notify([me(req)], {
       title: 'Notifications are on',
       body: 'E-Universe will tell you here when something needs you.',
-      url: '/universe',
+      url: '/e-universe/home',
       kind: 'test',
       tag: 'test',
     });

@@ -15,7 +15,8 @@ import {
   Typography,
 } from "antd";
 import { InboxOutlined, PlusOutlined } from "@ant-design/icons";
-import { Link } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import PrintLabel from "../components/PrintLabel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PROVINCE_LABEL,
@@ -36,10 +37,17 @@ const STATUS_COLOR = {
   disposed: "default",
 };
 
+// The Records Unit's boxes at /erms/archive; Legal Services' and the
+// Laboratory's at /erms/<unit>/archive, the same screen over their own.
 const ArchiveBoxes = () => {
+  const { unit: unitParam } = useParams();
+  const unit = unitParam === "legal" || unitParam === "laboratory" ? unitParam : "records";
+  const isRecords = unit === "records";
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
-  const [viewing, setViewing] = useState(null);
+  // A box label's QR code opens here with ?box=<code>: its contents, at once.
+  const [searchParams] = useSearchParams();
+  const [viewing, setViewing] = useState(searchParams.get("box"));
   const [form] = Form.useForm();
 
   const { data: options } = useQuery({
@@ -48,25 +56,27 @@ const ArchiveBoxes = () => {
     staleTime: 5 * 60 * 1000,
   });
   const { data: boxes = [], isLoading } = useQuery({
-    queryKey: ["erms", "boxes"],
-    queryFn: () => fetchBoxes(),
+    queryKey: ["erms", "boxes", unit],
+    queryFn: () => fetchBoxes(undefined, unit),
   });
   const { data: due = [] } = useQuery({
     queryKey: ["erms", "disposal-due"],
     queryFn: fetchDisposalDue,
+    enabled: isRecords,
   });
   const { data: contents = [], isFetching: loadingContents } = useQuery({
-    queryKey: ["erms", "box", viewing],
-    queryFn: () => fetchBoxContents(viewing),
+    queryKey: ["erms", "box", unit, viewing],
+    queryFn: () => fetchBoxContents(viewing, unit),
     enabled: Boolean(viewing),
   });
 
-  const canWrite = Boolean(options?.writableProvinces?.length ?? true);
+  // A unit's own staff keep its boxes; for Records, those who may write records.
+  const canWrite = isRecords ? Boolean(options?.writableProvinces?.length ?? true) : true;
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["erms"] });
   const onError = (fallback) => (e) => message.error(describeApiError(e, fallback));
 
   const createMutation = useMutation({
-    mutationFn: createBox,
+    mutationFn: (payload) => createBox({ ...payload, unit }),
     onSuccess: (box) => {
       message.success(`Created box ${box.code}.`);
       setCreating(false);
@@ -77,7 +87,7 @@ const ArchiveBoxes = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: updateBox,
+    mutationFn: (vars) => updateBox({ ...vars, unit }),
     onSuccess: (box) => {
       message.success(`Box ${box.code} is now ${box.status}.`);
       invalidate();
@@ -187,21 +197,28 @@ const ArchiveBoxes = () => {
     {
       title: "",
       key: "actions",
-      render: (_, box) =>
-        canWrite && (
+      render: (_, box) => (
           <Space size={4}>
-            {box.status === "open" && (
+            {/* The box's label: its code, where it sits, and a QR code that opens its contents. */}
+            <PrintLabel
+              size="small"
+              buttonLabel="Label"
+              code={box.code}
+              path={`/e-universe/erms/${isRecords ? "" : `${unit}/`}archive?box=${encodeURIComponent(box.code)}`}
+              lines={[box.label !== box.code ? box.label : null, [box.province, box.location].filter(Boolean).join(" · "), `${box.recordCount} ${isRecords ? "records" : "documents"}`]}
+            />
+            {canWrite && box.status === "open" && (
               <Button size="small" onClick={() => seal(box)}>
                 Seal
               </Button>
             )}
-            {["sealed", "due-for-disposal"].includes(box.status) && (
+            {canWrite && ["sealed", "due-for-disposal"].includes(box.status) && (
               <Button size="small" danger onClick={() => dispose(box)}>
                 Record disposal
               </Button>
             )}
           </Space>
-        ),
+      ),
     },
   ];
 
@@ -217,7 +234,7 @@ const ArchiveBoxes = () => {
       )}
 
       <Card
-        title="Archive boxes"
+        title={isRecords ? "Archive boxes" : `Archive boxes — ${unit === "legal" ? "Legal Services" : "Laboratory"}`}
         extra={
           canWrite && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
@@ -307,11 +324,18 @@ const ArchiveBoxes = () => {
               dataIndex: "serialNo",
               key: "serialNo",
               render: (s) => (
-                <Link to={`/universe/erms/records/${encodeURIComponent(s)}`}>{s}</Link>
+                <Link to={isRecords ? `/e-universe/erms/records/${encodeURIComponent(s)}` : `/e-universe/erms/${unit}/documents/${encodeURIComponent(s)}`}>{s}</Link>
               ),
             },
-            { title: "Proponent", dataIndex: "proponentName", key: "proponent", ellipsis: true },
-            { title: "Permit", dataIndex: ["permit", "number"], key: "permit" },
+            ...(isRecords
+              ? [
+                  { title: "Proponent", dataIndex: "proponentName", key: "proponent", ellipsis: true },
+                  { title: "Permit", dataIndex: ["permit", "number"], key: "permit" },
+                ]
+              : [
+                  { title: "Document", key: "doc", ellipsis: true, render: (_, d) => d.title || d.fields?.docketNo || d.fields?.cocNo || "—" },
+                  { title: "Type", dataIndex: "docTypeLabel", key: "type", render: (v, d) => v || d.docType },
+                ]),
           ]}
           locale={{ emptyText: "This box is empty" }}
         />

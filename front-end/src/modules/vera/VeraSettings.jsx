@@ -20,7 +20,6 @@ import {
   Statistic,
   Tooltip,
   Tabs,
-  theme as antdTheme,
 } from "antd";
 import {
   SaveOutlined,
@@ -42,9 +41,11 @@ import VeraCorrections from "./VeraCorrections";
 import VeraRegisterLinks from "./VeraRegisterLinks";
 import VeraSerials from "./VeraSerials";
 import VeraProjectTypes from "./VeraProjectTypes";
+import VeraScanText from "./VeraScanText";
 import { useQuery } from "@tanstack/react-query";
 import VeraLogs from "./VeraLogs";
-import { VeraEdgeBeam, VeraFlame } from "./VeraMark";
+import { VeraFlame } from "./VeraMark";
+import { BorderBeam } from "border-beam";
 import { useTheme } from "../../theme/ThemeProvider";
 import { message } from "../../shared/feedback";
 import "./vera.css";
@@ -98,7 +99,6 @@ export default function VeraSettings() {
   // Answers for the Developer only (403 otherwise), which also decides the tab.
   const { data: pendingCorrections } = useQuery({ queryKey: ["vera", "corrections", "pending"], queryFn: getCorrectionsPending, retry: false, staleTime: 30 * 1000 });
   const { data: pendingLinks } = useQuery({ queryKey: ["vera", "register-links", "pending"], queryFn: getRegisterLinksPending, retry: false, staleTime: 30 * 1000 });
-  const accent = antdTheme.useToken().token.colorPrimary;
   const provider = Form.useWatch("provider", form);
 
   const load = async () => {
@@ -518,8 +518,10 @@ export default function VeraSettings() {
 
   return (
     <div className="vera-settings" data-theme={mode}>
+      {/* VERA's flame on the title card, and the same beam that runs round
+          her launcher running round the card. */}
+      <BorderBeam size="md" colorVariant="ocean" theme={mode === "dark" ? "dark" : "light"} duration={3.2} strength={0.85} style={{ marginBottom: 14, borderRadius: 20 }}>
       <section className="vera-settings__hero">
-        <VeraEdgeBeam radius={20} theme={mode} strength={0.8} color={accent} />
         <VeraFlame size={88} state={preview} theme={mode} />
         <div>
           <h2 className="vera-settings__title">VERA Assistant</h2>
@@ -539,11 +541,12 @@ export default function VeraSettings() {
           </div>
         </div>
       </section>
+      </BorderBeam>
       <Tabs
         // The bell links to ?tab=corrections or ?tab=links; until that tab
         // exists (the Developer check is still answering), Configuration shows.
         activeKey={
-          ((tab === "corrections" || tab === "serials" || tab === "project-types") && pendingCorrections === undefined) || (tab === "links" && pendingLinks === undefined) ? "configuration" : tab
+          ((tab === "corrections" || tab === "serials" || tab === "project-types" || tab === "scan-text") && pendingCorrections === undefined) || (tab === "links" && pendingLinks === undefined) ? "configuration" : tab
         }
         onChange={setTab}
         items={[
@@ -564,6 +567,10 @@ export default function VeraSettings() {
           // Each record's project type, read against its document.
           ...(pendingCorrections !== undefined
             ? [{ key: "project-types", label: <span><FileSearchOutlined /> Project types</span>, children: <VeraProjectTypes /> }]
+            : []),
+          // Reading scans' text so the libraries can search inside them.
+          ...(pendingCorrections !== undefined
+            ? [{ key: "scan-text", label: <span><FileSearchOutlined /> Scan text</span>, children: <VeraScanText /> }]
             : []),
         ]}
       />

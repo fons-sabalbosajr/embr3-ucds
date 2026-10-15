@@ -63,7 +63,7 @@ self.addEventListener("push", (event) => {
         renotify: true,
         icon: "/notice-icon.png",
         badge: "/notice-badge.png",
-        data: { url: notice.url || "/universe", to: notice.to || null, shared: Boolean(notice.shared) },
+        data: { url: notice.url || "/e-universe/home", to: notice.to || null, shared: Boolean(notice.shared) },
         requireInteraction: notice.kind === "document-request",
       });
     })
@@ -72,7 +72,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const { url: path = "/universe", to = null, shared = false } = event.notification.data || {};
+  const { url: path = "/e-universe/home", to = null, shared = false } = event.notification.data || {};
   const url = new URL(path, self.location.origin).href;
   event.waitUntil(
     accountsOfWindows().then(async (windows) => {

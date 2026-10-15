@@ -67,41 +67,9 @@
   min-height: 500px;
 }
 
-.tabpane-container {
-  font-size: 10px;
-}
-
-.modal-container {
-  font-size: 11px; /* Set the desired font size here */
-}
-
-.report-modal-container {
-  font-size: 11px; /* Ensure font size is applied to the report modal as well */
-}
-
-.ant-modal-body {
-  font-size: 11px; /* Ensure Ant Design modal body uses the correct font size */
-}
-
-.ant-tabs-tab {
-  font-size: 11px; /* Adjust font size for tab headers */
-}
-
-.ant-tabs-tabpane {
-  font-size: 11px; /* Adjust font size for tab content */
-}
-
-.ant-btn {
-  font-size: 11px; /* Adjust font size for buttons */
-}
-
-.ant-typography {
-  font-size: 11px; /* Adjust font size for typography components */
-}
-
-.tabpane-title {
-  font-size: 11px;
-}
+/* Sizes for the record window live in ucds-modern.css (.ucds-record-tabs).
+   The rules that stood here set every modal body, tab, button and text in
+   the application to 10-11px once this file loaded; they are gone. */
 
 .tab-pane-content {
   background-color: #f0f0f0; /* or any other background color you prefer */

@@ -26,7 +26,7 @@ async function listAuthorizedYears(req, res) {
           label: y.label,
           description: y.description,
           provinces: y.provinces || [],
-          open: y.locked !== true && (lockFuture ? yearService.isOpenYear(y.year) : true),
+          open: y.locked !== true && (y.openEarly === true || (lockFuture ? yearService.isOpenYear(y.year) : true)),
           locked: y.locked === true,
         })),
     });

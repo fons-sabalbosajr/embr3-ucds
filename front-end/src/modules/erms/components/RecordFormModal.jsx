@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Skeleton, Space, Tag, Typography, Upload } from "antd";
+import { Alert, Button, DatePicker, Form, Input, InputNumber, Radio, Select, Skeleton, Space, Tag, Typography, Upload } from "antd";
 import { InboxOutlined, MinusCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { UnitTabs, UploadFooter } from "./UploadParts";
 import { attachRecordFile } from "../../../shared/api/recordDocuments";
@@ -9,6 +9,7 @@ import RegisterLookup from "./RegisterLookup";
 import NasFolderBrowser from "./NasFolderBrowser";
 import SuggestInput from "./SuggestInput";
 import ListInput from "./ListInput";
+import FloatingModal from "../../../shared/components/FloatingModal";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -506,7 +507,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             <ListInput options={barangayOptions} placeholder={city ? "Choose or type" : "Choose the city first"} onSelect={fillCoordinates} />
           </Form.Item>
           <Form.Item name="street" label="Street">
-            <Input placeholder="Street, purok or sitio" />
+            <Input.TextArea rows={2} autoSize={{ minRows: 2, maxRows: 4 }} placeholder="Street, purok or sitio" />
           </Form.Item>
           <Form.Item name="mailingAddress" label="Mailing address" style={{ gridColumn: "1 / -1" }}>
             <Input.TextArea rows={2} maxLength={500} placeholder="Where correspondence goes, when not the project site" />
@@ -633,7 +634,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   ];
 
   return (
-    <Modal
+    <FloatingModal
       title={
         <Space>
           <span style={{ color: theme.accent }}>{theme.icon}</span>
@@ -668,9 +669,11 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
         </Space>
         </UploadFooter>
       }
+      // A window: moved aside or minimised to look something up mid-form;
+      // minimised, the form keeps what was typed.
       width="min(1040px, 96vw)"
-      style={{ top: 32 }}
-      destroyOnHidden
+      resizable={false}
+      top={32}
     >
       {!isEdit && (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
@@ -687,7 +690,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
           <UnitTabs unit="records" activeKey={tab} onChange={setTab} items={tabs} />
         </Form>
       )}
-    </Modal>
+    </FloatingModal>
   );
 };
 

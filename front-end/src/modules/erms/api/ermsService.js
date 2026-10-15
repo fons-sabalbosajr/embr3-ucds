@@ -12,6 +12,39 @@ export const fetchFilterOptions = async () => (await client.get("/filter-options
 export const fetchLookups = async (params) =>
   (await client.get("/lookups", { params: pruned(params) })).data;
 
+/** An export download: the workbook and what the server said about it. */
+const download = async (path, params) => {
+  const res = await client.get(path, { params: pruned(params), responseType: "blob", timeout: 5 * 60 * 1000 });
+  const disposition = res.headers["content-disposition"] || "";
+  return {
+    blob: res.data,
+    fileName: /filename="([^"]+)"/.exec(disposition)?.[1] || "ERMS-export.xlsx",
+    rows: Number(res.headers["x-export-rows"]) || 0,
+    truncated: res.headers["x-export-truncated"] === "1",
+  };
+};
+// The list's own filters; paging is left out — the export is all of them.
+const unpaged = ({ page, pageSize, ...rest } = {}) => rest; // eslint-disable-line no-unused-vars
+
+export const exportRecords = (params) => download("/records/export", unpaged(params));
+export const exportUnitDocuments = (unit, params) => download(`/units/${unit}/documents/export`, unpaged(params));
+
+// The Records reports (server: reportService).
+export const fetchReports = async () => (await client.get("/reports")).data.reports;
+export const fetchReport = async (key) => (await client.get(`/reports/${key}`)).data;
+export const downloadReportCsv = async (key) => {
+  const res = await client.get(`/reports/${key}`, { params: { format: "csv", limit: 20000 }, responseType: "blob" });
+  const name = /filename="([^"]+)"/.exec(res.headers["content-disposition"] || "")?.[1] || `erms-${key}.csv`;
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
+
 export const fetchRecords = async (params) =>
   (await client.get("/records", { params: pruned(params) })).data;
 
@@ -47,6 +80,12 @@ const multipart = (parts, file) => {
 /** axios's upload progress as a whole percentage, for the upload dialogs' bar. */
 const progressOf = (onProgress) =>
   onProgress ? { onUploadProgress: (e) => e.total && onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))) } : {};
+
+// Settings › Duplicates: VERA's reading of each group, and her quick fix.
+export const fetchDuplicateReview = async (unit) => (await client.get(`/duplicates/${unit}`)).data;
+export const fixDuplicates = async ({ unit, keys, all }) => (await client.post(`/duplicates/${unit}/fix`, all ? { all: true } : { keys })).data;
+export const dismissDuplicate = async ({ unit, key }) => (await client.post(`/duplicates/${unit}/dismiss`, { key })).data;
+export const restoreDuplicate = async ({ unit, serialNo }) => (await client.post(`/duplicates/${unit}/restore`, { serialNo })).data;
 
 /** Move a record's scan to another record (Developer or administrator). */
 export const moveRecordFile = async ({ serialNo, toSerialNo }) =>
@@ -185,23 +224,33 @@ export const saveLookupList = async ({ kind, items, description }) =>
 export const addTracking = async ({ serialNo, ...entry }) =>
   (await client.post(`/records/${encodeURIComponent(serialNo)}/tracking`, entry)).data.entry;
 
+// A Legal or Laboratory document's custody trail.
+export const fetchUnitTracking = async (unit, serialNo) => (await client.get(`/units/${unit}/documents/${encodeURIComponent(serialNo)}/tracking`)).data;
+export const addUnitTracking = async ({ unit, serialNo, ...entry }) =>
+  (await client.post(`/units/${unit}/documents/${encodeURIComponent(serialNo)}/tracking`, entry)).data.entry;
+
 export const fetchOverdue = async () => (await client.get("/tracking/overdue")).data.overdue;
 
 // --- archive ----------------------------------------------------------------
 
-export const fetchBoxes = async (params) =>
-  (await client.get("/boxes", { params: pruned(params) })).data.boxes;
+// `unit`: Legal Services' or the Laboratory's own boxes; omitted, the Records Unit's.
+const boxBase = (unit) => (unit && unit !== "records" ? `/units/${unit}/boxes` : "/boxes");
 
-export const createBox = async (payload) => (await client.post("/boxes", payload)).data.box;
+export const fetchBoxes = async (params, unit) =>
+  (await client.get(boxBase(unit), { params: pruned(params) })).data.boxes;
 
-export const updateBox = async ({ code, ...changes }) =>
-  (await client.patch(`/boxes/${encodeURIComponent(code)}`, changes)).data.box;
+export const createBox = async ({ unit, ...payload }) => (await client.post(boxBase(unit), payload)).data.box;
 
-export const fetchBoxContents = async (code) =>
-  (await client.get(`/boxes/${encodeURIComponent(code)}`)).data.contents;
+export const updateBox = async ({ unit, code, ...changes }) =>
+  (await client.patch(`${boxBase(unit)}/${encodeURIComponent(code)}`, changes)).data.box;
 
-export const assignToBox = async ({ serialNo, boxCode }) =>
-  (await client.put(`/records/${encodeURIComponent(serialNo)}/box`, { boxCode })).data;
+export const fetchBoxContents = async (code, unit) =>
+  (await client.get(`${boxBase(unit)}/${encodeURIComponent(code)}`)).data.contents;
+
+export const assignToBox = async ({ unit, serialNo, boxCode }) =>
+  unit && unit !== "records"
+    ? (await client.put(`/units/${unit}/documents/${encodeURIComponent(serialNo)}/box`, { boxCode })).data
+    : (await client.put(`/records/${encodeURIComponent(serialNo)}/box`, { boxCode })).data;
 
 export const fetchDisposalDue = async () => (await client.get("/disposal-due")).data.boxes;
 

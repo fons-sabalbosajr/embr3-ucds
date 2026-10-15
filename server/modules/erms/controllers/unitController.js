@@ -93,6 +93,94 @@ async function getDocument(req, res, next) {
 }
 
 /** A document's history — the Legal and Laboratory counterpart of a record's Tracking panel. */
+// A Legal or Laboratory unit's archive boxes — where its paper files sit — as
+// the Records Unit's (services/archiveService, boxes marked with the unit).
+const archive = require('../services/archiveService');
+const boxGuard = async (req) => {
+  const user = await principalOf(req);
+  units.assertCanSee(user, units.assertUnit(req.params.unit));
+  return user;
+};
+async function unitBoxes(req, res, next) {
+  try {
+    await boxGuard(req);
+    res.json({ boxes: await archive.listBoxes({ ...req.query, unit: req.params.unit }, null) });
+  } catch (error) {
+    next(error);
+  }
+}
+async function createUnitBox(req, res, next) {
+  try {
+    const user = await boxGuard(req);
+    const box = await archive.createBox({ ...req.body, unit: req.params.unit }, { username: user?.username || 'unknown' });
+    await audit.record(req, { domain: DOMAINS.ERMS, action: 'Create Archive Box', collection: archive.BOXES, documentId: box.code, label: `Created ${req.params.unit} box ${box.code}` });
+    res.status(201).json({ box });
+  } catch (error) {
+    next(error);
+  }
+}
+async function updateUnitBox(req, res, next) {
+  try {
+    const user = await boxGuard(req);
+    // Only this unit's own boxes, whatever code is sent.
+    if (!(await getDb().collection(archive.BOXES).findOne({ code: req.params.code.toUpperCase(), unit: req.params.unit }))) {
+      return res.status(404).json({ code: 'BOX_NOT_FOUND', message: 'That box is not one of this unit\'s.' });
+    }
+    const { before, after } = await archive.updateBox(req.params.code.toUpperCase(), req.body, { username: user?.username || 'unknown' });
+    await audit.record(req, { domain: DOMAINS.ERMS, action: after.status === 'disposed' ? 'Record Box Disposal' : 'Update Archive Box', collection: archive.BOXES, documentId: after.code, label: `Updated ${req.params.unit} box ${after.code}`, changes: audit.diff(before, req.body) });
+    res.json({ box: after });
+  } catch (error) {
+    next(error);
+  }
+}
+async function unitBoxContents(req, res, next) {
+  try {
+    await boxGuard(req);
+    res.json({ contents: await archive.boxContents(req.params.code, null, { unit: req.params.unit }) });
+  } catch (error) {
+    next(error);
+  }
+}
+async function assignUnitBox(req, res, next) {
+  try {
+    const user = await boxGuard(req);
+    const result = await archive.assignRecord(req.params.serialNo, req.body.boxCode, { username: user?.username || 'unknown' }, { unit: req.params.unit });
+    await audit.record(req, { domain: DOMAINS.ERMS, action: 'File in Box', collection: units.COLLECTION, documentId: req.params.serialNo, label: result.archive ? `Filed ${req.params.serialNo} in box ${result.archive.boxCode}` : `Took ${req.params.serialNo} out of its box` });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// A Legal or Laboratory document's custody trail — who holds the paper file
+// — as the Records Unit keeps one for each record.
+async function unitTracking(req, res, next) {
+  try {
+    await units.get(await principalOf(req), req.params.unit, req.params.serialNo);
+    const tracking = require('../services/trackingService');
+    res.json({
+      tracking: await tracking.listForUnitDocument(req.params.serialNo),
+      custody: await tracking.currentCustody(req.params.serialNo),
+      actions: tracking.ACTIONS,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function addUnitTracking(req, res, next) {
+  try {
+    const user = await principalOf(req);
+    await units.get(user, req.params.unit, req.params.serialNo);
+    const tracking = require('../services/trackingService');
+    const entry = await tracking.addEntry(req.params.serialNo, req.body, { username: user?.username || 'unknown' }, { unit: req.params.unit });
+    await audit.record(req, { domain: DOMAINS.ERMS, action: 'Track Record', collection: tracking.TRACKING, documentId: req.params.serialNo, label: `${entry.actionLabel} — ${req.params.serialNo}` });
+    res.status(201).json({ entry });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function documentHistory(req, res, next) {
   try {
     res.json(await units.history(await principalOf(req), req.params.unit, req.params.serialNo));
@@ -642,6 +730,26 @@ async function getDocumentFileInfo(req, res, next) {
   }
 }
 
+/** A unit's Document Library as an Excel workbook: the list's filters, every field. */
+async function exportDocuments(req, res, next) {
+  try {
+    const user = await principalOf(req);
+    const { isDeveloper } = require('../../../services/authorization');
+    const { buffer, count, truncated } = await require('../services/exportService').unitWorkbook(user, req.params.unit, req.query, { developer: isDeveloper(user) });
+    await audit.record(req, { domain: DOMAINS.ERMS, action: 'export', label: `${req.params.unit} Document Library exported (${count} documents)`, collection: units.COLLECTION, changes: { filters: req.query, count }, includeBody: false });
+    const name = `ERMS-${req.params.unit === 'legal' ? 'Legal' : 'Laboratory'}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.setHeader('X-Export-Rows', String(count));
+    res.setHeader('X-Export-Truncated', truncated ? '1' : '0');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Rows, X-Export-Truncated');
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.end(buffer);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function viewDocumentFile(req, res, next) {
   try {
     const resolved = await resolveUnitFile(req, res);
@@ -884,6 +992,14 @@ async function uncheckUploads(req, res, next) {
 }
 
 module.exports = {
+  unitBoxes,
+  createUnitBox,
+  updateUnitBox,
+  unitBoxContents,
+  assignUnitBox,
+  unitTracking,
+  addUnitTracking,
+  exportDocuments,
   myUnits,
   unitDashboard,
   listDocuments,

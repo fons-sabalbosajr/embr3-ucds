@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Badge, Button, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tag, Tooltip, Typography, Upload } from "antd";
+import { Alert, Badge, Button, Checkbox, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Tag, Tooltip, Typography, Upload } from "antd";
 import { UnitTabs, UploadFooter } from "../components/UploadParts";
 import ListInput from "../components/ListInput";
+import FloatingModal from "../../../shared/components/FloatingModal";
 import { InboxOutlined, NumberOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -352,7 +353,7 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }
   };
 
   return (
-    <Modal
+    <FloatingModal
       open={open}
       title={
         <Space>
@@ -378,9 +379,11 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }
         </Space>
         </UploadFooter>
       }
+      // A window: moved aside or minimised to look something up mid-form;
+      // minimised, the form keeps what was typed.
       width="min(1040px, 96vw)"
-      style={{ top: 32 }}
-      destroyOnHidden
+      resizable={false}
+      top={32}
     >
       {/* Rebuilt for each document, and once the unit's field list is in,
           so the initial values always match the fields on show. */}
@@ -521,7 +524,7 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }
           ]}
         />
       </Form>
-    </Modal>
+    </FloatingModal>
   );
 };
 

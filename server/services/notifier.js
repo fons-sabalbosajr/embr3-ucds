@@ -295,7 +295,7 @@ async function pushTo(usernames, notice) {
  *
  * @param {string[]} usernames
  * @param {{title: string, body?: string, url?: string, tag?: string, kind?: string}} notice
- *   url is a path in the application ("/universe/erms/portal").
+ *   url is a path in the application ("/e-universe/erms/portal").
  * Never throws: a notice that cannot be delivered must not fail the request
  * that caused it.
  */
@@ -305,7 +305,7 @@ async function notify(usernames, notice) {
   const payload = {
     title: String(notice.title || 'E-Universe').slice(0, 120),
     body: String(notice.body || '').slice(0, 300),
-    url: typeof notice.url === 'string' && notice.url.startsWith('/') ? notice.url : '/universe',
+    url: typeof notice.url === 'string' && notice.url.startsWith('/') ? notice.url : '/e-universe/home',
     tag: notice.tag || notice.kind || 'e-universe',
     kind: notice.kind || 'general',
     at: new Date().toISOString(),

@@ -34,7 +34,10 @@ const AttachmentModal = ({ open, parent, onClose }) => {
   const [form] = Form.useForm();
   const [tab, setTab] = useState("attachment");
   const [errorTabs, setErrorTabs] = useState([]);
-  const [scan, setScan] = useState(null);
+  // One or more scans: each is filed as an attachment of its own, with the
+  // details on the form (several at once — the bulk upload).
+  const [scans, setScans] = useState([]);
+  const scan = scans[0] || null;
   const [missing, setMissing] = useState(false);
   const [targetPath, setTargetPath] = useState(null);
   const province = parent?.location?.province;
@@ -43,7 +46,7 @@ const AttachmentModal = ({ open, parent, onClose }) => {
     if (!open || !parent) return;
     setTab("attachment");
     setErrorTabs([]);
-    setScan(null);
+    setScans([]);
     setMissing(false);
     setTargetPath(null);
   }, [open, parent]);
@@ -59,12 +62,28 @@ const AttachmentModal = ({ open, parent, onClose }) => {
   // The upload's progress, 0–100, while the scan is on its way; null otherwise.
   const [progress, setProgress] = useState(null);
   const save = useMutation({
-    mutationFn: ({ payload }) => uploadRecord({ payload, file: scan, onProgress: scan ? setProgress : undefined }),
+    // One after the other, so each gets its attachment number in order; the
+    // bar is the whole batch's progress.
+    mutationFn: async ({ payload }) => {
+      const saved = [];
+      for (let i = 0; i < scans.length; i++) {
+        const file = scans[i];
+        const title = scans.length > 1 ? `${payload.projectTitle} — ${file.name.replace(/\.[a-z0-9]{2,5}$/i, "")}` : payload.projectTitle;
+        saved.push(
+          await uploadRecord({
+            payload: { ...payload, projectTitle: title, document: { ...payload.document, fileName: file.name } },
+            file,
+            onProgress: (p) => setProgress(Math.round(((i + p / 100) / scans.length) * 100)),
+          })
+        );
+      }
+      return saved;
+    },
     onSettled: () => setProgress(null),
     onSuccess: (saved) => {
-      message.success(`Filed ${saved.serialNo}.`);
+      message.success(saved.length === 1 ? `Filed ${saved[0].serialNo}.` : `Filed ${saved.length} attachments: ${saved[0].serialNo} to ${saved[saved.length - 1].serialNo}.`);
       queryClient.invalidateQueries({ queryKey: ["erms"] });
-      onClose(saved);
+      onClose(saved[saved.length - 1]);
     },
     onError: (e) => message.error(describeApiError(e, "The attachment could not be filed.")),
   });
@@ -155,22 +174,23 @@ const AttachmentModal = ({ open, parent, onClose }) => {
             extra={!(missing && !scan) ? "Filed beside the record’s own scan, as the desktop system did, unless you choose another folder below." : undefined}
           >
             <Upload.Dragger
-              maxCount={1}
+              multiple
+              maxCount={20}
               accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx"
               beforeUpload={(file) => {
-                setScan(file);
+                setScans((list) => (list.some((f) => f.name === file.name && f.size === file.size) ? list : [...list, file].slice(0, 20)));
                 setMissing(false);
                 setErrorTabs((t) => t.filter((k) => k !== "document"));
                 return false;
               }}
-              onRemove={() => setScan(null)}
-              fileList={scan ? [scan] : []}
+              onRemove={(file) => setScans((list) => list.filter((f) => f.uid !== file.uid))}
+              fileList={scans}
             >
               <p className="ant-upload-drag-icon">
                 <InboxOutlined />
               </p>
               <p className="ant-upload-text">Click or drag the scan here</p>
-              <p className="ant-upload-hint">PDF or image; one file per attachment.</p>
+              <p className="ant-upload-hint">PDF or image. Choose several to file them together — each becomes an attachment of its own (up to 20).</p>
             </Upload.Dragger>
           </Form.Item>
           <Form.Item
@@ -212,7 +232,7 @@ const AttachmentModal = ({ open, parent, onClose }) => {
           <Button disabled={step <= 0} onClick={() => setTab(TAB_KEYS[step - 1])}>Back</Button>
           {step < TAB_KEYS.length - 1 && <Button onClick={() => setTab(TAB_KEYS[step + 1])}>Next</Button>}
           <Button type="primary" loading={save.isPending} disabled={!province} onClick={submit}>
-            Upload attachment
+            {scans.length > 1 ? `Upload ${scans.length} attachments` : "Upload attachment"}
           </Button>
         </Space>
         </UploadFooter>

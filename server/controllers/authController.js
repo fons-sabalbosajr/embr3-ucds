@@ -107,7 +107,7 @@ async function register(req, res) {
         division,
         position,
         email,
-        reviewUrl: `${origin}/universe/admin/users`,
+        reviewUrl: `${origin}/e-universe/admin/users`,
       }),
     });
     const acknowledge = mailer.send({ to: email, ...templates.registrationAcknowledged({ name }) });

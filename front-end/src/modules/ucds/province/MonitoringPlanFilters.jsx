@@ -129,7 +129,6 @@ const MonitoringPlanFilters = ({ rows, value, onChange, showDateRange }) => {
       )}
       {showDateRange && (
         <RangePicker
-          size="small"
           value={value.dateSigned}
           onChange={(v) => set({ dateSigned: v })}
           format="MM/DD/YYYY"

@@ -56,7 +56,7 @@ export default function PortalSummaryCard({ source, accent }) {
         </Space>
       }
       extra={
-        <Link to="/universe/erms/portal-requests">
+        <Link to="/e-universe/erms/portal-requests">
           <Badge count={pending} size="small" offset={[6, -2]}>
             <span>
               Portal Requests <RightOutlined style={{ fontSize: 10 }} />

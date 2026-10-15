@@ -41,6 +41,8 @@ import BoxAssignment from "../components/BoxAssignment";
 import AttachmentModal from "../components/AttachmentModal";
 import DocumentPanel from "../../../shared/components/DocumentPanel";
 import MoveFileModal from "../components/MoveFileModal";
+import PrintLabel from "../components/PrintLabel";
+import ScanTextPanel from "../components/ScanTextPanel";
 import { fetchCurrentUser } from "../../../api/universeService";
 import { DetailHeader, Field, Grid } from "../components/DetailParts";
 
@@ -67,9 +69,9 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
   const params = useParams();
   const serialNo = serialProp || params.serialNo;
   const navigate = useNavigate();
-  const goToRecord = (serial) => (embedded && onOpenRecord ? onOpenRecord(serial) : navigate(`/universe/erms/records/${encodeURIComponent(serial)}`));
+  const goToRecord = (serial) => (embedded && onOpenRecord ? onOpenRecord(serial) : navigate(`/e-universe/erms/records/${encodeURIComponent(serial)}`));
   const RecordLink = ({ serial, children }) => (
-    <a href={`/universe/erms/records/${encodeURIComponent(serial)}`} onClick={(e) => { e.preventDefault(); goToRecord(serial); }}>
+    <a href={`/e-universe/erms/records/${encodeURIComponent(serial)}`} onClick={(e) => { e.preventDefault(); goToRecord(serial); }}>
       {children || serial}
     </a>
   );
@@ -105,7 +107,7 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
           title="Record not found"
           subTitle={`No record with serial ${serialNo}, or it lies outside the provinces assigned to your account.`}
           extra={
-            <Button type="primary" onClick={() => navigate("/universe/erms/records")}>
+            <Button type="primary" onClick={() => navigate("/e-universe/erms/records")}>
               Back to records
             </Button>
           }
@@ -242,6 +244,7 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
             {doc?.sharePath && <Field label="Location on the share" value={doc.sharePath} mono path span />}
           </Grid>
           <DocumentPanel serialNo={record.serialNo} fileName={doc?.fileName} canFile={canWrite} refNo={permit?.number} />
+          <ScanTextPanel unit="records" serialNo={record.serialNo} text={record.scanText} readAt={record.scanTextAt} hasScan={Boolean(doc?.fileName || doc?.sharePath)} />
           {canMove && (doc?.fileName || doc?.sharePath) && (
             <Space size={8} wrap>
               <Button icon={<SwapOutlined />} onClick={() => setMoving(true)}>
@@ -318,16 +321,24 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
         typeLabel={permit?.label || permit?.type}
         typeColor={PERMIT_TYPE_COLOR[permit?.type]}
         serialNo={record.serialNo}
-        onBack={embedded ? null : () => navigate("/universe/erms/records")}
+        onBack={embedded ? null : () => navigate("/e-universe/erms/records")}
         // In the dialog the right edge is the close X's: the Edit button sits
         // on the left, with the title, rather than crowded against it.
         actionsFirst={embedded}
         actions={
-          canWrite && (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          )
+          <>
+            {canWrite && (
+              <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            )}
+            {/* For the paper file's folder: the FSN, what it is, and a QR code to it. */}
+            <PrintLabel
+              code={record.serialNo}
+              path={`/e-universe/erms/records/${encodeURIComponent(record.serialNo)}`}
+              lines={[[permit?.label, permit?.number].filter(Boolean).join(" · "), record.proponentName, record.projectTitle]}
+            />
+          </>
         }
       />
 

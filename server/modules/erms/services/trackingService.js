@@ -163,13 +163,69 @@ async function shareEntries(serialNo) {
  * here, how it was shared, and, when `record` is given, the desktop system's
  * events for it.
  */
+// What happened to the record and its scan in E-Universe, from the activity
+// log: filed, edited, the scan uploaded, replaced, viewed, refused, moved.
+// The custody trail ("Track Record") is already here in full, and the
+// Document Portal's events come with the sharing entries.
+const FILE_LABELS = {
+  'document-view': 'Scan viewed',
+  'document-read': 'Scan view refused',
+  'document-upload': 'Scan uploaded',
+  'document-delete': 'Scan deleted from the share',
+  'Create Record': 'Record created',
+  'File Record': 'Record filed with its scan',
+  'Update Record': 'Record edited',
+  create: 'Record created',
+  update: 'Record edited',
+  'file-moved': 'Scan moved',
+  'attachment-filed': 'Attachment filed',
+};
+
+async function fileEntries(serialNo) {
+  const rows = await getDb()
+    .collection('app-logs')
+    .find(
+      {
+        $or: [
+          { domain: 'nas', serialNo, operation: { $nin: ['portal-view', 'portal-download'] } },
+          { domain: 'erms', documentId: serialNo, actionType: { $nin: ['Track Record', 'search'] } },
+        ],
+      },
+      { projection: { requestData: 0, userAgent: 0 } }
+    )
+    .sort({ timestamp: -1 })
+    .limit(300)
+    .toArray();
+  return rows.map((r) => {
+    const code = r.domain === 'nas' ? r.operation : r.actionType;
+    const detail = [r.fileName, r.detail, r.actionLabel && !FILE_LABELS[code] ? r.actionLabel : null, r.success === false ? 'failed' : null].filter(Boolean).join(' · ');
+    return {
+      _id: String(r._id),
+      source: 'activity',
+      action: code,
+      actionLabel: r.domain === 'erms' && code === 'file-moved' ? r.actionLabel || FILE_LABELS[code] : FILE_LABELS[code] || r.actionLabel || code,
+      fromParty: null,
+      toParty: null,
+      purpose: detail || null,
+      remarks: null,
+      dueDate: null,
+      createdAt: r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp),
+      createdBy: r.username || null,
+    };
+  });
+}
+
 async function listForRecord(serialNo, record = null) {
   await connectToMongo();
-  const [own, shared] = await Promise.all([collection().find({ recordSerialNo: serialNo }).sort({ createdAt: -1 }).toArray(), shareEntries(serialNo)]);
+  const [own, shared, activity] = await Promise.all([
+    collection().find({ recordSerialNo: serialNo }).sort({ createdAt: -1 }).toArray(),
+    shareEntries(serialNo),
+    fileEntries(serialNo),
+  ]);
   const native = own.map((e) => ({ ...e, source: 'custody' }));
   const legacy = record ? await legacyEvents(record) : [];
   const time = (e) => (e.createdAt instanceof Date ? e.createdAt.getTime() : 0);
-  return [...native, ...shared, ...legacy].sort((a, b) => time(b) - time(a));
+  return [...native, ...shared, ...activity, ...legacy].sort((a, b) => time(b) - time(a));
 }
 
 /**
@@ -193,15 +249,23 @@ async function currentCustody(serialNo) {
   return null;
 }
 
-async function addEntry(serialNo, input, { username }) {
+/**
+ * `unit`: a Legal Services or Laboratory document's trail rather than a
+ * record's — the same movements, in the same collection, marked with the
+ * unit (their serials never collide with the Records Unit's FSNs).
+ */
+async function addEntry(serialNo, input, { username }, { unit } = {}) {
   await connectToMongo();
 
-  const record = await getDb().collection(RECORDS).findOne({ serialNo }, { projection: { serialNo: 1 } });
-  if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+  const record = unit
+    ? await getDb().collection('erms-documents').findOne({ unit, serialNo }, { projection: { serialNo: 1 } })
+    : await getDb().collection(RECORDS).findOne({ serialNo }, { projection: { serialNo: 1 } });
+  if (!record) throw notFoundError(unit ? 'Document not found.' : 'Record not found.', unit ? 'DOCUMENT_NOT_FOUND' : 'RECORD_NOT_FOUND');
   if (!ACTION_CODES.includes(input.action)) throw badRequest('Unknown tracking action.');
 
   const entry = {
     recordSerialNo: serialNo,
+    ...(unit ? { unit } : {}),
     action: input.action,
     actionLabel: byCode.get(input.action).label,
     fromParty: input.fromParty || null,
@@ -246,7 +310,14 @@ async function overdue(allowedProvinces) {
   return results;
 }
 
+/** A Legal or Laboratory document's custody trail, newest first. */
+async function listForUnitDocument(serialNo) {
+  await connectToMongo();
+  return (await collection().find({ recordSerialNo: serialNo }).sort({ createdAt: -1 }).toArray()).map((e) => ({ ...e, source: 'custody' }));
+}
+
 module.exports = {
+  listForUnitDocument,
   TRACKING,
   ACTIONS,
   ACTION_CODES,

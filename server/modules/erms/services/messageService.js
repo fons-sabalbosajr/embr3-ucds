@@ -98,7 +98,7 @@ async function send(user, { to, purpose, subject, details }) {
     tag: `message-${insertedId}`,
     title: `${purpose === 'Request' ? 'Request' : 'Message'} from ${doc.from?.name || doc.from?.username || 'an ERMS user'}`,
     body: doc.subject,
-    url: '/universe/erms/messages',
+    url: '/e-universe/erms/messages',
   });
   return view({ _id: insertedId, ...doc }, user);
 }

@@ -33,7 +33,8 @@ async function logActivity(req, res, next) {
     const year = body.year || '2025';
     collectionName = `survey-data-${year}`;
   } else if (path.includes('/update-data/')) {
-    collectionName = 'ucds-data';
+    // The active year's register (2027 onward may have its own).
+    collectionName = /^ucds-data-\d{4}$/.test(req.yearContainer?.register || '') ? req.yearContainer.register : 'ucds-data';
   } else if (path.includes('/postings/')) {
     collectionName = 'postings';
   } else if (path.includes('/draft-reports/')) {

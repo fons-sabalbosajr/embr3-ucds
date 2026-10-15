@@ -116,7 +116,7 @@ describe('notices as they happen', () => {
     const sent = await agents[LEGAL].post('/api/erms/messages').send({ to: RECORDS, purpose: 'Request', subject: 'Copy of the NOV, please', details: 'For the hearing.' });
     expect(sent.status, JSON.stringify(sent.body)).toBeLessThan(300);
     expect(await waitFor(() => inbox[RECORDS].length > 0)).toBe(true);
-    expect(inbox[RECORDS][0]).toMatchObject({ body: 'Copy of the NOV, please', url: '/universe/erms/messages' });
+    expect(inbox[RECORDS][0]).toMatchObject({ body: 'Copy of the NOV, please', url: '/e-universe/erms/messages' });
   });
 
   it('serves several accounts on one browser, each turning notices on and off for itself', async () => {

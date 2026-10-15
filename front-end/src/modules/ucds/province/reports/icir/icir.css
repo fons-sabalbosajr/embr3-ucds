@@ -1,120 +1,102 @@
-.icir-container {
+/* The ICIR builder: a bar with what to do and the actions, a tool row
+   (initial data, which fields to show, search), and the record's fields to
+   tick. Colours are Ant Design's theme tokens, so light and dark both read. */
+
+.icir-panel {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 10px;
 }
 
-.icir-header {
-  display: flex;
-  justify-content: flex-end;
-  width: 100%;
-  margin-bottom: 20px;
-}
-
-.icir-header-left {
-  flex: 2;
-  text-align: left;
-}
-
-.icir-header-center {
-  text-align: right;
-  margin-top: 5px; 
-}
-
-.icir-header-right {
-  flex: 1;
-  text-align: right;
-  max-width: max-content;
-}
-
-.skyblue-row {
-  background-color: #add1f9 !important;
-}
-
-.orange-row {
-  background-color: #ffd0a1 !important;
-}
-
-.yellow-row{
-  background-color: #F3F0CA !important;
-}
-
-.green-row{
-  background-color: #d4ed9e !important;
-}
-
-.blue-row {
-  background-color: #adc0f9 !important;
-}
-
-.gray-row{
-  background-color: #e4e4e4 !important;
-}
-
-.dropdown-container {
-  display: flex;
-  justify-content: flex-start; /* Aligns items to the start of the container */
-  margin-bottom: 20px; /* Optional: adjust the margin as needed */
-  margin-left: 680px;
-}
-
-.drop-down-select {
-  width: 300px; /* Optional: adjust width as needed */
-  text-align: left; /* Ensures the content inside is aligned to the left */
-}
-
-.button-gen-pdf{
-  margin-right: 10px;
-}
-
-.button-gen-draft{
-  background-color: green;
-}
-
-.table-rows thead th {
-  height: 20px; /* reduce the height of the header cells */
-  font-size: 12px; /* reduce the font size of the header text */
-  padding: 4px; /* adjust the padding to your liking */
-}
-
-.table-rows td {
-  font-size: 11px; 
-  padding: 3px;
-  height: 20px;
-}
-
-.table-rows tr {
-  height: 20px; /* set a fixed height for each row */
-}
-
-.info-icon{
-  margin-right: 10px;
-}
-
-.data-container{
+.icir-bar {
   display: flex;
   flex-wrap: wrap;
-  background-color: #ededed;
-  border-radius: 5px;
-  padding: 10px;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--ant-color-fill-quaternary, rgba(0, 0, 0, 0.02));
+  border-left: 3px solid #2f9e44;
+}
+.icir-bar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
-.data-ul{
-  flex: 1;
-  margin-right: 20px;
-  font-size: 10px;
+.icir-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+}
+.icir-initial .ant-checkbox-wrapper {
+  font-weight: 600;
 }
 
-.data-p{
-  margin-top: 10px;
-  margin-bottom: 10px;
+.icir-table .ant-table-thead > tr > th {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 10px !important;
+}
+.icir-table .ant-table-tbody > tr > td {
+  font-size: 13px;
+  padding: 6px 10px !important;
+  vertical-align: top;
+}
+.icir-table .icir-row,
+.icir-table .icir-row-on {
+  cursor: pointer;
+}
+.icir-table .icir-row-on > td {
+  background: rgba(47, 158, 68, 0.08) !important;
+}
+.icir-table .icir-row-empty > td {
+  opacity: 0.6;
 }
 
-@media (max-width: 1098px) {
-
-  .button-gen-draft{
-    margin-right: 10px;
-    margin-top: 10px;
-  }
+.icir-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.icir-field-name {
+  font-weight: 600;
+}
+.icir-group.ant-tag {
+  font-size: 10.5px;
+  line-height: 16px;
+  margin-inline-end: 0;
+  flex: none;
+}
+.icir-value {
+  white-space: pre-line;
+  word-break: break-word;
 }
 
+/* The tour's first step lists the initial fields. */
+.icir-tour p {
+  margin: 0 0 8px;
+}
+.icir-tour-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.icir-tour-list span {
+  font-size: 11.5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(47, 158, 68, 0.12);
+}
+
+/* The tour's card above its own backdrop: antd gives both the Tour's
+   zIndex, and the backdrop, rendered later, covered the card and its
+   Next / Finish buttons — the tour could not be moved on or closed. */
+.ant-tour.icir-tour-root {
+  z-index: 3002 !important;
+}

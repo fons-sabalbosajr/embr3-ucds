@@ -950,7 +950,27 @@ async function moveRecordFileSuggestions(req, res, next) {
   }
 }
 
+/** The Document Library as an Excel workbook: the list's filters, every field. */
+async function exportRecords(req, res, next) {
+  try {
+    const user = principalOf(req);
+    const { buffer, count, truncated } = await require('../services/exportService').recordsWorkbook(req.query, readScope(req), { developer: isDeveloper(user) });
+    await audit.record(req, { domain: DOMAINS.ERMS, action: 'export', label: `Document Library exported (${count} records)`, collection: recordService.RECORDS, changes: { filters: req.query, count }, includeBody: false });
+    const name = `ERMS-Records-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.setHeader('X-Export-Rows', String(count));
+    res.setHeader('X-Export-Truncated', truncated ? '1' : '0');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Rows, X-Export-Truncated');
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.end(buffer);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
+  exportRecords,
   moveRecordFile,
   moveRecordFileSuggestions,
   listRecords,

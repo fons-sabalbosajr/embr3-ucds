@@ -63,6 +63,8 @@ const LIST_PROJECTION = {
   'document.uploadedAt': 1,
   'document.uploadedBy': 1,
   isAttachment: 1,
+  parentSerialNo: 1,
+  attachmentNo: 1,
   'ucdsRef.sortKey': 1,
   'ucdsRef.nameSnapshot': 1,
   'dataQuality.clean': 1,
@@ -95,6 +97,8 @@ function buildFilter(
       { 'permit.refs.number': rx },
       { proponentName: rx },
       { projectTitle: rx },
+      // The text VERA read from the scan (services/vera/scanText).
+      { scanText: rx },
     ];
   }
 
@@ -118,7 +122,13 @@ function buildFilter(
 async function listRecords(options, allowedProvinces) {
   await connectToMongo();
   const { page = 1, pageSize = 25, sortBy = 'document.uploadedAt', sortDir = -1 } = options;
-  const filter = buildFilter(options, allowedProvinces);
+  const base = buildFilter(options, allowedProvinces);
+  // An attachment stays with its record: unless something is being searched
+  // for, it is not a row of its own but listed under the record it belongs
+  // to (`attachments`). One whose record is not on file keeps its own row,
+  // so nothing drops out of sight.
+  const packed = !String(options.search || '').trim();
+  const filter = packed ? { $and: [base, { $or: [{ isAttachment: { $ne: true } }, { parentSerialNo: null }] }] } : base;
 
   const [items, total] = await Promise.all([
     collection()
@@ -130,7 +140,20 @@ async function listRecords(options, allowedProvinces) {
     collection().countDocuments(filter),
   ]);
 
-  return { items, total, page, pageSize };
+  if (packed && items.length) {
+    const children = await collection()
+      .find({ parentSerialNo: { $in: items.map((r) => r.serialNo) } }, { projection: LIST_PROJECTION })
+      .sort({ attachmentNo: 1, serialNo: 1 })
+      .toArray();
+    const byParent = new Map();
+    for (const c of children) {
+      if (!byParent.has(c.parentSerialNo)) byParent.set(c.parentSerialNo, []);
+      byParent.get(c.parentSerialNo).push(c);
+    }
+    for (const r of items) if (byParent.has(r.serialNo)) r.attachments = byParent.get(r.serialNo);
+  }
+
+  return { items, total, page, pageSize, packed };
 }
 
 async function getRecord(serialNo, allowedProvinces) {

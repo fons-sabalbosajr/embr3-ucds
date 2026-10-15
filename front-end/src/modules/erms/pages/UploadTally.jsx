@@ -180,7 +180,7 @@ const UploadTally = () => {
           </div>
           <Space wrap>
             {unitChoices.length > 1 && (
-              <Select placeholder="Unit" value={unit} onChange={(u) => navigate(`/universe/erms/upload-tally/${u}`)} options={unitChoices.map((u) => ({ value: u.key, label: UNIT_LABEL[u.key] || u.label }))} style={{ width: 190 }} />
+              <Select placeholder="Unit" value={unit} onChange={(u) => navigate(`/e-universe/erms/upload-tally/${u}`)} options={unitChoices.map((u) => ({ value: u.key, label: UNIT_LABEL[u.key] || u.label }))} style={{ width: 190 }} />
             )}
             <DatePicker.RangePicker
               value={range}

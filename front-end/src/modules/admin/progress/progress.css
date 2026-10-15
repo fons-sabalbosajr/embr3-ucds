@@ -1,0 +1,103 @@
+/* Admin Settings › Progress Tracker. Theme tokens throughout, so light and
+   dark both read. */
+
+.pt-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: rgba(140, 140, 140, 0.14);
+  color: #8c8c8c;
+}
+.pt-live.is-live {
+  background: rgba(82, 196, 26, 0.14);
+  color: #389e0d;
+}
+.pt-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pt-live.is-live .pt-live-dot {
+  animation: pt-pulse 1.8s ease-out infinite;
+}
+@keyframes pt-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.55); }
+  100% { box-shadow: 0 0 0 8px rgba(82, 196, 26, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pt-live.is-live .pt-live-dot { animation: none; }
+}
+
+.pt-card {
+  height: 100%;
+}
+
+.pt-headline {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.pt-headline-pct {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.pt-provinces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px 22px;
+}
+.pt-province {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pt-province-name {
+  width: 92px;
+  flex: none;
+  font-weight: 600;
+}
+.pt-province-count {
+  flex: none;
+  font-size: 12px;
+  min-width: 72px;
+  text-align: right;
+}
+
+.pt-tile {
+  height: 100%;
+}
+.pt-tile .ant-statistic-title {
+  font-size: 12.5px;
+  margin-bottom: 2px;
+}
+.pt-tile .ant-statistic-content {
+  font-size: 22px;
+}
+.pt-tile-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.pt-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.pt-timeline {
+  max-height: 460px;
+  overflow: auto;
+  padding-top: 6px;
+}

@@ -11,7 +11,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { CloudUploadOutlined, EditOutlined, EyeOutlined, LinkOutlined, WarningOutlined } from "@ant-design/icons";
+import { CloudUploadOutlined, EditOutlined, EyeOutlined, LinkOutlined, PaperClipOutlined, WarningOutlined } from "@ant-design/icons";
 import UnitHeader from "../components/UnitHeader";
 import { useSearchParams } from "react-router-dom";
 import RecordDetail from "./RecordDetail";
@@ -20,10 +20,12 @@ import {
   PERMIT_TYPE_COLOR,
   PROVINCE_LABEL,
   describeApiError,
+  exportRecords,
   fetchFilterOptions,
   fetchRecords,
 } from "../api/ermsService";
 import RecordFormModal from "../components/RecordFormModal";
+import ExportButton from "../components/ExportButton";
 import FloatingModal from "../../../shared/components/FloatingModal";
 import useFitHeight from "../../../shared/useFitHeight";
 import useScreen from "../../../shared/useScreen";
@@ -131,6 +133,11 @@ const RecordsList = () => {
                 <Tag style={{ marginInlineEnd: 0 }}>att</Tag>
               </Tooltip>
             )}
+            {row.attachments?.length > 0 && (
+              <Tooltip title="Its attachments — open the row to see them">
+                <Tag icon={<PaperClipOutlined />} color="blue" style={{ marginInlineEnd: 0 }}>{row.attachments.length}</Tag>
+              </Tooltip>
+            )}
             {row.dataQuality?.clean === false && (
               <Tooltip title="A value could not be interpreted during migration. The original is preserved on the record.">
                 <WarningOutlined style={{ color: "#9a6b00" }} />
@@ -148,7 +155,7 @@ const RecordsList = () => {
       render: (_, row) => (
         <Space direction="vertical" size={0}>
           <a
-            href={`/universe/erms/records/${encodeURIComponent(row.serialNo)}`}
+            href={`/e-universe/erms/records/${encodeURIComponent(row.serialNo)}`}
             onClick={(e) => { e.preventDefault(); setOpenSerial(row.serialNo); }}
             style={{ fontWeight: 600 }}
           >
@@ -266,6 +273,7 @@ const RecordsList = () => {
           <Typography.Text type="secondary">
             {data ? `${new Intl.NumberFormat().format(data.total)} records` : ""}
           </Typography.Text>
+          <ExportButton load={() => exportRecords(query)} />
           {/* Offered only where the account may actually write. */}
           {(options?.writableProvinces === null ||
             (options?.writableProvinces || []).length > 0) && (
@@ -383,6 +391,38 @@ const RecordsList = () => {
           dataSource={data?.items || []}
           onChange={onTableChange}
           onRow={(r) => ({ onDoubleClick: () => setOpenSerial(r.serialNo), style: { cursor: "pointer" } })}
+          // A record's attachments, inside it — not rows of their own.
+          expandable={{
+            rowExpandable: (r) => r.attachments?.length > 0,
+            expandedRowRender: (r) => (
+              <Table
+                rowKey="serialNo"
+                size="small"
+                pagination={false}
+                showHeader={false}
+                className="records-table"
+                dataSource={r.attachments}
+                onRow={(a) => ({ onDoubleClick: () => setOpenSerial(a.serialNo), style: { cursor: "pointer" } })}
+                columns={[
+                  {
+                    key: "serial",
+                    width: 230,
+                    render: (_, a) => (
+                      <Space size={6}>
+                        <PaperClipOutlined />
+                        <Typography.Link onClick={() => setOpenSerial(a.serialNo)} style={{ fontFamily: "monospace" }}>
+                          {a.serialNo.replace(`${r.serialNo} `, "")}
+                        </Typography.Link>
+                      </Space>
+                    ),
+                  },
+                  { key: "file", render: (_, a) => <Typography.Text style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{a.document?.fileName || a.projectTitle || "no file"}</Typography.Text> },
+                  { key: "when", width: 200, responsive: ["sm"], render: (_, a) => (a.document?.uploadedAt ? new Date(a.document.uploadedAt).toLocaleDateString() : "—") },
+                  { key: "view", width: 60, align: "center", render: (_, a) => <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(a.serialNo)} aria-label="View" /> },
+                ]}
+              />
+            ),
+          }}
           // On a phone the page scrolls, not a box inside it; the table keeps
           // the columns that fit (the rest drop out at md/lg, above).
           scroll={screen.phone ? { x: 600 } : { x: 1000, y: fitHeight }}
@@ -436,3 +476,4 @@ const RecordsList = () => {
 };
 
 export default RecordsList;
+

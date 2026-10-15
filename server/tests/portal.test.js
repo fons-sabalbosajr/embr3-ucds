@@ -254,7 +254,7 @@ describe('the public page', () => {
 
     expect(await waitFor(() => staffInbox[RECORDS].some((n) => n.kind === 'portal-request'))).toBe(true);
     const notice = staffInbox[RECORDS].find((n) => n.kind === 'portal-request');
-    expect(notice).toMatchObject({ url: '/universe/erms/portal-requests' });
+    expect(notice).toMatchObject({ url: '/e-universe/erms/portal-requests' });
     // The document is named by its ECC reference number and project title.
     expect(notice.body).toContain('__PORTAL-ECC-1 — Portal Test Project');
     expect(res.body.request.permitNumber).toBe('__PORTAL-ECC-1');

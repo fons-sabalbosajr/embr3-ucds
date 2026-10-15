@@ -30,7 +30,7 @@ const Forbidden = ({ module, detail }) => {
           : "Your account is not assigned to this part of E-Universe. Ask the system developer if you need it.")
       }
       actions={[
-        <Button type="primary" key="home" icon={<HomeOutlined />} onClick={() => navigate("/universe")}>
+        <Button type="primary" key="home" icon={<HomeOutlined />} onClick={() => navigate("/e-universe/home")}>
           Go to my home page
         </Button>,
         <Button key="back" onClick={() => navigate(-1)}>

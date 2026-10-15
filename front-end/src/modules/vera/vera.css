@@ -268,11 +268,23 @@
 
 /* ═══ Launcher ═════════════════════════════════════════════════════════════ */
 
-.vera-launcher {
-  position: fixed;
+/* The beam's box (border-beam) holds the launcher in the corner; its own
+   position would otherwise be relative. */
+.vera-launcher-dock {
+  position: fixed !important;
   bottom: 28px;
   right: 28px;
   z-index: 1000;
+  border-radius: 999px;
+  transition: transform 0.18s ease;
+}
+
+.vera-launcher-dock:hover {
+  transform: translateY(-2px);
+}
+
+.vera-launcher {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -289,7 +301,6 @@
 }
 
 .vera-launcher:hover {
-  transform: translateY(-2px);
   border-color: var(--v-accent);
 }
 
@@ -508,7 +519,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  scrollbar-color: var(--v-line) transparent;
+  /* (scrollbar: the app's thin one, index.css) */
 }
 
 .vera-msg {
@@ -841,12 +852,13 @@ ul.vera-answer__list {
     animation: none;
     transition: none;
   }
-  .vera-launcher:hover {
+  .vera-launcher-dock:hover {
     transform: none;
   }
 }
 
 @media print {
+  .vera-launcher-dock,
   .vera-launcher,
   .vera-window {
     display: none !important;
@@ -868,9 +880,12 @@ ul.vera-answer__list {
 
 /* A phone gets the flame alone, in a round button with the beam on its edge. */
 @media (max-width: 576px) {
-  .vera-launcher {
+  .vera-launcher-dock {
     bottom: 18px;
     right: 18px;
+    border-radius: 50%;
+  }
+  .vera-launcher {
     padding: 6px;
     border-radius: 50%;
   }
@@ -891,7 +906,10 @@ ul.vera-answer__list {
   display: flex;
   align-items: center;
   gap: 18px;
-  margin-bottom: 14px;
+  /* No margin of its own: it sits inside the border beam, which keeps the
+     space below. A margin here made the beam's box 14px taller than the
+     card, and the beam ran below it. */
+  margin-bottom: 0;
   padding: 18px 20px;
   border: 1px solid var(--v-line);
   border-radius: 20px;

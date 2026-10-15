@@ -50,6 +50,7 @@ const VERA_ACTIONS = Object.freeze({
   'vera:serials:scan': 'Serial number check',
   'vera:serials:fix': 'Serial counters fixed',
   'vera:project-types:scan': 'Project type check',
+  'vera:scan-text': 'Scan text read',
   'vera:project-types:settings': 'Project type check settings',
   'vera:project-types:apply': 'Project types corrected',
   'vera:project-types:undo': 'Project type correction undone',
@@ -57,6 +58,10 @@ const VERA_ACTIONS = Object.freeze({
   'vera:links:scan': 'Data check (register links)',
   'vera:links:apply': 'Register links applied',
   'vera:links:undo': 'Register link undone',
+  'vera:ucds-check:scan': 'Universe Central DB checked',
+  'vera:ucds-check:apply': 'Universe Central DB fixes applied',
+  'vera:ucds-check:undo': 'Universe Central DB fix undone',
+  'vera:ucds-check:auto-fix': 'Universe Central DB fixed by VERA',
 });
 
 async function loadConfig() {
@@ -789,6 +794,34 @@ async function projectTypesSettle(req, res, next) {
   }
 }
 
+// ── Reading scans' text, for search (services/vera/scanText) ──────────────
+const scanText = require('../services/vera/scanText');
+const { canAccessAllYears: allYears } = require('../services/authorization');
+
+async function scanTextOne(req, res, next) {
+  try {
+    if (!allYears(principalOf(req))) return res.status(403).json({ message: 'Only the Developer or an administrator has scans read.' });
+    const unit = String(req.params.unit || 'records');
+    const result = await scanText.readOne(await loadConfig(), unit, String(req.params.serialNo), principalOf(req)?.username || null);
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:scan-text', { unit, serialNo: req.params.serialNo, chars: result.text.length });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function scanTextNext(req, res, next) {
+  try {
+    const unit = ['records', 'legal', 'laboratory'].includes(req.body?.unit) ? req.body.unit : 'records';
+    const result = await scanText.readNext(await loadConfig(), unit, Number(req.body?.limit) || 10, principalOf(req)?.username || null);
+    await log(req, 'vera:scan-text', { unit, ...result });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 /** For the bell: how many proposals wait. */
 async function correctionsPending(req, res, next) {
   try {
@@ -856,7 +889,81 @@ async function linksPending(req, res, next) {
   }
 }
 
+// ── The Universe Central DB register ── see modules/ucds/services/registerCheck
+// Always the active year's register (2027 onward has its own), never one
+// named in the request.
+const registerCheck = require('../modules/ucds/services/registerCheck');
+const { registerOf } = require('../services/yearScope');
+const registerTarget = (req) => {
+  const col = registerOf(req);
+  return { col, register: col.collectionName };
+};
+
+async function ucdsCheckReport(req, res, next) {
+  try {
+    return res.json(await registerCheck.latest(registerTarget(req).register));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function ucdsCheckScan(req, res, next) {
+  try {
+    const target = registerTarget(req);
+    const run = await registerCheck.scan({ ...target, cfg: await loadConfig(), by: principalOf(req)?.username || null });
+    await log(req, 'vera:ucds-check:scan', { register: target.register, ...run.totals });
+    return res.json(await registerCheck.latest(target.register));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function ucdsCheckApply(req, res, next) {
+  try {
+    const ids = req.body?.all === true ? 'all' : (Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger);
+    if (ids !== 'all' && !ids.length) return res.status(400).json({ message: 'Choose the fixes to apply.' });
+    const target = registerTarget(req);
+    const result = await registerCheck.apply({ ...target, runId: req.params.id, ids, user: principalOf(req) });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:ucds-check:apply', { register: target.register, applied: result.applied, records: result.changed });
+    return res.json({ ...result, report: await registerCheck.latest(target.register) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function ucdsCheckUndo(req, res, next) {
+  try {
+    const target = registerTarget(req);
+    const result = await registerCheck.undo({ ...target, runId: req.params.id, id: Number(req.body?.proposalId), user: principalOf(req) });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:ucds-check:undo', { register: target.register, proposal: Number(req.body?.proposalId), records: result.restored });
+    return res.json({ ...result, report: await registerCheck.latest(target.register) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function ucdsCheckAutoFix(req, res, next) {
+  try {
+    const target = registerTarget(req);
+    const who = principalOf(req);
+    const result = await registerCheck.autoFix({ ...target, cfg: await loadConfig(), by: who?.username || null, user: who });
+    await log(req, 'vera:ucds-check:auto-fix', { register: target.register, applied: result.applied, records: result.changed, left: result.left });
+    return res.json({ ...result, report: await registerCheck.latest(target.register) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
+  ucdsCheckReport,
+  ucdsCheckScan,
+  ucdsCheckApply,
+  ucdsCheckUndo,
+  ucdsCheckAutoFix,
+  scanTextOne,
+  scanTextNext,
   projectTypesReport,
   projectTypesSettings,
   projectTypesScan,

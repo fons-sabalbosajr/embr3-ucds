@@ -165,11 +165,8 @@ async function nextSerialNo(unit, docType) {
 
 // --- reads ---------------------------------------------------------------------------
 
-async function list(user, unitKey, query = {}) {
-  const unit = assertUnit(unitKey);
-  assertCanSee(user, unit);
-  await connectToMongo();
-
+/** The list's filter, shared with the export so both show the same documents. */
+function listFilter(unit, query = {}) {
   const filter = { unit };
   if (query.docType) filter.docType = String(query.docType).toLowerCase();
   if (query.province && PROVINCE_KEYS.includes(query.province)) filter.province = query.province;
@@ -178,8 +175,16 @@ async function list(user, unitKey, query = {}) {
   if (query.missingFile) filter.$and = [{ $or: [{ 'document.fileName': null }, { 'document.fileName': '' }, { 'document.sharePath': null }] }];
   if (query.search) {
     const re = new RegExp(String(query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ serialNo: re }, { title: re }, { 'document.fileName': re }, { 'fields.docketNo': re }, { 'fields.cocNo': re }];
+    filter.$or = [{ serialNo: re }, { title: re }, { 'document.fileName': re }, { 'fields.docketNo': re }, { 'fields.cocNo': re }, { scanText: re }];
   }
+  return filter;
+}
+
+async function list(user, unitKey, query = {}) {
+  const unit = assertUnit(unitKey);
+  assertCanSee(user, unit);
+  await connectToMongo();
+  const filter = listFilter(unit, query);
 
   // Packed: a case's attachments are listed inside it, not as rows of their
   // own — unless the person is looking for something (a type, a docket, a
@@ -288,7 +293,33 @@ async function computeDashboard(unit) {
     byMonth: months.fill(byMonth.map((r) => ({ month: r._id.month, kind: r._id.type, count: r.count }))),
     kindLabels: Object.fromEntries((unitCfg?.docTypes || []).map((t) => [t.code, t.label])),
     recent: recent.map(publicView),
+    ...(unit === 'laboratory' ? { calibrationDue: await calibrationDue() } : {}),
   };
+}
+
+/**
+ * Calibration certificates whose "date due" has passed or falls within the
+ * next 60 days — the Laboratory's reminder. The date is stored as a date, or
+ * as the text typed in the desktop system ("2026-11-30"); both are read.
+ */
+const DUE_WINDOW_DAYS = 60;
+async function calibrationDue() {
+  const until = new Date(Date.now() + DUE_WINDOW_DAYS * 86400000);
+  const untilText = until.toISOString().slice(0, 10);
+  const docs = await collection()
+    .find(
+      { unit: 'laboratory', $or: [{ 'fields.dateDue': { $type: 'date', $lte: until } }, { 'fields.dateDue': { $type: 'string', $gte: '1900', $lte: untilText } }] },
+      { projection: { serialNo: 1, title: 1, fields: 1, docType: 1, docTypeLabel: 1 } }
+    )
+    .sort({ 'fields.dateDue': 1 })
+    .limit(200)
+    .toArray();
+  const today = new Date().toISOString().slice(0, 10);
+  const items = docs.map((d) => {
+    const due = d.fields.dateDue instanceof Date ? d.fields.dateDue.toISOString().slice(0, 10) : String(d.fields.dateDue).slice(0, 10);
+    return { serialNo: d.serialNo, title: d.title || d.fields.unitUnderTest || null, unitUnderTest: d.fields.unitUnderTest || null, dateDue: due, overdue: due < today };
+  });
+  return { windowDays: DUE_WINDOW_DAYS, overdue: items.filter((i) => i.overdue).length, soon: items.filter((i) => !i.overdue).length, items };
 }
 
 // --- attachments ---------------------------------------------------------------------
@@ -726,6 +757,9 @@ module.exports = {
   COLLECTION,
   ensureIndexes,
   list,
+  listFilter,
+  assertUnit,
+  assertCanSee,
   get,
   history,
   dashboard,

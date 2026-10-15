@@ -82,7 +82,7 @@ const CustomItemPage = () => {
               renderItem={(c) => (
                 <List.Item>
                   {c.kind === "table" ? (
-                    <Link to={`/universe/custom/${c.id}`}><TableOutlined /> {c.label}</Link>
+                    <Link to={`/e-universe/custom/${c.id}`}><TableOutlined /> {c.label}</Link>
                   ) : (
                     <span><FolderOutlined /> {c.label}</span>
                   )}

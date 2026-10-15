@@ -216,6 +216,9 @@ router.get(
 );
 
 router.get('/api/erms/records', ermsAccess, validate(listQuery, 'query'), ctrl.listRecords);
+// The Document Library as Excel — the list's filters, every field. Before
+// /records/:serialNo, which would otherwise take "export" for a serial.
+router.get('/api/erms/records/export', ermsAccess, expensiveLimiter, validate(listQuery, 'query'), ctrl.exportRecords);
 router.post('/api/erms/records', ermsWrite, validate(createSchema), ctrl.createRecord);
 
 // Create a record and file its scan in one multipart request: `payload`
@@ -249,6 +252,15 @@ router.get(
   ctrl.duplicateCheck
 );
 router.get('/api/erms/records/duplicate-groups', ermsAccess, expensiveLimiter, ctrl.duplicateGroups);
+// Settings › Duplicates: VERA's reading of each group, and her quick fix
+// (the controller checks the unit, and that the fixer is the Developer or an
+// administrator).
+const dupCtrl = require('./controllers/duplicateController');
+const dupUnit = validate(z.object({ unit: z.enum(['records', 'legal', 'laboratory']) }), 'params');
+router.get('/api/erms/duplicates/:unit', ermsAccess, dupUnit, expensiveLimiter, dupCtrl.review);
+router.post('/api/erms/duplicates/:unit/fix', ermsAccess, dupUnit, validate(z.object({ all: z.boolean().optional(), keys: z.array(z.string().max(500)).max(300).optional() })), dupCtrl.fix);
+router.post('/api/erms/duplicates/:unit/dismiss', ermsAccess, dupUnit, validate(z.object({ key: z.string().min(1).max(500) })), dupCtrl.dismiss);
+router.post('/api/erms/duplicates/:unit/restore', ermsAccess, dupUnit, validate(z.object({ serialNo: z.string().trim().min(3).max(80) })), dupCtrl.restore);
 router.post('/api/erms/records/upload', ermsWrite, requireNasActive, uploadOne, validateMultipartPayload, ctrl.uploadRecord);
 // Move a scan to the record it belongs to (the Developer's or an
 // administrator's; the controller checks), and VERA's suggestions for which.
@@ -390,8 +402,12 @@ router.get(
   unitCtrl.suggest
 );
 router.post('/api/erms/units/:unit/documents', ermsAccess, requireNasActive, validate(unitParam, 'params'), uploadOne, unitCtrl.createDocument);
+router.get('/api/erms/units/:unit/documents/export', ermsAccess, expensiveLimiter, validate(unitParam, 'params'), validate(unitListQuery, 'query'), unitCtrl.exportDocuments);
 router.get('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.getDocument);
 router.patch('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), validate(unitUpdateSchema), unitCtrl.updateDocument);
+// A Legal or Laboratory document's custody trail, as a record's.
+router.get('/api/erms/units/:unit/documents/:serialNo/tracking', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.unitTracking);
+router.post('/api/erms/units/:unit/documents/:serialNo/tracking', ermsAccess, validate(unitSerialParam, 'params'), validate(trackingSchema), unitCtrl.addUnitTracking);
 router.get('/api/erms/units/:unit/documents/:serialNo/history', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.documentHistory);
 // File a scan against a document already on file, or replace its scan.
 router.post('/api/erms/units/:unit/documents/:serialNo/upload', ermsAccess, requireNasActive, validate(unitSerialParam, 'params'), uploadOne, unitCtrl.attachDocumentFile);
@@ -524,6 +540,13 @@ router.patch(
   ctrl.updateBox
 );
 router.get('/api/erms/disposal-due', ermsAccess, ctrl.disposalDue);
+// Legal Services' and the Laboratory's own boxes (the controller checks the unit).
+const unitBoxParam = z.object({ unit: z.enum(['legal', 'laboratory']), code: z.string().trim().min(1).max(40) });
+router.get('/api/erms/units/:unit/boxes', ermsAccess, validate(z.object({ unit: z.enum(['legal', 'laboratory']) }), 'params'), unitCtrl.unitBoxes);
+router.post('/api/erms/units/:unit/boxes', ermsAccess, validate(z.object({ unit: z.enum(['legal', 'laboratory']) }), 'params'), validate(boxSchema), unitCtrl.createUnitBox);
+router.get('/api/erms/units/:unit/boxes/:code', ermsAccess, validate(unitBoxParam, 'params'), unitCtrl.unitBoxContents);
+router.patch('/api/erms/units/:unit/boxes/:code', ermsAccess, validate(unitBoxParam, 'params'), validate(boxUpdateSchema), unitCtrl.updateUnitBox);
+router.put('/api/erms/units/:unit/documents/:serialNo/box', ermsAccess, validate(unitSerialParam, 'params'), validate(z.object({ boxCode: z.string().trim().max(40).nullable() })), unitCtrl.assignUnitBox);
 
 // --- the Action Center: messages between ERMS users ------------------------------
 
@@ -547,6 +570,8 @@ router.post(
 router.patch('/api/erms/messages/:id', ermsAccess, validate(messageId, 'params'), validate(z.object({ read: z.boolean() })), messageCtrl.mark);
 router.delete('/api/erms/messages/:id', ermsAccess, validate(messageId, 'params'), messageCtrl.remove);
 
+// The reports there are, for the Reports screen.
+router.get('/api/erms/reports', ermsAccess, (req, res) => res.json({ reports: Object.entries(require('./services/reportService').REPORTS).map(([key, r]) => ({ key, label: r.label, description: r.description })) }));
 router.get(
   '/api/erms/reports/:key',
   ermsAccess,

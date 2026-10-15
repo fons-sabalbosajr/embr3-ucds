@@ -3,7 +3,8 @@ const path = require('path');
 const zlib = require('zlib');
 const { PDFDocument } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
-const { connectToMongo, collections } = require('../config/db');
+const { connectToMongo } = require('../config/db');
+const { registerOf } = require('../services/yearScope');
 
 // GET /generate-icir/:id
 async function generateICIR(req, res) {
@@ -11,7 +12,8 @@ async function generateICIR(req, res) {
   try {
     if (!parseInt(id)) return res.status(400).send('Invalid id_no format');
     await connectToMongo();
-    const record = await collections.ucds.findOne({ id_no: parseInt(id, 10) });
+    // id_no is per register: the active year's (see yearScope.registerOf).
+    const record = await registerOf(req).findOne({ id_no: parseInt(id, 10) });
     if (!record) return res.status(404).send('Record not found');
 
     const pdfPath = path.join(__dirname, '..', 'tmp', 'icir-form.pdf');

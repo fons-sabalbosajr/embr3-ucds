@@ -20,7 +20,7 @@
 }
 
 .text-area {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .label_container {
@@ -38,7 +38,7 @@
 }
 
 .label-focal {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 10px;
   width: 100px;
   align-items: flex-start;
@@ -58,7 +58,7 @@
 }
 
 .ant-picker-input input {
-  font-size: 11px !important;
+  font-size: 13px !important;
 }
 
 

@@ -47,7 +47,7 @@ export default function useRealtimeNotices({ enabled, username, onNotice }) {
       // waiting", the inbox) refresh too, not only the bell.
       for (const area of ["dashboard", "messages"]) queryClient.invalidateQueries({ queryKey: ["erms", area] });
       if (String(notice.kind || "").startsWith("portal-")) queryClient.invalidateQueries({ queryKey: ["portal"] });
-      const open = () => navigate(notice.url || "/universe");
+      const open = () => navigate(notice.url || "/e-universe/home");
       if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted" && !(await isPushOn())) {
         try {
           const n = new Notification(notice.title, { body: notice.body, tag: notice.tag, icon: "/notice-icon.png" });

@@ -1,6 +1,6 @@
 import React, { useContext, useState, useEffect } from "react";
-import { Modal, Button, Tabs, Space, Typography, Spin } from "antd";
-import { EditOutlined, SaveOutlined, CloseOutlined } from "@ant-design/icons";
+import { Modal, Button, ConfigProvider, Tabs, Space, Typography, Spin } from "antd";
+import { EditOutlined, SaveOutlined, CloseOutlined, FileTextOutlined } from "@ant-design/icons";
 import "./provincemodal.css";
 import styled from "styled-components";
 import Swal from "sweetalert2";
@@ -8,13 +8,10 @@ import PropTypes from "prop-types";
 import GenInfo from "./tabpanes/GeneralInfo/GenInfo";
 import FocalPerson from "./tabpanes/FocalPerson/FocalPerson";
 import Permit from "./tabpanes/PermitsInfo/Permits";
-import Legal from "./tabpanes/LegalInfo/LegalUnit";
-import MBU from "./tabpanes/MBUInfo/MBUnit";
 import ProvTransactionLog from "./tabpanes/TransactionLog/ProvTransaction";
 import { getItem, setItem } from "../../../shared/secureStorage";
 import ICIR from "./reports/icir/ICIR";
-import IC from "./reports/ic/formIC";
-import CIC from "./reports/cic/formCIC";
+import { UCDS_ACCENT } from "../ucdsColors";
 import Drafts from "./reports/drafts/ReportDrafts";
 import EstablishmentRecordsPanel from "../components/EstablishmentRecordsPanel";
 import {
@@ -353,13 +350,41 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
         </div>
       ) : (
         <>
+          {/* The tabs in the Universe Central DB's accent, the record's
+              actions on the tab bar's right — not floating at the page's corner. */}
+          <ConfigProvider theme={{ components: { Tabs: { itemHoverColor: UCDS_ACCENT, itemSelectedColor: UCDS_ACCENT, itemActiveColor: UCDS_ACCENT, inkBarColor: UCDS_ACCENT, titleFontSize: 14 } } }}>
           <Tabs
+            className="ucds-record-tabs"
+            tabPosition="left"
             activeKey={activeTab}
             onChange={handleTabChange}
+            tabBarExtraContent={{
+              right: activeTab !== "6" && (
+                <Space size={8} direction="vertical" className="ucds-record-actions">
+                  <Button icon={<FileTextOutlined />} onClick={handleopenModal} loading={loadingPDF}>
+                    Generate report
+                  </Button>
+                  {isEditing ? (
+                    <>
+                      <Button onClick={handleCancelEdit}>Cancel</Button>
+                      <Button onClick={handleSaveChanges} type="primary" icon={<SaveOutlined />}>
+                        Save
+                      </Button>
+                    </>
+                  ) : (
+                    canShowEditButton && (
+                      <Button onClick={() => setIsEditing(true)} type="primary" icon={<EditOutlined />}>
+                        Edit
+                      </Button>
+                    )
+                  )}
+                </Space>
+              ),
+            }}
             items={[
               {
                 key: "1",
-                label: <span className="custom-tab">General Information</span>,
+                label: "General Information",
                 children: (
                   <GenInfo
                     editedRecord={editedRecord}
@@ -372,9 +397,7 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
               },
               {
                 key: "2",
-                label: (
-                  <span className="custom-tab">Concerned Unit/Focal Person</span>
-                ),
+                label: "Concerned Unit / Focal Person",
                 children: (
                   <FocalPerson
                     editedRecord={editedRecord}
@@ -387,9 +410,7 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
               },
               {
                 key: "3",
-                label: (
-                  <span className="custom-tab">Clearances and Permits</span>
-                ),
+                label: "Clearances and Permits",
                 children: (
                   <Permit
                     editedRecord={editedRecord}
@@ -403,32 +424,8 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                 ),
               },
               {
-                key: "4",
-                label: <span className="custom-tab">Legal Services Unit</span>,
-                children: (
-                  <Legal
-                    editedRecord={editedRecord}
-                    handleChange={handleChange}
-                    isEditing={isEditing}
-                    theme={theme}
-                  />
-                ),
-              },
-              {
-                key: "5",
-                label: <span className="custom-tab">Manila Bay Unit</span>,
-                children: (
-                  <MBU
-                    editedRecord={editedRecord}
-                    handleChange={handleChange}
-                    isEditing={isEditing}
-                    theme={theme}
-                  />
-                ),
-              },
-              {
                 key: "6",
-                label: <span className="custom-tab-history">History</span>,
+                label: "History",
                 children: (
                   <ProvTransactionLog
                     editedRecord={editedRecord}
@@ -447,7 +444,7 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
               // the viewer, so this tab is empty rather than broken.
               {
                 key: "7",
-                label: <span className="custom-tab">Documents</span>,
+                label: "Documents",
                 children: (
                   <Space direction="vertical" size="middle" style={{ width: "100%" }}>
                     {isEditing && (
@@ -463,45 +460,35 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
               },
             ]}
           />
+          </ConfigProvider>
 
           <Modal
-            title="Generate Report"
+            title={<Space><FileTextOutlined />Generate report — {editedRecord.title || editedRecord.sort_key}</Space>}
             open={isModalVisible}
             onOk={handleModalOk}
             onCancel={handleModalCancel}
-            width={1200}
+            width="min(1320px, 96vw)"
+            style={{ top: 20 }}
             footer={null}
+            destroyOnHidden
           >
             <div className="report-modal-container">
+              {/* The Inspection and Compliance Inspection Report, and the log of
+                  those generated. (The CIC and IC forms were never built: their
+                  tabs showed "404 — under development" and are gone.) */}
               <Tabs
                 defaultActiveKey="1"
-                tabPosition="left"
-                tabBarGutter={5}
                 items={[
                   {
                     key: "1",
-                    label: <span className="tabpane-title">Generate ICIR</span>,
+                    label: "Inspection report (ICIR)",
                     children: (
-                      <ICIR
-                        editedRecord={editedRecord}
-                        onIncludeChange={() => {}}
-                        resetCheckboxesKey={resetCheckboxesKey}
-                      />
+                      <ICIR editedRecord={editedRecord} resetCheckboxesKey={resetCheckboxesKey} />
                     ),
                   },
                   {
-                    key: "2",
-                    label: <span className="tabpane-title">Generate CIC</span>,
-                    children: <IC />,
-                  },
-                  {
-                    key: "3",
-                    label: <span className="tabpane-title">Generate IC</span>,
-                    children: <CIC />,
-                  },
-                  {
                     key: "4",
-                    label: <span className="tabpane-title">Reports Logs</span>,
+                    label: "Reports log",
                     children: <Drafts />,
                   },
                 ]}
@@ -509,48 +496,6 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
             </div>
           </Modal>
 
-          {activeTab !== "6" && (
-            <>
-              <Button
-                className="button-generate"
-                type="primary"
-                onClick={handleopenModal}
-                disabled={loadingPDF}
-              >
-                {loadingPDF ? "Generating PDF..." : "Generate Report"}
-              </Button>
-
-              <div className="action-buttons-container">
-                <Space>
-                  {isEditing ? (
-                    <>
-                      <Button
-                        onClick={handleSaveChanges}
-                        type="primary"
-                        icon={<SaveOutlined />}
-                      >
-                        Save
-                      </Button>
-                      <Button onClick={handleCancelEdit} type="primary" danger>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    canShowEditButton && (
-                      <Button // Conditionally render Edit button
-                        onClick={() => setIsEditing(true)}
-                        type="primary"
-                        icon={<EditOutlined />}
-                        className="button-right"
-                      >
-                        Edit
-                      </Button>
-                    )
-                  )}
-                </Space>
-              </div>
-            </>
-          )}
         </>
       )}
     </div>

@@ -16,7 +16,7 @@ import { getItem, setItem, clearExcept } from "./secureStorage";
 // survive.
 // ---------------------------------------------------------------------------
 
-export const PREFERENCE_KEYS = ["ucds-theme", "hideThemeHint", "eu-appearance", "eu-explorer-view"];
+export const PREFERENCE_KEYS = ["ucds-theme", "hideThemeHint", "eu-appearance", "eu-explorer-view", "icirTourSeen"];
 
 /**
  * Clear everything except the display preferences.

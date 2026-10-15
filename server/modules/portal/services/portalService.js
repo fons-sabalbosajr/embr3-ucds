@@ -321,7 +321,7 @@ function releaseTimes(seated, now = new Date()) {
 
 // ── Notices ─────────────────────────────────────────────────────────────────
 
-const DESK_URL = '/universe/erms/portal-requests';
+const DESK_URL = '/e-universe/erms/portal-requests';
 const WATCHERS = 'portal-watchers';
 const ticketRoom = (id) => `portal-ticket:${id}`;
 /**

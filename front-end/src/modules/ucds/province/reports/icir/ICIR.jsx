@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { Table, Checkbox, Button, Spin, Menu, Dropdown, Tour, Modal } from "antd";
-import { modal } from "../../../../../shared/feedback";
-import { InfoCircleOutlined } from "@ant-design/icons";
+import { useState, useEffect, useRef } from "react";
+import PropTypes from "prop-types";
+import { getPreference, setPreference } from "../../../../../shared/preferences";
+import { Table, Checkbox, Button, Dropdown, Tour, Tag, Typography, Space, Segmented, Input } from "antd";
+import { message, modal } from "../../../../../shared/feedback";
+import { QuestionCircleOutlined, FilePdfOutlined, SaveOutlined, DownOutlined, SearchOutlined } from "@ant-design/icons";
 import axios from "axios";
 import "./icir.css";
 import { API_BASE_URL } from "../../../../../config/api";
@@ -35,7 +37,12 @@ const fieldTitles = {
   handler: "Handler",
   monitoring_sched: "Schedule of Monitoring",
   iis_no: "IIS Reference No.",
+  iis_no_2024: "IIS Reference No. (2024)",
   iis_no_2025: "IIS Reference No. (2025)",
+  iis_no_2026: "IIS Reference No. (2026)",
+  iis_no_nov: "IIS No. of the Notice of Violation",
+  protected_area: "Protected Area",
+  recommendations: "Remarks / Recommendations",
   insp_type: "Inspection Type",
   report_type: "Report Type",
   date_monitored: "Date Monitored",
@@ -111,715 +118,386 @@ const fieldTitles = {
   color: "Tagged Status",
 };
 
-const ICIR = ({ editedRecord, onIncludeChange, resetCheckboxesKey }) => {
-  const [ucdsData, setUcdsData] = useState([]);
+// Which part of the record a field belongs to, shown as a tag beside it (the
+// rows used to be tinted whole, in six colours, with no key to them).
+const GROUPS = [
+  {
+    label: "Profile",
+    color: "geekblue",
+    fields: ["id_no", "title", "name", "address", "industry_type", "industry_subtype", "industry_class", "psic_code", "proj_type", "mbu_area", "waterbody", "emp_total", "wwtf_type", "bod", "long", "lat", "cong_district", "street", "brgy", "city", "province", "protected_area", "title_status"],
+  },
+  {
+    label: "Monitoring",
+    color: "green",
+    fields: ["section_incharged", "fmr_section_incharged", "handler", "monitoring_sched", "pismu_tracking", "recommendations", "remarks_recommendations", "with_nov", "iis_no", "iis_no_2024", "iis_no_2025", "iis_no_2026", "iis_no_nov", "insp_type", "report_type", "date_monitored", "date_routed", "date_signed", "days_dmds", "days_drds", "remarks"],
+  },
+  {
+    label: "Permits",
+    color: "cyan",
+    fields: ["pd1586", "ecc_cnc", "permit_process", "date_amended", "date_approved", "ra8749", "pto_code", "pto_issued", "pto_expiration", "ra9275", "wwdp_code", "wwdp_issued", "wwdp_expiration", "ra6969", "haz_id", "haz_issued", "tsd", "tsd_ref_no", "tsd_issued", "tsd_expiration", "tp_trc", "tp_trc_ref_no", "tp_trc_issued", "tp_trc_expiration", "chemical_permit", "chemical_permit_type", "chemical_permit_sub_type", "chem_permit_issued", "chem_permit_exp", "pco", "pco_no", "pco_name", "pco_tel_no", "pco_validity"],
+  },
+  {
+    label: "Legal",
+    color: "volcano",
+    fields: ["docket_no", "denr_pab_case_no", "date_forwarded", "date_approved_clegal", "days_dfda", "service_mode", "nov_released", "nov_issued", "v_pd1586", "v_ra9275", "v_ra8749", "v_ra6969_haz", "v_ra6969_tchem", "tc_date_sched", "tc_date_actual", "time", "legal_officer", "tc_commitment", "pos_paper", "penalty_date", "amount", "or_number", "tc_compliance_link", "other_tc_remarks", "resolution_issued", "order_issued", "order_status"],
+  },
+];
+const groupOf = (field) => GROUPS.find((g) => g.fields.includes(field)) || { label: "Other", color: "default" };
+
+// "Select initial data": what an ICIR nearly always carries.
+const INITIAL_FIELDS = [
+  "id_no", "title", "name", "address", "industry_class", "psic_code", "emp_total", "ecc_cnc", "date_approved", "date_amended",
+  "haz_id", "haz_issued", "pto_code", "pto_issued", "pto_expiration", "wwdp_code", "wwdp_issued", "wwdp_expiration", "long", "lat", "handler",
+];
+
+// The register's own bookkeeping is not report data.
+const INTERNAL = new Set(["_id", "sort_key", "formatted_sort_key", "helper_column", "helper_count", "searchText", "year", "createdAt", "updatedAt", "updated_by", "updated_at"]);
+
+const hasValue = (v) => v !== null && v !== undefined && String(v).trim() !== "" && !/^(n\/a|-+|null|none)$/i.test(String(v).trim());
+
+const ICIR = ({ editedRecord, resetCheckboxesKey }) => {
   const [includedFields, setIncludedFields] = useState({});
   const [selectedData, setSelectedData] = useState({});
   const [loadingPDF, setLoadingPDF] = useState(false);
-  const [selectAllChecked, setSelectAllChecked] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [tourVisible, setTourVisible] = useState(false); // Initialize tourVisible to true
-  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState("filled");
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const initialRef = useRef(null);
+  const tableRef = useRef(null);
+  const pdfRef = useRef(null);
+  const draftRef = useRef(null);
 
+  // The tour once per person on this device, after the window has opened
+  // (its targets are the window's own controls, which must be on screen);
+  // afterwards from "How it works".
   useEffect(() => {
-    if (!dontShowAgain) {
-      setTimeout(() => {
-        setTourVisible(true);
-      }, 1000);
+    if (getPreference("icirTourSeen") === "true") return undefined;
+    const t = setTimeout(() => {
+      setTourStep(0);
+      setTourOpen(true);
+    }, 700);
+    return () => clearTimeout(t);
+  }, []);
+
+  const closeTour = () => {
+    setPreference("icirTourSeen", "true");
+    setTourOpen(false);
+  };
+
+  const data = Object.entries(editedRecord || {})
+    .filter(([field]) => !INTERNAL.has(field))
+    // The firm's ID is its serial as the screens show it (AU-2), not the
+    // register's internal row number.
+    .map(([field, value]) => ({ field, value: field === "id_no" && editedRecord.sort_key ? String(editedRecord.sort_key).replace(/-0*(\d+)$/, "-$1") : value }))
+    .sort((a, b) => Number(hasValue(b.value)) - Number(hasValue(a.value)));
+  const valueOf = (field) => data.find((d) => d.field === field)?.value;
+
+  const selectedKeys = Object.keys(includedFields).filter((k) => includedFields[k]);
+  const initialAvailable = INITIAL_FIELDS.filter((f) => hasValue(valueOf(f)));
+  const initialChecked = initialAvailable.length > 0 && initialAvailable.every((f) => includedFields[f]);
+
+  const setSelection = (keys) => {
+    const included = {};
+    const selected = {};
+    for (const k of keys) {
+      included[k] = true;
+      selected[k] = valueOf(k);
     }
-  }, [dontShowAgain]);
-
-  const handleDontShowAgain = () => {
-    setDontShowAgain(true);
-    setTourVisible(false);
+    setIncludedFields(included);
+    setSelectedData(selected);
   };
+  const toggle = (field) =>
+    setSelection(includedFields[field] ? selectedKeys.filter((k) => k !== field) : [...selectedKeys, field]);
 
-  const handleTourClick = () => {
-    setTourVisible(true);
-  };
-
+  // A new record, or the window reopened: start from nothing ticked.
   useEffect(() => {
-    const encodedIdNo = encodeURIComponent(editedRecord.id_no);
-    axios
-      .get(`${API_BASE_URL}/api/ucds-data/${encodedIdNo}`)
-      .then((response) => {
-        setUcdsData(response.data);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    setSelection([]);
+    setQuery("");
+  }, [editedRecord?.sort_key, resetCheckboxesKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Reset fields when editedRecord changes
-    setIncludedFields({});
-    setSelectedData({});
-    setSelectAllChecked(false);
-  }, [editedRecord]);
-
-  const handleCheckboxChange = (field, checked) => {
-    // Update the state for which fields are included
-    setIncludedFields((prevIncludedFields) => ({
-      ...prevIncludedFields,
-      [field]: checked,
-    }));
-  
-    // Get the corresponding description (value) for the field from the data source
-    const fieldData = data.find((item) => item.field === field);
-    const description = fieldData ? fieldData.value : null;
-  
-    // Update selected data with the description and field if checked
-    setSelectedData((prevSelectedData) => {
-      const newSelectedData = { ...prevSelectedData };
-      if (checked) {
-        newSelectedData[field] = description;
-      } else {
-        delete newSelectedData[field];
-      }
-  
-      console.log('Selected Data:', newSelectedData); // Log selected data
-      return newSelectedData;
-    });
+  const handleInitialChange = (e) => {
+    if (e.target.checked) setSelection([...new Set([...selectedKeys, ...initialAvailable])]);
+    else setSelection(selectedKeys.filter((k) => !INITIAL_FIELDS.includes(k)));
   };
-  
 
-  useEffect(() => {
-    // Reset checkboxes when resetCheckboxesKey changes
-    setIncludedFields({});
-    setSelectAllChecked(false); // Reset Select All checkbox
-  }, [resetCheckboxesKey]);
+  const chosenFields = () =>
+    Object.keys(selectedData)
+      .filter((key) => includedFields[key] && selectedData[key] != null)
+      .reduce((obj, key) => ({ ...obj, [key]: selectedData[key] }), {});
 
-  const handleSelectAllChange = (e) => {
-    const isChecked = e.target.checked;
-    //console.log("Select All Checked:", isChecked); // Log if select all is checked or unchecked
-    
-    setSelectAllChecked(isChecked); // Set the select all state
-    
-    const fieldsToInclude = [
-      "id_no",
-      "title",
-      "name",
-      "address",
-      "industry_class",
-      "psic_code",
-      "emp_no_total",
-      "ecc_cnc",
-      "date_approved",
-      "date_amended",
-      "haz_id",
-      "haz_issued",
-      "pto_code",
-      "pto_issued",
-      "pto_expiration",
-      "wwdp_code",
-      "wwdp_issued",
-      "wwdp_expiration",
-      "long",
-      "lat",
-      "handler",
-    ];
-  
-    fieldsToInclude.forEach((field) => {
-      handleCheckboxChange(field, isChecked); // Update each checkbox field
+  const fileNameFor = (prefix, fields) =>
+    `${prefix}-${fields.establishment_name || editedRecord.title || editedRecord.sort_key || editedRecord.id_no}.pdf`;
+
+  const fetchPdf = async (fields) => {
+    const response = await axios.get(`${API_BASE_URL}/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`, {
+      params: fields,
+      responseType: "arraybuffer",
+      withCredentials: true,
     });
-  
-    // Log the selected data to confirm if it's being populated correctly
-    //console.log("Selected Data after Select All Change:", selectedData);
+    return new Blob([response.data], { type: "application/pdf" });
   };
-  
+
+  const download = (blob, fileName) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  };
+
   const handleGeneratePDF = async () => {
+    setLoadingPDF(true);
     try {
-      setLoadingPDF(true);
-      document.body.style.cursor = "wait";
-  
-      // Show processing modal
-      const processingModal = modal.info({
-        title: "Generating PDF...",
-        content: (
-          <Spin spinning={true} size="large">
-            <p>Please wait...</p>
-          </Spin>
-        ),
-        maskClosable: false,
-        okButtonProps: { disabled: true },
-        zIndex: 10000, // Ensure this modal is on top
-      });
-  
-      // Filter and remove fields with null values
-      const selectedFields = Object.keys(selectedData)
-        .filter((key) => includedFields[key]) // Only keep fields that are checked
-        .reduce((obj, key) => {
-          if (selectedData[key] != null) {  // Only add fields with valid values
-            obj[key] = selectedData[key];
-          }
-          return obj;
-        }, {});
-  
-      // Construct the query parameters from selected fields
-      const queryParams = new URLSearchParams(selectedFields).toString();
-      console.log("Query Params:", queryParams); // Log to ensure it's correct
-  
-      // Log Request URL to see if it aligns
-      console.log(
-        "Request URL:",
-        `${API_BASE_URL}/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`
-      );
-  
-      // Call the API to generate PDF
-      const response = await axios.get(
-        `${API_BASE_URL}/generate-custom-icir/${encodeURIComponent(editedRecord.id_no)}`,
-        {
-          params: selectedFields, // Sending selected fields as query parameters
-          responseType: "arraybuffer", // Expecting PDF as an array buffer
-        }
-      );
-  
-      // Close processing modal
-      processingModal.destroy();
-  
-      // Create a Blob from the PDF data and create a URL for it
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-  
-      // Determine the filename based on selected fields or editedRecord
-      const fileName = selectedFields.establishment_name
-        ? `ICIR-${selectedFields.establishment_name}.pdf`
-        : editedRecord.title
-        ? `ICIR-${editedRecord.title}.pdf`
-        : `ICIR-${editedRecord.id_no}.pdf`;
-  
-      // Create an anchor tag to trigger the file download
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.download = fileName;
-  
-      // Simulate a click on the anchor tag to download the file
-      a.click();
-  
-      // Clean up
-      window.URL.revokeObjectURL(url);
+      const fields = chosenFields();
+      download(await fetchPdf(fields), fileNameFor("ICIR", fields));
+      message.success("ICIR generated.");
     } catch (error) {
-      // Handle error
-      setLoadingPDF(false);
-      document.body.style.cursor = "default";
-      Modal.destroyAll();
-      modal.error({
-        title: "Error",
-        content: "Failed to generate PDF",
-      });
       console.error("Error generating PDF:", error);
+      modal.error({ title: "The ICIR could not be generated", content: error.message || "Please try again." });
     } finally {
-      // Reset cursor and loading state
-      document.body.style.cursor = "default";
       setLoadingPDF(false);
     }
   };
-  
 
-  const handleGeneratePDFDraft = async () => {
-    let response;
-
+  const handleGeneratePDFDraft = async (purpose) => {
+    setLoadingPDF(true);
     try {
-      setLoadingPDF(true);
-      document.body.style.cursor = "wait";
-
-      // Fetch current user with credentials using /check-auth
-      const userResponse = await axios.get(`${API_BASE_URL}/check-auth`, {
-        withCredentials: true,
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-      });
-
-      //console.log("User Response:", userResponse.data);
-
-      if (
-        userResponse.status === 200 &&
-        userResponse.data.status === "Success"
-      ) {
-        const currentUser = userResponse.data;
-        //console.log("Current User:", currentUser);
-
-        // Update your state with the full user object
-        setCurrentUser(currentUser);
-      } else {
-        throw new Error("Failed to fetch current user");
-      }
-
-      // Show processing modal
-      const processingModal = modal.info({
-        title: "Generating PDF...",
-        content: (
-          <Spin spinning={true} size="large">
-            <p>Please wait...</p>
-          </Spin>
-        ),
-        maskClosable: false,
-        okButtonProps: { disabled: true },
-        zIndex: 10000,
-      });
-
-      // Filter and sort selected fields based on your field order
-      const selectedFields = Object.keys(selectedData)
-        .filter((key) => includedFields[key])
-        .reduce((obj, key) => {
-          obj[key] = selectedData[key];
-          return obj;
-        }, {});
-
-      // Call the API to generate PDF
-      response = await axios.get(
-        `${API_BASE_URL}/generate-custom-icir/${editedRecord.id_no}`,
-        {
-          params: selectedFields,
-          responseType: "arraybuffer",
-          withCredentials: true,
-        }
-      );
-
-      // Close processing modal
-      processingModal.destroy();
-
-      // Create a Blob from the PDF data
-      const blob = new Blob([response.data], { type: "application/pdf" });
-
-      // Determine the filename
-      const fileName = selectedFields.establishment_name
-        ? `ICIR_Draft-${selectedFields.establishment_name}.pdf`
-        : editedRecord.title
-        ? `ICIR_Draft-${editedRecord.title}.pdf`
-        : `ICIR_Draft-${editedRecord.id_no}.pdf`;
-
-      // Create a new FormData object
+      const userResponse = await axios.get(`${API_BASE_URL}/check-auth`, { withCredentials: true });
+      if (userResponse.status !== 200 || userResponse.data.status !== "Success") throw new Error("Your session could not be confirmed.");
+      const fields = chosenFields();
+      const blob = await fetchPdf(fields);
+      const fileName = fileNameFor("ICIR_Draft", fields);
       const formData = new FormData();
-      formData.append("reportInfo", JSON.stringify(selectedFields));
-      formData.append("user", JSON.stringify({ name: currentUser.name })); // Pass the user name only
+      formData.append("reportInfo", JSON.stringify({ ...fields, purpose }));
+      formData.append("user", JSON.stringify({ name: userResponse.data.name }));
       formData.append("date", new Date().toISOString());
       formData.append("fileName", fileName);
-      formData.append("pdfFile", blob, fileName); // Attach file with filename
-
-      // Save draft report to MongoDB
-      await axios.post(`${API_BASE_URL}/save-draft-report`, formData);
-
-      modal.success({
-        title: "Success",
-        content: "Draft report has been saved successfully.",
-      });
-
-      // Create a temporary link element and trigger the download
-      const downloadLink = document.createElement("a");
-      downloadLink.href = URL.createObjectURL(blob);
-      downloadLink.download = fileName;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      formData.append("pdfFile", blob, fileName);
+      await axios.post(`${API_BASE_URL}/save-draft-report`, formData, { withCredentials: true });
+      download(blob, fileName);
+      modal.success({ title: "Draft saved", content: `Saved to the Reports log (${purpose}).` });
     } catch (error) {
-      Modal.destroyAll();
-      modal.error({
-        title: "Error",
-        content: "Failed to generate PDF",
-      });
-      console.error("Error generating PDF:", error);
+      console.error("Error saving the draft:", error);
+      modal.error({ title: "The draft could not be saved", content: error.message || "Please try again." });
     } finally {
       setLoadingPDF(false);
-      document.body.style.cursor = "default";
     }
   };
 
-  const confirmGeneratePDF = () => {
+  const confirmGeneratePDF = () =>
     modal.confirm({
-      title: "Are you sure you want to generate the PDF?",
-      content:
-        "Please confirm that you want to proceed. \n Note:All data sources can be modified upon generation of PDF.",
+      title: `Generate the ICIR with ${selectedKeys.length} field${selectedKeys.length === 1 ? "" : "s"}?`,
+      content: "The PDF's fields stay editable after it is generated.",
+      okText: "Generate PDF",
       onOk: handleGeneratePDF,
-      onCancel() {
-        console.log("Cancelled");
-      },
     });
-  };
 
-  const confirmGenerateDraft = () => {
+  const confirmGenerateDraft = (purpose) =>
     modal.confirm({
-      title: "Save generated PDF to Draft Reports?",
-      content:
-        "Please confirm that you want to proceed. \n Note:All data sources can be modified upon generation of PDF.",
-      onOk: handleGeneratePDFDraft,
-      onCancel() {
-        console.log("Cancelled");
-      },
+      title: `Save as a draft — ${purpose}?`,
+      content: "The PDF is generated, downloaded and kept in the Reports log.",
+      okText: "Save draft",
+      onOk: () => handleGeneratePDFDraft(purpose),
     });
-  };
 
-  const steps = [
-    {
-      title: "",
-      description: (
-        <div style={{ fontSize: 11 }}>
-          <hr />
-          <h4>About Select Initial Data:</h4>
-          <div className="data-p">
-            <p>
-              The Select Initial Data function allows users to quickly select a
-              set of initial data fields to be included in the report. When the
-              user clicks the Select Initial Data checkbox, the function
-              automatically selects a predefined set of fields that are commonly
-              required in the report.
-            </p>
-            <p>
-              This feature saves time, ensures consistency, and simplifies the
-              reporting process. By selecting the initial data fields with a
-              single click, users can quickly generate a report with the
-              essential information.
-            </p>
-          </div>
-
-          <h4>Initial Data Fields:</h4>
-          <div className="data-container">
-            <ul className="data-ul">
-              <li>Firm ID</li>
-              <li>Project Title</li>
-              <li>Proponent Name</li>
-              <li>Address</li>
-              <li>Industry Class</li>
-              <li>PSIC Code</li>
-              <li>Total Number of Employees</li>
-              <li>ECC/CNC Reference Code</li>
-              <li>Date Approved</li>
-              <li>Haz-Waste Generated ID</li>
-            </ul>
-            <ul className="data-ul">
-              <li>Haz-Waste ID Date Issued</li>
-              <li>PTO Code</li>
-              <li>PTO Date Issued</li>
-              <li>PTO Date of Expiration</li>
-              <li>WWDP Code</li>
-              <li>WWDP Date Issued</li>
-              <li>WWDP Date of Expiration</li>
-              <li>Longitude</li>
-              <li>Latitude</li>
-              <li>Handler</li>
-            </ul>
-          </div>
-        </div>
-      ),
-      placement: "bottom",
-      target: () => document.querySelector(".info-icon"),
-    },
-  ];
-
-  const draftMenu = (
-    <Menu>
-      <Menu.Item
-        key="monitoring"
-        onClick={() => confirmGenerateDraft("For Monitoring")}
-      >
-        For Monitoring
-      </Menu.Item>
-      <Menu.Item
-        key="inspection"
-        onClick={() => confirmGenerateDraft("For Inspection")}
-      >
-        For Inspection
-      </Menu.Item>
-      <Menu.Item key="nov" onClick={() => confirmGenerateDraft("For NOV")}>
-        For NOV
-      </Menu.Item>
-    </Menu>
-  );
+  const nothingChosen = selectedKeys.length === 0;
+  const filledCount = data.filter((d) => hasValue(d.value)).length;
+  const q = query.trim().toLowerCase();
+  const rows = data.filter((d) => {
+    if (view === "filled" && !hasValue(d.value)) return false;
+    if (view === "selected" && !includedFields[d.field]) return false;
+    if (!q) return true;
+    return (fieldTitles[d.field] || d.field).toLowerCase().includes(q) || String(d.value ?? "").toLowerCase().includes(q);
+  });
 
   const columns = [
     {
-      title: "Required Field",
+      title: "Field",
       dataIndex: "field",
       key: "field",
-      align: "left",
-      width: 250,
-      render: (text) => <b>{fieldTitles[text] || text}</b>,
+      width: 300,
+      render: (field) => {
+        const g = groupOf(field);
+        return (
+          <div className="icir-field">
+            <span className="icir-field-name">{fieldTitles[field] || field}</span>
+            <Tag color={g.color} bordered={false} className="icir-group">
+              {g.label}
+            </Tag>
+          </div>
+        );
+      },
     },
     {
-      title: "Description",
+      title: "Value in the record",
       dataIndex: "value",
       key: "value",
-      align: "left",
-      render: (text, record) => (
-        <span
-          onClick={(e) =>
-            handleCheckboxChange(record.field, !includedFields[record.field])
-          }
-        >
-          {text}
-        </span>
-      ),
+      render: (value) =>
+        hasValue(value) ? <span className="icir-value">{String(value)}</span> : <Typography.Text type="secondary">—</Typography.Text>,
     },
-    {
-      title: "Include to Report?",
-      dataIndex: "include",
-      key: "include",
-      align: "left",
-      width: 150,
-      render: (text, record) => (
-        <Checkbox
-          checked={includedFields[record.field] === true}
-          onChange={(e) => handleCheckboxChange(record.field, e.target.checked)}
-        />
-      ),
-    }    
   ];
 
-  const data = Object.entries(editedRecord).map(([field, value]) => ({
-    field,
-    value,
-    include: !!value, // set include to true if value is not empty
-  }));
-
-  data.sort((a, b) => {
-    if (!!a.value && !b.value) return -1;
-    if (!a.value && !!b.value) return 1;
-    return 0;
-  });
+  const steps = [
+    {
+      title: "Start with the usual fields",
+      description: (
+        <div className="icir-tour">
+          <p>“Select initial data” ticks what an ICIR nearly always carries:</p>
+          <div className="icir-tour-list">
+            {INITIAL_FIELDS.map((f) => (
+              <span key={f}>{fieldTitles[f] || f}</span>
+            ))}
+          </div>
+          <p>Fields the record has no value for are skipped.</p>
+        </div>
+      ),
+      target: () => initialRef.current,
+      placement: "bottomLeft",
+    },
+    {
+      title: "Add or remove any field",
+      description: "Tick a row, or click it, to include it. Search, or show only what is ticked, to check the list before generating.",
+      target: () => tableRef.current,
+      placement: "top",
+    },
+    {
+      title: "Generate the PDF",
+      description: "Downloads the ICIR filled with the ticked fields. If a value is out of date, edit the record first.",
+      target: () => pdfRef.current,
+      placement: "bottomRight",
+    },
+    {
+      title: "Or keep it as a draft",
+      description: "Saves the PDF to the Reports log under its purpose — monitoring, inspection or NOV — and downloads it.",
+      target: () => draftRef.current,
+      placement: "bottomRight",
+    },
+  ];
 
   return (
-    <div className="icir-container">
-      <div className="icir-header">
-        <div className="icir-header-left">
-          <h3>Please choose data to be included in the report.</h3>
-          <p>
-            If the data is not updated, please update the data first before
-            generating.
-          </p>
+    <div className="icir-panel">
+      <div className="icir-bar">
+        <div className="icir-bar-text">
+          <Typography.Text strong style={{ fontSize: 15 }}>
+            Choose what goes into the report
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12.5 }}>
+            Tick the fields to print on the Inspection and Compliance Inspection Report. A value out of date? Edit the record first.
+          </Typography.Text>
         </div>
-
-        <div className="icir-header-center">
+        <Space wrap>
           <Button
-            type="primary"
-            shape="circle"
-            size="small"
-            icon={<InfoCircleOutlined style={{ fontSize: 14 }} />}
-            onClick={handleTourClick}
-            className="info-icon"
-          />
-          <Checkbox checked={selectAllChecked} onChange={handleSelectAllChange}>
-            Select Initial Data
-          </Checkbox>
-        </div>
-
-        <div className="icir-header-right">
-          <Button
-            type="primary"
-            className="button-gen-pdf"
-            onClick={confirmGeneratePDF}
-            disabled={Object.values(includedFields).every((x) => !x)}
+            icon={<QuestionCircleOutlined />}
+            onClick={() => {
+              setTourStep(0);
+              setTourOpen(true);
+            }}
           >
-            Generate PDF
+            How it works
           </Button>
-          <Dropdown
-            overlay={draftMenu}
-            trigger={["click"]}
-            disabled={Object.values(includedFields).every((x) => !x)}
-          >
-            <Button
-              type="primary"
-              className="button-gen-draft"
-              disabled={Object.values(includedFields).every((x) => !x)}
+          <span ref={draftRef}>
+            <Dropdown
+              trigger={["click"]}
+              disabled={nothingChosen || loadingPDF}
+              menu={{
+                items: ["For Monitoring", "For Inspection", "For NOV"].map((p) => ({ key: p, label: p })),
+                onClick: ({ key }) => confirmGenerateDraft(key),
+              }}
             >
-              Save Draft
+              <Button icon={<SaveOutlined />} disabled={nothingChosen || loadingPDF}>
+                Save draft <DownOutlined />
+              </Button>
+            </Dropdown>
+          </span>
+          <span ref={pdfRef}>
+            <Button type="primary" icon={<FilePdfOutlined />} onClick={confirmGeneratePDF} disabled={nothingChosen} loading={loadingPDF}>
+              Generate PDF{nothingChosen ? "" : ` (${selectedKeys.length})`}
             </Button>
-          </Dropdown>
-
-          {tourVisible && (
-            <Tour
-              steps={steps}
-              current={0}
-              //mask={false}
-              onClose={() => setTourVisible(false)}
-              onFinish={() => (
-                <div>
-                  <div>
-                    <Button type="primary" onClick={handleDontShowAgain}>
-                      Finish
-                    </Button>
-                  </div>
-                  <div>
-                    <Button type="primary" onClick={handleDontShowAgain}>
-                      Don't show this again
-                    </Button>
-                  </div>
-                </div>
-              )}
-            ></Tour>
-          )}
-        </div>
+          </span>
+        </Space>
       </div>
 
-      <Table
-        columns={columns}
-        size="small"
-        dataSource={data}
-        pagination={{
-          pageSize: 20,
-          showSizeChanger: true,
-          pageSizeOptions: ["10", "20", "50", "100"],
-        }}
-        scroll={{ y: 750 }}
-        rowClassName={(record) => {
-          if (
-            [
-              "id_no",
-              "title",
-              "name",
-              "address",
-              "industry_type",
-              "industry_subtype",
-              "industry_class",
-              "psic_code",
-              "proj_type",
-              "mbu_area",
-              "waterbody",
-              "emp_total",
-              "wwtf_type",
-              "bod",
-              "long",
-              "lat",
-              "cong_district",
-              "address",
-              "street",
-              "brgy",
-              "city",
-              "province",
-              "title_status",
-            ].includes(record.field)
-          ) {
-            return "skyblue-row";
-          } else if (
-            [
-              "section_incharged",
-              "fmr_section_incharged",
-              "handler",
-              "monitoring_sched",
-              "pismu_tracking",
-              "remarks_recommendations",
-              "with_nov",
-            ].includes(record.field)
-          ) {
-            return "green-row";
-          } else if (
-            [
-              "iis_no",
-              "iis_no_2025",
-              "insp_type",
-              "report_type",
-              "date_monitored",
-              "date_routed",
-              "date_signed",
-              "days_dmds",
-              "days_drds",
-              "remarks",
-            ].includes(record.field)
-          ) {
-            return "orange-row";
-          } else if (
-            [
-              "pd1586",
-              "ecc_cnc",
-              "permit_process",
-              "date_amended",
-              "date_approved",
-              "pto_code",
-              "pto_issued",
-              "pto_expiration",
-              "ra9275",
-              "wwdp_code",
-              "wwdp_issued",
-              "wwdp_expiration",
-              "ra6969",
-              "haz_id",
-              "haz_issued",
-              "tsd",
-              "tsd_ref_no",
-              "tsd_expiration",
-              "tp_trc",
-              "tp_trc_ref_no",
-              "tp_trc_expiration",
-              "chemical_permit",
-              "chemical_permit_type",
-              "chemical_permit_sub_type",
-              "chem_permit_issued",
-              "chem_permit_exp",
-              "pco",
-              "pco_no",
-              "pco_name",
-              "pco_tel_no",
-              "pco_validity",
-              "ra8749",
-            ].includes(record.field)
-          ) {
-            return "blue-row";
-          } else if (
-            [
-              "docket_no",
-              "denr_pab_case_no",
-              "date_forwarded",
-              "date_approved_clegal",
-              "days_dfda",
-              "service_mode",
-              "nov_released",
-              "nov_issued",
-              "v_pd1586",
-              "v_ra9275",
-              "v_ra8749",
-              "v_ra6969_haz",
-              "v_ra6969_tchem",
-              "ra6969",
-              "tc_date_sched",
-              "tc_date_actual",
-              "time",
-              "tsd_ref_no",
-              "tsd_expiration",
-              "tp_trc",
-              "tp_trc_ref_no",
-              "tp_trc_expiration",
-              "chemical_permit",
-              "chemical_permit_type",
-              "chemical_permit_sub_type",
-              "chem_permit_issued",
-              "chem_permit_exp",
-              "pco",
-              "pco_no",
-              "pco_name",
-              "pco_tel_no",
-              "pco_validity",
-              "ra8749",
-              "legal_officer",
-              "tc_commitment",
-              "pos_paper",
-              "penalty_date",
-              "amount",
-              "or_number",
-              "tc_compliance_link",
-              "other_tc_remarks",
-              "resolution_issued",
-              "order_issued",
-              "order_status",
-              "color",
-            ].includes(record.field)
-          ) {
-            return "gray-row";
-          } else if (
-            [
-              "mbu_priority",
-              "mbu_survey",
-              "mbu_survey_request",
-              "dp_universe",
-            ].includes(record.field)
-          ) {
-            return "yellow-row";
-          }
-          return "";
-        }}
-        className="table-rows"
+      <div className="icir-tools">
+        <span ref={initialRef} className="icir-initial">
+          <Checkbox checked={initialChecked} indeterminate={!initialChecked && initialAvailable.some((f) => includedFields[f])} onChange={handleInitialChange}>
+            Select initial data
+          </Checkbox>
+        </span>
+        <Segmented
+          size="small"
+          value={view}
+          onChange={setView}
+          options={[
+            { label: `With a value (${filledCount})`, value: "filled" },
+            { label: `All fields (${data.length})`, value: "all" },
+            { label: `Ticked (${selectedKeys.length})`, value: "selected" },
+          ]}
+        />
+        <Input
+          allowClear
+          size="small"
+          prefix={<SearchOutlined />}
+          placeholder="Find a field or a value"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ width: 240 }}
+        />
+        {!nothingChosen && (
+          <Button size="small" type="link" onClick={() => setSelection([])}>
+            Clear all
+          </Button>
+        )}
+      </div>
+
+      <div ref={tableRef}>
+        <Table
+          rowKey="field"
+          size="small"
+          className="icir-table"
+          columns={columns}
+          dataSource={rows}
+          pagination={false}
+          scroll={{ y: "calc(100vh - 360px)" }}
+          locale={{ emptyText: view === "selected" ? "Nothing ticked yet." : "No field matches." }}
+          rowSelection={{
+            selectedRowKeys: selectedKeys,
+            onChange: (keys) => setSelection([...new Set([...selectedKeys.filter((k) => !rows.some((r) => r.field === k)), ...keys])]),
+            getCheckboxProps: (r) => ({ disabled: !hasValue(r.value) }),
+            columnWidth: 44,
+          }}
+          onRow={(r) => ({
+            onClick: (e) => {
+              if (e.target.closest(".ant-table-selection-column") || !hasValue(r.value)) return;
+              toggle(r.field);
+            },
+          })}
+          rowClassName={(r) => (includedFields[r.field] ? "icir-row-on" : hasValue(r.value) ? "icir-row" : "icir-row-empty")}
+        />
+      </div>
+
+      <Tour
+        open={tourOpen}
+        current={tourStep}
+        onChange={setTourStep}
+        steps={steps}
+        onClose={closeTour}
+        onFinish={closeTour}
+        // Above the report window (a modal over a modal); the card is lifted
+        // over its own backdrop in icir.css, which antd gives the same z-index.
+        zIndex={3000}
+        rootClassName="icir-tour-root"
       />
     </div>
   );
+};
+
+ICIR.propTypes = {
+  editedRecord: PropTypes.object.isRequired,
+  resetCheckboxesKey: PropTypes.number,
 };
 
 export default ICIR;

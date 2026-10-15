@@ -78,6 +78,52 @@ router.get('/api/ucds-data/distinct-dropdown-values', ucdsAccess, getDistinctDro
 // Additional GET routes migrated from server.js
 router.get('/api/permits-summary', heavy, permitsSummary);
 router.get('/api/ucds/dashboard-stats', heavy, dashboardStats);
+
+// The Monitoring Plan anchored to ERMS (validation only — the scans stay
+// behind the Document Portal's request), its Excel export, and the monitoring
+// accomplishment per province. See modules/ucds/services/ucdsReports.
+{
+  const reports = require('../modules/ucds/services/ucdsReports');
+  const { provinceScoped } = require('../services/provinces');
+  const { registerOf } = require('../services/yearScope');
+  const scoped = (req) => provinceScoped(registerOf(req), req);
+  router.post('/api/ucds/erms-anchor', ucdsAccess, async (req, res, next) => {
+    try {
+      const keys = (Array.isArray(req.body?.sortKeys) ? req.body.sortKeys : []).map(String).slice(0, 8000);
+      res.json({ anchors: await reports.anchor(scoped(req), keys) });
+    } catch (e) {
+      next(e);
+    }
+  });
+  router.get('/api/ucds/monitoring-plan/export.xlsx', heavy, async (req, res, next) => {
+    try {
+      const province = req.query.province ? String(req.query.province).slice(0, 40) : null;
+      const { buffer, count } = await reports.monitoringPlanWorkbook(scoped(req), { province });
+      const name = `Monitoring-Plan-${province ? province.replace(/[^A-Za-z]/g, '') + '-' : ''}${new Date().toISOString().slice(0, 10)}.xlsx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      res.setHeader('X-Export-Rows', String(count));
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Rows');
+      res.end(buffer);
+    } catch (e) {
+      next(e);
+    }
+  });
+  router.get('/api/ucds/reports/not-in-erms', heavy, async (req, res, next) => {
+    try {
+      res.json({ rows: await reports.notInErms(scoped(req), { province: req.query.province ? String(req.query.province).slice(0, 40) : null }) });
+    } catch (e) {
+      next(e);
+    }
+  });
+  router.get('/api/ucds/reports/accomplishment', heavy, async (req, res, next) => {
+    try {
+      res.json({ provinces: await reports.accomplishment(scoped(req)) });
+    } catch (e) {
+      next(e);
+    }
+  });
+}
 router.get('/api/ucds-data/by-sort-key/:sort_key', ucdsAccess, getBySortKey);
 router.get('/api/ucds/next-id', ucdsAccess, getNextId);
 router.get('/api/ucds/search-name', ucdsAccess, searchName);

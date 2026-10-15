@@ -139,6 +139,7 @@ app.use(yearRoutes);
 app.use(require("./routes/datasetRoutes"));
 // VERA, the in-app assistant (services/vera, controllers/veraController.js).
 app.use(require("./routes/veraRoutes"));
+app.use(require("./routes/progressTrackerRoutes"));
 app.use(require("./routes/notificationRoutes"));
 app.use(orgUnitRoutes);
 

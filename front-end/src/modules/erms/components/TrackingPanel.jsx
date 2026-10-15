@@ -14,9 +14,9 @@ import {
   Timeline,
   Typography,
 } from "antd";
-import { DesktopOutlined, PlusOutlined, ShareAltOutlined } from "@ant-design/icons";
+import { DesktopOutlined, FileTextOutlined, PlusOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { addTracking, describeApiError } from "../api/ermsService";
+import { addTracking, addUnitTracking, describeApiError } from "../api/ermsService";
 import { message } from "../../../shared/feedback";
 
 // Custody history. Append-only — there is no edit or delete, here or in the
@@ -59,11 +59,13 @@ const ACTION_COLOR = {
 const SOURCE_OPTIONS = [
   { value: "all", label: "Everything" },
   { value: "custody", label: "Movements recorded here" },
+  { value: "activity", label: "The file: views, uploads, edits" },
   { value: "portal", label: "Sharing (Document Portal)" },
   { value: "legacy", label: "Desktop system log" },
 ];
 
-const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrite }) => {
+/** `unit`: a Legal or Laboratory document's trail (its own route); omitted, a record's. */
+const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrite, unit }) => {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState("all");
@@ -71,13 +73,15 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
 
   const legacyCount = tracking.filter((t) => t.source === "legacy").length;
   const sharedCount = tracking.filter((t) => t.source === "portal").length;
+  const activityCount = tracking.filter((t) => t.source === "activity").length;
   const shown = tracking.filter((t) => source === "all" || (t.source || "custody") === source);
 
   const mutation = useMutation({
-    mutationFn: addTracking,
+    mutationFn: (vars) => (unit ? addUnitTracking({ unit, ...vars }) : addTracking(vars)),
     onSuccess: (entry) => {
       message.success(`${entry.actionLabel} recorded.`);
       queryClient.invalidateQueries({ queryKey: ["erms", "record", serialNo] });
+      if (unit) queryClient.invalidateQueries({ queryKey: ["erms", "unit", unit, "tracking", serialNo] });
       queryClient.invalidateQueries({ queryKey: ["erms", "overdue"] });
       form.resetFields();
       setOpen(false);
@@ -108,6 +112,11 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
               <ShareAltOutlined /> {sharedCount} sharing
             </Typography.Text>
           )}
+          {activityCount > 0 && (
+            <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: "normal" }}>
+              <FileTextOutlined /> {activityCount} on the file
+            </Typography.Text>
+          )}
           {legacyCount > 0 && (
             <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: "normal" }}>
               <DesktopOutlined /> {legacyCount} from the desktop system
@@ -118,7 +127,7 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
       size="small"
       extra={
         <Space size={8} wrap>
-          {(legacyCount > 0 || sharedCount > 0) && (
+          {(legacyCount > 0 || sharedCount > 0 || activityCount > 0) && (
             <Select placeholder="Source" size="small" value={source} onChange={setSource} options={SOURCE_OPTIONS} style={{ width: 210 }} />
           )}
           {canWrite && (
@@ -153,7 +162,7 @@ const TrackingPanel = ({ serialNo, tracking = [], custody, actions = [], canWrit
           items={shown.map((t, i) => ({
             key: t._id || `${t.source}-${i}`,
             color: ACTION_COLOR[t.action] || "gray",
-            dot: t.source === "legacy" ? <DesktopOutlined style={{ fontSize: 12 }} /> : t.source === "portal" ? <ShareAltOutlined style={{ fontSize: 12 }} /> : undefined,
+            dot: t.source === "legacy" ? <DesktopOutlined style={{ fontSize: 12 }} /> : t.source === "portal" ? <ShareAltOutlined style={{ fontSize: 12 }} /> : t.source === "activity" ? <FileTextOutlined style={{ fontSize: 12 }} /> : undefined,
             children: (
               <Space direction="vertical" size={0}>
                 <Space size={6} wrap>

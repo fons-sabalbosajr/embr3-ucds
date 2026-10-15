@@ -121,7 +121,24 @@ function stampYear(datasetKey, year, doc) {
   return { ...doc, ...filter };
 }
 
+/**
+ * The Monitoring Plan register a request works on.
+ *
+ * Up to 2026 every year shares `ucds-data`. A container loaded from its own
+ * RAW universe (scripts/migrate-ucds/import-year-register.js — 2027 onward)
+ * names its register on the container document, { register: 'ucds-data-2027' },
+ * and reads and writes go there; the earlier years are untouched by it.
+ * Needs req.yearContainer, which resolveYearContext sets; without one it is
+ * the shared register.
+ */
+function registerOf(req) {
+  const name = req?.yearContainer?.register;
+  if (name && /^ucds-data-\d{4}$/.test(name)) return getDb().collection(name);
+  return collections.ucds;
+}
+
 module.exports = {
+  registerOf,
   STRATEGY,
   DATASETS,
   FIELD_SCOPED_DATASETS,

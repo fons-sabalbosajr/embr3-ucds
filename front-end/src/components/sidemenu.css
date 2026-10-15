@@ -288,20 +288,31 @@
   white-space: nowrap;
 }
 
+/* The actions (add, edit, remove) sit at the right of the label, clear of
+   the folder's arrow, always in place — faint until the row is hovered, so
+   the label does not jump when they appear. */
 .menu-item-actions {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
   margin-left: 6px;
   flex: none;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
 }
-
+.ant-menu-submenu-title .menu-item-actions {
+  margin-right: 20px;
+}
 .ant-menu-item:hover .menu-item-actions,
-.ant-menu-submenu-title:hover .menu-item-actions {
-  display: inline-flex;
+.ant-menu-submenu-title:hover .menu-item-actions,
+.menu-item-actions:focus-within {
+  opacity: 1;
 }
 
 .menu-item-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: rgba(255, 255, 255, 0.14);
   color: inherit;

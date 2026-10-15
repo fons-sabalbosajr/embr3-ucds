@@ -22,7 +22,7 @@ const Login = () => {
   // no tab open (public/sw.js): the account filled in, and the page it
   // concerns opened after signing in. Only an application path is followed.
   const presetUsername = location.state?.username || query.get("user") || "";
-  const next = /^\/universe(\/|$)/.test(query.get("next") || "") && !/\/\//.test(query.get("next")) ? query.get("next") : null;
+  const next = /^\/e-universe(\/|$)/.test(query.get("next") || "") && !/\/\//.test(query.get("next")) ? query.get("next") : null;
 
   const handleSubmit = async ({ username, password }) => {
     setIsLoading(true);
@@ -49,7 +49,7 @@ const Login = () => {
           // The year context last asked while signed out; let it learn the
           // container the server chose before the guard looks at it.
           await refreshYears();
-          navigate(next || ROUTES.app);
+          navigate(next || ROUTES.appHome);
         } else {
           navigate(ROUTES.selectYear);
         }

@@ -236,4 +236,4 @@ async function settle(serialNo, action, user) {
   return { ok: true };
 }
 
-module.exports = { COLLECTION, DEFAULTS, settingsOf, cleanSettings, parseVerdict, scan, report, apply, settle };
+module.exports = { COLLECTION, DEFAULTS, settingsOf, cleanSettings, parseVerdict, firstPages, scan, report, apply, settle };

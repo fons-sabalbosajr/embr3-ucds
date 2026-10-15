@@ -87,7 +87,7 @@ const UserPopover = ({ name, userHandle, handleLogout, userData, division, role,
         <Button type="text" block icon={<UserOutlined />} onMouseEnter={prefetch} onClick={() => setModal("profile")}>
           My profile
         </Button>
-        <Button type="text" block icon={<SettingOutlined />} onClick={() => go("/universe/settings/general")}>
+        <Button type="text" block icon={<SettingOutlined />} onClick={() => go("/e-universe/settings/general")}>
           Settings
         </Button>
         <Button type="text" block icon={<QuestionCircleOutlined />} onClick={() => setModal("help")}>

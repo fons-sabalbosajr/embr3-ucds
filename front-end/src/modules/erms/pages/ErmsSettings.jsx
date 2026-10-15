@@ -55,6 +55,7 @@ import RecordFormModal from "../components/RecordFormModal";
 import LookupListEditor from "../components/LookupListEditor";
 import { unitTheme } from "../units/unitTheme";
 import UnitDocumentDetail from "../units/UnitDocumentDetail";
+import DuplicateQuickFix from "../components/DuplicateQuickFix";
 import { SETTINGS_SECTIONS, settingsPath } from "../settingsPath";
 
 const SECTIONS = SETTINGS_SECTIONS.map(([key]) => key);
@@ -70,9 +71,9 @@ const { Text, Paragraph } = Typography;
 // settings of the units on their account and no other; the API enforces the
 // same (read: the unit's members; change: its filing staff).
 //
-//   Records     /universe/erms/settings/:section?
-//   Legal       /universe/erms/legal/settings/:section?
-//   Laboratory  /universe/erms/laboratory/settings/:section?
+//   Records     /e-universe/erms/settings/:section?
+//   Legal       /e-universe/erms/legal/settings/:section?
+//   Laboratory  /e-universe/erms/laboratory/settings/:section?
 //
 // Each tab is one concern, and each setting is enforced somewhere named in
 // its description: the record form, the library, the viewer, the trail. The
@@ -119,7 +120,7 @@ const NeedsReview = () => {
 const DuplicateGroups = () => {
   const { data, isLoading, refetch, isFetching } = useQuery({ queryKey: ["erms", "duplicate-groups"], queryFn: fetchDuplicateGroups, staleTime: 5 * 60 * 1000 });
   const columns = [
-    { title: "Permit number", dataIndex: "permitNumber", key: "permitNumber", width: 220, render: (v) => <Link to={`/universe/erms/records?search=${encodeURIComponent(v)}`}>{v}</Link> },
+    { title: "Permit number", dataIndex: "permitNumber", key: "permitNumber", width: 220, render: (v) => <Link to={`/e-universe/erms/records?search=${encodeURIComponent(v)}`}>{v}</Link> },
     { title: "Filed", dataIndex: "count", key: "count", width: 70, align: "right" },
     { title: "As", dataIndex: "serials", key: "serials", render: (s) => <Space size={4} wrap>{s.map((x) => <Tag key={x} style={{ fontFamily: "monospace" }}>{x}</Tag>)}</Space> },
     { title: "Proponents", dataIndex: "proponents", key: "proponents", ellipsis: true, render: (p) => p.filter(Boolean).join(" · ") },
@@ -130,6 +131,7 @@ const DuplicateGroups = () => {
         Some are legitimate — an original and its amendment, an attachment — and some are the same document filed twice. Open the permit number in the library to decide.
       </Paragraph>
       <Table size="small" rowKey="permitNumber" loading={isLoading} columns={columns} dataSource={data || []} pagination={{ defaultPageSize: 10, hideOnSinglePage: true }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No permit number is filed twice" /> }} />
+      <DuplicateQuickFix unit="records" />
     </Card>
   );
 };
@@ -173,7 +175,7 @@ const UnitMissingFiles = ({ unit }) => {
 const UnitDuplicateGroups = ({ unit }) => {
   const { data, isLoading, refetch, isFetching } = useQuery({ queryKey: ["erms", "unit", unit, "duplicate-groups"], queryFn: () => fetchUnitDuplicateGroups(unit), staleTime: 5 * 60 * 1000 });
   const columns = [
-    { title: "File name", dataIndex: "fileName", key: "fileName", ellipsis: true, render: (v) => <Link to={`/universe/erms/${unit}/documents?search=${encodeURIComponent(v)}`}>{v}</Link> },
+    { title: "File name", dataIndex: "fileName", key: "fileName", ellipsis: true, render: (v) => <Link to={`/e-universe/erms/${unit}/documents?search=${encodeURIComponent(v)}`}>{v}</Link> },
     { title: "Filed", dataIndex: "count", key: "count", width: 70, align: "right" },
     { title: "As", dataIndex: "serials", key: "serials", width: 320, render: (s) => <Space size={4} wrap>{s.map((x) => <Tag key={x} style={{ fontFamily: "monospace" }}>{x}</Tag>)}</Space> },
   ];
@@ -183,6 +185,7 @@ const UnitDuplicateGroups = ({ unit }) => {
         The same scan filed twice, or a name reused for two documents. Open the file name in the documents list to decide.
       </Paragraph>
       <Table size="small" rowKey="fileName" loading={isLoading} columns={columns} dataSource={data || []} pagination={{ defaultPageSize: 10, hideOnSinglePage: true }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No file name is filed twice" /> }} />
+      <DuplicateQuickFix unit={unit} />
     </Card>
   );
 };

@@ -13,17 +13,18 @@ import { assignToBox, describeApiError, fetchBoxes } from "../api/ermsService";
 import { message } from "../../../shared/feedback";
 
 /** Where this record physically sits. */
-const BoxAssignment = ({ record, canWrite }) => {
+/** `unit`: a Legal or Laboratory document, into its unit's boxes; omitted, a record. */
+const BoxAssignment = ({ record, canWrite, unit }) => {
   const queryClient = useQueryClient();
 
   const { data: boxes = [] } = useQuery({
-    queryKey: ["erms", "boxes"],
-    queryFn: () => fetchBoxes(),
+    queryKey: ["erms", "boxes", unit || "records"],
+    queryFn: () => fetchBoxes(undefined, unit),
     enabled: canWrite,
   });
 
   const mutation = useMutation({
-    mutationFn: assignToBox,
+    mutationFn: (vars) => assignToBox({ ...vars, unit }),
     onSuccess: (result) => {
       message.success(
         result.archive ? `Filed into box ${result.archive.boxCode}.` : "Removed from its box."
@@ -49,7 +50,7 @@ const BoxAssignment = ({ record, canWrite }) => {
               Filed {new Date(record.archive.filedAt).toLocaleDateString()} by{" "}
               {record.archive.filedBy}
             </Typography.Text>
-            <Link to="/universe/erms/archive">View boxes</Link>
+            <Link to="/e-universe/erms/archive">View boxes</Link>
           </Space>
         ) : (
           <Typography.Text type="secondary">Not filed into a box yet.</Typography.Text>

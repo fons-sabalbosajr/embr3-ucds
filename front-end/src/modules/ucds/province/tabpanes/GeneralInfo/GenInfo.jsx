@@ -138,7 +138,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
             onChange={(e) => setProponentName(e.target.value)}
             placeholder="Enter Proponent Name"
             style={{
-              fontSize: "11px",
+              fontSize: 13,
               padding: "4px 8px",
               cursor: isEditing ? "text" : "not-allowed",
               color: isEditing ? "" : "#aaa",
@@ -154,7 +154,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
             onChange={(e) => setProjectTitle(e.target.value)}
             placeholder="Enter street"
             style={{
-              fontSize: "11px",
+              fontSize: 13,
               padding: "4px 8px",
               cursor: isEditing ? "text" : "not-allowed",
               color: isEditing ? "" : "#aaa",
@@ -245,7 +245,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                 theme={{
                   components: {
                     Input: {
-                      fontSize: "11px",
+                      fontSize: 13,
                       height: "29px",
                       padding: "4px 8px",
                     },
@@ -257,7 +257,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                   onChange={(e) => setStreet(e.target.value)}
                   placeholder="Enter street"
                   style={{
-                    fontSize: "11px",
+                    fontSize: 13,
                     padding: "4px 8px",
                     cursor: isEditing ? "text" : "not-allowed",
                     color: isEditing ? "" : "#aaa",
@@ -277,7 +277,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                 theme={{
                   components: {
                     Input: {
-                      fontSize: "11px",
+                      fontSize: 13,
                       height: "29px",
                       padding: "4px 8px",
                       cursor: "not-allowed",
@@ -290,7 +290,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                   readOnly
                   rows={5}
                   style={{
-                    fontSize: "11px",
+                    fontSize: 13,
                     padding: "4px 8px",
                     marginTop: "4px",
                     cursor: isEditing ? "text" : "not-allowed",
@@ -308,7 +308,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                   value="N/A"
                   readOnly
                   style={{
-                    fontSize: "11px",
+                    fontSize: 13,
                     height: "29px",
                     padding: "4px 8px",
                   }}
@@ -329,7 +329,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                   value="N/A"
                   readOnly
                   style={{
-                    fontSize: "11px",
+                    fontSize: 13,
                     height: "29px",
                     padding: "4px 8px",
                     background: "#f5f5f5",
@@ -366,7 +366,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                         theme={{
                           components: {
                             Input: {
-                              fontSize: "11px",
+                              fontSize: 13,
                               height: "29px",
                               padding: "4px 8px",
                             },
@@ -383,7 +383,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                           }
                           onChange={(e) => setLongitude(e.target.value)}
                           style={{
-                            fontSize: "11px",
+                            fontSize: 13,
                             height: "29px",
                             padding: "4px 8px",
                             cursor: isEditing ? "text" : "not-allowed",
@@ -410,7 +410,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                         theme={{
                           components: {
                             Input: {
-                              fontSize: "11px",
+                              fontSize: 13,
                               height: "29px",
                               padding: "4px 8px",
                             },
@@ -427,7 +427,7 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing, theme }) => {
                           }
                           onChange={(e) => setLatitude(e.target.value)}
                           style={{
-                            fontSize: "11px",
+                            fontSize: 13,
                             height: "29px",
                             padding: "4px 8px",
                             cursor: isEditing ? "text" : "not-allowed",

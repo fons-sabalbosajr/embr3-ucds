@@ -1,6 +1,6 @@
 // Public route paths, defined in one place so the site prefix can change
 // without hunting through components. The authenticated application lives
-// under /universe and is unaffected by this prefix.
+// under /e-universe and is unaffected by this prefix.
 
 export const SITE_BASE = "/e-universe";
 
@@ -13,7 +13,10 @@ export const ROUTES = {
   // Public: anyone asks for a scanned document here, no account needed.
   documentPortal: `${SITE_BASE}/document-portal`,
   selectYear: "/select-year",
-  app: "/universe",
+  app: "/e-universe",
+  // The application's own home: each account lands on its dashboard from
+  // here. Bare /e-universe is the public landing page.
+  appHome: "/e-universe/home",
 };
 
 export default ROUTES;

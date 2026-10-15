@@ -3,7 +3,8 @@ import { Alert, Button, Card, Input, Modal, Select, Space, Table, Tag, Tooltip, 
 import { CloudUploadOutlined, EditOutlined, EyeOutlined, FileExclamationOutlined, PaperClipOutlined } from "@ant-design/icons";
 import { useParams, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { describeApiError, fetchUnitDocuments } from "../api/ermsService";
+import { describeApiError, exportUnitDocuments, fetchUnitDocuments } from "../api/ermsService";
+import ExportButton from "../components/ExportButton";
 import UnitHeader from "../components/UnitHeader";
 import useFitHeight from "../../../shared/useFitHeight";
 import useScreen from "../../../shared/useScreen";
@@ -116,7 +117,7 @@ const UnitDocuments = () => {
       render: (_, row) => (
         <Space direction="vertical" size={0}>
           <a
-            href={`/universe/erms/${unit}/documents/${encodeURIComponent(row.serialNo)}`}
+            href={`/e-universe/erms/${unit}/documents/${encodeURIComponent(row.serialNo)}`}
             onClick={(e) => {
               // A plain click opens the dialog; ctrl/middle-click still opens the page in a new tab.
               if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
@@ -227,6 +228,7 @@ const UnitDocuments = () => {
         actions={
           <>
             <Text type="secondary">{data ? `${new Intl.NumberFormat().format(data.total)} documents` : ""}</Text>
+            <ExportButton load={() => exportUnitDocuments(unit, query)} />
             {unitConfig?.canFile && (
               <Button type="primary" icon={<CloudUploadOutlined />} onClick={() => setFiling(true)}>
                 Upload document

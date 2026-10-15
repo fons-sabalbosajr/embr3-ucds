@@ -31,6 +31,7 @@ import { API_BASE_URL } from "../../../config/api";
 import { withSessionToken } from "../../../shared/sessionToken";
 import ErrorCard from "../../../shared/components/ErrorCard";
 import ContentLoading from "../../../shared/components/ContentLoading";
+import { UcdsHeader } from "../ucdsTheme";
 
 const { Text } = Typography;
 
@@ -310,22 +311,11 @@ const DatasetPage = () => {
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       {error && <Alert type="error" showIcon message={error} closable onClose={() => setError(null)} />}
 
-      <Card
-        size="small"
-        title={
-          <Space size={10}>
-            <span>{dataset.label}</span>
-            <Tag>{activeYear}</Tag>
-            {dataset.imported ? (
-              <Text type="secondary" style={{ fontWeight: 400, fontSize: 12 }}>
-                {dataset.rowCount.toLocaleString()} rows · imported {new Date(dataset.importedAt).toLocaleDateString()}
-              </Text>
-            ) : (
-              <Tag color="orange">not imported</Tag>
-            )}
-          </Space>
-        }
-        extra={
+      {/* The Universe Central DB's page header, as the Monitoring Plan's. */}
+      <UcdsHeader
+        title={`${dataset.label} — ${activeYear}`}
+        description={dataset.imported ? `${dataset.rowCount.toLocaleString()} rows · imported ${new Date(dataset.importedAt).toLocaleDateString()}` : "Not imported yet."}
+        actions={
           <Space wrap>
             {dataset.imported && exportOn && (
               <Button
@@ -353,7 +343,8 @@ const DatasetPage = () => {
             )}
           </Space>
         }
-      >
+      />
+      <Card size="small">
         {!dataset.imported ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}

@@ -352,7 +352,7 @@ const FocalPerson = ({
                 theme={{
                   components: {
                     DatePicker: {
-                      fontSize: "11px",
+                      fontSize: 13,
                       height: "29px",
                       padding: "4px 8px",
                     },
@@ -389,7 +389,7 @@ const FocalPerson = ({
                 theme={{
                   components: {
                     DatePicker: {
-                      fontSize: "11px",
+                      fontSize: 13,
                       height: "29px",
                       padding: "4px 8px",
                     },
@@ -426,7 +426,7 @@ const FocalPerson = ({
                 theme={{
                   components: {
                     DatePicker: {
-                      fontSize: "11px",
+                      fontSize: 13,
                       height: "29px",
                       padding: "4px 8px",
                     },
@@ -582,7 +582,7 @@ const FocalPerson = ({
                       handleChange("pismu_tracking", "");
                     }
                   }}
-                  style={{ fontSize: "11px" }}
+                  style={{ fontSize: 13 }}
                 >
                   <span> Tracking of Reports Received by Planning Unit</span>
                 </Checkbox>
@@ -596,7 +596,7 @@ const FocalPerson = ({
                           components: {
                             AutoComplete: {
                               optionFontSize: 10,
-                              fontSize: "11px",
+                              fontSize: 13,
                               boxShadow: "none",
                             },
                           },
@@ -605,7 +605,7 @@ const FocalPerson = ({
                         <AutoComplete
                           style={{
                             width: "100%",
-                            fontSize: "11px",
+                            fontSize: 13,
                           }}
                           options={pismuTrackingOptions}
                           value={editedRecord?.pismu_tracking || pismuTracking}
@@ -623,7 +623,7 @@ const FocalPerson = ({
                         >
                           <Input
                             style={{
-                              fontSize: "11px",
+                              fontSize: 13,
                               height: "29px",
                               padding: "4px 8px",
                               cursor: isEditing ? "text" : "not-allowed",
@@ -666,7 +666,7 @@ const FocalPerson = ({
                     handleValueChange("with_nov", newValue);
                     handleChange("with_nov", newValue);
                   }}
-                  style={{ fontSize: "11px" }}
+                  style={{ fontSize: 13 }}
                 >
                   <span> With previously issued NOV</span>
                 </Checkbox>

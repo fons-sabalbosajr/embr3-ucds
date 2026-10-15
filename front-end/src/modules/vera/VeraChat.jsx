@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import { Grid, theme as antdTheme } from "antd";
 import { SendOutlined, CloseOutlined, MinusOutlined, ReloadOutlined, DeleteOutlined, WarningOutlined, MessageOutlined } from "@ant-design/icons";
 
-import { VeraEdgeBeam, VeraFlame } from "./VeraMark";
+import { VeraFlame, VeraOrb } from "./VeraMark";
+import { BorderBeam } from "border-beam";
 import { getVeraStatus, askVera, getVeraPublicStatus, askVeraPublic, pageKeyFromPath } from "./veraService";
 import { useTheme } from "../../theme/ThemeProvider";
 import "./vera.css";
@@ -313,6 +314,10 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
         </div>
       )}
       {!open && (
+        // VERA's own flame on the launcher, with a beam running its edge
+        // (border-beam, libraries.dev). The beam's box is what sits fixed in
+        // the corner; the button inside it takes the beam's shape.
+        <BorderBeam className="vera-launcher-dock" size="sm" colorVariant="ocean" theme={mode === "dark" ? "dark" : "light"} duration={2.6}>
         <button
           type="button"
           ref={launcherRef}
@@ -323,13 +328,13 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
             setMinimized(false);
           }}
         >
-          <VeraEdgeBeam radius="pill" theme={mode} color={accent} />
           <VeraFlame size={isMobile ? 40 : 36} state="burning" theme={mode} glow={false} label="" />
           <span className="vera-launcher__text">
             <span className="vera-launcher__label">Ask {name}</span>
             <span className="vera-launcher__sub">{status.introduce ? "Your Document Portal guide" : modelOn ? "Your E-Universe assistant" : "Help library"}</span>
           </span>
         </button>
+        </BorderBeam>
       )}
 
       {open && (
@@ -407,7 +412,7 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                 {sending && (
                   <div className="vera-msg vera-msg--assistant">
                     <div className="vera-bubble vera-thinking" aria-live="assertive">
-                      <VeraFlame size={22} state={flameState} theme={mode} glow={false} label="" />
+                      <VeraOrb size={20} state={flameState} theme={mode} color={accent} label="" />
                       <span className="vera-thinking__text">{thinkingMessages[thinkStage]}</span>
                     </div>
                   </div>

@@ -1,11 +1,12 @@
 const dayjs = require('dayjs');
 const { connectToMongo, collections, client, ObjectId } = require('../config/db');
-const { withYear, stampYear } = require('../services/yearScope');
+const { withYear, stampYear, registerOf } = require('../services/yearScope');
 const { provinceScoped, requestAllowsProvince } = require('../services/provinces');
 const shortCache = require('../shared/services/shortCache');
 
-// The establishment register, confined to the provinces this request may touch.
-const ucdsFor = (req) => provinceScoped(collections.ucds, req);
+// The establishment register of the active year, confined to the provinces
+// this request may touch.
+const ucdsFor = (req) => provinceScoped(registerOf(req), req);
 
 // Wraps a log collection so inserts are stamped and reads/deletes are filtered
 // by the active year, without touching each call site individually.
@@ -92,9 +93,11 @@ const REGISTER_CHECKS_CACHE = `${REGISTER_CACHE}checks:`;
 
 /** The cache key for a request's province scope: one entry per distinct scope. */
 function registerScopeKey(req, prefix = REGISTER_CHECKS_CACHE) {
+  // Which register (2027 onward has its own) and which provinces.
+  const scope = `${prefix}${req.yearContainer?.register || 'shared'}:`;
   const list = req.provinceFilter?.province?.$in;
-  if (!req.provinceFilter) return prefix + 'all';
-  return prefix + (Array.isArray(list) ? list.map((r) => String(r)).sort().join('|') : JSON.stringify(req.provinceFilter));
+  if (!req.provinceFilter) return scope + 'all';
+  return scope + (Array.isArray(list) ? list.map((r) => String(r)).sort().join('|') : JSON.stringify(req.provinceFilter));
 }
 
 async function computeRegisterChecks(req) {
@@ -589,6 +592,10 @@ async function dashboardStats(req, res) {
       else if (item._id === '') projectStatusBreakdown.notYetMonitored = item.count;
       else if (item._id && item._id !== 'N/A' && item._id !== 'NONE') projectStatusBreakdown.other += item.count;
     });
+    // "Not yet monitored" is every establishment with no project status — the
+    // field absent as well as blank. Only the blank ones were counted, so the
+    // dashboard said 0 while thousands had never been monitored.
+    projectStatusBreakdown.notYetMonitored = await ucdsFor(req).countDocuments({ $or: [{ title_status: { $exists: false } }, { title_status: null }, { title_status: { $regex: '^\\s*$' } }] });
     const industriesCursor = ucdsFor(req).find({}, { projection: { _id: 1, ecc_cnc: 1, pto_code: 1, wwdp_code: 1, haz_id: 1, pco_no: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1 } });
     const industriesWithAnyPermitSet = new Set();
     const industriesWithExpiredPermitSet = new Set();
@@ -673,6 +680,9 @@ async function getProvinceData(req, res) {
       monitoring_sched: doc.monitoring_sched || '',
       iis_no_2024: doc.iis_no_2024 || '',
       iis_no_2025: doc.iis_no_2025 || '',
+      iis_no_2026: doc.iis_no_2026 || '',
+      iis_no_nov: doc.iis_no_nov || '',
+      protected_area: doc.protected_area || '',
       insp_type: doc.insp_type || '',
       date_monitored: doc.date_monitored || '',
       date_routed: doc.date_routed || '',
@@ -780,6 +790,9 @@ async function extractProvinceData(req, res) {
       monitoring_sched: doc.monitoring_sched || '',
       iis_no_2024: doc.iis_no_2024 || '',
       iis_no_2025: doc.iis_no_2025 || '',
+      iis_no_2026: doc.iis_no_2026 || '',
+      iis_no_nov: doc.iis_no_nov || '',
+      protected_area: doc.protected_area || '',
       insp_type: doc.insp_type || '',
       date_monitored: doc.date_monitored || '',
       date_routed: doc.date_routed || '',

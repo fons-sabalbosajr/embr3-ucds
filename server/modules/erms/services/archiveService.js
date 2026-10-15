@@ -15,6 +15,13 @@ const RECORDS = 'erms-records';
 
 const boxes = () => getDb().collection(BOXES);
 const records = () => getDb().collection(RECORDS);
+// Legal Services and Laboratory keep boxes too: their documents carry the
+// same archive.boxCode, and a box belongs to one unit. Boxes from before
+// carry no unit and are the Records Unit's.
+const documents = () => getDb().collection('erms-documents');
+const isRecords = (unit) => !unit || unit === 'records';
+const unitFilter = (unit) => (isRecords(unit) ? { unit: { $in: [null, 'records'] } } : { unit });
+const itemsOf = (unit) => (isRecords(unit) ? records() : documents());
 
 const STATUSES = ['open', 'sealed', 'due-for-disposal', 'disposed'];
 
@@ -24,11 +31,12 @@ async function ensureIndexes() {
   await boxes().createIndex({ status: 1 });
   await boxes().createIndex({ province: 1 });
   await records().createIndex({ 'archive.boxCode': 1 }, { sparse: true });
+  await documents().createIndex({ 'archive.boxCode': 1 }, { sparse: true });
 }
 
-async function listBoxes({ status, province } = {}, allowedProvinces) {
+async function listBoxes({ status, province, unit } = {}, allowedProvinces) {
   await connectToMongo();
-  const filter = {};
+  const filter = { ...unitFilter(unit) };
   if (status) filter.status = status;
   if (Array.isArray(allowedProvinces)) {
     const chosen = province && allowedProvinces.includes(province) ? [province] : allowedProvinces;
@@ -41,9 +49,9 @@ async function listBoxes({ status, province } = {}, allowedProvinces) {
 
   // Counts come from the records themselves rather than a stored counter, so
   // the number cannot drift away from reality.
-  const counts = await records()
+  const counts = await itemsOf(unit)
     .aggregate([
-      { $match: { 'archive.boxCode': { $in: list.map((b) => b.code) } } },
+      { $match: { 'archive.boxCode': { $in: list.map((b) => b.code) }, ...(isRecords(unit) ? {} : { unit }) } },
       { $group: { _id: '$archive.boxCode', count: { $sum: 1 } } },
     ])
     .toArray();
@@ -61,6 +69,7 @@ async function createBox(input, { username }) {
 
   const doc = {
     code,
+    unit: input.unit || 'records',
     label: input.label || code,
     province: input.province,
     location: input.location || null,
@@ -126,30 +135,39 @@ async function updateBox(code, changes, { username }) {
 }
 
 /** File a record into a box, or take it out when boxCode is null. */
-async function assignRecord(serialNo, boxCode, { username }) {
+async function assignRecord(serialNo, boxCode, { username }, { unit } = {}) {
   await connectToMongo();
-  const record = await records().findOne({ serialNo }, { projection: { serialNo: 1, archive: 1 } });
-  if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+  const items = itemsOf(unit);
+  const itemFilter = isRecords(unit) ? { serialNo } : { unit, serialNo };
+  const record = await items.findOne(itemFilter, { projection: { serialNo: 1, archive: 1 } });
+  if (!record) throw notFoundError(isRecords(unit) ? 'Record not found.' : 'Document not found.', isRecords(unit) ? 'RECORD_NOT_FOUND' : 'DOCUMENT_NOT_FOUND');
 
   if (boxCode === null) {
-    await records().updateOne({ serialNo }, { $set: { archive: null } });
+    await items.updateOne(itemFilter, { $set: { archive: null } });
     return { serialNo, archive: null };
   }
 
   const code = String(boxCode).trim().toUpperCase();
-  const box = await boxes().findOne({ code });
+  // A unit's documents go into that unit's boxes only.
+  const box = await boxes().findOne({ code, ...unitFilter(unit) });
   if (!box) throw badRequest(`Box ${code} does not exist.`, 'BOX_NOT_FOUND');
   if (box.status !== 'open') {
     throw badRequest(`Box ${code} is ${box.status} and cannot take new records.`, 'BOX_NOT_OPEN');
   }
 
   const archive = { boxCode: code, filedAt: new Date(), filedBy: username };
-  await records().updateOne({ serialNo }, { $set: { archive } });
+  await items.updateOne(itemFilter, { $set: { archive } });
   return { serialNo, archive };
 }
 
-async function boxContents(code, allowedProvinces) {
+async function boxContents(code, allowedProvinces, { unit } = {}) {
   await connectToMongo();
+  if (!isRecords(unit)) {
+    return documents()
+      .find({ unit, 'archive.boxCode': String(code).toUpperCase() }, { projection: { serialNo: 1, title: 1, docType: 1, docTypeLabel: 1, province: 1, provinceLabel: 1, archive: 1, 'fields.docketNo': 1, 'fields.cocNo': 1 } })
+      .sort({ serialNo: 1 })
+      .toArray();
+  }
   const filter = { 'archive.boxCode': String(code).toUpperCase() };
   if (Array.isArray(allowedProvinces)) filter['location.province'] = { $in: allowedProvinces };
   return records()
@@ -163,9 +181,10 @@ async function boxContents(code, allowedProvinces) {
 }
 
 /** Boxes whose retention period has elapsed. Reported, never acted upon. */
-async function dueForDisposal(allowedProvinces) {
+async function dueForDisposal(allowedProvinces, { unit } = {}) {
   await connectToMongo();
   const filter = {
+    ...(unit ? unitFilter(unit) : {}),
     status: { $in: ['sealed', 'due-for-disposal'] },
     disposeAfter: { $ne: null, $lte: new Date() },
   };

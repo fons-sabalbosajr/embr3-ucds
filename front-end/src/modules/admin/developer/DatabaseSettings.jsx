@@ -47,7 +47,7 @@ const DatabaseSettings = () => {
             description={
               <>
                 Host, share and service account are on{" "}
-                <Link to="/universe/admin/developer/storage-config">Storage Configuration</Link>, which
+                <Link to="/e-universe/admin/developer/storage-config">Storage Configuration</Link>, which
                 asks for an emailed code before showing them.
               </>
             }
@@ -64,7 +64,7 @@ const DatabaseSettings = () => {
             description={
               <>
                 Documents cannot be opened until this is resolved. See{" "}
-                <Link to="/universe/admin/developer/storage-config">Storage Configuration</Link>.
+                <Link to="/e-universe/admin/developer/storage-config">Storage Configuration</Link>.
               </>
             }
           />

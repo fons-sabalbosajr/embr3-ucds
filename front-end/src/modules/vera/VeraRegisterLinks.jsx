@@ -101,7 +101,7 @@ const VeraRegisterLinks = () => {
       render: (_, p) => (
         <Space direction="vertical" size={0} style={{ minWidth: 0 }}>
           {p.serialNo ? (
-            <Link to={`/universe/erms/records/${encodeURIComponent(p.serialNo)}`} style={{ fontSize: 12 }}>
+            <Link to={`/e-universe/erms/records/${encodeURIComponent(p.serialNo)}`} style={{ fontSize: 12 }}>
               {p.serialNo}
             </Link>
           ) : null}

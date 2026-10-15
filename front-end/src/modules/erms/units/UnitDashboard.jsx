@@ -61,7 +61,7 @@ const UnitDashboard = () => {
 
   const loading = isLoading || !data;
   const thisYear = new Date().getFullYear();
-  const documentsUrl = `/universe/erms/${unit}/documents`;
+  const documentsUrl = `/e-universe/erms/${unit}/documents`;
 
   const recentColumns = [
     {
@@ -100,7 +100,7 @@ const UnitDashboard = () => {
               <Button icon={<FileSearchOutlined />}>Document Library</Button>
             </Link>
             {canDecide && (
-              <Link to="/universe/erms/portal-requests">
+              <Link to="/e-universe/erms/portal-requests">
                 <Badge count={pending} size="small" offset={[-2, 2]}>
                   <Button icon={<MailOutlined />}>Portal requests</Button>
                 </Badge>
@@ -117,7 +117,7 @@ const UnitDashboard = () => {
       <Row gutter={[12, 12]}>
         {canDecide && (
           <Col flex="1 1 170px">
-            <AttentionTile icon={<MailOutlined />} label="Portal requests waiting" value={pending} tone="warning" to="/universe/erms/portal-requests" loading={inbox.isLoading} hint={pending ? "to decide" : "none"} />
+            <AttentionTile icon={<MailOutlined />} label="Portal requests waiting" value={pending} tone="warning" to="/e-universe/erms/portal-requests" loading={inbox.isLoading} hint={pending ? "to decide" : "none"} />
           </Col>
         )}
         <Col flex="1 1 170px">
@@ -133,6 +133,29 @@ const UnitDashboard = () => {
           <AttentionTile icon={<DesktopOutlined />} label="From the desktop system" value={data?.fromDesktop || 0} tone="info" loading={loading} hint="migrated" />
         </Col>
       </Row>
+
+      {/* The Laboratory's reminder: calibration certificates past or near their due date. */}
+      {unit === "laboratory" && data?.calibrationDue && (data.calibrationDue.overdue > 0 || data.calibrationDue.soon > 0) && (
+        <Card
+          size="small"
+          title={<Space><CalendarOutlined />Calibration due</Space>}
+          extra={<Text type="secondary" style={{ fontSize: 12 }}>{data.calibrationDue.overdue} overdue · {data.calibrationDue.soon} within {data.calibrationDue.windowDays} days</Text>}
+        >
+          <List
+            size="small"
+            dataSource={data.calibrationDue.items.slice(0, 8)}
+            renderItem={(i) => (
+              <List.Item>
+                <Space size={8} wrap>
+                  <Tag color={i.overdue ? "red" : "gold"}>{i.overdue ? "overdue" : "due"} {i.dateDue}</Tag>
+                  <Link to={`${documentsUrl}/${encodeURIComponent(i.serialNo)}`} style={{ fontFamily: "monospace" }}>{i.serialNo}</Link>
+                  <Text>{i.unitUnderTest || i.title || ""}</Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
 
       {/* The public Document Portal, for this unit's documents. */}
       {canDecide && <PortalSummaryCard source={unit} accent={theme.accent} />}
@@ -216,7 +239,7 @@ const UnitDashboard = () => {
               title="Waiting for a decision"
               size="small"
               style={{ height: "100%" }}
-              extra={<Link to="/universe/erms/portal-requests">Portal requests <RightOutlined style={{ fontSize: 10 }} /></Link>}
+              extra={<Link to="/e-universe/erms/portal-requests">Portal requests <RightOutlined style={{ fontSize: 10 }} /></Link>}
             >
               {inbox.isLoading ? (
                 <Skeleton active />

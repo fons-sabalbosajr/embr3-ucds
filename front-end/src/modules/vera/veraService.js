@@ -53,6 +53,10 @@ export const getSerialCheck = async () => (await client.get("/serials")).data.re
 export const runSerialCheck = async () => (await client.post("/serials/scan")).data.report;
 export const fixSerials = async () => (await client.post("/serials/fix")).data;
 
+// VERA reads a scan's text, for search: one document, or the next few.
+export const readScanText = async (unit, serialNo) => (await client.post(`/scan-text/${unit}/${encodeURIComponent(serialNo)}`, null, { timeout: 3 * 60 * 1000 })).data;
+export const readNextScans = async ({ unit, limit }) => (await client.post("/scan-text/next", { unit, limit }, { timeout: 30 * 60 * 1000 })).data;
+
 // VERA's check of each record's project type against its document.
 export const getProjectTypeCheck = async () => (await client.get("/project-types")).data;
 export const saveProjectTypeSettings = async (settings) => (await client.put("/project-types/settings", settings)).data;
@@ -117,3 +121,12 @@ export const pageKeyFromPath = (pathname) => {
   for (const [re, key] of rules) if (re.test(p)) return key;
   return "";
 };
+
+// VERA's check of the Universe Central DB register — always the active
+// year's — and applying or undoing the fixes she proposes (Developer, admin).
+export const getUcdsCheck = async () => (await client.get("/ucds-check")).data;
+export const runUcdsCheck = async () => (await client.post("/ucds-check/scan", null, { timeout: 5 * 60 * 1000 })).data;
+export const applyUcdsFixes = async ({ reportId, ids, all }) =>
+  (await client.post(`/ucds-check/${reportId}/apply`, all ? { all: true } : { ids }, { timeout: 5 * 60 * 1000 })).data;
+export const undoUcdsFix = async ({ reportId, proposalId }) => (await client.post(`/ucds-check/${reportId}/undo`, { proposalId })).data;
+export const autoFixUcds = async () => (await client.post("/ucds-check/auto-fix", null, { timeout: 5 * 60 * 1000 })).data;

@@ -121,3 +121,38 @@ describe('moving a scan to another record', () => {
     expect(from.document).toMatchObject({ fileName: null, sharePath: null, movedTo: TO });
   });
 });
+
+describe("VERA's project type check", () => {
+  const ptc = require('../services/vera/projectTypeCheck.js');
+  const SERIAL = 'FSN-9300001';
+  afterAll(async () => {
+    await getDb().collection('erms-records').deleteMany({ serialNo: SERIAL });
+    await getDb().collection(ptc.COLLECTION).deleteMany({ serialNo: SERIAL });
+  });
+
+  it('takes only a type from the list, whatever the model writes around it', () => {
+    const allowed = ['Poultry Industries', 'Sanitary Landfill'];
+    expect(ptc.parseVerdict('Sure: {"projectType":"poultry industries","confidence":"high","reason":"layer farm"}', allowed)).toEqual({ projectType: 'Poultry Industries', confidence: 'high', reason: 'layer farm' });
+    expect(ptc.parseVerdict('{"projectType":"Piggery","confidence":"high"}', allowed)).toBeNull();
+    expect(ptc.parseVerdict('no json', allowed)).toBeNull();
+  });
+
+  it('keeps its settings in range, off until turned on', () => {
+    expect(ptc.settingsOf({})).toMatchObject({ enabled: false, readScans: true, pages: 2, perRun: 20, minConfidence: 'high' });
+    expect(ptc.cleanSettings({ enabled: true, pages: 40, perRun: 0, minConfidence: 'x' })).toMatchObject({ enabled: true, pages: 5, perRun: 1, minConfidence: 'high' });
+  });
+
+  it('applies a proposal to the record, and undoes it', async () => {
+    await connectToMongo();
+    await getDb().collection('erms-records').insertOne({ serialNo: SERIAL, project: { type: 'Sanitary Landfill' }, location: { province: 'aurora' }, document: {} });
+    await getDb().collection(ptc.COLLECTION).insertOne({ serialNo: SERIAL, current: 'Sanitary Landfill', suggested: 'Poultry Industries', confidence: 'high', status: 'proposed', checkedAt: new Date() });
+    expect((await ptc.apply([SERIAL], { username: 'test' })).changed).toBe(1);
+    expect((await getDb().collection('erms-records').findOne({ serialNo: SERIAL })).project.type).toBe('Poultry Industries');
+    expect((await ptc.settle(SERIAL, 'undo', { username: 'test' })).ok).toBe(true);
+    expect((await getDb().collection('erms-records').findOne({ serialNo: SERIAL })).project.type).toBe('Sanitary Landfill');
+  });
+
+  it('refuses to run while switched off', async () => {
+    expect(await ptc.scan({ cfg: {}, by: 'test' })).toMatchObject({ ok: false, status: 409 });
+  });
+});

@@ -20,13 +20,12 @@ import {
   Popover,
   DatePicker,
   Select as AntSelect,
-  ConfigProvider,
   Progress,
   Avatar,
+  Card,
 } from "antd";
 import {
   ReloadOutlined,
-  ExportOutlined,
   SearchOutlined,
   EyeOutlined,
   PlusOutlined,
@@ -37,6 +36,8 @@ import {
   ClockCircleFilled,
   TagsOutlined,
   ExclamationCircleOutlined, // For expired indicator
+  FileExcelOutlined,
+  FilePdfOutlined,
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
@@ -50,6 +51,12 @@ import AddProvinceModal from "./actions/AddProvinceModal";
 import moment from "moment"; // Import moment for date calculations
 import { io } from "socket.io-client";
 import "./province.css";
+// The shared look (ERMS's page header, cards, tables and type sizes) over the legacy styles.
+import "./ucds-modern.css";
+import { UcdsHeader } from "../ucdsTheme";
+import FloatingModal from "../../../shared/components/FloatingModal";
+import { downloadMonitoringPlan, fetchErmsAnchors } from "../ucdsService";
+import { message as notify } from "../../../shared/feedback";
 import { API_BASE_URL, SOCKET_URL } from "../../../config/api";
 
 // Helper function to format province name for display (e.g., "Nueva_Ecija" to "Nueva Ecija")
@@ -101,6 +108,34 @@ const Province = ({ theme, currentUser }) => {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false); // For ProvinceModal
   const [originalData, setOriginalData] = useState([]);
+  // Each establishment's permit against the ERMS Document Library: sort_key →
+  // { status: "found" | "missing" | "none", serials }. Validation only — the
+  // scans stay behind the Document Portal's request.
+  const [anchors, setAnchors] = useState({});
+  const anchorKey = originalData.length ? `${provinceName}:${originalData.length}` : "";
+  useEffect(() => {
+    if (!anchorKey) return undefined;
+    let cancelled = false;
+    fetchErmsAnchors(originalData.map((r) => r.sort_key).filter(Boolean))
+      .then((a) => !cancelled && setAnchors(a || {}))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorKey]);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+  const exportXlsx = async () => {
+    setExportingXlsx(true);
+    try {
+      const n = await downloadMonitoringPlan(displayProvinceName);
+      notify.success(`Exported ${n} establishments of ${displayProvinceName}.`);
+    } catch {
+      notify.error("The Monitoring Plan could not be exported.");
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
   const [duplicates, setDuplicates] = useState({});
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
   const [duplicateRecords, setDuplicateRecords] = useState([]);
@@ -119,7 +154,6 @@ const Province = ({ theme, currentUser }) => {
   const [selectedSection, setSelectedSection] = useState("");
   const [sectionDetails, setSectionDetails] = useState([]);
   const [selectedSectionData, setSelectedSectionData] = useState([]); // Combined with sectionDetails logic
-  const [buttonColor, setButtonColor] = useState("primary");
   const [progress, setProgress] = useState(0); // Progress state
   const [provinceViewers, setProvinceViewers] = useState({});
   const socketRef = useRef(null);
@@ -1158,12 +1192,10 @@ const Province = ({ theme, currentUser }) => {
 
   const showModalAdd = () => {
     setIsModalVisibleAdd(true);
-    setButtonColor("secondary");
   };
 
   const handleCancelAdd = () => {
     setIsModalVisibleAdd(false);
-    setButtonColor("primary");
   };
 
   // Helper function to get permit status
@@ -1292,15 +1324,14 @@ const Province = ({ theme, currentUser }) => {
       dataIndex: "sort_key",
       key: "sort_key",
       align: "left",
-      width: 70,
+      width: 92,
       ...getColumnSearchProps("sort_key"),
+      // "AU-00002" shows as AU-2; a two-part prefix ("HCCP-NE-00001", the
+      // healthcare and chemical universes) keeps both parts.
       render: (text) => {
         if (typeof text !== "string") return text;
-
-        const [prefix, numberPart] = text.split("-");
-        const formatted = `${prefix}-${parseInt(numberPart, 10)}`;
-
-        return <div>{formatted}</div>;
+        const m = /^(.*)-0*(\d+)$/.exec(text);
+        return <div style={{ whiteSpace: "nowrap" }}>{m ? `${m[1]}-${m[2]}` : text}</div>;
       },
     },
     {
@@ -1385,10 +1416,7 @@ const Province = ({ theme, currentUser }) => {
         const pcoStatus = getPermitStatus(record.pco_validity); // Assuming pco_validity is the expiration date
 
         return (
-          <div
-            className="permits-clearances-container"
-            style={{ fontSize: "10px" }}
-          >
+          <div className="permits-clearances-container">
             {/* ECC / CNC */}
             {record.ecc_cnc && (
               <Tooltip
@@ -1423,6 +1451,22 @@ const Province = ({ theme, currentUser }) => {
                     }
                   />
                 </span>
+              </Tooltip>
+            )}
+
+            {/* Anchored to ERMS: a green check when the permit is on file
+                with the Records Unit; nothing when it is not. */}
+            {record.ecc_cnc && anchors[record.sort_key]?.status === "found" && (
+              <Tooltip
+                title={
+                  <div style={{ fontSize: 12 }}>
+                    <div>On file in ERMS: {anchors[record.sort_key].serials.join(", ")}</div>
+                    {anchors[record.sort_key].label && <div>{anchors[record.sort_key].label}</div>}
+                    <div style={{ opacity: 0.8 }}>To see the scan, request it in the Document Portal.</div>
+                  </div>
+                }
+              >
+                <CheckCircleFilled className="ucds-erms-anchor" aria-label="On file in ERMS" />
               </Tooltip>
             )}
 
@@ -1796,27 +1840,21 @@ const Province = ({ theme, currentUser }) => {
 
   return (
     <div className="province-container-card">
-      <div className="header-content">
-        <h3 className="header-title">{`${displayProvinceName} Universe of Firms and Industries`}</h3>
-        <Button
-          type="primary"
-          size="small"
-          className="refresh-button-province"
-          icon={<ReloadOutlined style={{ fontSize: "12px" }} />} // Adjusted font size
-          onClick={() => handleReload(provinceName)}
-          loading={loading}
-          title="Reload Table"
-          style={{ marginLeft: "10px" }}
-        />
-
-        <Button
-          type="primary"
-          size="small"
-          className="refresh-button-province"
-          icon={<ExportOutlined style={{ fontSize: "12px" }} />} // Adjusted font size
-          onClick={() => handleExportPDF(displayProvinceName)}
-          title="Export Data"
-        />
+      <UcdsHeader
+        title={`${displayProvinceName} — Monitoring Plan`}
+        description={`Universe of Firms and Industries · ${new Intl.NumberFormat().format(originalData.length)} establishments${Object.keys(anchors).length ? ` · ${new Intl.NumberFormat().format(Object.values(anchors).filter((a) => a.status === "found").length)} permits found in ERMS` : ""}`}
+        actions={
+          <>
+            <Tooltip title="Reload the table">
+              <Button icon={<ReloadOutlined />} onClick={() => handleReload(provinceName)} loading={loading} aria-label="Reload" />
+            </Tooltip>
+            <Button icon={<FileExcelOutlined />} onClick={exportXlsx} loading={exportingXlsx}>Export to Excel</Button>
+            <Button icon={<FilePdfOutlined />} onClick={() => handleExportPDF(displayProvinceName)}>Export PDF</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={showModalAdd}>Add Industry</Button>
+          </>
+        }
+      />
+      <div className="header-content ucds-viewers-row">
 
         {/* Display avatars of other users viewing this province */}
         {canViewDataHistory && provinceViewers[displayProvinceName] && (
@@ -1868,18 +1906,6 @@ const Province = ({ theme, currentUser }) => {
           </div>
         )}
 
-        <Button
-          type="primary"
-          className="add-industry-button"
-          size="small "
-          style={{
-            backgroundColor: buttonColor === "primary" ? "#1890ff" : "#03396c",
-          }}
-          onClick={showModalAdd}
-        >
-          Add Industry
-        </Button>
-
         <AddProvinceModal
           visible={isModalVisibleAdd}
           onCancel={handleCancelAdd}
@@ -1887,41 +1913,21 @@ const Province = ({ theme, currentUser }) => {
         />
       </div>
 
-      <Modal
+      <FloatingModal
         open={isModalVisible}
         title={
-          <div className="modal-title-container">
-            <span className="modal-title" style={{ whiteSpace: "normal" }}>
-              Record ID: {selectedRecord?.sort_key || "Unknown"}
-            </span>
-            <span
-              className="modal-title"
-              style={{
-                whiteSpace: "normal",
-                textAlign: "center",
-                width: "50%",
-              }}
-            >
-              {selectedRecord?.title || ""}
-            </span>
-            <span
-              className="modal-title"
-              style={{
-                whiteSpace: "normal",
-                textAlign: "right",
-                marginRight: "20px",
-              }}
-            >
-              {selectedRecord?.ecc_cnc || ""}
-            </span>
-          </div>
+          <span>
+            <span style={{ fontFamily: "monospace", opacity: 0.75, marginRight: 8 }}>{selectedRecord?.sort_key || ""}</span>
+            <strong>{selectedRecord?.title || ""}</strong>
+          </span>
         }
+        extra={selectedRecord?.ecc_cnc ? <Tag color="green" style={{ marginInlineEnd: 0, fontFamily: "monospace" }}>{selectedRecord.ecc_cnc}</Tag> : null}
         onCancel={handleCloseModal}
-        width={1100}
-        footer={null}
-        onClose={handleCloseModal}
-        zIndex={1000}
-        style={{ top: 40 }}
+        // Large by default: the record is read side by side with its tabs.
+        width={1480}
+        height="88vh"
+        maxHeight="94vh"
+        top={20}
       >
         {selectedRecord && (
           <ProvinceModal
@@ -1935,7 +1941,7 @@ const Province = ({ theme, currentUser }) => {
             theme={theme}
           />
         )}
-      </Modal>
+      </FloatingModal>
 
       <Modal
         title={
@@ -2026,13 +2032,7 @@ const Province = ({ theme, currentUser }) => {
       </Modal>
 
       <div className="table-container">
-        <ConfigProvider
-          theme={{
-            token: {
-              fontSize: 11,
-            },
-          }}
-        >
+        <Card size="small" className="ucds-toolbar">
           <div className="total-count" style={{ textAlign: "left" }}>
             <div
               style={{
@@ -2129,7 +2129,7 @@ const Province = ({ theme, currentUser }) => {
             </div>
             {/* Structured filters, under the keyword row. They combine with
                 the keywords and with each other. */}
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 6 }}>
               <MonitoringPlanFilters
                 rows={originalData || []}
                 value={filters}
@@ -2243,7 +2243,7 @@ const Province = ({ theme, currentUser }) => {
               zIndex={1000}
             />
           </div>
-        </ConfigProvider>
+        </Card>
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "20px" }}>
@@ -2262,15 +2262,19 @@ const Province = ({ theme, currentUser }) => {
               selectedRowKeys,
               onChange: setSelectedRowKeys,
             }}
-            scroll={{ y: 950 }}
+            scroll={{ x: 1100, y: "calc(100vh - 330px)" }}
             dataSource={filteredDuplicateData} // Ensure this is set correctly
             columns={columns}
             rowKey="sort_key"
             size="small"
-            className="custom-table"
+            bordered
+            className="custom-table ucds-table"
             pagination={false}
+            // A click selects the row (for the bulk actions); a double-click
+            // opens its details, as a record does in ERMS.
             onRow={(record) => ({
               onClick: () => onRowClick(record),
+              onDoubleClick: () => showModal(record),
             })}
           />
         )}

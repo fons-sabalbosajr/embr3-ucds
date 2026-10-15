@@ -28,6 +28,15 @@ const DATA_DIR = process.env.UCDS_DATA_DIR || path.join(__dirname, '..', '..', '
 const FOLDER_PATTERN = /^ucd\s+(\d{4})$/i;
 const MONITORING_PATTERN = /monitoring/i;
 const SKIP_PATTERN = /outdated|^~\$/i;
+// What the Universe Central DB keeps for a year: the Monitoring Plan and the
+// Survey. The year folders still hold the Bureau's other working files
+// (complaints, ESWM, CNC validation…); they are not UCDS menus or data any
+// more — their imported rows were backed up to backups/ucd and removed on
+// 15 Oct 2026. UCDS_DATASETS (a regular expression) can widen it again.
+// The Monitoring Plan is the year's monitoring folder; the Survey, its survey
+// spreadsheet. ("2025-ECPs MONITORING.xlsx" is a file, not the plan.)
+const KEEP_FILES = new RegExp(process.env.UCDS_DATASETS || 'survey', 'i');
+const keep = (item) => (item.isDirectory() ? MONITORING_PATTERN.test(item.name) : KEEP_FILES.test(item.name));
 
 const ROWS = 'ucds-dataset-rows';
 const REGISTRY = 'ucds-dataset-registry';
@@ -115,7 +124,7 @@ async function scanFolders() {
     const dir = path.join(DATA_DIR, entry.name);
     const datasets = [];
     for (const item of await fsp.readdir(dir, { withFileTypes: true })) {
-      if (SKIP_PATTERN.test(item.name)) continue;
+      if (SKIP_PATTERN.test(item.name) || !keep(item)) continue;
       if (item.isDirectory()) {
         const files = (await walk(path.join(dir, item.name))).filter((f) => /\.xlsx?$/i.test(f) && !SKIP_PATTERN.test(f));
         if (!files.length) continue;

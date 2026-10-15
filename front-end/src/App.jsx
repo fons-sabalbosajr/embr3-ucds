@@ -50,6 +50,12 @@ const RedirectTo = ({ to }) => (
   <Navigate to={`${to}${window.location.search}${window.location.hash}`} replace />
 );
 
+/** /universe/<rest> → /e-universe/<rest>, query and hash kept; bare /universe → the app's home. */
+const LegacyAppRedirect = () => {
+  const rest = window.location.pathname.replace(/^\/universe\/?/, '');
+  return <Navigate to={`${rest ? `${ROUTES.app}/${rest}` : ROUTES.appHome}${window.location.search}${window.location.hash}`} replace />;
+};
+
 // Create the router with future flags enabled
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -90,9 +96,13 @@ const router = createBrowserRouter(
       <Route element={<ProtectedRoute />}>
         <Route path={ROUTES.selectYear} element={<YearSelect />} errorElement={<RouteError />} />
         <Route element={<YearGuard />}>
-          <Route path='/universe/*' element={<Universe />} errorElement={<RouteError />} />
+          <Route path='/e-universe/*' element={<Universe />} errorElement={<RouteError />} />
         </Route>
       </Route>
+
+      {/* The application moved from /universe to /e-universe: old bookmarks,
+          emailed links and stored notices still arrive. */}
+      <Route path='/universe/*' element={<LegacyAppRedirect />} />
 
       {/* Unknown paths land on the public site rather than a blank screen */}
       <Route path='*' element={<RedirectTo to={ROUTES.landing} />} />

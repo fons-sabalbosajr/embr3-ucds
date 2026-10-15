@@ -34,7 +34,7 @@ const YearSelect = () => {
     setFailed(null);
     try {
       await selectYear(year);
-      navigate(ROUTES.app, { replace: true });
+      navigate(ROUTES.appHome, { replace: true });
     } catch (e) {
       // A container can be revoked or archived between listing and selection.
       setFailed(e?.response?.data?.error || `Unable to open the ${year} container.`);

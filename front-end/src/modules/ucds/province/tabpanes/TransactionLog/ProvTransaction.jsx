@@ -437,7 +437,7 @@ const ProvTransaction = ({
             <>
               <span>{user.name}</span>
               <br />
-              <span style={{ fontSize: "10px", color: "#888" }}>
+              <span style={{ fontSize: 12, color: "#888" }}>
                 {user.division}
               </span>
             </>
@@ -557,7 +557,7 @@ const ProvTransaction = ({
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                fontSize: "11px",
+                fontSize: 13,
               }}
             >
               <p className="revert-paragraph">

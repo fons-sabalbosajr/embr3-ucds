@@ -110,7 +110,7 @@ const ErmsDashboard = () => {
       dataIndex: "serialNo",
       key: "serialNo",
       width: 130,
-      render: (s) => <Link to={`/universe/erms/records/${encodeURIComponent(s)}`}>{s}</Link>,
+      render: (s) => <Link to={`/e-universe/erms/records/${encodeURIComponent(s)}`}>{s}</Link>,
     },
     { title: "Proponent", dataIndex: "proponentName", key: "proponentName", ellipsis: true },
     {
@@ -143,17 +143,17 @@ const ErmsDashboard = () => {
         unit="records"
         actions={
           <>
-            <Link to="/universe/erms/records?new=1">
+            <Link to="/e-universe/erms/records?new=1">
               <Button type="primary" icon={<CloudUploadOutlined />}>Upload record</Button>
             </Link>
-            <Link to="/universe/erms/records">
+            <Link to="/e-universe/erms/records">
               <Button icon={<FileSearchOutlined />}>Document Library</Button>
             </Link>
-            <Link to="/universe/erms/archive">
+            <Link to="/e-universe/erms/archive">
               <Button icon={<InboxOutlined />}>Archive boxes</Button>
             </Link>
             {canDecide && (
-              <Link to="/universe/erms/portal-requests">
+              <Link to="/e-universe/erms/portal-requests">
                 <Badge count={pending} size="small" offset={[-2, 2]}>
                   <Button icon={<MailOutlined />}>Portal requests</Button>
                 </Badge>
@@ -174,7 +174,7 @@ const ErmsDashboard = () => {
             label="Portal requests waiting"
             value={pending}
             tone="warning"
-            to="/universe/erms/portal-requests"
+            to="/e-universe/erms/portal-requests"
             loading={inbox.isLoading}
             hint={pending ? "to decide" : "none"}
           />
@@ -185,7 +185,7 @@ const ErmsDashboard = () => {
             label="Needs review"
             value={data?.flagged || 0}
             tone="danger"
-            to="/universe/erms/records?flagged=1"
+            to="/e-universe/erms/records?flagged=1"
             loading={loading}
             hint="values to check"
           />
@@ -196,7 +196,7 @@ const ErmsDashboard = () => {
             label="Not linked to the register"
             value={data?.unlinked || 0}
             tone="warning"
-            to="/universe/erms/records?linked=unlinked"
+            to="/e-universe/erms/records?linked=unlinked"
             loading={loading}
             hint="no matching permit"
           />
@@ -209,7 +209,7 @@ const ErmsDashboard = () => {
       {/* The collection. */}
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
-          <StatTile title="Records" value={data?.total} loading={loading} onClick={() => navigate("/universe/erms/records")} />
+          <StatTile title="Records" value={data?.total} loading={loading} onClick={() => navigate("/e-universe/erms/records")} />
         </Col>
         <Col xs={12} md={6}>
           <Tooltip title="Records whose permit number resolves to an establishment in the Universe register">
@@ -220,7 +220,7 @@ const ErmsDashboard = () => {
                 loading={loading}
                 prefix={<LinkOutlined style={{ fontSize: 16, color: token.colorTextTertiary }} />}
                 suffix={<Text type="secondary" style={{ fontSize: 14 }}>{`${linkedPct}%`}</Text>}
-                onClick={() => navigate("/universe/erms/records?linked=linked")}
+                onClick={() => navigate("/e-universe/erms/records?linked=linked")}
               />
             </div>
           </Tooltip>
@@ -300,7 +300,7 @@ const ErmsDashboard = () => {
           <Card
             title="Recently uploaded"
             size="small"
-            extra={<Link to="/universe/erms/records">Open the library <RightOutlined style={{ fontSize: 10 }} /></Link>}
+            extra={<Link to="/e-universe/erms/records">Open the library <RightOutlined style={{ fontSize: 10 }} /></Link>}
           >
             {loading ? (
               <Skeleton active />
@@ -315,7 +315,7 @@ const ErmsDashboard = () => {
               title="Waiting for a decision"
               size="small"
               style={{ height: "100%" }}
-              extra={<Link to="/universe/erms/portal-requests">Portal requests <RightOutlined style={{ fontSize: 10 }} /></Link>}
+              extra={<Link to="/e-universe/erms/portal-requests">Portal requests <RightOutlined style={{ fontSize: 10 }} /></Link>}
             >
               {inbox.isLoading ? (
                 <Skeleton active />

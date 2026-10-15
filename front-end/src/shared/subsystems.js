@@ -19,55 +19,55 @@ const SUBSYSTEMS = [
   },
   {
     key: "erms-legal",
-    match: /^\/universe\/erms\/legal(\/|$)|^\/universe\/erms\/upload-tally\/legal/,
+    match: /^\/e-universe\/erms\/legal(\/|$)|^\/e-universe\/erms\/upload-tally\/legal/,
     name: "ERMS · Legal Services",
     detail: "Legal Services Unit records",
-    home: "/universe/erms/legal/dashboard",
+    home: "/e-universe/erms/legal/dashboard",
     homeLabel: "Back to Legal Services",
     color: "#4a2250",
   },
   {
     key: "erms-laboratory",
-    match: /^\/universe\/erms\/laboratory(\/|$)|^\/universe\/erms\/upload-tally\/laboratory/,
+    match: /^\/e-universe\/erms\/laboratory(\/|$)|^\/e-universe\/erms\/upload-tally\/laboratory/,
     name: "ERMS · Laboratory",
     detail: "Environmental Laboratory records",
-    home: "/universe/erms/laboratory/dashboard",
+    home: "/e-universe/erms/laboratory/dashboard",
     homeLabel: "Back to the Laboratory",
     color: "#415e20",
   },
   {
     key: "erms",
-    match: /^\/universe\/erms(\/|$)/,
+    match: /^\/e-universe\/erms(\/|$)/,
     name: "ERMS · Records",
     detail: "Electronic Records Management System",
-    home: "/universe/erms/dashboard",
+    home: "/e-universe/erms/dashboard",
     homeLabel: "Back to ERMS Records",
     color: "#b45248",
   },
   {
     key: "admin",
-    match: /^\/universe\/(admin|accounts|activity-log)(\/|$)/,
+    match: /^\/e-universe\/(admin|accounts|activity-log)(\/|$)/,
     name: "Admin Settings",
     detail: "Accounts and configuration",
-    home: "/universe/admin",
+    home: "/e-universe/admin",
     homeLabel: "Back to Admin Settings",
     color: "#542c14",
   },
   {
     key: "storage",
-    match: /^\/universe\/storage(\/|$)/,
+    match: /^\/e-universe\/storage(\/|$)/,
     name: "Storage",
     detail: "Shared storage containers",
-    home: "/universe/storage",
+    home: "/e-universe/storage",
     homeLabel: "Back to Storage",
     color: "#0a4959",
   },
   {
     key: "ucds",
-    match: /^\/universe(\/|$)/,
+    match: /^\/e-universe(\/|$)/,
     name: "Universe Central DB",
     detail: "Register of regulated establishments",
-    home: "/universe",
+    home: "/e-universe/home",
     homeLabel: "Back to E-Universe",
     color: "#0b5f74",
   },
@@ -83,7 +83,7 @@ const FALLBACK = {
   public: true,
 };
 
-/** The subsystem an address belongs to. `/universe` lands each account on its own home. */
+/** The subsystem an address belongs to. `/e-universe` lands each account on its own home. */
 export function subsystemOf(pathname = typeof window !== "undefined" ? window.location.pathname : "") {
   const path = String(pathname || "");
   return SUBSYSTEMS.find((s) => s.match.test(path)) || FALLBACK;

@@ -54,6 +54,9 @@ const isOpenYear = (year, now = new Date()) => Number(year) <= now.getFullYear()
 async function isOpenYearNow(year, now = new Date()) {
   const doc = await getYear(year);
   if (doc?.locked === true) return false;
+  // One future year opened ahead of time (2027 in October 2026, for its
+  // monitoring plan), without unlocking every year after it.
+  if (doc?.openEarly === true) return true;
   const settings = await require('./ucdsSettings').read();
   return settings.years.lockFuture === false ? true : isOpenYear(year, now);
 }

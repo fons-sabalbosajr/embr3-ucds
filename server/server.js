@@ -116,6 +116,9 @@ require("./services/notifier").attach(io, app.locals.sessionStore);
 connectToMongo().then(() => require("./services/notifier").ensureIndexes()).catch((err) => console.warn("[notifier] indexes:", err.message));
 // Watch the NAS bridge and push its state to open screens (see services/nasBridge.js).
 connectToMongo().then(() => require("./services/nasBridge").start(io)).catch((err) => console.warn("[NAS bridge] not started:", err.message));
+// The Progress Tracker: the Planning Unit's SharePoint working files, read
+// while an activity season is open (see services/progressTracker).
+connectToMongo().then(() => { const t = require("./services/progressTracker"); t.ensureIndexes().catch(() => {}); t.start(io); }).catch((err) => console.warn("[progress tracker] not started:", err.message));
 
 server.listen(PORT, "0.0.0.0", () => {
   const nets = os.networkInterfaces();
