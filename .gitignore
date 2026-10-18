@@ -24,3 +24,6 @@ node_modules/
 # Backups taken before editing .env hold the same secrets.
 .env.bak*
 .env.*.bak
+
+# Rendered demo videos (91 MB each); rebuild with demo/e-universe-3d/render-video.cjs.
+demo/**/*.mp4
