@@ -295,13 +295,27 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  margin-left: 6px;
+  margin-left: auto;
+  padding-left: 6px;
   flex: none;
-  opacity: 0.35;
+  opacity: 0.6;
   transition: opacity 0.15s ease;
+  position: relative;
+  z-index: 2;
 }
-.ant-menu-submenu-title .menu-item-actions {
-  margin-right: 20px;
+
+/* A folder's title keeps a lane on the right for its arrow, so the actions
+   end just before it instead of sliding under it (where a click on + hit the
+   arrow and folded the folder). */
+.side-menu-list .ant-menu-sub .ant-menu-submenu-title {
+  padding-right: 30px !important;
+}
+.side-menu-list .ant-menu-sub .ant-menu-submenu-title > .ant-menu-submenu-arrow {
+  inset-inline-end: 12px;
+}
+.side-menu-list .ant-menu-submenu-title .ant-menu-title-content {
+  display: flex;
+  align-items: center;
 }
 .ant-menu-item:hover .menu-item-actions,
 .ant-menu-submenu-title:hover .menu-item-actions,

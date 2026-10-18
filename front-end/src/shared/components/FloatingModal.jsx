@@ -32,6 +32,7 @@ const FloatingModal = ({
   bodyStyle,
   destroyOnHidden = true,
   top = 24,
+  className,
 }) => {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [minimized, setMinimized] = useState(false);
@@ -102,12 +103,13 @@ const FloatingModal = ({
     <Modal
       open={open}
       onCancel={onCancel}
+      className={className}
       // The close button is the title bar's own, beside minimise.
       closable={false}
       title={header}
       footer={minimized ? null : footer}
       // Minimised: a bar in the lower right corner, out of the way.
-      width={minimized ? 340 : resizable ? "fit-content" : width}
+      width={minimized ? 340 : resizable ? "fit-content" : typeof width === "number" ? `min(${width}px, 96vw)` : width}
       style={minimized ? { position: "fixed", top: "auto", bottom: 12, right: 12, margin: 0, paddingBottom: 0 } : { top }}
       mask={!floating && !minimized}
       maskClosable={false}
@@ -130,9 +132,12 @@ const FloatingModal = ({
                 display: "flex",
                 flexDirection: "column",
               }
-            : undefined,
+            : height
+              ? // A fixed size: the window does not resize, its body scrolls inside it.
+                { height, maxHeight, overflow: "hidden", display: "flex", flexDirection: "column" }
+              : undefined,
         header: minimized ? { marginBottom: 0 } : undefined,
-        body: minimized ? { display: "none" } : { ...(resizable ? { flex: 1, minHeight: 0, overflow: "auto" } : {}), ...bodyStyle },
+        body: minimized ? { display: "none" } : { ...(resizable || height ? { flex: 1, minHeight: 0, overflow: "auto" } : {}), ...bodyStyle },
       }}
     >
       {children}

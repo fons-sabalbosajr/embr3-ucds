@@ -98,8 +98,28 @@ router.get('/api/ucds/dashboard-stats', heavy, dashboardStats);
   router.get('/api/ucds/monitoring-plan/export.xlsx', heavy, async (req, res, next) => {
     try {
       const province = req.query.province ? String(req.query.province).slice(0, 40) : null;
-      const { buffer, count } = await reports.monitoringPlanWorkbook(scoped(req), { province });
+      const { buffer, count } = await reports.monitoringPlanWorkbook(scoped(req), { province, ownRegister: require('../modules/ucds/services/healthcare').hasOwnRegister(req) });
       const name = `Monitoring-Plan-${province ? province.replace(/[^A-Za-z]/g, '') + '-' : ''}${new Date().toISOString().slice(0, 10)}.xlsx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      res.setHeader('X-Export-Rows', String(count));
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Rows');
+      res.end(buffer);
+    } catch (e) {
+      next(e);
+    }
+  });
+  // The spreadsheet view's "Excel (this view)": the rows and columns on the
+  // screen, as the person filtered and sorted them (ucdsReports.viewWorkbook).
+  router.post('/api/ucds/spreadsheet/export.xlsx', heavy, async (req, res, next) => {
+    try {
+      const b = req.body || {};
+      const { buffer, count } = await reports.viewWorkbook(scoped(req), {
+        serials: Array.isArray(b.serials) ? b.serials : [],
+        columns: Array.isArray(b.columns) ? b.columns : [],
+        sheet: b.sheet ? String(b.sheet).slice(0, 31) : 'Monitoring Plan',
+      });
+      const name = `${String(b.sheet || 'Monitoring Plan').replace(/[^A-Za-z0-9 _-]/g, '').trim().replace(/\s+/g, '-') || 'Monitoring-Plan'}-${new Date().toISOString().slice(0, 10)}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
       res.setHeader('X-Export-Rows', String(count));
@@ -155,5 +175,33 @@ router.put('/api/permits-summary/update-expiry', ucdsAccess, logActivity, update
 
 // Create new establishment
 router.post('/api/ucds/add-establishment', ucdsAccess, logActivity, addEstablishment);
+
+// The record view's "Locate from address": coordinates for an address, from
+// MapTiler with the server's key (modules/ucds/services/geocode). The
+// address only — no name, serial or permit leaves the server.
+router.get('/api/ucds/geocode', ucdsAccess, async (req, res, next) => {
+  try {
+    const { geocode } = require('../modules/ucds/services/geocode');
+    const s = (v) => String(v || '').slice(0, 120);
+    const q = req.query || {};
+    res.json({ result: await geocode({ street: s(q.street), barangay: s(q.barangay), city: s(q.city), province: s(q.province) }) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    return next(err);
+  }
+});
+
+// The Monitoring Status column's 2026 IIS reference numbers, which the
+// register does not hold yet: read from the RAW files the Progress Tracker
+// follows, by serial, for one province (services/progressTracker rawIis).
+router.get('/api/ucds/raw-iis', ucdsAccess, async (req, res, next) => {
+  try {
+    const { rawIis } = require('../services/progressTracker');
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json({ iis: await rawIis(String(req.query.province || '').slice(0, 40)) });
+  } catch (err) {
+    return next(err);
+  }
+});
 
 module.exports = router;

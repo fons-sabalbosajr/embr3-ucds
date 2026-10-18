@@ -40,9 +40,9 @@ export const getVeraLogs = async (params) => (await client.get("/logs", { params
 // project types, a fresh check, and applying or undoing what it proposes.
 export const getCorrections = async () => (await client.get("/corrections")).data;
 export const getCorrectionsPending = async () => (await client.get("/corrections/pending")).data.pending;
-export const runCorrectionsCheck = async () => (await client.post("/corrections/scan")).data;
+export const runCorrectionsCheck = async () => (await client.post("/corrections/scan", null, { timeout: 5 * 60 * 1000 })).data;
 export const applyCorrections = async ({ reportId, ids, all }) =>
-  (await client.post(`/corrections/${reportId}/apply`, all ? { all: true } : { ids })).data;
+  (await client.post(`/corrections/${reportId}/apply`, all ? { all: true } : { ids }, { timeout: 5 * 60 * 1000 })).data;
 export const undoCorrection = async ({ reportId, proposalId }) =>
   (await client.post(`/corrections/${reportId}/undo`, { proposalId })).data;
 /** "Let VERA fix it": a fresh check, and every correction she is certain of applied. */
@@ -77,6 +77,13 @@ export const undoRegisterLink = async ({ reportId, proposalId }) =>
   (await client.post(`/register-links/${reportId}/undo`, { proposalId })).data;
 
 /**
+ * Open VERA's chat from a screen, optionally asking a question at once (the
+ * Progress Tracker's "Ask VERA" chips). VeraChat listens for it.
+ */
+export const VERA_ASK_EVENT = "vera:ask";
+export const openVera = (message = "") => window.dispatchEvent(new CustomEvent(VERA_ASK_EVENT, { detail: { message } }));
+
+/**
  * A router path as the coarse screen key the server's PAGE_LABELS knows, so
  * VERA can tailor its directions. Never a record id or a query string.
  */
@@ -102,6 +109,8 @@ export const pageKeyFromPath = (pathname) => {
     [/\/erms/, "erms-dashboard"],
     [/\/province\//, "province"],
     [/\/datasets\//, "datasets"],
+    // A Planning Unit table (or folder) added to the year's menu.
+    [/\/custom\/[^/]+/, "custom-table"],
     [/\/report/, "report"],
     [/\/settings\/general/, "settings-general"],
     [/\/settings\/erms/, "settings-erms"],
@@ -113,6 +122,7 @@ export const pageKeyFromPath = (pathname) => {
     [/\/admin\/system/, "admin-system"],
     [/\/admin\/erms-config/, "admin-erms-config"],
     [/\/admin\/vera/, "admin-vera"],
+    [/\/admin\/progress-tracker/, "progress-tracker"],
     [/\/admin\/posting/, "admin-posting"],
     [/\/storage-config/, "storage-config"],
     [/\/storage/, "storage"],

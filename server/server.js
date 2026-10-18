@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 8081;
 //
 // Kept trying rather than exiting: on a network that drops for a minute the
 // first attempt fails with "server selection timed out", and a process that
-// exits then sits under nodemon as "app crashed" until someone restarts it
+// exits then sits under the dev watcher as crashed until someone restarts it
 // by hand. The HTTP server is already listening; requests answer 500 until
 // the database is reachable, then everything works without a restart.
 const RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
@@ -33,6 +33,7 @@ async function connectWithRetry(attempt = 0) {
     await require("./shared/services/orgUnits").ensureIndexes();
     await require("./services/datasetService").ensureIndexes();
     await require("./services/menuItems").ensureIndexes();
+    await require("./services/customTables").ensureIndexes();
     await require("./services/signInHistory").ensureIndexes();
     const erms = require("./modules/erms");
     if (erms.isEnabled()) {

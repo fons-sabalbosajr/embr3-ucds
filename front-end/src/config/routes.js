@@ -12,6 +12,8 @@ export const ROUTES = {
   resetPassword: `${SITE_BASE}/reset-password`,
   // Public: anyone asks for a scanned document here, no account needed.
   documentPortal: `${SITE_BASE}/document-portal`,
+  // Public: the Progress Tracker's figures, for a link the Developer turned on.
+  progressPublic: `${SITE_BASE}/progress/:token`,
   selectYear: "/select-year",
   app: "/e-universe",
   // The application's own home: each account lands on its dashboard from

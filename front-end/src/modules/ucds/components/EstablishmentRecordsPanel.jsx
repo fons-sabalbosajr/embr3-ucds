@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Button, Card, Empty, Skeleton, Space, Table, Tag, Tooltip, Typography } from "antd";
-import { EyeOutlined, FileTextOutlined, FileExclamationOutlined, UpOutlined } from "@ant-design/icons";
+import { useMemo, useState } from "react";
+import { Alert, Button, Empty, Input, Skeleton, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { EyeOutlined, FileExclamationOutlined, FileTextOutlined, LinkOutlined, ReloadOutlined, SearchOutlined, UpOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -8,15 +8,15 @@ import { API_BASE } from "../../../config/api";
 // The same panel the Records Unit sees on a record, reaching the document
 // through the UCDS-domain routes (domain="ucds").
 import DocumentPanel from "../../../shared/components/DocumentPanel";
+import "./establishmentrecords.css";
 
 const { Text } = Typography;
 
 // ---------------------------------------------------------------------------
-// Permits, clearances and documents filed against this establishment.
-//
-// This is where records live now. The standalone Records screens were removed,
-// so this panel had to stop being a list of links into them and start being
-// the place a document is actually opened.
+// The record window's Documents tab: the permits, clearances and documents
+// filed for this establishment in the Records Document Library — linked to
+// its register serial, or holding one of its permit numbers (from 2027 the
+// register is renumbered, and the permit numbers are what still match).
 //
 // Every document is addressed by its record serial. The stored share path is
 // never sent from the browser and never accepted from it: the server looks it
@@ -28,9 +28,8 @@ const { Text } = Typography;
 // a Planning Admin or an Encoder asks from the row, and views once approved.
 // The row expands to the document panel, which shows whichever applies.
 //
-// Renders nothing when the records module is unavailable to the viewer: the
-// API answers { available: false } rather than an error, so a Monitoring Plan
-// screen never breaks because document access is off.
+// When the list is not available the tab says why (the server answers
+// { available: false, reason }) — it used to stay blank.
 // ---------------------------------------------------------------------------
 
 const PERMIT_COLOR = {
@@ -40,69 +39,119 @@ const PERMIT_COLOR = {
   "hw-generator": "volcano",
 };
 
+const WHY = {
+  "no-access": {
+    type: "info",
+    message: "Documents are kept in ERMS, which your account does not open.",
+    description: "Ask the Records Unit for a copy, or ask an administrator to give your account ERMS access.",
+  },
+  off: { type: "info", message: "The Records Document Library is switched off.", description: "An administrator can switch it on again in the settings." },
+  error: { type: "warning", message: "The Document Library could not be reached just now.", description: "Try again in a moment." },
+};
+
+const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
+
 const fetchRecords = async (sortKey) => {
-  const { data } = await axios.get(
-    `${API_BASE}/ucds/establishments/${encodeURIComponent(sortKey)}/records?limit=50`,
-    { withCredentials: true }
-  );
+  const { data } = await axios.get(`${API_BASE}/ucds/establishments/${encodeURIComponent(sortKey)}/records?limit=200`, { withCredentials: true });
   return data;
 };
 
-const EstablishmentRecordsPanel = ({ sortKey, limit = 25 }) => {
+const EstablishmentRecordsPanel = ({ sortKey }) => {
   const [expanded, setExpanded] = useState([]);
+  const [q, setQ] = useState("");
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["ucds", "establishment-records", sortKey],
     queryFn: () => fetchRecords(sortKey),
     enabled: Boolean(sortKey),
     retry: false,
   });
 
-  // Silent by design — an unavailable records module is not a planning error.
-  if (isError || (data && !data.available)) return null;
-  if (!sortKey) return null;
+  const records = useMemo(() => data?.records || [], [data]);
+  const byType = useMemo(() => {
+    const m = new Map();
+    for (const r of records) {
+      const k = r.permit?.label || r.permit?.type || "Other";
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [records]);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return records;
+    return records.filter((r) => [r.serialNo, r.permit?.number, r.permit?.label, r.projectTitle, r.proponentName, r.document?.fileName].some((v) => String(v || "").toLowerCase().includes(s)));
+  }, [records, q]);
 
-  if (isLoading) {
+  if (!sortKey) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="This record has no serial yet, so no documents can be found for it." />;
+  if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} />;
+  if (isError) {
+    const notFound = error?.response?.status === 404;
     return (
-      <Card size="small" title="Related permits, clearances and documents">
-        <Skeleton active paragraph={{ rows: 3 }} />
-      </Card>
+      <Alert
+        type={notFound ? "info" : "warning"}
+        showIcon
+        message={notFound ? "This establishment is not in the register you are viewing." : "The documents could not be loaded."}
+        description={notFound ? "It may be in another year's Monitoring Plan." : "Check the connection, then try again."}
+        action={
+          !notFound && (
+            <Button size="small" onClick={() => refetch()}>
+              Try again
+            </Button>
+          )
+        }
+      />
+    );
+  }
+  if (data && !data.available) {
+    const why = WHY[data.reason] || WHY.error;
+    return (
+      <Alert
+        type={why.type}
+        showIcon
+        message={why.message}
+        description={why.description}
+        action={
+          data.reason === "error" && (
+            <Button size="small" onClick={() => refetch()}>
+              Try again
+            </Button>
+          )
+        }
+      />
     );
   }
 
-  const toggle = (serialNo) =>
-    setExpanded((keys) => (keys.includes(serialNo) ? keys.filter((k) => k !== serialNo) : [...keys, serialNo]));
+  const toggle = (serialNo) => setExpanded((keys) => (keys.includes(serialNo) ? keys.filter((k) => k !== serialNo) : [...keys, serialNo]));
+  const withScan = records.filter((r) => r.document?.fileName).length;
 
   const columns = [
     {
       title: "Type",
-      dataIndex: ["permit", "label"],
       key: "type",
       width: 150,
-      render: (label, r) => (
+      render: (_, r) => (
         <Tag color={PERMIT_COLOR[r.permit?.type]} style={{ marginInlineEnd: 0 }}>
-          {label || r.permit?.type || "—"}
+          {r.permit?.label || r.permit?.type || "—"}
         </Tag>
       ),
     },
     {
       title: "Number",
-      dataIndex: ["permit", "number"],
       key: "number",
-      width: 190,
-      render: (v) => v || <Text type="secondary">—</Text>,
+      width: 210,
+      render: (_, r) => (r.permit?.number ? <Text className="er-mono">{r.permit.number}</Text> : <Text type="secondary">—</Text>),
     },
     {
       title: "Document",
       key: "document",
       render: (_, r) => (
-        <Space direction="vertical" size={0}>
-          <Text ellipsis style={{ maxWidth: 420 }}>
-            {r.document?.fileName || r.projectTitle || "—"}
+        <Space direction="vertical" size={0} style={{ minWidth: 0 }}>
+          <Text ellipsis={{ tooltip: r.projectTitle || r.document?.fileName }} style={{ maxWidth: "100%" }}>
+            {r.projectTitle || r.document?.fileName || "—"}
           </Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>
+          <Text type="secondary" style={{ fontSize: 11.5 }}>
             {r.serialNo}
-            {r.document?.fileClass ? ` · ${r.document.fileClass}` : ""}
+            {r.proponentName ? ` · ${r.proponentName}` : ""}
           </Text>
         </Space>
       ),
@@ -110,31 +159,41 @@ const EstablishmentRecordsPanel = ({ sortKey, limit = 25 }) => {
     {
       title: "Filed",
       key: "filed",
+      width: 115,
+      sorter: (a, b) => String(a.document?.uploadedAt || "").localeCompare(String(b.document?.uploadedAt || "")),
+      render: (_, r) => (r.document?.uploadedAt ? dayjs(r.document.uploadedAt).format("MMM D, YYYY") : <Text type="secondary">—</Text>),
+    },
+    {
+      title: "Found by",
+      key: "matched",
       width: 120,
       render: (_, r) =>
-        r.document?.uploadedAt ? (
-          dayjs(r.document.uploadedAt).format("D MMM YYYY")
+        r.matchedBy === "permit" ? (
+          <Tooltip title="Holds one of this establishment's permit numbers">
+            <Tag style={{ marginInlineEnd: 0 }}>same permit no.</Tag>
+          </Tooltip>
         ) : (
-          <Text type="secondary">—</Text>
+          <Tooltip title="Linked to this establishment in the Document Library">
+            <Tag icon={<LinkOutlined />} color="geekblue" style={{ marginInlineEnd: 0 }}>
+              linked
+            </Tag>
+          </Tooltip>
         ),
     },
     {
       title: "",
       key: "actions",
-      width: 110,
+      width: 104,
+      align: "right",
       render: (_, r) =>
         r.document?.fileName ? (
-          <Button
-            size="small"
-            icon={expanded.includes(r.serialNo) ? <UpOutlined /> : <EyeOutlined />}
-            onClick={() => toggle(r.serialNo)}
-          >
+          <Button size="small" type={expanded.includes(r.serialNo) ? "default" : "primary"} ghost={!expanded.includes(r.serialNo)} icon={expanded.includes(r.serialNo) ? <UpOutlined /> : <EyeOutlined />} onClick={() => toggle(r.serialNo)}>
             {expanded.includes(r.serialNo) ? "Close" : "Open"}
           </Button>
         ) : (
-          <Tooltip title="This record has no scanned document filed against it">
+          <Tooltip title="No scanned document is filed for this record yet">
             <Text type="secondary" style={{ fontSize: 12 }}>
-              <FileExclamationOutlined /> no file
+              <FileExclamationOutlined /> no scan
             </Text>
           </Tooltip>
         ),
@@ -142,48 +201,62 @@ const EstablishmentRecordsPanel = ({ sortKey, limit = 25 }) => {
   ];
 
   return (
-    <Card
-      size="small"
-      title={
-        <Space size={8}>
+    <div className="er">
+      <div className="er-bar">
+        <Space size={10} wrap>
           <FileTextOutlined />
-          <span>Related permits, clearances and documents</span>
-          <Text type="secondary">{new Intl.NumberFormat().format(data.total)}</Text>
+          <Text strong>Permits, clearances and documents</Text>
+          <Text type="secondary">
+            {fmt(data.total)} found · {fmt(withScan)} with the scan
+          </Text>
         </Space>
-      }
-    >
+        <Space size={8} wrap>
+          <Input allowClear size="small" prefix={<SearchOutlined />} placeholder="Filter by number, title, serial" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 240 }} />
+          <Tooltip title="Look again">
+            <Button size="small" icon={<ReloadOutlined />} loading={isFetching} onClick={() => refetch()} aria-label="Refresh" />
+          </Tooltip>
+        </Space>
+      </div>
+
+      {byType.length > 1 && (
+        <Space size={[6, 6]} wrap className="er-types">
+          {byType.map(([label, n]) => (
+            <Tag key={label} style={{ marginInlineEnd: 0 }}>
+              {label} <b>{n}</b>
+            </Tag>
+          ))}
+        </Space>
+      )}
+
       {data.total === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="No records are linked to this establishment"
-        />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No document is filed for this establishment yet — none is linked to it, and none holds one of its permit numbers." />
       ) : (
         <>
           <Table
             size="small"
             rowKey="serialNo"
             columns={columns}
-            dataSource={data.records.slice(0, limit)}
-            pagination={false}
+            dataSource={shown}
+            tableLayout="fixed"
+            pagination={shown.length > 10 ? { pageSize: 10, size: "small", showSizeChanger: false, showTotal: (t) => `${fmt(t)} document(s)` } : false}
             scroll={{ x: 820 }}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing matches the filter." /> }}
             expandable={{
               expandedRowKeys: expanded,
               onExpandedRowsChange: (keys) => setExpanded([...keys]),
               rowExpandable: (r) => Boolean(r.document?.fileName),
               // Viewing, or asking to view, is the row's own business.
-              expandedRowRender: (r) => (
-                <DocumentPanel serialNo={r.serialNo} fileName={r.document?.fileName} domain="ucds" />
-              ),
+              expandedRowRender: (r) => <DocumentPanel serialNo={r.serialNo} fileName={r.document?.fileName} domain="ucds" />,
             }}
           />
-          {data.total > limit && (
+          {data.total > records.length && (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Showing {limit} of {new Intl.NumberFormat().format(data.total)}.
+              The {fmt(records.length)} most recent of {fmt(data.total)} are listed; search the Document Library for the rest.
             </Text>
           )}
         </>
       )}
-    </Card>
+    </div>
   );
 };
 

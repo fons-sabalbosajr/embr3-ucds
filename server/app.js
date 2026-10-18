@@ -119,7 +119,11 @@ app.use(require("compression")());
 // needed a body (POST /logout was the one seen). Such a request proceeds
 // with an empty body instead, and the route decides what that means.
 const jsonParser = express.json({ limit: "2mb" });
-app.use((req, res, next) => (req.readable ? jsonParser(req, res, next) : next()));
+// One exception: a Planning Unit table's Excel export carries the table as the
+// page shows it (up to 10,000 rows), so its body may be larger.
+const exportParser = express.json({ limit: "20mb" });
+const EXPORT_PATH = /^\/api\/ucds\/custom-tables\/[^/]+\/export\.xlsx$/;
+app.use((req, res, next) => (!req.readable ? next() : EXPORT_PATH.test(req.path) ? exportParser(req, res, next) : jsonParser(req, res, next)));
 // General per-account budget for the API; the expensive tier is applied per
 // route where a request scans or aggregates a whole collection.
 app.use(["/api", "/ucds", "/ucds-data", "/check-data", "/archive-data"], apiLimiter);

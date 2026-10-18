@@ -45,6 +45,14 @@ router.post('/api/ucds/menu-items', scoped, ctrl.requireMenuEdit, logActivity, c
 router.patch('/api/ucds/menu-items/:id', scoped, ctrl.requireMenuEdit, logActivity, ctrl.updateMenuItem);
 router.delete('/api/ucds/menu-items/:id', scoped, ctrl.requireMenuEdit, logActivity, ctrl.deleteMenuItem);
 
+// The Planning Unit's own tables: their design, rows and Excel export.
+router.get('/api/ucds/custom-tables/:id', scoped, ctrl.readCustomTable);
+router.put('/api/ucds/custom-tables/:id/columns', scoped, ctrl.requireTableEdit, logActivity, ctrl.saveCustomColumns);
+router.post('/api/ucds/custom-tables/:id/rows', scoped, ctrl.requireTableEdit, logActivity, ctrl.addCustomRows);
+router.patch('/api/ucds/custom-tables/:id/rows/:rowId', scoped, ctrl.requireTableEdit, ctrl.updateCustomRow);
+router.post('/api/ucds/custom-tables/:id/rows/delete', scoped, ctrl.requireTableEdit, logActivity, ctrl.deleteCustomRows);
+router.post('/api/ucds/custom-tables/:id/export.xlsx', scoped, expensiveLimiter, ctrl.exportCustomTable);
+
 // Reading a whole spreadsheet or streaming a whole dataset is the expensive
 // tier: a few a minute per person, not a few a second.
 router.post('/api/ucds/datasets/:key/import', scoped, expensiveLimiter, logActivity, ctrl.importDataset);

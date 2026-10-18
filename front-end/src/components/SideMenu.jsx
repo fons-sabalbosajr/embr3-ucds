@@ -50,13 +50,6 @@ import "./sidemenu.css";
 
 const { Sider } = Layout;
 
-const rootSubmenuKeys = [
-  "ucds-db",
-  "erms",
-  "settings",
-  "admin",
-];
-
 // `key` matches the per-province grant on the user account; `value` is the
 // province as written in the register and in the route. These were previously
 // two parallel lists kept in sync by array position, so that the sidebar could
@@ -70,6 +63,9 @@ const PROVINCE_MENU = [
   { key: "tarlac", value: "Tarlac" },
   { key: "zambales", value: "Zambales" },
 ];
+// The Healthcare Industries screen: the province screen over the year's
+// healthcare list (see server/modules/ucds/services/healthcare.js).
+const HEALTHCARE_ROUTE = "Healthcare_Industries";
 
 /**
  * @param collapsed / setCollapsed  owned by the shell (Universe), which starts
@@ -181,42 +177,33 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   // path (…/settings/privacy); the entry stays lit on every tab.
   const selectedKey = location.pathname.replace(/^(\/e-universe\/erms(?:\/[a-z]+)?\/settings)\/[^/]+$/, "$1");
 
+  // Navigating opens the section the page lives in, added to whatever is
+  // already open — it never folds anything away. Clicking a province, a
+  // dataset, a year's + or another section used to collapse the Universe
+  // Central DB tree under the click (and a year switch reset it entirely).
   useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith("/e-universe/dashboard") || (mainDashboard && path === mainDashboard)) {
-      setOpenKeys([]);
-    } else if (/^\/e-universe\/(province|datasets|custom|report|vera-check)(\/|$)/.test(path)) {
-      // Inside the Universe Central DB: its section, the active year and (on a
-      // province) the Monitoring Plan open — added to whatever folders are
-      // already open there, never closing them. Moving from Aurora to Bataan
-      // used to fold the Monitoring Plan away under the click.
-      const ucdsOpen = (keys) => keys.filter((k) => k === "ucds-db" || k.startsWith("year-") || k.startsWith("custom-"));
-      const needed = ["ucds-db", `year-${activeYear}`, ...(path.startsWith("/e-universe/province/") ? [`year-${activeYear}-monitoring`] : [])];
-      setOpenKeys((prev) => [...new Set([...ucdsOpen(prev), ...needed])]);
-      // } else if (path.startsWith("/e-universe/mbu")) {
-      //   setOpenKeys([]);
+    let needed = [];
+    if (/^\/e-universe\/(province|datasets|custom|report|vera-check)(\/|$)/.test(path)) {
+      needed = ["ucds-db", `year-${activeYear}`, ...(path.startsWith("/e-universe/province/") ? [`year-${activeYear}-monitoring`] : [])];
     } else if (path.startsWith("/e-universe/erms/messages")) {
-      setOpenKeys([]);
+      needed = [];
     } else if (flatErms && /^\/e-universe\/erms(\/[a-z]+)?\/settings(\/|$)/.test(path)) {
       // An ERMS User's unit settings are under Settings, beside General.
-      setOpenKeys(["settings"]);
+      needed = ["settings"];
     } else if (path.startsWith("/e-universe/erms/legal") || path.startsWith("/e-universe/erms/upload-tally/legal")) {
-      setOpenKeys(["erms-legal"]);
+      needed = ["erms-legal"];
     } else if (path.startsWith("/e-universe/erms/laboratory") || path.startsWith("/e-universe/erms/upload-tally/laboratory")) {
-      setOpenKeys(["erms-laboratory"]);
+      needed = ["erms-laboratory"];
     } else if (path.startsWith("/e-universe/erms/")) {
-      setOpenKeys(["erms"]);
+      needed = ["erms"];
     } else if (path.startsWith("/e-universe/settings/")) {
-      setOpenKeys(["settings"]);
-    } else if (
-      path.startsWith("/e-universe/admin/") ||
-      path.startsWith("/e-universe/register/")
-    ) {
-      setOpenKeys(["admin"]);
-    } else {
-      setOpenKeys([]); // Default: close all submenus if no specific match
+      needed = ["settings"];
+    } else if (path.startsWith("/e-universe/admin/") || path.startsWith("/e-universe/register/")) {
+      needed = ["admin"];
     }
-  }, [location.pathname, activeYear, mainDashboard]);
+    if (needed.length) setOpenKeys((prev) => [...new Set([...prev, ...needed])]);
+  }, [location.pathname, activeYear, mainDashboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Unread messages in the Action Center, for the badge. Every two minutes,
   // and only while the tab is in view (see shared/visibleInterval); opening
@@ -301,22 +288,30 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   // A user-added item as a menu entry: a folder holds its children (and can
   // take more), a table opens its page. Hover shows the actions to whoever
   // may manage the menu; a click on them must not toggle the folder.
+  // The click (and the key press) is kept from the menu row underneath, so
+  // the action never toggles the folder or selects the entry it sits on.
+  const stopEvent = (e) => { e.stopPropagation(); e.preventDefault(); };
+  const actionButton = (label, onAct, content, extraClass = "") => (
+    <Tooltip title={label}>
+      <button
+        type="button"
+        className={`menu-item-action ${extraClass}`.trim()}
+        aria-label={label}
+        onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { stopEvent(e); onAct(); } }}
+        onClick={(e) => { stopEvent(e); onAct(); }}
+      >
+        {content}
+      </button>
+    </Tooltip>
+  );
   const itemActions = (year, item) => {
     if (!canManageMenu) return null;
-    const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
     return (
-      <span className="menu-item-actions" onClick={stop}>
-        {item.kind === "folder" && (
-          <Tooltip title="Add inside">
-            <button type="button" className="menu-item-action" aria-label="Add inside" onClick={() => addItem(year, item.id)}><PlusOutlined /></button>
-          </Tooltip>
-        )}
-        <Tooltip title="Rename or move">
-          <button type="button" className="menu-item-action" aria-label="Rename" onClick={async () => { if (year !== activeYear) await selectYear(year).catch(() => null); setItemDialog({ year, item }); }}>✎</button>
-        </Tooltip>
-        <Tooltip title={item.kind === "folder" ? "Remove folder and its contents" : "Remove"}>
-          <button type="button" className="menu-item-action is-danger" aria-label="Remove" onClick={() => removeItem(year, item)}>×</button>
-        </Tooltip>
+      <span className="menu-item-actions" onClick={stopEvent}>
+        {item.kind === "folder" && actionButton("Add inside", () => addItem(year, item.id), <PlusOutlined />)}
+        {actionButton("Rename or move", async () => { if (year !== activeYear) await selectYear(year).catch(() => null); setItemDialog({ year, item }); }, "✎")}
+        {actionButton(item.kind === "folder" ? "Remove folder and its contents" : "Remove", () => removeItem(year, item), "×", "is-danger")}
       </span>
     );
   };
@@ -628,10 +623,8 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
           const tables = datasets.filter((d) => d.kind !== "monitoring-plan");
           const addButton = (parent, title) =>
             canManageMenu ? (
-              <span className="menu-item-actions" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
-                <Tooltip title={title}>
-                  <button type="button" className="menu-item-action" aria-label={title} onClick={() => addItem(y.year, parent)}><PlusOutlined /></button>
-                </Tooltip>
+              <span className="menu-item-actions" onClick={stopEvent}>
+                {actionButton(title, () => addItem(y.year, parent), <PlusOutlined />)}
               </span>
             ) : null;
           const children = open
@@ -659,6 +652,26 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
                         <div className="menu-label-wrapper submenu-item-label">{province}</div>
                       ),
                     })),
+                    // From 2027 the year's register carries the healthcare
+                    // list (HC- and HCCL- serials) across the provinces: one
+                    // screen of its own, scoped by the server to the
+                    // provinces the account may see.
+                    ...(y.year >= 2027 && visibleProvinces.length
+                      ? [
+                          {
+                            key: isActive ? `/e-universe/province/${HEALTHCARE_ROUTE}` : `y${y.year}/province/${HEALTHCARE_ROUTE}`,
+                            className: "healthcare-entry",
+                            onClick: () => openInYear(y.year, `/e-universe/province/${HEALTHCARE_ROUTE}`),
+                            label: isActive ? (
+                              <div className="menu-label-wrapper submenu-item-label">
+                                <Link to={`/e-universe/province/${HEALTHCARE_ROUTE}`}>Healthcare Industries</Link>
+                              </div>
+                            ) : (
+                              <div className="menu-label-wrapper submenu-item-label">Healthcare Industries</div>
+                            ),
+                          },
+                        ]
+                      : []),
                     ...customEntries(y.year, "monitoring", isActive),
                   ],
                 },
@@ -974,10 +987,9 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
             setPopupKeys(keys);
             return;
           }
-          const latestOpenKey = keys.find((key) => !openKeys.includes(key));
-          setOpenKeys(
-            rootSubmenuKeys.includes(latestOpenKey) ? [latestOpenKey] : keys
-          );
+          // Only the section the user clicks opens or closes; the others stay
+          // as they are (no accordion).
+          setOpenKeys(keys);
         }}
         inlineCollapsed={collapsed}
         items={menuItems}

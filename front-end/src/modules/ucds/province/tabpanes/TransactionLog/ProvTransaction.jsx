@@ -1,666 +1,327 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Table, Tag, Button, Tooltip, Modal } from "antd";
-import { RollbackOutlined, DeleteOutlined } from "@ant-design/icons";
-import moment from "moment";
+import { useMemo, useState } from "react";
+import { Alert, Button, Empty, Segmented, Skeleton, Space, Tag, Tooltip, Typography } from "antd";
+import { ArrowRightOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, RollbackOutlined, UserOutlined } from "@ant-design/icons";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import Swal from "sweetalert2";
-import CryptoJS from "crypto-js";
-import "./provtransaction.css";
+import dayjs from "dayjs";
 import { API_BASE_URL } from "../../../../../config/api";
-import visibleInterval from "../../../../../shared/visibleInterval";
+import { message, modal } from "../../../../../shared/feedback";
+import "./provtransaction.css";
 
-const ProvTransaction = ({
-  editedRecord,
-  currentUser,
-  handleReload,
-  reloadEditedRecord,
-}) => {
-  const [transactions, setTransactions] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [totalItems, setTotalItems] = useState(0);
-  const [initialLog, setInitialLog] = useState(null);
-  const [totalViewItems, setTotalViewItems] = useState(0);
-  const [userMap, setUserMap] = useState({});
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [revertRecord, setRevertRecord] = useState(null);
+const { Text } = Typography;
 
-  // Named capability flags from GET /api/auth/me
-  const capabilities = currentUser?.capabilities || {};
-  const canGenerateData = capabilities.canGenerateData === true;
-  const canManageData = capabilities.canManageData === true;
-  const canViewAdminPanel = capabilities.canViewAdminPanel === true;
-  const canViewDataHistory = capabilities.canViewDataHistory === true;
+// ---------------------------------------------------------------------------
+// The record's History: every change, newest first — who changed what, from
+// what to what — and, for an account that may manage the data, putting one
+// field back as it was, or deleting an entry.
+//
+// It is read by the record's serial (and, for the entries written before the
+// serial was kept, its exact ECC/CNC): by ECC/CNC alone a record without one
+// showed nothing, and records sharing one showed each other's changes.
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      if (!editedRecord?.ecc_cnc) {
-        setTransactions([]);
-        setUserMap({});
-        return;
-      }
-      try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/ucds-log`,
-          {
-            params: { ecc_cnc: editedRecord.ecc_cnc },
-          }
-        );
-        const fetchedTransactions = Array.isArray(response.data)
-          ? response.data
-          : [];
-        // Get unique usernames
-        const uniqueUsernames = [
-          ...new Set(
-            fetchedTransactions.map((t) => t.userActed).filter((u) => !!u)
-          ),
-        ];
-        // Fetch user data for all unique usernames
-        const userFetches = uniqueUsernames.map((username) =>
-          axios
-            .get(`${API_BASE_URL}/api/users`, { params: { username } })
-            .then((res) => ({
-              username,
-              user: res.data && res.data.length > 0 ? res.data[0] : null,
-            }))
-            .catch(() => ({ username, user: null }))
-        );
-        const userResults = await Promise.all(userFetches);
-        const userMapObj = {};
-        userResults.forEach(({ username, user }) => {
-          userMapObj[username] = user;
-        });
-        // Remove duplicate transactions by transactionID
-        const uniqueTransactions = [
-          ...new Map(
-            fetchedTransactions.map((transaction) => [
-              transaction.transactionID,
-              transaction,
-            ])
-          ).values(),
-        ];
-        setTransactions(uniqueTransactions);
-        // Find and store the "Initial Data" log entry
-        const initialDataLog = uniqueTransactions.find(
-          (t) => t.actionType === "Initial Data"
-        );
-        setInitialLog(initialDataLog || null); // Set to null if not found
-        setUserMap(userMapObj);
-        setTotalItems(uniqueTransactions.length);
-        const viewActionCount = uniqueTransactions.filter(
-          (t) => t.actionType === "View"
-        ).length;
-        setTotalViewItems(viewActionCount);
-      } catch (error) {
-        setTransactions([]);
-        setUserMap({});
-        console.error("Error fetching transactions:", error);
-      }
-    };
+const ACTION = {
+  Create: { color: "green", label: "Created" },
+  "Initial Data": { color: "cyan", label: "First recorded" },
+  Modified: { color: "blue", label: "Changed" },
+  Reverted: { color: "purple", label: "Put back" },
+  Delete: { color: "red", label: "Deleted" },
+  View: { color: "default", label: "Viewed" },
+};
 
-    fetchTransactions();
+// The register's fields, as people call them.
+const LABEL = {
+  name: "Proponent", title: "Project title", industry_class: "Industry classification", industry_type: "Industry type", industry_subtype: "Industry sub-type",
+  psic_code: "PSIC code", province: "Province", city: "Municipality / city", brgy: "Barangay", barangay: "Barangay", street: "Street", address: "Complete address",
+  lat: "Latitude", long: "Longitude", mbu_area: "Manila Bay area", protected_area: "Protected area", waterbody: "Receiving waterbody", cong_district: "District",
+  section_incharged: "Section in charge", handler: "Inspector / handler", monitoring_sched: "Schedule of monitoring", insp_type: "Type of inspection",
+  title_status: "Project status", report_type: "Type of report", reported_to_co: "Reported to CO", date_monitored: "Date monitored", date_routed: "Date routed",
+  date_signed: "Date signed", days_dmds: "Days monitored → routed", days_drds: "Days routed → signed", iis_no_2024: "IIS no. 2024", iis_no_2025: "IIS no. 2025",
+  iis_no_2026: "IIS no. 2026", iis_no_nov: "IIS no. of NOV", iis_survey: "IIS survey report", remarks: "Remarks", recommendations: "Remarks / recommendations",
+  pismu_tracking: "Received by (PISMU)", pismu_count_month: "Count month", with_nov: "With a previous NOV", emp_total: "Number of employees", wwtf_type: "Type of WWTF",
+  bod: "BOD", ecc_cnc: "ECC/CNC", permit_process: "ECC process", date_approved: "ECC approved", date_amended: "ECC amended", pd1586: "PD 1586 NOV recommendation",
+  pto_code: "PTO", pto_issued: "PTO issued", pto_expiration: "PTO expires", ra8749: "RA 8749 NOV recommendation", wwdp_code: "WWDP", wwdp_issued: "WWDP issued",
+  wwdp_expiration: "WWDP expires", ra9275: "RA 9275 NOV recommendation", haz_id: "HWG ID", haz_issued: "HWG ID issued", ra6969: "RA 6969 NOV recommendation",
+  pco_no: "PCO no.", pco_name: "PCO name", pco_validity: "PCO valid until",
+};
+const labelOf = (f) => LABEL[f] || String(f || "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
-    // Every 30 s while the tab is visible. It was every second, which with
-    // the tab left open was one query per second per person, all day.
-    return visibleInterval(fetchTransactions, 30000);
-  }, [editedRecord, handleReload]);
+// Never shown as a change: bookkeeping the save itself writes.
+const QUIET = new Set(["updated_at", "updated_by", "updatedAt", "updatedBy", "_id", "formatted_sort_key"]);
 
-  const handleTableChange = (pagination) => {
-    setCurrentPage(pagination.current);
-    setPageSize(pagination.pageSize);
-  };
+const asText = (v) => (v === undefined || v === null || v === "" ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
-  // Function to close the modal
-  const handleModalClose = () => {
-    setIsModalVisible(false);
-    setRevertRecord(null); // Clear the record after closing
-  };
+/** The entry's time: an ISO date or the "10/15/2026, 3:04:05 PM" the log writes. */
+const whenOf = (t) => {
+  const d = dayjs(new Date(t.transactionDate || t.dateActed || 0));
+  return d.isValid() && d.year() > 2000 ? d : null;
+};
 
-  const handleRevertConfirm = async (record) => {
-    if (!record || !record.ecc_cnc) {
-      Swal.fire({
-        icon: "error",
-        title: "Revert Failed",
-        text: "ECC/CNC value is missing in this transaction.",
-      });
-      return;
-    }
+/** The changes an entry lists: field, before, after — the empty and the unchanged left out. */
+const changesOf = (t) =>
+  (Array.isArray(t.changes) ? t.changes : [])
+    .filter((c) => c && c.field && !QUIET.has(c.field) && asText(c.old_value) !== asText(c.new_value))
+    .map((c) => ({ field: c.field, before: asText(c.old_value), after: asText(c.new_value) }));
 
-    let field = "date_approved";
-    let oldValue = record.oldValue;
-    if (Array.isArray(record.changes) && record.changes.length > 0) {
-      field = record.changes[0].field;
-      oldValue = record.changes[0].new_value; // Revert to previous value
-    }
+const fetchHistory = async ({ sortKey, ecc }) => {
+  const { data } = await axios.get(`${API_BASE_URL}/api/ucds-log`, { params: { sort_key: sortKey || undefined, ecc_cnc: ecc || undefined } });
+  const list = Array.isArray(data) ? data : [];
+  // One entry per transaction, newest first.
+  const unique = [...new Map(list.map((t) => [t.transactionID || t._id, t])).values()];
+  return unique.sort((a, b) => (whenOf(b)?.valueOf() || 0) - (whenOf(a)?.valueOf() || 0));
+};
 
-    const payload = {
-      ecc_cnc: record.ecc_cnc,
-      field,
-      oldValue,
-      updated_by: currentUser?.username,
-    };
-
-    try {
-      await axios.put(`${API_BASE_URL}/api/revert-by-ecc`, payload);
-
-      Swal.fire({
-        icon: "success",
-        title: "Revert Successful",
-        text: "The changes have been reverted successfully.",
-        confirmButtonText: "OK",
-      });
-
-      // 🔁 Refresh both main record and table log
-      if (typeof handleReload === "function") handleReload();
-      if (typeof reloadEditedRecord === "function") {
-        await reloadEditedRecord(record.ecc_cnc); // ← reload modal data
-      }
-    } catch (error) {
-      console.error("Revert error:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Revert Failed",
-        text: "Something went wrong while reverting the data.",
-        confirmButtonText: "OK",
-      });
-    }
-  };
-
-  const handleDeleteTransaction = async (transactionID) => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/transaction/${transactionID}`, // Use transactionID instead of ID
-        {
-          method: "DELETE",
-          credentials: "include", // Include credentials if necessary
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        Swal.fire({
-          title: "Success!",
-          text: result.message,
-          icon: "success",
-          confirmButtonText: "OK",
-        });
-      } else {
-        const error = await response.json();
-        console.error("Server response error:", error); // Log the error
-        Swal.fire({
-          title: "Error",
-          text: error.message || "Error deleting transaction",
-          icon: "error",
-          confirmButtonText: "OK",
-        });
-      }
-    } catch (error) {
-      console.error("Network error:", error); // Log network errors
-      Swal.fire({
-        title: "Error",
-        text: "Error deleting transaction",
-        icon: "error",
-        confirmButtonText: "OK",
-      });
-    }
-  };
-
-  const columns = [];
-
-  // Only show Trans. ID if canManageData is true (dev mode)
-  if (canManageData) {
-    columns.push({
-      title: <span className="table-header">Trans. ID</span>,
-      dataIndex: "transactionID",
-      key: "transactionID",
-      align: "center",
-      width: 90,
-    });
-  }
-
-  columns.push(
-    {
-      title: <span className="table-header">Date</span>,
-      dataIndex: "transactionDate",
-      key: "transactionDate",
-      render: (date) => {
-        const formattedDate = moment(date).format("MM/DD/yyyy");
-        const formattedTime = moment(date).format("hh:mm A");
-        return (
-          <>
-            {formattedDate}
-            <br />
-            {formattedTime}
-          </>
-        );
-      },
-      align: "center",
-    },
-    {
-      title: <span className="table-header">Action Type</span>,
-      dataIndex: "actionType",
-      key: "actionType",
-      render: (actionType) => {
-        let tagClass;
-        switch (actionType) {
-          case "Create":
-            tagClass = "tag-create";
-            break;
-          case "Initial Data":
-            tagClass = "tag-add";
-            break;
-          case "Modified":
-            tagClass = "tag-update";
-            break;
-          case "Delete":
-            tagClass = "tag-delete";
-            break;
-          default:
-            tagClass = "";
-        }
-        return <Tag className={tagClass}>{actionType}</Tag>;
-      },
-      align: "center",
-    },
-    {
-      title: <span className="table-header">Old Data</span>,
-      dataIndex: "oldValue",
-      key: "oldValue",
-      align: "center",
-      width: 200,
-      render: (_, record) => {
-        if (record.actionType === "Initial Data") {
-          if (!record.oldValue || record.oldValue === "-")
-            return <span>-</span>;
-          return record.oldValue
-            .split("\n")
-            .filter((val) => val !== "undefined" && val !== "0")
-            .map((val, idx) => (
-              <div key={idx}>
-                <div>{val}</div>
-              </div>
-            ));
-        }
-        if (Array.isArray(record.changes) && record.changes.length > 0) {
-          // Only show fields that have changed and are not empty
-          const filteredChanges = record.changes.filter(
-            (chg) =>
-              chg.old_value !== chg.new_value &&
-              chg.field &&
-              chg.old_value !== undefined &&
-              chg.old_value !== null &&
-              chg.old_value !== "" // Only show if old_value is not empty
-          );
-          if (filteredChanges.length === 0) return <span>-</span>;
-          return (
-            <div>
-              {filteredChanges.map((chg, idx) => (
-                <div key={idx} style={{ marginBottom: 8 }}>
-                  <div>{chg.old_value}</div>
-                  {canManageData && (
-                    <div
-                      style={{
-                        fontSize: "9px",
-                        color: "#888",
-                        fontWeight: 400,
-                        fontStyle: "italic",
-                      }}
-                    >
-                      {chg.field}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        }
-        if (!record.oldValue || record.oldValue === "-") return <span>-</span>;
-        return record.oldValue
-          .split("\n")
-          .filter((val) => val !== "undefined" && val !== "0")
-          .map((val, idx) => (
-            <div key={idx} style={{ marginBottom: 8 }}>
-              <div>{val}</div>
-            </div>
-          ));
-      },
-    },
-    {
-      title: <span className="table-header">New Data</span>,
-      dataIndex: "newValue",
-      key: "newValue",
-      align: "center",
-      width: 200,
-      render: (_, record) => {
-        if (record.actionType === "Initial Data") {
-          if (!record.newValue) return <span>-</span>;
-          const [ecc_cnc, project_title] = record.newValue.split("\n");
-          return (
-            <div>
-              {ecc_cnc && (
-                <div style={{ marginBottom: 8 }}>
-                  <div>{ecc_cnc}</div>
-                </div>
-              )}
-              {project_title && (
-                <div style={{ marginBottom: 8 }}>
-                  <div>{project_title}</div>
-                </div>
-              )}
-            </div>
-          );
-        }
-        if (Array.isArray(record.changes) && record.changes.length > 0) {
-          // Only show fields that have changed and are not empty
-          const filteredChanges = record.changes.filter(
-            (chg) =>
-              chg.old_value !== chg.new_value &&
-              chg.field &&
-              chg.new_value !== undefined &&
-              chg.new_value !== null &&
-              chg.new_value !== "" // Only show if new_value is not empty
-          );
-          if (filteredChanges.length === 0) return <span>-</span>;
-          return (
-            <div>
-              {filteredChanges.map((chg, idx) => (
-                <div key={idx} style={{ marginBottom: 8 }}>
-                  <div>{chg.new_value}</div>
-                  {canManageData && (
-                    <div
-                      style={{
-                        fontSize: "9px",
-                        color: "#888",
-                        fontWeight: 400,
-                        fontStyle: "italic",
-                      }}
-                    >
-                      {chg.field}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        }
-        if (!record.newValue) return <span>-</span>;
-        const [ecc_cnc, project_title] = record.newValue.split("\n");
-        return (
-          <div>
-            {ecc_cnc && (
-              <div style={{ marginBottom: 8 }}>
-                <div>{ecc_cnc}</div>
-                {canManageData && (
-                  <div
-                    style={{
-                      fontSize: "9px",
-                      color: "#888",
-                      fontWeight: 400,
-                      fontStyle: "italic",
-                    }}
-                  >
-                    ECC/CNC
-                  </div>
-                )}
-              </div>
-            )}
-            {project_title && (
-              <div style={{ marginBottom: 8 }}>
-                <div>{project_title}</div>
-                {canManageData && (
-                  <div
-                    style={{
-                      fontSize: "9px",
-                      color: "#888",
-                      fontWeight: 400,
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Project Title
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      title: <span className="table-header">User Acted</span>,
-      dataIndex: "userActed",
-      key: "userActed",
-      align: "center",
-      render: (userActed) => {
-        const user = userMap[userActed];
-        if (user) {
-          return (
-            <>
-              <span>{user.name}</span>
-              <br />
-              <span style={{ fontSize: 12, color: "#888" }}>
-                {user.division}
-              </span>
-            </>
-          );
-        }
-        return <span>{userActed || "Unknown"}</span>;
-      },
-    }
+const fetchPeople = async (usernames) => {
+  const rows = await Promise.all(
+    usernames.map((username) =>
+      axios
+        .get(`${API_BASE_URL}/api/users`, { params: { username } })
+        .then((res) => [username, Array.isArray(res.data) ? res.data[0] : null])
+        .catch(() => [username, null])
+    )
   );
+  return Object.fromEntries(rows);
+};
 
-  if (canManageData) {
-    columns.push({
-      title: <span className="table-header">Actions</span>,
-      key: "actions",
-      align: "center",
-      render: (_, record) => (
-        <div className="action-buttons">
-          {/* Revert Button */}
-          {record.actionType !== "Initial Data" && (
-            <Tooltip title="Revert to Old Value">
-              <Button
-                type="primary"
-                icon={<RollbackOutlined />}
-                className="action-button"
-                size="small"
-                style={{ marginRight: 20 }}
-                onClick={async () => {
-                  const field = record.changes?.[0]?.field || "-";
-                  const oldValue = record.changes?.[0]?.old_value ?? "-";
-                  const newValue = record.changes?.[0]?.new_value ?? "-";
+const ProvTransaction = ({ editedRecord, currentUser, handleReload, reloadEditedRecord }) => {
+  const queryClient = useQueryClient();
+  const [show, setShow] = useState("changes");
+  const [busy, setBusy] = useState(null);
+  const canManageData = currentUser?.capabilities?.canManageData === true;
+  const sortKey = editedRecord?.sort_key || "";
+  const ecc = String(editedRecord?.ecc_cnc || "").trim();
 
-                  const result = await Swal.fire({
-                    title: "Revert Changes?",
-                    html: `
-                    <div style='text-align:left; font-size: 14px;'>
-                      <b>Transaction ID:</b> ${record.transactionID}<br/>
-                      <b>Field:</b> ${field}<br/>
-                      <b>User Acted:</b> ${
-                        userMap[record.userActed]?.name || "N/A"
-                      }<br/>
-                      <b>Date Acted:</b> ${moment(record.dateActed).format(
-                        "MM/DD/yyyy hh:mm A"
-                      )}<br/>
-                      <b>Old Value:</b> ${oldValue}<br/>
-                      <b>New Value:</b> ${newValue}
-                    </div>
-                  `,
-                    icon: "warning",
-                    showCancelButton: true,
-                    confirmButtonColor: "#3085d6",
-                    cancelButtonColor: "#d33",
-                    confirmButtonText: "Confirm Revert",
-                    cancelButtonText: "Cancel",
-                    width: 600,
-                  });
+  // Keyed by the record, not by the record's every keystroke: it used to
+  // re-read the History (and restart its timer) each time a field was typed in.
+  const historyKey = ["ucds", "history", sortKey, ecc];
+  const { data: entries = [], isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: historyKey,
+    queryFn: () => fetchHistory({ sortKey, ecc }),
+    enabled: Boolean(sortKey || ecc),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+  });
+  const usernames = useMemo(() => [...new Set(entries.map((t) => t.userActed).filter(Boolean))].sort(), [entries]);
+  const { data: people = {} } = useQuery({
+    queryKey: ["ucds", "history-people", usernames.join("|")],
+    queryFn: () => fetchPeople(usernames),
+    enabled: usernames.length > 0,
+    staleTime: 10 * 60 * 1000,
+  });
 
-                  if (result.isConfirmed) {
-                    await handleRevertConfirm(record);
-                  }
-                }}
-              />
-            </Tooltip>
-          )}
+  const counts = useMemo(
+    () => ({
+      all: entries.length,
+      changes: entries.filter((t) => t.actionType !== "View").length,
+      views: entries.filter((t) => t.actionType === "View").length,
+    }),
+    [entries]
+  );
+  const shown = entries.filter((t) => show === "all" || (show === "views" ? t.actionType === "View" : t.actionType !== "View"));
+  const lastChange = entries.find((t) => t.actionType !== "View");
+  const nameOf = (u) => people[u]?.name || u || "Unknown";
 
-          {/* Delete Button */}
-          {record.actionType !== "Initial Data" && (
-            <Tooltip title="Delete Transaction">
-              <Button
-                type="primary"
-                danger
-                icon={<DeleteOutlined />}
-                className="action-button button-danger"
-                size="small"
-                onClick={async () => {
-                  const result = await Swal.fire({
-                    title: "Are you sure?",
-                    text: "This will permanently delete the transaction!",
-                    icon: "warning",
-                    showCancelButton: true,
-                    confirmButtonColor: "#d33",
-                    cancelButtonColor: "#3085d6",
-                    confirmButtonText: "Yes, delete it!",
-                    cancelButtonText: "Cancel",
-                  });
+  const afterChange = async () => {
+    await queryClient.invalidateQueries({ queryKey: historyKey });
+    if (typeof reloadEditedRecord === "function") await reloadEditedRecord();
+    if (typeof handleReload === "function") handleReload();
+  };
 
-                  if (result.isConfirmed) {
-                    await handleDeleteTransaction(record.transactionID);
-                  }
-                }}
-              />
-            </Tooltip>
-          )}
+  const revert = (t, c) =>
+    modal.confirm({
+      title: `Put "${labelOf(c.field)}" back?`,
+      icon: <RollbackOutlined />,
+      width: 520,
+      content: (
+        <div className="ph-confirm">
+          <div>
+            <Text type="secondary">Now</Text>
+            <div className="ph-value">{c.after || <i>empty</i>}</div>
+          </div>
+          <div>
+            <Text type="secondary">Back to</Text>
+            <div className="ph-value ph-value--old">{c.before || <i>empty</i>}</div>
+          </div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Changed {whenOf(t)?.format("MMM D, YYYY h:mm A") || ""} by {nameOf(t.userActed)}. Putting it back is itself recorded here.
+          </Text>
         </div>
       ),
+      okText: "Put it back",
+      onOk: async () => {
+        setBusy(`${t.transactionID}:${c.field}`);
+        try {
+          await axios.put(`${API_BASE_URL}/api/revert-by-ecc`, { sort_key: sortKey, ecc_cnc: ecc || undefined, field: c.field, oldValue: c.before });
+          message.success(`${labelOf(c.field)} put back.`);
+          await afterChange();
+        } catch (e) {
+          message.error(e?.response?.data?.error || e?.response?.data?.message || "It could not be put back.");
+        } finally {
+          setBusy(null);
+        }
+      },
     });
-  }
+
+  const remove = (t) =>
+    modal.confirm({
+      title: "Delete this History entry?",
+      icon: <DeleteOutlined />,
+      content: "The record keeps its values; only this line of its History goes. It cannot be undone.",
+      okText: "Delete",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setBusy(t.transactionID);
+        try {
+          await axios.delete(`${API_BASE_URL}/api/transaction/${encodeURIComponent(t.transactionID)}`);
+          message.success("History entry deleted.");
+          await queryClient.invalidateQueries({ queryKey: historyKey });
+        } catch (e) {
+          message.error(e?.response?.data?.message || e?.response?.data?.error || "The entry could not be deleted.");
+        } finally {
+          setBusy(null);
+        }
+      },
+    });
+
+  // "Initial Data": the lines it recorded, as they were.
+  const initialLines = (t) =>
+    [t.oldValue, t.newValue]
+      .flatMap((v) => String(v || "").split("\n"))
+      .map((s) => s.trim())
+      .filter((s) => s && s !== "-" && s !== "undefined" && s !== "0");
+
+  const entryCard = (t) => {
+    const a = ACTION[t.actionType] || { color: "default", label: t.actionType || "Entry" };
+    const when = whenOf(t);
+    const changes = changesOf(t);
+    const person = people[t.userActed];
+    const canRevert = canManageData && ["Modified", "Reverted"].includes(t.actionType);
+    return (
+      <li key={t.transactionID || t._id} className="ph-entry">
+        <span className={`ph-dot ph-dot--${a.color}`} />
+        <div className="ph-card">
+          <header className="ph-head">
+            <Space size={8} wrap>
+              <Tag color={a.color} style={{ marginInlineEnd: 0 }}>
+                {a.label}
+              </Tag>
+              <Text strong>{when ? when.format("MMM D, YYYY") : "—"}</Text>
+              <Text type="secondary">{when ? when.format("h:mm A") : ""}</Text>
+              {canManageData && t.transactionID && (
+                <Text type="secondary" className="ph-id">
+                  {t.transactionID}
+                </Text>
+              )}
+            </Space>
+            <Space size={6}>
+              <Tooltip title={person?.division || t.userActed || ""}>
+                <span className="ph-user">
+                  <UserOutlined /> {nameOf(t.userActed)}
+                </span>
+              </Tooltip>
+              {canManageData && t.actionType !== "Initial Data" && t.transactionID && (
+                <Tooltip title="Delete this entry">
+                  <Button size="small" type="text" danger icon={<DeleteOutlined />} loading={busy === t.transactionID} onClick={() => remove(t)} aria-label="Delete this entry" />
+                </Tooltip>
+              )}
+            </Space>
+          </header>
+
+          {changes.length > 0 ? (
+            <table className="ph-changes">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Before</th>
+                  <th aria-label="to" />
+                  <th>After</th>
+                  {canRevert && <th aria-label="actions" />}
+                </tr>
+              </thead>
+              <tbody>
+                {changes.map((c) => (
+                  <tr key={c.field}>
+                    <td className="ph-field">{labelOf(c.field)}</td>
+                    <td className="ph-before">{c.before || <i>empty</i>}</td>
+                    <td className="ph-arrow">
+                      <ArrowRightOutlined />
+                    </td>
+                    <td className="ph-after">{c.after || <i>empty</i>}</td>
+                    {canRevert && (
+                      <td className="ph-act">
+                        <Tooltip title={`Put ${labelOf(c.field)} back to the value before`}>
+                          <Button size="small" icon={<RollbackOutlined />} loading={busy === `${t.transactionID}:${c.field}`} onClick={() => revert(t, c)}>
+                            Revert
+                          </Button>
+                        </Tooltip>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : t.actionType === "Initial Data" || t.actionType === "Create" ? (
+            <div className="ph-lines">{initialLines(t).length ? initialLines(t).map((s, i) => <div key={i}>{s}</div>) : "—"}</div>
+          ) : t.actionType === "View" ? null : (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              No field values were recorded for this entry.
+            </Text>
+          )}
+        </div>
+      </li>
+    );
+  };
+
+  if (!sortKey && !ecc) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="This record has no serial yet, so it has no History." />;
 
   return (
-    <div>
-      <Modal
-        title="Revert Changes?"
-        open={isModalVisible}
-        onCancel={handleModalClose}
-        width={800}
-        footer={[
-          <Button key="cancel" type="primary" danger onClick={handleModalClose}>
-            Cancel
-          </Button>,
-          <Button key="confirm" type="primary" onClick={handleRevertConfirm}>
-            Confirm Revert
-          </Button>,
-        ]}
-      >
-        {revertRecord ? (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 13,
-              }}
-            >
-              <p className="revert-paragraph">
-                <strong>Transaction ID:</strong> {revertRecord.transactionID}
-              </p>
-              <p className="revert-paragraph">
-                <strong>User Acted:</strong> {revertRecord.userActed}
-              </p>
-              <p className="revert-paragraph">
-                <strong>Date Acted:</strong>{" "}
-                {moment(revertRecord.dateActed).format("MM/DD/yyyy hh:mm A")}
-              </p>
-              <p className="revert-paragraph">
-                <strong>Field:</strong>{" "}
-                {revertRecord.changes?.[0]?.field ?? "-"}
-              </p>
-            </div>
+    <div className="ph">
+      <div className="ph-bar">
+        <Space size={10} wrap>
+          <HistoryOutlined />
+          <Text strong>History</Text>
+          {lastChange && (
+            <Text type="secondary" style={{ fontSize: 12.5 }}>
+              last changed {whenOf(lastChange)?.format("MMM D, YYYY h:mm A") || ""} by {nameOf(lastChange.userActed)}
+            </Text>
+          )}
+        </Space>
+        <Space size={8} wrap>
+          <Segmented
+            size="small"
+            value={show}
+            onChange={setShow}
+            options={[
+              { value: "changes", label: `Changes (${counts.changes})` },
+              { value: "views", label: `Views (${counts.views})` },
+              { value: "all", label: `All (${counts.all})` },
+            ]}
+          />
+          <Tooltip title="Read the History again">
+            <Button size="small" icon={<ReloadOutlined />} loading={isFetching && !isLoading} onClick={() => refetch()} aria-label="Refresh" />
+          </Tooltip>
+        </Space>
+      </div>
 
-            <Table
-              dataSource={[
-                {
-                  key: "1",
-                  oldValue: revertRecord.changes?.[0]?.old_value ?? "-",
-                  newValue: revertRecord.changes?.[0]?.new_value ?? "-",
-                },
-              ]}
-              pagination={false}
-              showHeader={true}
-              columns={[
-                {
-                  title: "Current Data",
-                  dataIndex: "newValue",
-                  width: "200px",
-                  align: "center",
-                  render: (newValue) => {
-                    const safeSplit =
-                      typeof newValue === "string"
-                        ? newValue.split("\n")
-                        : [String(newValue)];
-                    const filteredValues = safeSplit.filter(
-                      (val) =>
-                        val &&
-                        val.trim() !== "" &&
-                        val.trim().toLowerCase() !== "undefined"
-                    );
-                    return (
-                      <div>
-                        {filteredValues.map((val, index) => (
-                          <p key={index}>{val}</p>
-                        ))}
-                      </div>
-                    );
-                  },
-                },
-                {
-                  title: "Revert to Old Data",
-                  dataIndex: "oldValue",
-                  width: "200px",
-                  align: "center",
-                  render: (oldValue) => {
-                    const safeSplit =
-                      typeof oldValue === "string"
-                        ? oldValue.split("\n")
-                        : [String(oldValue)];
-                    const filteredValues = safeSplit.filter(
-                      (val) =>
-                        val &&
-                        val.trim() !== "" &&
-                        val.trim().toLowerCase() !== "undefined"
-                    );
-                    return (
-                      <div>
-                        {filteredValues.map((val, index) => (
-                          <p key={index}>{val}</p>
-                        ))}
-                      </div>
-                    );
-                  },
-                },
-              ]}
-              size="small"
-              style={{ fontSize: "14px" }}
-            />
-          </div>
-        ) : (
-          <p>Loading...</p>
-        )}
-      </Modal>
-
-      <Table
-        columns={columns}
-        dataSource={transactions}
-        rowKey={(record) => record.transactionID || record._id?.$oid}
-        rowClassName={() => "table-row"}
-        pagination={{
-          current: currentPage,
-          pageSize: pageSize,
-          total: totalItems,
-          showSizeChanger: true,
-          pageSizeOptions: [5, 10, 20, 50],
-        }}
-        onChange={handleTableChange}
-      />
+      {isLoading ? (
+        <Skeleton active paragraph={{ rows: 4 }} />
+      ) : isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="The History could not be loaded."
+          description="Check the connection, then try again."
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Try again
+            </Button>
+          }
+        />
+      ) : shown.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={entries.length ? "Nothing of this kind in the History." : "No changes have been recorded for this record yet."} />
+      ) : (
+        <ol className="ph-list">{shown.map(entryCard)}</ol>
+      )}
     </div>
   );
 };

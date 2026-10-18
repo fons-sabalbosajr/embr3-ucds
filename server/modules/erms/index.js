@@ -35,5 +35,6 @@ module.exports = {
   read: {
     countForFirm: recordService.countForFirm,
     listForFirm: recordService.listForFirm,
+    forFirm: recordService.forFirm,
   },
 };

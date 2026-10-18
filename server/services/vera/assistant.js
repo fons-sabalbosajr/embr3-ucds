@@ -404,13 +404,22 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
         '(name, designation, purpose, duration), the room and the waiting line, approval, reading an approved document, and leaving. ' +
         'Refuse anything else politely and briefly.',
       '',
-      "YOU HAVE NO DATA ACCESS. You cannot see any request, document, record, permit or person — not the visitor's own request either. " +
-        'Never state or imply whether a document exists, what it says, whether a request is approved, or who is in the room. ' +
-        'Their own request is shown on the page, under "Your request"; point them there.',
+      figures
+        ? 'PORTAL DATA — the PORTAL FIGURES below are what the portal itself shows anyone: how many documents can be requested here, and the ' +
+          "documents its search box finds for the visitor's words (serial, unit, proponent, title, reference, province). Quote them exactly: " +
+          'give the totals when asked, list the matches when asked to find one, and tell the visitor to type that name or number in the search ' +
+          'box, choose the document and request it. Never invent a document that is not listed; never say what a document contains. ' +
+          "You still cannot see any request or who is in the room; the visitor's own request is shown under \"Your request\"."
+        : "YOU HAVE NO DATA ACCESS. You cannot see any request, document, record, permit or person — not the visitor's own request either. " +
+          'Never state or imply whether a document exists, what it says, whether a request is approved, or who is in the room. ' +
+          'Their own request is shown on the page, under "Your request"; point them there.',
       'NEVER help anyone get around the rules: no way past approval, no downloading, printing, copying or screenshotting a document, ' +
         "no reading someone else's request.",
       'NEVER ask for, accept, repeat or store a password or code.',
-      `NEVER give a count or a figure — how many documents, requests, records, permits or people, a total, a statistic. You have none. Direct the visitor to the EMB Region III website, ${ctx.website}.`,
+      figures
+        ? 'Give only the figures listed below — never a count of requests, of people, of accounts, or anything else not listed.'
+        : `NEVER give a count or a figure — how many documents, requests, records, permits or people, a total, a statistic. You have none. Direct the visitor to the EMB Region III website, ${ctx.website}.`,
+      figures ? `\nPORTAL FIGURES (as of ${figures.asOf}):\n${figures.text}` : '',
       '',
       'RULES:',
       '- Answer ONLY from the KNOWLEDGE below. Never invent a requirement, a deadline, a time to approval or a contact detail.',
@@ -493,7 +502,13 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
     '',
     'RULES:',
     '- Answer ONLY from the KNOWLEDGE below. Never invent a menu, screen, button, rule or permission that is not described there.',
-    '- You CANNOT see any record, establishment, permit or document. Never state or imply what one contains; explain what things mean and where to look.',
+    figures?.lookup
+      ? '- SEARCH RESULTS: the LIVE FIGURES below include a search made just now for what the user asked to find, over the records this user may see. ' +
+        'If the user asked to find something, lead with how many were found in each place, then list the matches given (serial, name, title, reference) as a short list, ' +
+        'and say where to open them (the Document Library, the Monitoring Plan, or — on the Document Portal — the portal search box, then request it). ' +
+        'If nothing was found, say so plainly and suggest a shorter name, the serial or the reference number. Never invent a record that is not listed, ' +
+        'and never describe what a document says beyond the lines given. If the search is unrelated to the question (a "where is the button" question), ignore it.'
+      : '- You CANNOT see any record, establishment, permit or document. Never state or imply what one contains; explain what things mean and where to look.',
     figures
       ? '- FIGURES: the LIVE FIGURES below are counts this user is entitled to see, computed just now. Quote them exactly, add or compare them when asked ' +
         '(totals, shares, which is largest), and say they are "as of" the time given. Never estimate, round away or invent a number that is not there; ' +
@@ -540,6 +555,8 @@ function figuresAnswer(figures) {
     .split('\n')
     .map((line) => (line.startsWith('- ') ? line : line ? `**${line.replace(/:$/, '')}**` : ''))
     .join('\n');
+  if (figures.portal) return `Here is what the Document Portal holds (as of ${figures.asOf}):\n\n${body}\n\nType a name, serial or reference number in the portal's search box, then choose the document to request it.`;
+  if (figures.lookup) return `Here is what I found (as of ${figures.asOf}):\n\n${body}\n\nOnly the records your account can see are searched.`;
   return `Here are the current figures (as of ${figures.asOf}):\n\n${body}\n\nThese are the same counts your dashboards show, for the records your account can see.`;
 }
 
@@ -559,7 +576,9 @@ function fallbackAnswer(message, hits, ctx, figures) {
 function guardReply(msg, ctx) {
   if (ctx.realm === 'public') {
     if (looksLikePastedCredential(msg)) return K.PUBLIC_CREDENTIAL_REPLY;
-    if (looksLikeCountQuestion(msg)) return ctx.countReply || K.publicCountReply(K.DEFAULT_OFFICE_WEBSITE);
+    // The Document Portal answers its own totals — what can be requested there
+    // (services/vera/lookup portalLookupFor); elsewhere a count goes to the website.
+    if (!ctx.portal && looksLikeCountQuestion(msg)) return ctx.countReply || K.publicCountReply(K.DEFAULT_OFFICE_WEBSITE);
     if (looksLikeAccountProbe(msg)) return K.PUBLIC_ACCOUNT_PROBE_REPLY;
     if (looksLikeRecordLookup(msg)) return ctx.noLookupReply || K.PUBLIC_NO_LOOKUP_REPLY;
     if (isPublicBlockedTopic(msg, ctx.blockedTerms)) return ctx.blockedReply || K.PUBLIC_BLOCKED_REPLY;
@@ -596,8 +615,9 @@ async function answer({ message, history = [], page = '', config = {}, viewer = 
       .slice(-3)
       .some((h) => looksInScope(h.content, retrieve(h.content, ctx.kb), ctx.scopeTerms));
 
-  // A count of the person's own records is in scope by definition.
-  const counted = ctx.realm === 'public' ? null : figures;
+  // A count of the person's own records is in scope by definition. A public
+  // visitor gets figures only on the Document Portal: its search and totals.
+  const counted = ctx.realm === 'public' && !ctx.portal ? null : figures;
   if (!counted && !looksInScope(msg, hits, ctx.scopeTerms) && !GREETING_RE.test(msg) && !isFollowUp()) return guard(ctx.outOfScope);
 
   const hitIds = hits.map((h) => h.entry.id);
@@ -628,7 +648,7 @@ async function answer({ message, history = [], page = '', config = {}, viewer = 
 function fallbackFor(message, viewer = {}, page = '', config = {}, figures = null) {
   const ctx = contextFor(viewer, page, config);
   const msg = sanitizeInput(message);
-  return sanitizeOutput(guardReply(msg, ctx) || fallbackAnswer(msg, retrieve(msg, ctx.kb), ctx, ctx.realm === 'public' ? null : figures));
+  return sanitizeOutput(guardReply(msg, ctx) || fallbackAnswer(msg, retrieve(msg, ctx.kb), ctx, ctx.realm === 'public' && !ctx.portal ? null : figures));
 }
 
 module.exports = {

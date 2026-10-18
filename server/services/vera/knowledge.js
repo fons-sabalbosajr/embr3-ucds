@@ -51,6 +51,7 @@ const PAGE_LABELS = Object.freeze({
   province: 'Universe Central DB › Monitoring Plan (province)',
   'monitoring-plan': 'Universe Central DB › Monitoring Plan',
   datasets: 'Universe Central DB › year dataset',
+  'custom-table': 'Universe Central DB › a Planning Unit table (added to the year menu)',
   'year-select': 'Year container picker',
   report: 'Reports',
   'erms-dashboard': 'ERMS › Dashboard',
@@ -74,6 +75,7 @@ const PAGE_LABELS = Object.freeze({
   'admin-system': 'Admin Settings › System',
   'admin-erms-config': 'Admin Settings › ERMS Config',
   'admin-vera': 'Admin Settings › VERA Assistant',
+  'progress-tracker': 'Progress Tracker (Admin Settings › System)',
   'admin-posting': 'Admin Settings › Post to Bulletin',
   'storage-config': 'Admin Settings › Storage Configuration',
 });
@@ -757,6 +759,8 @@ const COMMON_KB = Object.freeze([
 // ── UCDS: Planning, the register ─────────────────────────────────────────────
 
 const UCDS_KB = Object.freeze([
+  // The Planning Unit's own tables: their articles are in knowledgeTables.js.
+  ...require('./knowledgeTables').TABLE_KB,
   {
     id: 'ucds-year',
     category: 'Universe Central DB',
@@ -1083,6 +1087,22 @@ const ADMIN_KB = Object.freeze([
 
 const DEV_KB = Object.freeze([
   {
+    id: 'dev-progress-tracker',
+    category: 'Developer',
+    question: 'How do I read the Progress Tracker?',
+    answer:
+      '**Admin Settings › System › Progress Tracker** (Developer only) follows the Planning Unit\'s updating of the universe during an activity season, read live from the SharePoint RAW files. ' +
+      'Only each file\'s **main worksheet** counts: the sheet named after the province (BULACAN, NUEVA_ECIJA…), or the list sheets of the Healthcare, Chemical permits, TSD / TRC and Importers files.\n\n' +
+      '1. **Firms** split into the **baseline** (already on the sheet), **added from ERMS** (the CSV tb_main_data export) and **added from ECC Online**, read from each workbook\'s additions log (NEW ADDITIONS LOG / ADDED FIRM SUMMARY).\n' +
+      '2. **Permits** are shown kind by kind — ECC/CNC, PTO, WWDP, HWG ID and PCO are never added together — each split into baseline, added from ERMS and added from ECC Online.\n' +
+      '3. **Highlighted** is the share of baseline firms someone has coloured as updated. The green / blue fill that marks an addition is not counted as an update.\n' +
+      '4. **Conditional highlighting** groups the fills by colour family — light and dark greens are one green — with each shade listed under it and its meaning from **Edit legend**.\n' +
+      '5. **Review sheets** (NEW - CHECK DUPLICATE, HAZWASTE ID ONLY (ERMS)) hold firms not yet on the main sheet; DUPLICATE, FOR DELISTING and FOR DELETION are set aside.\n' +
+      '6. **Newly issued permits** shows, kind by kind (ECC/CNC, PTO, WWDP, HWG ID, PCO, and TSD / TRC), how many of the season\'s new permits are already written into the RAW data, and on which firms.\n\n' +
+      'Switch between the **Monitoring Plan** (the seven provinces), **Healthcare & special lists** and **Other lists** above the tables. The **Open** button on a row or a file opens its workbook in Excel. **Check now** reads the folders at once; **New baseline** starts the comparison again from the files as they are.',
+    keywords: ['progress tracker', 'tracker', 'updating', 'season', 'baseline', 'highlighting', 'conditional highlighting', 'legend', 'added from erms', 'ecc online', 'main sheet', 'review sheet', 'new baseline'],
+  },
+  {
     id: 'dev-architecture',
     category: 'Developer',
     question: 'How is E-Universe built?',
@@ -1133,6 +1153,7 @@ const COMMON_SCOPE_TERMS = Object.freeze([
 ]);
 
 const UCDS_SCOPE_TERMS = Object.freeze([
+  'table', 'tables', 'my table', 'column', 'columns', 'row', 'rows', 'formula', 'formulas', 'filter', 'filters', 'export', 'excel', 'csv', 'totals',
   'ucds', 'universe central db', 'register', 'establishment', 'establishments', 'monitoring plan',
   'province', 'provinces', 'year container', 'year switcher', 'permit', 'permits', 'ecc', 'cnc', 'pto',
   'wwdp', 'pco', 'haz id', 'psic', 'monitoring', 'monitoring calendar', 'inspection', 'duplicate ecc',
@@ -1155,6 +1176,7 @@ const ADMIN_SCOPE_TERMS = Object.freeze([
 const DEV_SCOPE_TERMS = Object.freeze([
   'architecture', 'module', 'modules', 'endpoint', 'api', 'route', 'controller', 'schema', 'collection',
   'index', 'query', 'test', 'tests', 'code', 'cache', 'socket', 'load test', 'vera', 'provider', 'mongodb',
+  'progress tracker', 'tracker', 'season', 'baseline', 'highlighting', 'legend', 'ecc online', 'province', 'provinces',
 ]);
 
 // ── Starter chips ────────────────────────────────────────────────────────────

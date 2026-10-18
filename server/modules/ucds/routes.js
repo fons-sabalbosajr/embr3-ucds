@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateSession, requireDomain } = require('../../middleware/auth');
+const { authenticateSession, requireDomain, resolveYearContext } = require('../../middleware/auth');
 const { DOMAINS } = require('../../services/authorization');
 const { validate, z } = require('../../shared/middleware/validate');
 const { requireNasActive } = require('../../services/nasActivation');
@@ -31,7 +31,9 @@ router.get('/api/ucds/records/:serialNo/file/preview', ucdsAccess, requireNasAct
 
 router.get(
   '/api/ucds/establishments/:sortKey/records',
-  ucdsAccess,
+  // The year context: the establishment is looked up in the active year's register.
+  ...ucdsAccess,
+  resolveYearContext,
   validate(z.object({ sortKey: z.string().trim().min(1).max(60) }), 'params'),
   ctrl.establishmentRecords
 );

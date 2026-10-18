@@ -632,6 +632,10 @@ ul.vera-answer__list {
   gap: 8px;
 }
 
+.vera-thinking__mark {
+  flex: none;
+}
+
 .vera-thinking__text {
   font-size: 12.5px;
   color: var(--v-muted);
@@ -900,6 +904,20 @@ ul.vera-answer__list {
 /* ═══════════════════════════════════════════════════════════════════════════
    VERA SETTINGS — admin
    ═══════════════════════════════════════════════════════════════════════════ */
+
+.vera-settings__beam-wrap {
+  margin-bottom: 14px;
+}
+
+/* The beam's box hugs the card: full width, no padding or margin of its
+   own, so the beam traces the card's edge and nothing more. */
+.vera-settings__beam {
+  display: block !important;
+  width: 100%;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 20px;
+}
 
 .vera-settings__hero {
   position: relative;

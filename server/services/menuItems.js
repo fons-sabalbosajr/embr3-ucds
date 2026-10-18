@@ -146,6 +146,8 @@ async function remove(year, id) {
     ids.push(...frontier);
   }
   await collection().deleteMany({ _id: { $in: ids.map((x) => new ObjectId(x)) } });
+  // A removed table's rows go with it (required here: customTables requires this file).
+  await require('./customTables').removeRowsOf(year, ids);
   return { removed: ids.length, label: root.label };
 }
 

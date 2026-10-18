@@ -22,6 +22,8 @@ import PageLoading from './shared/components/PageLoading';
 // The public Document Portal: its own chunk, so the landing and sign-in pages
 // do not carry the PDF viewer.
 const DocumentPortal = lazy(() => import('./modules/portal/DocumentPortal'));
+// The Progress Tracker's public link: its own chunk too (the charts).
+const PublicProgress = lazy(() => import('./modules/admin/progress/PublicProgress'));
 
 // Ensure axios sends credentials with requests
 axios.defaults.withCredentials = true;
@@ -73,6 +75,17 @@ const router = createBrowserRouter(
         element={
           <Suspense fallback={<PageLoading tip="Opening the Document Portal" />}>
             <DocumentPortal />
+          </Suspense>
+        }
+        errorElement={<RouteError />}
+      />
+      {/* Public, outside the application: the UCD updating's figures for a
+          link the Developer turned on. Read-only; no sign-in. */}
+      <Route
+        path={ROUTES.progressPublic}
+        element={
+          <Suspense fallback={<PageLoading tip="Opening the progress" />}>
+            <PublicProgress />
           </Suspense>
         }
         errorElement={<RouteError />}

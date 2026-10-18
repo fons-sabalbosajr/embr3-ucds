@@ -5,6 +5,10 @@ backups/
 # Migration findings exported for Planning and Records. Contain proponent
 # names and project titles, so they stay local like the extract itself.
 reports/
+# …but not source folders that happen to be called reports (the Universe
+# Central DB's Reports page was never committed because of the line above).
+!front-end/src/**/reports/
+!server/**/reports/*.js
 
 # Source data: the ERMS extract (~18k records with proponent names and
 # addresses), the yearly UCDS spreadsheets, the NAS credentials workbook and

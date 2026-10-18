@@ -780,6 +780,39 @@ async function listForFirm(sortKey, limit = 20) {
     .toArray();
 }
 
+/**
+ * The records of an establishment: linked to its register serial, or holding
+ * one of its permit numbers. From 2027 the register is renumbered from the RAW
+ * workbooks, so its serials no longer match the links made against the
+ * earlier register (`sortKey` null then) — the permit numbers still do.
+ * Each record says how it was matched.
+ * @returns {Promise<{ total: number, records: object[] }>}
+ */
+async function forFirm({ sortKey = null, permitNumbers = [] } = {}, limit = 50) {
+  await connectToMongo();
+  const numbers = [...new Set(permitNumbers.map((n) => String(n || '').trim()).filter((n) => n.length >= 4))];
+  const or = [
+    ...(sortKey ? [{ 'ucdsRef.sortKey': sortKey }] : []),
+    ...(numbers.length ? [{ 'permit.number': { $in: [...new Set([...numbers, ...numbers.map((n) => n.toUpperCase())])] } }] : []),
+  ];
+  if (!or.length) return { total: 0, records: [] };
+  const filter = or.length === 1 ? or[0] : { $or: or };
+  const [total, rows] = await Promise.all([
+    collection().countDocuments(filter),
+    collection()
+      .find(filter, { projection: LIST_PROJECTION })
+      .sort({ 'document.uploadedAt': -1 })
+      .limit(Math.min(Number(limit) || 50, 200))
+      .toArray(),
+  ]);
+  const upper = new Set(numbers.map((n) => n.toUpperCase()));
+  const records = rows.map((r) => ({
+    ...r,
+    matchedBy: sortKey && r.ucdsRef?.sortKey === sortKey ? 'linked' : upper.has(String(r.permit?.number || '').trim().toUpperCase()) ? 'permit' : 'linked',
+  }));
+  return { total, records };
+}
+
 // A write changes the dashboard's counts: clear them, so the person who just
 // filed sees their record counted rather than waiting out the cache.
 const clearingDashboard = (fn) => async (...args) => {
@@ -901,4 +934,5 @@ module.exports = {
   // cross-domain read API
   countForFirm,
   listForFirm,
+  forFirm,
 };

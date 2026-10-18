@@ -15,6 +15,9 @@ const { notFoundError } = require('../../../shared/middleware/errorHandler');
 // ---------------------------------------------------------------------------
 
 const UNAVAILABLE = { available: false, records: [], total: 0 };
+const { registerOf } = require('../../../services/yearScope');
+// The register's permit numbers, matched against the Document Library's.
+const PERMIT_FIELDS = ['ecc_cnc', 'pto_code', 'wwdp_code', 'haz_id', 'pco_no', 'chemical_permit', 'importer_clearance', 'tsd_ref_no', 'tp_trc_ref_no'];
 
 function scopeOf(req) {
   const user = principalOf(req);
@@ -28,25 +31,33 @@ async function establishmentRecords(req, res, next) {
     const user = principalOf(req);
     const erms = require('../../erms');
 
-    if (!erms.isEnabled() || !hasDomain(user, DOMAINS.ERMS)) {
-      return res.json(UNAVAILABLE);
-    }
+    // Why the list is not there, so the tab can say so instead of going blank.
+    if (!erms.isEnabled()) return res.json({ ...UNAVAILABLE, reason: 'off' });
+    if (!hasDomain(user, DOMAINS.ERMS)) return res.json({ ...UNAVAILABLE, reason: 'no-access' });
 
     const { sortKey } = req.params;
-    const establishment = await registryService.findBySortKey(sortKey);
+    // The establishment in the active year's register: from 2027 a year keeps
+    // its own, renumbered from the RAW workbooks (services/yearScope registerOf).
+    const ownRegister = Boolean(req.yearContainer?.register);
+    const scope = scopeOf(req);
+    const establishment = await registerOf(req).findOne({
+      sort_key: sortKey,
+      ...(Array.isArray(scope) ? { province: { $in: scope } } : {}),
+    });
     if (!establishment) throw notFoundError('Establishment not found.', 'ESTABLISHMENT_NOT_FOUND');
 
-    const [total, records] = await Promise.all([
-      erms.read.countForFirm(sortKey),
-      erms.read.listForFirm(sortKey, Number(req.query.limit) || 10),
-    ]);
+    // Its documents: the records linked to its serial (up to 2026; a renumbered
+    // year's serials are not the ones the links were made against), and every
+    // record holding one of its permit numbers.
+    const permitNumbers = PERMIT_FIELDS.flatMap((f) => String(establishment[f] ?? '').split(/[\n;,]+/)).map((s) => s.trim()).filter((s) => s && !/^(n\/?a|none|-)$/i.test(s));
+    const { total, records } = await erms.read.forFirm({ sortKey: ownRegister ? null : sortKey, permitNumbers }, Number(req.query.limit) || 50);
 
     return res.json({ available: true, sortKey, total, records });
   } catch (error) {
     // A records-module failure must not take a planning screen down with it.
     if (error.status && error.status < 500) return next(error);
     console.error('ERMS panel failed, degrading:', error.message);
-    return res.json(UNAVAILABLE);
+    return res.json({ ...UNAVAILABLE, reason: 'error' });
   }
 }
 

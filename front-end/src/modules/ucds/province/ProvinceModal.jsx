@@ -115,11 +115,11 @@ const ProvinceModal = ({
     setEditedRecord(record);
   }, [record]);
 
+  // From the latest record, not the one this render saw: several changes in a
+  // row (employees and the BOD worked out from them, an IIS number filed under
+  // two years, both day counts) each kept only the last before.
   const handleChange = (field, value) => {
-    setEditedRecord({
-      ...editedRecord,
-      [field]: value,
-    });
+    setEditedRecord((prev) => ({ ...prev, [field]: value }));
   };
 
   const createInitialLogEntry = async (record) => {
@@ -329,11 +329,12 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
   }
 };
 
-  const reloadEditedRecord = async (eccCncKey) => {
-    const updated = await fetchRecordByEccCnc(eccCncKey);
-    if (updated) {
-      setEditedRecord(updated);
-    }
+  // The record as saved now (after a revert from its History): by its serial —
+  // by ECC/CNC it could load another record holding the same ECC.
+  const reloadEditedRecord = async () => {
+    const updated = editedRecord?.sort_key ? await fetchRecordDetailsBySortKey(editedRecord.sort_key) : await fetchRecordByEccCnc(editedRecord?.ecc_cnc);
+    if (updated && !Array.isArray(updated)) setEditedRecord(updated);
+    else if (Array.isArray(updated) && updated[0]) setEditedRecord(updated[0]);
   };
 
   const provinceKey = getProvincePermissionKey(record?.province);
@@ -341,7 +342,7 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
     currentUser?.provinceStringPermissions?.[provinceKey] === "readWrite";
 
   return (
-    <div>
+    <div className="ucds-record">
       {!record || !record.sort_key || !editedRecord ? (
         <div style={{ textAlign: "center", padding: 40 }}>
           <Spin size="large" tip="Loading record details...">
@@ -352,35 +353,12 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
         <>
           {/* The tabs in the Universe Central DB's accent, the record's
               actions on the tab bar's right — not floating at the page's corner. */}
-          <ConfigProvider theme={{ components: { Tabs: { itemHoverColor: UCDS_ACCENT, itemSelectedColor: UCDS_ACCENT, itemActiveColor: UCDS_ACCENT, inkBarColor: UCDS_ACCENT, titleFontSize: 14 } } }}>
+          <ConfigProvider theme={{ components: { Tabs: { itemHoverColor: UCDS_ACCENT, itemSelectedColor: UCDS_ACCENT, itemActiveColor: UCDS_ACCENT, inkBarColor: UCDS_ACCENT, titleFontSize: 16 } } }}>
           <Tabs
             className="ucds-record-tabs"
-            tabPosition="left"
+            tabPosition="top"
             activeKey={activeTab}
             onChange={handleTabChange}
-            tabBarExtraContent={{
-              right: activeTab !== "6" && (
-                <Space size={8} direction="vertical" className="ucds-record-actions">
-                  <Button icon={<FileTextOutlined />} onClick={handleopenModal} loading={loadingPDF}>
-                    Generate report
-                  </Button>
-                  {isEditing ? (
-                    <>
-                      <Button onClick={handleCancelEdit}>Cancel</Button>
-                      <Button onClick={handleSaveChanges} type="primary" icon={<SaveOutlined />}>
-                        Save
-                      </Button>
-                    </>
-                  ) : (
-                    canShowEditButton && (
-                      <Button onClick={() => setIsEditing(true)} type="primary" icon={<EditOutlined />}>
-                        Edit
-                      </Button>
-                    )
-                  )}
-                </Space>
-              ),
-            }}
             items={[
               {
                 key: "1",
@@ -461,6 +439,35 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
             ]}
           />
           </ConfigProvider>
+
+          {/* The record's actions, under the record — fixed at the foot of
+              the window; only the tab's content above scrolls. */}
+          {activeTab !== "6" && (
+            <div className="ucds-record-footer">
+              <span className="ucds-record-footer__note">
+                {isEditing ? "Editing — save to keep the changes." : canShowEditButton ? "Viewing. Edit to change the record." : "Viewing (read only)."}
+              </span>
+              <Space size={8} wrap>
+                <Button icon={<FileTextOutlined />} onClick={handleopenModal} loading={loadingPDF}>
+                  Generate report
+                </Button>
+                {isEditing ? (
+                  <>
+                    <Button onClick={handleCancelEdit}>Cancel</Button>
+                    <Button onClick={handleSaveChanges} type="primary" icon={<SaveOutlined />}>
+                      Save
+                    </Button>
+                  </>
+                ) : (
+                  canShowEditButton && (
+                    <Button onClick={() => setIsEditing(true)} type="primary" icon={<EditOutlined />}>
+                      Edit
+                    </Button>
+                  )
+                )}
+              </Space>
+            </div>
+          )}
 
           <Modal
             title={<Space><FileTextOutlined />Generate report — {editedRecord.title || editedRecord.sort_key}</Space>}

@@ -29,6 +29,10 @@ export default {
             /textLayer/,
             /markedContent/,
             /endOfContent/,
+            // Leaflet (the Progress Tracker's map) sets every class of its
+            // own from JavaScript; without this its stylesheet was dropped
+            // whole and the map's tiles fell apart in production.
+            /^leaflet-/,
           ],
         },
         // Extract identifier-shaped tokens rather than everything between

@@ -1,0 +1,37 @@
+/* The record window's Documents tab (EstablishmentRecordsPanel.jsx): the same
+   bar and card look as its History tab. */
+.er {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.er-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid rgba(140, 140, 140, 0.22);
+  border-radius: 10px;
+  background: var(--ant-color-bg-container, #fff);
+}
+body[data-theme="dark"] .er-bar {
+  background: rgba(255, 255, 255, 0.02);
+}
+.er-types b {
+  margin-left: 4px;
+}
+.er-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+.er .ant-table-wrapper {
+  border: 1px solid rgba(140, 140, 140, 0.22);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.er .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}

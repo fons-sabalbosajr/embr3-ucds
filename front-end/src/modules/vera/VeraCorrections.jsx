@@ -135,9 +135,10 @@ const VeraCorrections = () => {
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <Paragraph type="secondary" style={{ margin: 0 }}>
-        VERA checks the <Text strong>project types</Text> and <Text strong>specific project types</Text> of every record in the Records Document
-        Library and proposes one spelling for each: the same wording written with different capitals or spacing, values the desktop system cut
-        short, and — with the AI model on — misspellings. Nothing changes until you apply it, and every change can be undone.
+        VERA checks the <Text strong>project types</Text>, <Text strong>specific project types</Text>, <Text strong>project titles</Text>,{" "}
+        <Text strong>proponents</Text> and <Text strong>places</Text> of every record in the Records Document Library and proposes one spelling for
+        each: the same wording written with different capitals or spacing, values the desktop system cut short, and — with the AI model on —
+        misspelled project types. Nothing changes until you apply it, and every change can be undone.
       </Paragraph>
 
       <Card
@@ -191,7 +192,11 @@ const VeraCorrections = () => {
                     { label: "All", value: "all" },
                     { label: "Project type", value: "project.type" },
                     { label: "Specific project type", value: "project.otherType" },
-                  ]}
+                    { label: "Project title", value: "projectTitle" },
+                    { label: "Proponent", value: "proponentName" },
+                    { label: "City", value: "location.city" },
+                    { label: "Barangay", value: "location.barangay" },
+                  ].map((o) => (o.value === "all" ? o : { ...o, label: `${o.label} (${(report?.proposals || []).filter((p) => p.field === o.value && !p.applied).length})` }))}
                 />
                 <Space size={6}>
                   <Switch size="small" checked={certainOnly} onChange={setCertainOnly} />

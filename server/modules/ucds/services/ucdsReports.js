@@ -73,6 +73,8 @@ const ORDER = [
   'handler', 'legal_officer', 'docket_no', 'denr_pab_case_no', 'nov_issued', 'with_nov', 'penalty_date', 'tc_date_actual', 'tc_commitment', 'tc_compliance_link', 'other_tc_remarks',
   'v_pd1586', 'v_ra8749', 'v_ra9275', 'v_ra6969_haz', 'emp_total', 'bod', 'wwtf_type', 'pismu_tracking', 'pismu_count_month', 'amount', 'or_number',
 ];
+const { HEALTHCARE_SERIAL, isHealthcare, healthcareFilter } = require('./healthcare');
+
 const SKIP = new Set(['_id', 'helper_column', 'helper_count', 'searchText']);
 // The register spells a province several ways ("Nueva_Ecija", " Tarlac", "BATAAN").
 const provinceRegex = (province) => new RegExp(`^\\s*${String(province).replace(/[^A-Za-z_ ]/g, '').replace(/[_ ]/g, '[_ ]')}\\s*$`, 'i');
@@ -80,8 +82,17 @@ const header = (k) => k.replace(/_/g, ' ').replace(/\b(ecc|cnc|pto|wwdp|haz|pco|
 const cell = (v) => (v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'object' ? JSON.stringify(v) : v);
 
 /** The Monitoring Plan as an Excel workbook, with the ERMS anchor as a column. */
-async function monitoringPlanWorkbook(scoped, { province } = {}) {
-  const filter = province ? { province: provinceRegex(province) } : {};
+async function monitoringPlanWorkbook(scoped, { province, ownRegister = false } = {}) {
+  // Healthcare Industries (a year with its own register) is the healthcare
+  // list, and a province there is the province without it — as the screens
+  // show them (see healthcare.js).
+  const filter = !province
+    ? {}
+    : isHealthcare(province)
+      ? (ownRegister ? healthcareFilter() : { _id: null })
+      : ownRegister
+        ? { province: provinceRegex(province), sort_key: { $not: HEALTHCARE_SERIAL } }
+        : { province: provinceRegex(province) };
   const docs = await scoped.find(filter).sort({ id_no: 1 }).toArray();
   const keys = new Set();
   for (const d of docs) for (const k of Object.keys(d)) if (!SKIP.has(k)) keys.add(k);
@@ -101,6 +112,53 @@ async function monitoringPlanWorkbook(scoped, { province } = {}) {
   ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, (province ? `${province} Monitoring Plan` : 'Monitoring Plan').slice(0, 31));
+  return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true }), count: rows.length };
+}
+
+/**
+ * The spreadsheet view as Excel: the establishments the person sees (their
+ * serials, in their order — filtered and sorted on the screen), the columns
+ * they chose, under the labels they read. Within the caller's scope only: a
+ * serial outside it is simply not found. The 2026 IIS numbers, which the
+ * register does not hold yet, come from the RAW data as on the screen.
+ */
+async function viewWorkbook(scoped, { serials = [], columns = [], sheet = 'Monitoring Plan' } = {}) {
+  const keys = serials.map(String).filter(Boolean).slice(0, 20000);
+  const cols = columns
+    .filter((c) => c && /^[a-z0-9_]{1,40}$/i.test(String(c.key)) && !SKIP.has(c.key))
+    .slice(0, 120)
+    .map((c) => ({ key: String(c.key), label: String(c.label || header(c.key)).slice(0, 80) }));
+  if (!cols.length) cols.push({ key: 'sort_key', label: 'Serial No' });
+  const projection = Object.fromEntries([...cols.map((c) => [c.key === 'brgy' ? 'brgy' : c.key, 1]), ['sort_key', 1], ['barangay', 1]]);
+  const docs = await scoped.find({ sort_key: { $in: keys } }, { projection }).toArray();
+  const bySerial = new Map(docs.map((d) => [d.sort_key, d]));
+  let iis2026 = {};
+  if (cols.some((c) => c.key === 'iis_no_2026')) {
+    try {
+      iis2026 = await require('../../../services/progressTracker').rawIis('');
+    } catch {
+      iis2026 = {};
+    }
+  }
+  const rows = [];
+  for (const k of keys) {
+    const d = bySerial.get(k);
+    if (!d) continue;
+    const row = {};
+    for (const c of cols) {
+      let v = d[c.key];
+      if ((v === undefined || v === null || v === '') && c.key === 'brgy') v = d.barangay;
+      if ((v === undefined || v === null || v === '') && c.key === 'iis_no_2026') v = iis2026[d.sort_key];
+      row[c.label] = cell(v);
+    }
+    rows.push(row);
+  }
+  const headers = cols.map((c) => c.label);
+  const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+  ws['!cols'] = headers.map((h) => ({ wch: Math.min(50, Math.max(h.length, ...rows.slice(0, 300).map((r) => String(r[h] ?? '').length)) + 2) }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, String(sheet || 'Monitoring Plan').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
   return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true }), count: rows.length };
 }
 
@@ -137,4 +195,4 @@ async function notInErms(scoped, { province } = {}) {
     .map((d) => ({ sort_key: d.sort_key, title: d.title || d.name || '', ecc_cnc: d.ecc_cnc, province: provinceLabel(d.province), city: d.city || '', date_approved: d.date_approved || '' }));
 }
 
-module.exports = { notInErms, ermsIndex, anchorOne, anchor, monitoringPlanWorkbook, accomplishment, provinceLabel };
+module.exports = { notInErms, ermsIndex, anchorOne, anchor, monitoringPlanWorkbook, viewWorkbook, accomplishment, provinceLabel };

@@ -1,0 +1,304 @@
+/* The register's spreadsheet view (SpreadsheetView.jsx): Excel's look —
+   a ribbon of tool groups, the name box and formula bar, grey row numbers and
+   lettered headers, fine gridlines, a green outline on the chosen cell, and
+   sheet tabs with a status bar at the foot. */
+
+body {
+  --ss-green: #217346;
+  --ss-head: #f3f3f3;
+  --ss-grid: #d4d4d4;
+  --ss-sel-col: rgba(33, 115, 70, 0.06);
+  --ss-surface: #ffffff;
+}
+body[data-theme="dark"] {
+  --ss-green: #3fa36b;
+  --ss-head: #262626;
+  --ss-grid: #3a3a3a;
+  --ss-sel-col: rgba(63, 163, 107, 0.1);
+  --ss-surface: #141414;
+}
+
+.ss-modal .ant-modal-content {
+  padding: 12px 16px 10px;
+}
+.ss-modal .ant-modal-header {
+  margin-bottom: 8px;
+}
+.ss-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  background: var(--ss-green);
+  color: #fff;
+}
+.ss {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  outline: none;
+}
+
+/* The ribbon. */
+.ss-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--ss-grid);
+  border-radius: 6px;
+  background: var(--ss-head);
+}
+.ss-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 8px 12px 4px;
+  border-right: 1px solid var(--ss-grid);
+}
+.ss-group:last-child {
+  border-right: 0;
+  margin-left: auto;
+}
+.ss-group-label {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(120, 120, 120, 1);
+}
+.ss-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 0 4px;
+}
+.ss-excel.ant-btn-primary {
+  background: var(--ss-green);
+  border-color: var(--ss-green);
+}
+.ss-excel.ant-btn-primary:hover {
+  filter: brightness(1.08);
+}
+.ss-columns-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 560px;
+}
+.ss-columns-pick .ant-checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px 10px;
+  margin-top: 4px;
+}
+.ss-filter {
+  padding: 8px;
+  width: 230px;
+}
+
+/* The name box and the formula bar. */
+.ss-formula {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--ss-grid);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--ss-surface);
+}
+.ss-namebox {
+  min-width: 78px;
+  padding: 5px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  border-right: 1px solid var(--ss-grid);
+  text-align: center;
+}
+.ss-fx {
+  padding: 0 10px;
+  font-style: italic;
+  font-weight: 700;
+  color: rgba(120, 120, 120, 1);
+  border-right: 1px solid var(--ss-grid);
+}
+.ss-fx-value.ant-input {
+  border: 0 !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  background: transparent;
+}
+.ss-formula .ant-btn {
+  margin: 0 6px;
+}
+
+/* The grid. */
+.ss-grid {
+  border: 1px solid var(--ss-grid);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ss-table .ant-table {
+  font-size: calc(12.5px * var(--ss-zoom, 1));
+  border-radius: 0 !important;
+}
+.ss-table .ant-table-thead > tr > th {
+  background: var(--ss-head) !important;
+  padding: 3px 8px !important;
+  font-weight: 600;
+  border-color: var(--ss-grid) !important;
+  border-radius: 0 !important;
+}
+.ss-table .ant-table-thead > tr > th::before {
+  display: none;
+}
+.ss-head {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.ss-letter {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: rgba(130, 130, 130, 1);
+}
+.ss-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ss-table .ant-table-tbody > tr > td,
+.ss-table .ant-table-tbody .ant-table-cell {
+  padding: calc(3px * var(--ss-zoom, 1)) 8px !important;
+  border-color: var(--ss-grid) !important;
+  line-height: 1.35;
+}
+.ss-table.is-wrap .ant-table-tbody .ant-table-cell {
+  white-space: normal;
+  word-break: break-word;
+}
+.ss-table .ss-rownum,
+.ss-table .ant-table-tbody .ss-rownum {
+  background: var(--ss-head) !important;
+  color: rgba(120, 120, 120, 1);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ss-corner {
+  display: block;
+  width: 0;
+  height: 0;
+  margin-left: auto;
+  border-left: 10px solid transparent;
+  border-bottom: 10px solid rgba(150, 150, 150, 0.6);
+}
+.ss-cell {
+  cursor: cell;
+}
+.ss-table .ant-table-tbody .ss-colsel {
+  background: var(--ss-sel-col);
+}
+.ss-table .ant-table-tbody .ss-sel {
+  outline: 2px solid var(--ss-green);
+  outline-offset: -2px;
+  background: var(--ss-sel-col) !important;
+}
+.ss-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95em;
+}
+.ss-erms { color: #389e0d; font-weight: 600; }
+.ss-expired { color: #cf1322; font-weight: 600; }
+.ss-soon { color: #d46b08; font-weight: 600; }
+.ss-raw { color: #722ed1; }
+body[data-theme="dark"] .ss-erms { color: #73d13d; }
+body[data-theme="dark"] .ss-expired { color: #ff7875; }
+body[data-theme="dark"] .ss-soon { color: #ffa940; }
+body[data-theme="dark"] .ss-raw { color: #b37feb; }
+
+/* The sheet tabs and the status bar. */
+.ss-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.ss-sheets.ant-segmented {
+  background: var(--ss-head);
+}
+.ss-sheets .ant-segmented-item-selected {
+  color: var(--ss-green);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--ss-green);
+}
+.ss-status b {
+  font-variant-numeric: tabular-nums;
+}
+.ss-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(120, 120, 120, 1);
+  margin-left: auto;
+}
+.ss-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-left: 8px;
+  background: currentColor;
+}
+.ss-hint {
+  color: rgba(140, 140, 140, 1);
+  width: 100%;
+  text-align: right;
+}
+
+/* Editing (Edit switched on): editable cells, the in-cell editor, and each
+   cell's save state — saving, saved (a brief green), failed (red). */
+.ss:focus {
+  outline: none;
+}
+.ss.is-editing .ss-grid {
+  border-color: var(--ss-green);
+  box-shadow: 0 0 0 1px var(--ss-green);
+}
+.ss.is-editing .ss-editable {
+  cursor: text;
+}
+.ss-table .ant-table-tbody .ss-cell .ss-editor.ant-input {
+  margin: -3px -8px;
+  width: calc(100% + 16px);
+  border-radius: 0;
+  border: 2px solid var(--ss-green) !important;
+  box-shadow: none !important;
+  font-size: inherit;
+  padding: 1px 6px;
+}
+.ss-table .ant-table-tbody .ss-saving {
+  opacity: 0.55;
+}
+.ss-table .ant-table-tbody .ss-saved {
+  animation: ss-saved 1.6s ease-out;
+}
+@keyframes ss-saved {
+  0% { background: rgba(82, 196, 26, 0.35); }
+  100% { background: transparent; }
+}
+.ss-table .ant-table-tbody .ss-error {
+  background: rgba(245, 34, 45, 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgba(245, 34, 45, 0.6);
+}
+.ss-fx-value.ant-input:not([readonly]) {
+  background: rgba(33, 115, 70, 0.06);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-table .ant-table-tbody .ss-saved {
+    animation: none;
+    background: rgba(82, 196, 26, 0.2);
+  }
+}

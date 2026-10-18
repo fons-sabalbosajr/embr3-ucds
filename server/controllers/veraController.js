@@ -32,6 +32,7 @@ const { roleOf, domainsOf, ermsUnitsOf, ROLES } = require('../services/authoriza
 const provider = require('../services/vera/provider');
 const vera = require('../services/vera/assistant');
 const veraFigures = require('../services/vera/figures');
+const veraLookup = require('../services/vera/lookup');
 const K = require('../services/vera/knowledge');
 
 const CONFIG_COLLECTION = 'app-config';
@@ -80,13 +81,41 @@ async function patchConfig(set) {
  * services/vera/figures). Null when the question asks for none, and never
  * fatal: VERA answers without them rather than not at all.
  */
-async function countsFor(req, message, viewer, cfg) {
-  try {
-    if (!veraFigures.wantsFigures(message)) return null;
+async function countsFor(req, message, viewer, cfg, page = '') {
+  const user = principalOf(req);
+  const activeYear = req.session?.activeYear;
+  const counting = (async () => {
+    if (!veraFigures.wantsFigures(message, page)) return null;
     const ctx = vera.contextFor(viewer, '', cfg);
-    return await veraFigures.figuresFor(message, principalOf(req), { activeYear: req.session?.activeYear, pageLabels: ctx.pageLabels });
-  } catch (err) {
+    return veraFigures.figuresFor(message, user, { activeYear, pageLabels: ctx.pageLabels, page });
+  })().catch((err) => {
     console.warn('[VERA] figures unavailable:', err.message);
+    return null;
+  });
+  // "Find the file of…": the matching documents and establishments this person may see (services/vera/lookup).
+  const finding = veraLookup.lookupFor(message, user, { activeYear }).catch((err) => {
+    console.warn('[VERA] lookup unavailable:', err.message);
+    return null;
+  });
+  const [figures, found] = await Promise.all([counting, finding]);
+  if (!found) return figures;
+  return {
+    text: [found.text, figures?.text].filter(Boolean).join('\n\n'),
+    asOf: figures?.asOf || new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }),
+    role: figures?.role,
+    lookup: true,
+  };
+}
+
+/** The public Document Portal: its search and its totals, nothing more (services/vera/lookup). */
+async function portalFiguresFor(message, page) {
+  if (String(page || '').toLowerCase() !== 'document-portal') return null;
+  try {
+    const found = await veraLookup.portalLookupFor(message);
+    if (!found) return null;
+    return { text: found.text, asOf: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }), lookup: Boolean(found.terms), portal: true };
+  } catch (err) {
+    console.warn('[VERA] portal lookup unavailable:', err.message);
     return null;
   }
 }
@@ -220,7 +249,7 @@ async function chat(req, res) {
   // Kept outside the try so the help-library answer on failure can use them.
   let figures = null;
   try {
-    figures = await countsFor(req, message, viewer, cfg);
+    figures = await countsFor(req, message, viewer, cfg, page);
     // The model's time starts once the figures are counted: counting on a
     // busy database used to eat into it and time the answer out.
     timer = setTimeout(() => controller.abort(), provider.resolveTimeoutMs(cfg) + 2000);
@@ -620,8 +649,10 @@ async function publicChat(req, res) {
   const timer = setTimeout(() => controller.abort(), provider.resolveTimeoutMs(cfg) + 2000);
   const started = Date.now();
   const viewer = { realm: 'public' };
+  let figures = null;
   try {
-    const result = await vera.answer({ message, history, page, config: cfg, viewer, signal: controller.signal });
+    figures = await portalFiguresFor(message, page);
+    const result = await vera.answer({ message, history, page, config: cfg, viewer, figures, signal: controller.signal });
     // No user to attribute it to, and the address is NOT stored.
     log(req, 'vera:public-chat', {
       source: result.source,
@@ -638,7 +669,7 @@ async function publicChat(req, res) {
   } catch (error) {
     const safe = provider.sanitizeError(error);
     console.error('vera publicChat error:', safe.code);
-    return res.json({ success: true, answer: vera.fallbackFor(message, viewer, page, cfg), source: 'fallback', usedModel: false });
+    return res.json({ success: true, answer: vera.fallbackFor(message, viewer, page, cfg, figures), source: 'fallback', usedModel: false });
   } finally {
     clearTimeout(timer);
   }

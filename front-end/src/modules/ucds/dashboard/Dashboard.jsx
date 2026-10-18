@@ -1,4 +1,4 @@
-import { Button, Card, Col, Empty, List, Row, Space, Tag, Typography } from "antd";
+import { Button, Col, Row, Space, Typography } from "antd";
 import { CalendarOutlined, ExclamationCircleOutlined, FileExcelOutlined, FileTextOutlined, WarningOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -8,7 +8,8 @@ import { AttentionTile, StatTile } from "../../../shared/components/dashboard/da
 import ChartCard from "../../../shared/components/dashboard/ChartCard";
 import { DonutChart, MagnitudeBars } from "../../../shared/components/dashboard/charts";
 import { useTheme } from "../../../theme/ThemeProvider";
-import Calendar from "../../../components/Calendar/SystemCalendar";
+import MonitoringCalendar from "./MonitoringCalendar";
+import ExpiringPermits from "./ExpiringPermits";
 import { message } from "../../../shared/feedback";
 import { downloadMonitoringPlan, fetchAccomplishment, fetchDashboardStats, fetchExpiringPermits } from "../ucdsService";
 
@@ -25,7 +26,7 @@ const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
 const STATUS_LABEL = { operational: "Operational", nonOperational: "Non-operational", notOperational: "Not operational", notYetMonitored: "Not yet monitored", other: "Other" };
 const PERMIT_LABEL = { ecc: "ECC / CNC", pto: "Permit to Operate", wwdp: "Wastewater Discharge Permit", hwg: "Hazardous Waste Generator", pco: "PCO accreditation" };
 
-const Dashboard = ({ theme: themeProp }) => {
+const Dashboard = () => {
   const { isDark } = useTheme();
   const accent = UCDS_ACCENT;
   const stats = useQuery({ queryKey: ["ucds", "dashboard-stats"], queryFn: fetchDashboardStats, staleTime: 60 * 1000 });
@@ -125,37 +126,14 @@ const Dashboard = ({ theme: themeProp }) => {
         render={(full) => <MagnitudeBars rows={provinceRows} color={accent} dark={isDark} name="Monitored" height={full ? 380 : 240} />}
       />
 
+      {/* The monitoring calendar (a month as a heat grid, the day beside it)
+          and the permits that expire next. */}
       <Row gutter={[12, 12]}>
-        <Col xs={24} lg={16}>
-          <Card size="small" title={<Space><CalendarOutlined />Monitoring calendar</Space>} style={{ height: "100%" }}>
-            <Calendar theme={themeProp || (isDark ? "dark" : "light")} />
-          </Card>
+        <Col xs={24} xl={15}>
+          <MonitoringCalendar />
         </Col>
-        <Col xs={24} lg={8}>
-          <Card size="small" title="Permits expiring soonest" style={{ height: "100%" }} extra={<Text type="secondary" style={{ fontSize: 12 }}>{fmt(expiring.data?.total)} establishments</Text>}>
-            <List
-              size="small"
-              loading={expiring.isLoading}
-              dataSource={expiring.data?.data || []}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing expiring" /> }}
-              renderItem={(r) => (
-                <List.Item>
-                  <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                    <Text strong style={{ fontSize: 13 }}>
-                      <Text type="secondary" style={{ fontFamily: "monospace", fontSize: 12 }}>{r.sort_key}</Text> {r.title}
-                    </Text>
-                    <Space size={4} wrap>
-                      {r.permits.map((p) => (
-                        <Tag key={p.type} color={p.isExpired ? "red" : "gold"} style={{ marginInlineEnd: 0 }}>
-                          {p.type} {p.isExpired ? "expired" : "expires"} {String(p.expiry).slice(0, 10)}
-                        </Tag>
-                      ))}
-                    </Space>
-                  </Space>
-                </List.Item>
-              )}
-            />
-          </Card>
+        <Col xs={24} xl={9}>
+          <ExpiringPermits />
         </Col>
       </Row>
     </Space>

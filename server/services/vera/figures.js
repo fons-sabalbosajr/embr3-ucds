@@ -19,6 +19,9 @@
 //                     admin domain only
 //   The application   how many screens this account can open, from VERA's
 //                     own page list
+//   Progress Tracker  the season's updating figures per province — the
+//                     Developer only, as the tracker screen is; asked on
+//                     that screen, every question gets them
 //
 // Each block is computed only when asked for, so a question that names the
 // Laboratory does not count the register. Everything is cached briefly by
@@ -26,15 +29,20 @@
 // ---------------------------------------------------------------------------
 
 const { connectToMongo, getDb, collections } = require('../../config/db');
-const { canAccessAllYears, ermsUnitsOf, authorizedProvinces, roleOf, ROLE_LABELS, domainsOf } = require('../authorization');
+const { canAccessAllYears, ermsUnitsOf, authorizedProvinces, roleOf, ROLE_LABELS, domainsOf, isDeveloper } = require('../authorization');
 const { userProvinceKeys, provinceFilter, PROVINCES } = require('../provinces');
 
 const COUNT_RE =
   /\b(how\s+many|how\s+much|number\s+of|no\.?\s+of|total|totals|count|counts|counting|tally|statistics?|stats|figures?|breakdown|break\s+(it\s+)?down|per\s+(province|type|year|unit|kind)|by\s+(province|type|year|unit|kind)|percentage|ilan|ilang|bilang|kabuuan|summary\s+of)\b/i;
 
-/** Whether the message asks for a count or a breakdown. */
-function wantsFigures(message) {
-  return COUNT_RE.test(String(message || ''));
+// The Progress Tracker's words: on its screen every question is about it.
+const PROGRESS_PAGE = 'progress-tracker';
+const PROGRESS_RE =
+  /\b(progress|tracker|updating|season|baseline|highlight\w*|colou?r(ed|s|ing)?|legend|ecc\s*online|added|additions?|encod\w*|behind|pending|review\s+sheets?|main\s+sheets?)\b/i;
+
+/** Whether the message asks for a count or a breakdown (on the tracker's screen, anything does). */
+function wantsFigures(message, page = '') {
+  return page === PROGRESS_PAGE || COUNT_RE.test(String(message || ''));
 }
 
 const fmt = (n) => new Intl.NumberFormat('en-PH').format(n ?? 0);
@@ -57,9 +65,17 @@ function topicsOf(message) {
     portal: /\b(portal|room|seat|seats|waiting\s+line|queue|requesters?)\b/.test(m),
     accounts: /\b(user|users|account|accounts|online|people|staff)\b/.test(m),
     screens: /\b(screen|screens|page|pages|menu|menus|link|links|module|modules|feature|features)\b/.test(m),
+    progress: PROGRESS_RE.test(m),
+    tables: /\b(tables?|my\s+table|rows?|columns?)\b/.test(m),
   };
   const any = Object.values(named).some(Boolean);
-  return any ? named : { records: true, legal: true, laboratory: true, ucds: true, portal: false, accounts: false, screens: false };
+  return any ? named : { records: true, legal: true, laboratory: true, ucds: true, portal: false, accounts: false, screens: false, progress: false, tables: false };
+}
+
+async function progressBlock() {
+  const tracker = require('../progressTracker');
+  const { figuresLines } = require('../progressTracker/notes');
+  return figuresLines(await tracker.overview(null));
 }
 
 async function recordsBlock(user) {
@@ -102,7 +118,9 @@ async function ucdsBlock(user, activeYear) {
   const keys = container ? authorizedProvinces(user, container) : userProvinceKeys(user);
   const filter = provinceFilter(keys);
   await connectToMongo();
-  const rows = await collections.ucds
+  // A year loaded from its own RAW universe (2027 on) keeps its own register (services/yearScope.js registerOf).
+  const register = container?.register && /^ucds-data-\d{4}$/.test(container.register) ? getDb().collection(container.register) : collections.ucds;
+  const rows = await register
     .aggregate([
       ...(filter ? [{ $match: filter }] : []),
       // Spelled several ways in the data ("Nueva_Ecija", " tarlac"): one row each.
@@ -116,6 +134,23 @@ async function ucdsBlock(user, activeYear) {
     `- Total establishments: ${fmt(total)}`,
     rows.length ? `- By province: ${list(rows, (r) => PROVINCES.find((p) => [p.key, p.value, p.label].some((n) => n.toLowerCase() === r._id))?.label || r._id || 'No province')}` : '',
   ].filter(Boolean);
+}
+
+/** The Planning Unit's own tables in the active year: their names, rows and columns. */
+async function tablesBlock(activeYear) {
+  const year = Number(activeYear) || new Date().getFullYear();
+  await connectToMongo();
+  const tables = await getDb()
+    .collection(require('../menuItems').COLLECTION)
+    .find({ year, kind: 'table' }, { projection: { label: 1, table: 1 } })
+    .sort({ label: 1 })
+    .limit(40)
+    .toArray();
+  if (!tables.length) return [`Planning Unit tables (${year}): none added yet.`];
+  return [
+    `Planning Unit tables (${year}): ${fmt(tables.length)}`,
+    ...tables.map((t) => `- ${t.label}: ${fmt(t.table?.rowCount || 0)} row(s), ${fmt(t.table?.columns?.length || 0)} column(s)${(t.table?.columns || []).some((c) => c.type === 'formula') ? ', with formulas' : ''}`),
+  ];
 }
 
 const UNIT_WORDS = { records: 'Records Unit', legal: 'Legal Services', laboratory: 'Laboratory' };
@@ -169,9 +204,10 @@ function screensBlock(pageLabels) {
  * quote — or null when the question asks for no count, or nothing applies.
  * @param {object} user  the signed-in account (principalOf)
  */
-async function figuresFor(message, user, { activeYear, pageLabels } = {}) {
-  if (!user || !wantsFigures(message)) return null;
-  const topics = topicsOf(message);
+async function figuresFor(message, user, { activeYear, pageLabels, page = '' } = {}) {
+  if (!user || !wantsFigures(message, page)) return null;
+  // On the tracker's screen the question is about the tracker, whatever else it names.
+  const topics = page === PROGRESS_PAGE ? { progress: true } : topicsOf(message);
   const domains = domainsOf(user);
   const units = ermsUnitsOf(user);
   const jobs = [];
@@ -185,6 +221,8 @@ async function figuresFor(message, user, { activeYear, pageLabels } = {}) {
   if (topics.portal && domains.includes('erms')) jobs.push(portalBlock(user));
   if (topics.accounts && domains.includes('admin')) jobs.push(accountsBlock());
   if (topics.screens) jobs.push(Promise.resolve(screensBlock(pageLabels)));
+  if (topics.progress && isDeveloper(user)) jobs.push(progressBlock());
+  if (topics.tables && domains.includes('ucds')) jobs.push(tablesBlock(activeYear));
   if (!jobs.length) return null;
   // One block failing (a unit not configured, a slow read) does not cost the others.
   const blocks = (await Promise.allSettled(jobs)).filter((r) => r.status === 'fulfilled' && r.value?.length).map((r) => r.value.join('\n'));

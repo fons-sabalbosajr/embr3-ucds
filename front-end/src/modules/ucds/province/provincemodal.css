@@ -141,3 +141,234 @@
   background-color: #0050b3;
   color: #ffffff;
 }
+
+/* The record window's layout (ProvinceModal.jsx): the tab bar at the top and
+   the actions at the foot stay put; only the tab's content scrolls between. */
+.ucds-record {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+.ucds-record > .ucds-record-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.ucds-record > .ucds-record-tabs > .ant-tabs-content-holder {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.ucds-record > .ucds-record-tabs > .ant-tabs-content-holder > .ant-tabs-content,
+.ucds-record > .ucds-record-tabs > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+  min-width: 0;
+}
+
+/* The record's actions at the foot of its window, always in reach. */
+.ucds-record-footer {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 10px 4px 0;
+  border-top: 1px solid rgba(140, 140, 140, 0.25);
+  background: var(--ant-color-bg-elevated, #fff);
+}
+body[data-theme="dark"] .ucds-record-footer {
+  background: var(--ant-color-bg-elevated, #1f1f1f);
+}
+.ucds-record-footer__note {
+  font-size: 12.5px;
+  color: rgba(120, 120, 120, 1);
+}
+
+/* The register table (Province.jsx). */
+/* Permits/Clearances: the ECC/CNC by its reference number — green when the
+   permit is on file in ERMS (no separate check icon). */
+.ucds-permit-ref {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.35;
+  word-break: break-all;
+  position: relative;
+  padding-right: 10px;
+}
+.ucds-permit-ref__kind {
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 10px;
+  opacity: 0.7;
+}
+.ucds-permit-ref.is-on-erms {
+  color: #389e0d;
+  font-weight: 600;
+}
+body[data-theme="dark"] .ucds-permit-ref.is-on-erms {
+  color: #73d13d;
+}
+.ucds-permit-ref__pending {
+  position: absolute;
+  top: -3px;
+  right: 0;
+  font-size: 10px;
+  color: #a8e8f9;
+}
+/* The thin bar above the table while its rows refresh in place. */
+.ucds-refresh-bar {
+  height: 3px;
+  margin: 0 0 6px;
+  border-radius: 2px;
+  background: rgba(140, 140, 140, 0.15);
+  overflow: hidden;
+}
+.ucds-refresh-bar > span {
+  display: block;
+  height: 100%;
+  background: #2f7ecb;
+  border-radius: 2px;
+  transition: width 0.25s ease-out;
+}
+.ucds-load-progress .ant-progress-bg {
+  transition: width 0.25s ease-out !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ucds-refresh-bar > span,
+  .ucds-load-progress .ant-progress-bg {
+    transition: none !important;
+  }
+}
+
+/* The record window: no scrollbars. Its tabs are laid out to fit (two
+   columns of sections, the permits side by side); on a small screen the body
+   still scrolls — by wheel, touch or keyboard — without a bar, and never
+   sideways. */
+.ucds-record-modal .ant-modal-body {
+  overflow-x: hidden !important;
+  scrollbar-width: none;
+}
+.ucds-record-modal .ant-modal-body::-webkit-scrollbar {
+  display: none;
+}
+.ucds-record-modal .ucds-record-tabs .ant-tabs-content-holder,
+.ucds-record-modal .ucds-record-tabs .ant-tabs-tabpane {
+  min-width: 0;
+}
+.ucds-record-modal .ucds-record-tabs .ant-tabs-nav {
+  min-width: 190px;
+}
+.ucds-record-modal .ucds-record-tabs > .ant-tabs-nav .ant-tabs-tab {
+  padding: 10px 18px !important;
+  font-size: 16px;
+  font-weight: 600;
+}
+.ucds-record-modal .ucds-record-tabs .ant-tabs-content-holder {
+  padding-left: 4px;
+}
+.ucds-record-modal .ant-table-wrapper,
+.ucds-record-modal .ant-table-container {
+  max-width: 100%;
+}
+
+/* Permits/Clearances (Province.jsx): five fixed lines on every row. */
+.ucds-pc {
+  display: grid;
+  gap: 2px;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.ucds-pc-row {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.ucds-pc-label {
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: rgba(110, 110, 110, 1);
+}
+body[data-theme="dark"] .ucds-pc-label {
+  color: rgba(190, 190, 190, 0.85);
+}
+.ucds-pc-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+  position: relative;
+}
+.ucds-pc-row.is-none .ucds-pc-value {
+  color: rgba(160, 160, 160, 1);
+}
+.ucds-pc-row.is-erms .ucds-pc-value { color: #389e0d; font-weight: 600; }
+/* On file in ERMS: the reference no. links to the Document Portal. */
+.ucds-pc-link {
+  color: inherit !important;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.ucds-pc-link:hover {
+  text-decoration-style: solid;
+}
+.ucds-pc-row.is-expired { background: rgba(245, 34, 45, 0.07); }
+.ucds-pc-row.is-expired .ucds-pc-value { color: #cf1322; font-weight: 600; }
+.ucds-pc-row.is-soon { background: rgba(250, 140, 22, 0.08); }
+.ucds-pc-row.is-soon .ucds-pc-value { color: #d46b08; font-weight: 600; }
+body[data-theme="dark"] .ucds-pc-row.is-erms .ucds-pc-value { color: #73d13d; }
+body[data-theme="dark"] .ucds-pc-row.is-expired .ucds-pc-value { color: #ff7875; }
+body[data-theme="dark"] .ucds-pc-row.is-soon .ucds-pc-value { color: #ffa940; }
+.ucds-pc-pending {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #13a8a8;
+}
+/* The key in the column's header tooltip. */
+.ucds-pc-key {
+  display: inline-block;
+  min-width: 46px;
+  font-weight: 700;
+}
+.ucds-pc-key.is-erms { color: #95de64; }
+.ucds-pc-key.is-expired { color: #ff7875; }
+.ucds-pc-key.is-soon { color: #ffc069; }
+
+/* Section/Unit in charge: soft chips, ink readable on every section colour. */
+.ucds-section-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+.ucds-section-chip i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* The record's tabs across the top (no side column taking the width). */
+.ucds-record-modal .ucds-record-tabs > .ant-tabs-nav {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.ucds-record-modal .ucds-record-tabs > .ant-tabs-content-holder {
+  padding-left: 0;
+}

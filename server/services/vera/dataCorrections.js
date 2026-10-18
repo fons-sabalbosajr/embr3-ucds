@@ -38,6 +38,9 @@ const FIELDS = {
   // missed by a search. Names get the same-wording pass only: two names a
   // letter apart can be two different companies.
   proponentName: 'Proponent',
+  // Titles too: the same title written with other capitals, spacing or
+  // punctuation becomes one — same wording only, never a spelling guess.
+  projectTitle: 'Project title',
   'location.city': 'City / municipality',
   'location.barangay': 'Barangay',
 };
@@ -291,29 +294,65 @@ async function pendingCount() {
   return (run?.proposals || []).filter((p) => !p.applied).length;
 }
 
-/** Apply proposals (by id, or all not yet applied). */
+/** A dotted field's value in a document ("project.type"). */
+const valueAt = (doc, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), doc);
+
+/**
+ * Apply proposals (by id, or all not yet applied).
+ *
+ * One read per field finds every record to change, and one batched write
+ * changes them all. (It used to be a read and a write per proposal: "Apply
+ * all" on a report of a thousand corrections took minutes, the request was
+ * cut off midway, and the records it had changed were never written into
+ * the report — changed, but shown as waiting and impossible to undo.)
+ */
 async function apply(runId, ids, user) {
   await connectToMongo();
   const run = ObjectId.isValid(runId) ? await collection().findOne({ _id: new ObjectId(runId) }) : null;
   if (!run) return { ok: false, status: 404, message: 'That report is no longer there. Run a new check.' };
   const wanted = ids === 'all' ? run.proposals.filter((p) => !p.applied) : run.proposals.filter((p) => !p.applied && ids.includes(p.id));
+  if (!wanted.length) return { ok: true, applied: 0, changed: 0 };
   const now = new Date();
   const who = user?.username || 'unknown';
-  let changed = 0;
+
+  // The records holding each old value, field by field.
+  const hitsOf = new Map(); // `${field}\u0000${from}` -> [_id]
+  const byField = new Map();
   for (const p of wanted) {
-    const hits = await records().find({ [p.field]: p.from }, { projection: { _id: 1 } }).limit(MAX_REMEMBERED + 1).toArray();
-    const remembered = hits.length <= MAX_REMEMBERED ? hits.map((h) => h._id) : null;
-    const res = await records().updateMany(
-      { [p.field]: p.from },
-      { $set: { [p.field]: p.to, updatedAt: now, updatedBy: `VERA (approved by ${who})` } }
-    );
+    if (!byField.has(p.field)) byField.set(p.field, new Set());
+    byField.get(p.field).add(p.from);
+  }
+  for (const [field, froms] of byField) {
+    const docs = await records()
+      .find({ [field]: { $in: [...froms] } }, { projection: { _id: 1, [field]: 1 } })
+      .toArray();
+    for (const d of docs) {
+      const key = `${field}\u0000${valueAt(d, field)}`;
+      if (!hitsOf.has(key)) hitsOf.set(key, []);
+      hitsOf.get(key).push(d._id);
+    }
+  }
+
+  const ops = [];
+  for (const p of wanted) {
+    const hits = hitsOf.get(`${p.field}\u0000${p.from}`) || [];
     p.applied = true;
     p.appliedAt = now;
     p.appliedBy = who;
-    p.changed = res.modifiedCount;
-    p.appliedIds = remembered;
-    changed += res.modifiedCount;
+    p.changed = hits.length;
+    p.appliedIds = hits.length <= MAX_REMEMBERED ? hits : null;
+    if (hits.length) {
+      ops.push({
+        updateMany: {
+          filter: { _id: { $in: hits }, [p.field]: p.from },
+          update: { $set: { [p.field]: p.to, updatedAt: now, updatedBy: `VERA (approved by ${who})` } },
+        },
+      });
+    }
   }
+  const res = ops.length ? await records().bulkWrite(ops, { ordered: false }) : { modifiedCount: 0 };
+  const changed = res.modifiedCount || 0;
+
   const left = run.proposals.filter((p) => !p.applied).length;
   await collection().updateOne({ _id: run._id }, { $set: { proposals: run.proposals, status: left ? 'partly-applied' : 'applied' } });
   if (changed) require('../../shared/services/shortCache').invalidate('erms:records:');

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Grid, theme as antdTheme } from "antd";
+import { Grid } from "antd";
 import { SendOutlined, CloseOutlined, MinusOutlined, ReloadOutlined, DeleteOutlined, WarningOutlined, MessageOutlined } from "@ant-design/icons";
 
-import { VeraFlame, VeraOrb } from "./VeraMark";
+import { VeraFlame } from "./VeraMark";
 import { BorderBeam } from "border-beam";
-import { getVeraStatus, askVera, getVeraPublicStatus, askVeraPublic, pageKeyFromPath } from "./veraService";
+import { getVeraStatus, askVera, getVeraPublicStatus, askVeraPublic, pageKeyFromPath, VERA_ASK_EVENT } from "./veraService";
 import { useTheme } from "../../theme/ThemeProvider";
 import "./vera.css";
 
@@ -87,8 +87,6 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
 
   const location = useLocation();
   const { mode } = useTheme();
-  // The beam in the app's own accent, as the panel's colours are (vera.css).
-  const accent = antdTheme.useToken().token.colorPrimary;
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.sm;
   const pageKey = useMemo(() => pageKeyFromPath(location.pathname), [location.pathname]);
@@ -258,6 +256,27 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
     }
   };
 
+  // A screen can open the chat with a question (veraService.openVera): it is
+  // asked once the chat is ready and nothing else is on its way.
+  const [asked, setAsked] = useState(null);
+  useEffect(() => {
+    if (isPublic) return undefined;
+    const onAsk = (e) => {
+      setOpen(true);
+      setMinimized(false);
+      const q = String(e.detail?.message || "").trim();
+      if (q) setAsked(q);
+    };
+    window.addEventListener(VERA_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(VERA_ASK_EVENT, onAsk);
+  }, [isPublic]);
+  useEffect(() => {
+    if (!asked || sending || !status?.available) return;
+    setAsked(null);
+    send(asked);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked, sending, status?.available]);
+
   /** Ask the last question again, dropping the failed answer. */
   const retryLast = () => {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
@@ -412,7 +431,9 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                 {sending && (
                   <div className="vera-msg vera-msg--assistant">
                     <div className="vera-bubble vera-thinking" aria-live="assertive">
-                      <VeraOrb size={20} state={flameState} theme={mode} color={accent} label="" />
+                      {/* VERA's own mark, the dotted flame, animating through her
+                          stages — thinking, searching the library, preparing the steps. */}
+                      <VeraFlame size={26} state={flameState} theme={mode} label="" className="vera-thinking__mark" />
                       <span className="vera-thinking__text">{thinkingMessages[thinkStage]}</span>
                     </div>
                   </div>

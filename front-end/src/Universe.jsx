@@ -37,6 +37,7 @@ const UnitDocuments = lazy(() => import("./modules/erms/units/UnitDocuments"));
 const UnitDocumentDetail = lazy(() => import("./modules/erms/units/UnitDocumentDetail"));
 const ErmsConfig = lazy(() => import("./modules/admin/erms/ErmsConfig"));
 const VeraSettings = lazy(() => import("./modules/vera/VeraSettings"));
+const ProgressTracker = lazy(() => import("./modules/admin/progress/ProgressTracker"));
 const ErmsSettings = lazy(() => import("./modules/erms/pages/ErmsSettings"));
 const UploadTally = lazy(() => import("./modules/erms/pages/UploadTally"));
 const ErmsReports = lazy(() => import("./modules/erms/pages/ErmsReports"));
@@ -877,6 +878,13 @@ const Universe = () => {
                       </DomainGuard>
                     }
                   />
+
+                  {/* The Progress Tracker: the Planning Unit's SharePoint
+                      working files, live during an activity season.
+                      Developer-only; the API refuses everyone else. */}
+                  <Route element={<RoleGuard roles={["developer"]} user={currentUser} />}>
+                    <Route path="admin/progress-tracker" element={<ProgressTracker />} />
+                  </Route>
 
                   {/* Universe Central DB settings: read by every UCDS account,
                       changed by a Developer or Administrator (enforced by the API). */}

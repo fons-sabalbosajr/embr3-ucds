@@ -520,7 +520,11 @@ export default function VeraSettings() {
     <div className="vera-settings" data-theme={mode}>
       {/* VERA's flame on the title card, and the same beam that runs round
           her launcher running round the card. */}
-      <BorderBeam size="md" colorVariant="ocean" theme={mode === "dark" ? "dark" : "light"} duration={3.2} strength={0.85} style={{ marginBottom: 14, borderRadius: 20 }}>
+      {/* The spacing sits on a wrapper, not on the beam's box: a margin
+          there grew the box past the card, so the beam ran round empty
+          space and looked oversized. The beam's box is exactly the card. */}
+      <div className="vera-settings__beam-wrap">
+      <BorderBeam className="vera-settings__beam" size="sm" colorVariant="ocean" theme={mode === "dark" ? "dark" : "light"} duration={3.2} strength={0.7} style={{ borderRadius: 20 }}>
       <section className="vera-settings__hero">
         <VeraFlame size={88} state={preview} theme={mode} />
         <div>
@@ -542,6 +546,7 @@ export default function VeraSettings() {
         </div>
       </section>
       </BorderBeam>
+      </div>
       <Tabs
         // The bell links to ?tab=corrections or ?tab=links; until that tab
         // exists (the Developer check is still answering), Configuration shows.

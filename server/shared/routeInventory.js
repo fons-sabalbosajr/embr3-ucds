@@ -118,6 +118,16 @@ const PUBLIC_ROUTES = new Set([
   // The temporary conversation about this browser's own request (ticket-scoped, rate limited).
   'GET /api/portal/chat',
   'POST /api/portal/chat',
+  // The Progress Tracker's public link (/e-universe/progress/:token): the
+  // season's figures only — no files, links, names or activity — for a token
+  // the Developer turned on, until its end date; rate limited by address
+  // (routes/progressTrackerRoutes.js).
+  'GET /api/public/progress/:token',
+  // Its map: each firm's dot (a place and a province), and one firm's card —
+  // project, industry, municipality, province, the kinds of permit held;
+  // never the proponent, the street address or a permit number.
+  'GET /api/public/progress/:token/points',
+  'GET /api/public/progress/:token/firms/:serial',
   // CORS preflight, answered by the cors middleware before any route runs.
   'OPTIONS *',
 ]);

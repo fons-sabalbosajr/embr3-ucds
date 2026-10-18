@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import DatabaseSettings from "./developer/DatabaseSettings";
 import ActivityHistoryConfig from "./developer/ActivityHistoryConfig";
 import ErmsUnitsCard from "./developer/ErmsUnitsCard";
+import ProgressTrackerCard from "./developer/ProgressTrackerCard";
 import { fetchCurrentUser } from "../../api/universeService";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,8 @@ const TABS = [
   // Taking an ERMS unit down for maintenance: the Developer's alone (the API
   // refuses anyone else), so the tab is only offered to them.
   { key: "erms-units", label: "ERMS Units", element: ErmsUnitsCard, developerOnly: true },
+  // The Progress Tracker's way in, now that it is out of the menu (Developer only, as its API is).
+  { key: "progress-tracker", label: "Progress Tracker", element: ProgressTrackerCard, developerOnly: true },
 ];
 
 const SystemSettings = ({ theme }) => {

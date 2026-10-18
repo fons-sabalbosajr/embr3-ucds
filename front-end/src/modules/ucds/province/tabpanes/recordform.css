@@ -1,0 +1,471 @@
+/* ---------------------------------------------------------------------------
+   The record view's form (RecordForm.jsx), shared by its tabs: section boxes
+   side by side so a tab fits its window, fields large enough to read, and
+   values in plain ink when not editing (never greyed-out boxes).
+   --------------------------------------------------------------------------- */
+.rf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 2px 4px;
+}
+.rf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.rf-columns.rf-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+  .rf-columns,
+  .rf-columns.rf-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rf-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.rf-section {
+  border: 1px solid rgba(140, 140, 140, 0.22);
+  border-radius: 10px;
+  padding: 14px 18px 18px;
+  background: var(--ant-color-bg-container, #fff);
+  min-width: 0;
+}
+body[data-theme="dark"] .rf-section {
+  background: rgba(255, 255, 255, 0.02);
+}
+.rf-section.is-locked {
+  background: rgba(140, 140, 140, 0.05);
+}
+.rf-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(140, 140, 140, 0.14);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.rf-field {
+  gap: 6px !important;
+}
+
+/* A checkbox field: the same box, height and inner spacing as a value, so it
+   lines up with the fields beside and above it. */
+.rf-check {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 11px;
+  border-radius: 6px;
+  background: rgba(140, 140, 140, 0.07);
+}
+.rf-check .ant-checkbox-wrapper {
+  margin: 0;
+  align-items: center;
+  line-height: 1.4;
+}
+
+/* IIS numbers while editing: one box, then each number as a link. */
+.rf-iis-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rf-iis-input textarea.ant-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px !important;
+}
+.rf-iis-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* IIS entries while editing (IisEntries): reference no. · year · remove. */
+.rf-iis-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 440px;
+}
+/* The reference no. and the year: one height, side by side. */
+.rf-iis-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 32px;
+  gap: 8px;
+  align-items: center;
+}
+.rf-iis-entry .ant-select,
+.rf-iis-entry .ant-input-affix-wrapper {
+  height: 36px !important;
+  min-height: 36px !important;
+}
+.rf-iis-entry .ant-select .ant-select-selector {
+  height: 36px !important;
+  min-height: 36px !important;
+  align-items: center;
+}
+.rf-iis-entry--head {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(120, 120, 120, 1);
+}
+.rf-iis-entry input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px !important;
+}
+.rf-iis-warn {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: #d46b08;
+}
+
+/* The year an IIS entry is filed under. */
+.rf-iis-year {
+  display: inline-block;
+  min-width: 38px;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: #0b5f74;
+  background: rgba(11, 95, 116, 0.1);
+}
+body[data-theme="dark"] .rf-iis-year {
+  color: #87d5e8;
+  background: rgba(135, 213, 232, 0.12);
+}
+.rf-iis-filed {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+/* IIS reference numbers: one per line, each a link to the IIS tracker. */
+.rf-iis-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 11px;
+  min-height: 36px;
+  border-radius: 6px;
+  background: rgba(140, 140, 140, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rf-iis-list a {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+.rf-iis-list a .anticon {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.rf-section-head > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+/* One line per label, so the boxes of a row start level: a long hint is cut
+   short rather than wrapped onto a second line. */
+.rf-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(100, 100, 100, 1);
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 0;
+}
+.rf-label .rf-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body[data-theme="dark"] .rf-label {
+  color: rgba(200, 200, 200, 0.85);
+}
+.rf-hint {
+  font-weight: 400;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.rf-value {
+  font-size: 14px;
+  line-height: 1.4;
+  min-height: 36px;
+  padding: 7px 11px;
+  border-radius: 6px;
+  background: rgba(140, 140, 140, 0.07);
+  word-break: break-word;
+}
+.rf-strong {
+  font-weight: 600;
+}
+.rf-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.rf-auto {
+  background: rgba(47, 126, 203, 0.07);
+  border: 1px dashed rgba(47, 126, 203, 0.3);
+}
+.rf-empty {
+  color: rgba(140, 140, 140, 1);
+  font-style: italic;
+  font-size: 12.5px;
+}
+
+/* Every input inside — ours and the shared pickers' — at one readable size. */
+.rf .ant-input,
+.rf textarea.ant-input,
+.rf .ant-picker-input > input,
+.rf .ant-select-selector,
+.rf .ant-select-selection-search-input,
+.rf .ant-select-selection-item,
+.rf .ant-select-selection-placeholder {
+  font-size: 14px !important;
+}
+.rf input.ant-input,
+.rf .ant-input-affix-wrapper,
+.rf .ant-picker,
+.rf .ant-select-single .ant-select-selector,
+.rf .ant-select-auto-complete .ant-select-selector {
+  min-height: 36px !important;
+  height: auto !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+  width: 100% !important;
+}
+.rf textarea.ant-input {
+  padding: 7px 11px !important;
+  line-height: 1.4;
+}
+/* The shared pickers (province, municipality, barangay, industry) set an
+   11px font, a 29px height and 8px padding inline: the same box as every
+   other field here instead, text starting at the same place. */
+.rf input.ant-input {
+  padding-left: 11px !important;
+  padding-right: 11px !important;
+  margin-top: 0 !important;
+  line-height: 1.4 !important;
+}
+/* An input with an icon in it (the IIS no.'s link, a search box): the
+   wrapper is the box, at the fields' one height — the input inside takes no
+   height or padding of its own (it had both, and stood half as tall again). */
+.rf .ant-input-affix-wrapper > input.ant-input,
+.gi .ant-input-affix-wrapper > input.ant-input {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+.rf .ant-input-affix-wrapper {
+  padding-left: 11px !important;
+  padding-right: 11px !important;
+}
+.rf .ant-select-auto-complete,
+.rf .ant-select-auto-complete .ant-input {
+  width: 100% !important;
+}
+/* The shared pickers bring labels and fixed widths of their own. */
+.rf .ant-typography {
+  margin-bottom: 0 !important;
+}
+.rf [style*="width: 500px"],
+.rf [style*="width:500px"] {
+  width: 100% !important;
+}
+/* Not editing: the pickers read as values — plain ink, no "not allowed" look. */
+.rf.is-viewing .ant-input,
+.rf.is-viewing .ant-picker,
+.rf.is-viewing .ant-select-selector,
+.rf.is-viewing input,
+.rf.is-viewing textarea {
+  color: inherit !important;
+  cursor: default !important;
+  background: rgba(140, 140, 140, 0.07) !important;
+  border-color: transparent !important;
+  -webkit-text-fill-color: currentColor;
+}
+.rf.is-viewing .ant-picker-suffix,
+.rf.is-viewing .ant-select-arrow {
+  visibility: hidden;
+}
+.rf .ant-checkbox-wrapper {
+  font-size: 13.5px;
+}
+
+/* --- Clearances and Permits: one card per law, side by side -------------- */
+.rf-permits {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.rf-permits > .rf-span-3 { grid-column: span 3; }
+.rf-permits > .rf-span-2 { grid-column: span 2; }
+@media (max-width: 1200px) {
+  .rf-permits > .rf-span-3,
+  .rf-permits > .rf-span-2 { grid-column: span 6; }
+}
+.rf-permit-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rf-permit-law {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: #fff;
+}
+.rf-permit-law.is-ecc { background: #0b5f74; }
+.rf-permit-law.is-pto { background: #643c6a; }
+.rf-permit-law.is-wwdp { background: #b45248; }
+.rf-permit-law.is-haz { background: #415e20; }
+.rf-permit-law.is-pco { background: #3d4a5c; }
+.rf-permits .ant-table {
+  font-size: 13px;
+  background: transparent;
+}
+.rf-permits .ant-table-thead > tr > th {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 8px !important;
+  /* Long titles wrap within their column rather than push the grid. */
+  white-space: normal;
+  line-height: 1.25;
+  vertical-align: middle;
+  text-align: left !important;
+}
+.rf-permits .ant-table-tbody > tr > td {
+  padding: 6px 8px !important;
+  word-break: break-word;
+  vertical-align: middle;
+  text-align: left !important;
+}
+.rf-col-hint {
+  display: block;
+  font-weight: 400;
+  font-size: 10.5px;
+  opacity: 0.65;
+}
+.rf-permits .ant-table-tbody > tr > td .ant-picker {
+  width: 100% !important;
+  min-height: 32px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+/* Every field fills its cell, at one height. */
+.rf-permits .ant-table-tbody > tr > td .ant-select,
+.rf-permits .ant-table-tbody > tr > td .ant-input {
+  width: 100% !important;
+  margin: 0 !important;
+}
+.rf-permits .ant-table-tbody > tr > td .ant-input,
+.rf-permits .ant-table-tbody > tr > td .ant-select-selector {
+  font-size: 13px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+.rf-permit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.rf-expired {
+  color: #cf1322;
+  font-weight: 700;
+}
+body[data-theme="dark"] .rf-expired {
+  color: #ff7875;
+}
+
+/* Using the whole window: columns stretch to one height, and a section
+   marked rf-fill grows to the foot of its column, so no box ends short with
+   blank space under it. */
+.rf-columns {
+  align-items: stretch;
+}
+.rf-stack > .rf-fill {
+  flex: 1 1 auto;
+}
+.rf-permits {
+  align-items: stretch;
+}
+.rf-permits > .rf-span-6 { grid-column: span 6; }
+.rf-permits > .rf-section {
+  display: flex;
+  flex-direction: column;
+}
+.rf-permits > .rf-section > .ant-table-wrapper {
+  flex: 1 1 auto;
+}
+
+/* Clearances and Permits: one card per permit, each a full line — the law's
+   name and badge at the left, its entries in a table across the width. */
+.rf-permits > .rf-span-6 {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 16px;
+  align-items: start;
+}
+.rf-permits > .rf-span-6 > .rf-section-head {
+  grid-row: 1 / span 2;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 0;
+  border-bottom: 0;
+}
+.rf-permits > .rf-span-6 > .rf-section-head .rf-permit-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 14px;
+}
+.rf-permits > .rf-span-6 > .ant-table-wrapper,
+.rf-permits > .rf-span-6 > .rf-permit-actions {
+  grid-column: 2;
+}
+@media (max-width: 900px) {
+  .rf-permits > .rf-span-6 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rf-permits > .rf-span-6 > .rf-section-head,
+  .rf-permits > .rf-span-6 > .ant-table-wrapper,
+  .rf-permits > .rf-span-6 > .rf-permit-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}

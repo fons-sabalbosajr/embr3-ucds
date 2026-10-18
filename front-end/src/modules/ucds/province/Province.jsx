@@ -1,5 +1,7 @@
 import MonitoringPlanFilters, { EMPTY_FILTERS, matchesFilters } from "./MonitoringPlanFilters";
 import React, {
+  lazy,
+  Suspense,
   useContext,
   useEffect,
   useState,
@@ -7,6 +9,8 @@ import React, {
   useCallback,
 } from "react";
 import { useParams } from "react-router-dom";
+import { ROUTES } from "../../../config/routes";
+import { isRawLayout } from "./tabpanes/registerLayout";
 import {
   Table,
   Button,
@@ -21,7 +25,6 @@ import {
   DatePicker,
   Select as AntSelect,
   Progress,
-  Avatar,
   Card,
 } from "antd";
 import {
@@ -35,9 +38,9 @@ import {
   InfoCircleOutlined,
   ClockCircleFilled,
   TagsOutlined,
-  ExclamationCircleOutlined, // For expired indicator
   FileExcelOutlined,
   FilePdfOutlined,
+  TableOutlined,
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
@@ -55,9 +58,16 @@ import "./province.css";
 import "./ucds-modern.css";
 import { UcdsHeader } from "../ucdsTheme";
 import FloatingModal from "../../../shared/components/FloatingModal";
-import { downloadMonitoringPlan, fetchErmsAnchors } from "../ucdsService";
+// The spreadsheet view, in its own chunk: loaded when opened.
+const SpreadsheetView = lazy(() => import("./spreadsheet/SpreadsheetView"));
+
+/** A province's key in the account's permissions ("Nueva_Ecija" -> "nuevaEcija"), as the record view reads it. */
+const provincePermissionKey = (name) =>
+  ({ AURORA: "aurora", BATAAN: "bataan", BULACAN: "bulacan", "NUEVA ECIJA": "nuevaEcija", PAMPANGA: "pampanga", TARLAC: "tarlac", ZAMBALES: "zambales" })[String(name || "").toUpperCase().replace(/_/g, " ")] || null;
+import { downloadMonitoringPlan, fetchErmsAnchors, fetchRawIis } from "../ucdsService";
 import { message as notify } from "../../../shared/feedback";
-import { API_BASE_URL, SOCKET_URL } from "../../../config/api";
+import { SOCKET_URL } from "../../../config/api";
+import { getSocket, initializeSocket } from "../../../api/socketService";
 
 // Helper function to format province name for display (e.g., "Nueva_Ecija" to "Nueva Ecija")
 const formatProvinceNameForDisplay = (str) => {
@@ -124,6 +134,28 @@ const Province = ({ theme, currentUser }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorKey]);
+  // The 2026 IIS reference numbers, which the register does not hold yet:
+  // read from the RAW data files (the Progress Tracker's), by serial. Read
+  // again whenever the tracker says a RAW file changed.
+  const [rawIis, setRawIis] = useState({});
+  useEffect(() => {
+    if (!provinceName) return undefined;
+    let cancelled = false;
+    const load = () =>
+      fetchRawIis(provinceName)
+        .then((m) => !cancelled && setRawIis(m || {}))
+        .catch(() => {});
+    load();
+    // The app's shared socket: the tracker announces each RAW save on it.
+    const socket = getSocket() || initializeSocket();
+    socket?.on("progress-tracker:update", load);
+    return () => {
+      cancelled = true;
+      socket?.off("progress-tracker:update", load);
+    };
+  }, [provinceName]);
+  // The register as a spreadsheet (spreadsheet/SpreadsheetView.jsx).
+  const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const exportXlsx = async () => {
     setExportingXlsx(true);
@@ -155,7 +187,6 @@ const Province = ({ theme, currentUser }) => {
   const [sectionDetails, setSectionDetails] = useState([]);
   const [selectedSectionData, setSelectedSectionData] = useState([]); // Combined with sectionDetails logic
   const [progress, setProgress] = useState(0); // Progress state
-  const [provinceViewers, setProvinceViewers] = useState({});
   const socketRef = useRef(null);
 
   // Named capability flags from GET /api/auth/me
@@ -163,7 +194,6 @@ const Province = ({ theme, currentUser }) => {
   const canGenerateData = capabilities.canGenerateData === true;
   const canManageData = capabilities.canManageData === true;
   const canViewAdminPanel = capabilities.canViewAdminPanel === true;
-  const canViewDataHistory = capabilities.canViewDataHistory === true;
   const canAccessRangePicker = capabilities.canAccessRangePicker === true;
 
   useEffect(() => {
@@ -355,15 +385,23 @@ const Province = ({ theme, currentUser }) => {
     setSectionCounts(counts);
   }, [filterData]); // Depends on the memoized filterData function
 
+  // A reload with rows already on screen refreshes them in place — a thin
+  // bar above the table — instead of blanking the table for a loader. The
+  // bar eases toward 90% (smaller steps as it nears) and runs to 100% when
+  // the rows arrive, never jumping back.
+  const [refreshing, setRefreshing] = useState(false);
+  const hasRows = originalData.length > 0;
   const handleReload = async (provinceNameForReload, updatedRecord = null) => {
-    setLoading(true);
+    const inPlace = hasRows || Boolean(updatedRecord);
+    if (inPlace) setRefreshing(true);
+    else setLoading(true);
     setProgress(0);
     let intervalId = null;
 
     try {
       intervalId = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 10, 90));
-      }, 200);
+        setProgress((prev) => Math.min(90, Math.round((prev + Math.max(1, (90 - prev) * 0.12)) * 10) / 10));
+      }, 120);
 
       if (updatedRecord) {
         setOriginalData((prevData) =>
@@ -390,8 +428,9 @@ const Province = ({ theme, currentUser }) => {
       if (intervalId) clearInterval(intervalId);
       setTimeout(() => {
         setLoading(false);
+        setRefreshing(false);
         setProgress(0);
-      }, 500);
+      }, 450);
     }
   };
 
@@ -451,20 +490,14 @@ const Province = ({ theme, currentUser }) => {
       }
     };
 
-    const provinceViewersHandler = (viewers) => {
-      setProvinceViewers(viewers);
-    };
-
     if (socket.connected) {
       // If already connected, join immediately
       handleConnect();
     }
     socket.on("connect", handleConnect);
-    socket.on("provinceViewers", provinceViewersHandler);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("provinceViewers", provinceViewersHandler);
     };
   }, [currentUser, displayProvinceName]);
 
@@ -803,6 +836,18 @@ const Province = ({ theme, currentUser }) => {
     // This reset is for the AntD column filter.
     // If it needs to affect global filters, this logic would need to change.
     // For now, it resets the column's specific filter.
+  };
+
+  /** A section's chip: its colour tinted behind, firmer at the edge, a deep shade as ink. */
+  const sectionChip = (hex, dark) => {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ""));
+    const [r, g, b] = m ? m.slice(1).map((x) => parseInt(x, 16)) : [140, 140, 140];
+    const mix = (t, to) => `rgb(${[r, g, b].map((c) => Math.round(c + (to - c) * t)).join(", ")})`;
+    return {
+      background: `rgba(${r}, ${g}, ${b}, ${dark ? 0.22 : 0.14})`,
+      borderColor: `rgba(${r}, ${g}, ${b}, ${dark ? 0.7 : 0.55})`,
+      color: dark ? mix(0.55, 255) : mix(0.55, 0),
+    };
   };
 
   const sectionBackgroundColor = (section) => {
@@ -1199,50 +1244,6 @@ const Province = ({ theme, currentUser }) => {
   };
 
   // Helper function to get permit status
-  const getPermitStatus = (expirationDateStr) => {
-    const dateStr = String(expirationDateStr || "");
-    if (!dateStr || dateStr === "N/A") {
-      return {
-        status: "unknown",
-        daysRemaining: null,
-        color: null,
-        icon: null,
-      };
-    }
-    const expirationDate = moment(dateStr, ["MM/DD/YYYY", "YYYY-MM-DD"], true); // Strict parsing
-    if (!expirationDate.isValid()) {
-      return {
-        status: "invalid_date",
-        daysRemaining: null,
-        color: null,
-        icon: null,
-      };
-    }
-    const today = moment().startOf("day");
-    const daysRemaining = expirationDate.diff(today, "days");
-
-    if (daysRemaining < 0) {
-      return {
-        status: "expired",
-        daysRemaining,
-        color: "#cf1322",
-        icon: (
-          <ExclamationCircleOutlined
-            style={{ color: "white", marginLeft: "4px" }}
-          />
-        ),
-      }; // Bright red for expired
-    } else if (daysRemaining <= 30) {
-      return {
-        status: "nearly_expired",
-        daysRemaining,
-        color: "#faad14",
-        icon: null,
-      }; // Orange/Yellow for nearly expired
-    }
-    return { status: "active", daysRemaining, color: null, icon: null }; // Null color means use default
-  };
-
   const checkPendingStatus = (value) => {
     const strValue = String(value || "").toLowerCase();
     return (
@@ -1385,215 +1386,94 @@ const Province = ({ theme, currentUser }) => {
       width: 150,
     },
     {
-      title: "Permits/Clearances",
+      // Five fixed lines, in the same order on every row — ECC/CNC, PTO,
+      // WWDP, HWG ID, PCO — each its reference number or a dash. Colour
+      // says the state: green, the ECC is on file in ERMS; red, expired;
+      // orange, expires within a month. The details on hover.
+      title: (
+        <Tooltip
+          title={
+            <div style={{ fontSize: 12 }}>
+              <div><span className="ucds-pc-key is-erms">Green</span> ECC/CNC on file in ERMS</div>
+              <div><span className="ucds-pc-key is-expired">Red</span> expired</div>
+              <div><span className="ucds-pc-key is-soon">Orange</span> expires within a month</div>
+              <div>— not encoded</div>
+            </div>
+          }
+        >
+          <span>Permits/Clearances</span>
+        </Tooltip>
+      ),
       key: "permits_clearances",
-      width: 150,
+      width: 250,
       render: (text, record) => {
-        // checkPendingStatus is now defined outside this render function
-
-        const LabelWithIcon = ({ text, isPending, className }) => (
-          <span
-            style={{ position: "relative", display: "inline-block" }}
-            className={className}
-          >
-            {text}
-            {isPending && (
-              <ClockCircleFilled
-                style={{
-                  position: "absolute",
-                  top: "-3px",
-                  right: "-3px",
-                  fontSize: "11px",
-                  color: "#a8e8f9",
-                }}
-              />
-            )}
-          </span>
-        );
-
-        const ptoStatus = getPermitStatus(record.pto_expiration);
-        const wwdpStatus = getPermitStatus(record.wwdp_expiration);
-        const pcoStatus = getPermitStatus(record.pco_validity); // Assuming pco_validity is the expiration date
-
+        const expiryOf = (v) => {
+          const m = moment(String(v || ""), ["MM/DD/YYYY", "M/D/YYYY", "YYYY-MM-DD", "MMM D, YYYY", "MMMM D, YYYY"], true);
+          if (!m.isValid()) return null;
+          const days = m.diff(moment().startOf("day"), "days");
+          return { days, state: days < 0 ? "is-expired" : days <= 30 ? "is-soon" : "" };
+        };
+        const anchor = anchors[record.sort_key];
+        const onErms = anchor?.status === "found";
+        const ecc = String(record.ecc_cnc || "").trim();
+        const lines = [
+          {
+            key: "ecc",
+            label: ecc.includes("CNC") ? "CNC" : "ECC",
+            value: record.ecc_cnc,
+            state: onErms ? "is-erms" : "",
+            // On file: the reference no. opens the Document Portal at that serial.
+            href: onErms && anchor.serials?.[0] ? `${ROUTES.documentPortal}?serial=${encodeURIComponent(anchor.serials[0])}` : null,
+            tip: [
+              ecc.includes("CNC") ? "Certificate of Non-Coverage" : "Environmental Compliance Certificate",
+              record.date_approved && `Approved ${record.date_approved}`,
+              record.date_amend && `Amended ${record.date_amend}`,
+              onErms ? `On file in ERMS: ${anchor.serials.join(", ")} — click to open it in the Document Portal` : ecc && "Not found in ERMS",
+            ],
+          },
+          (() => {
+            const x = expiryOf(record.pto_expiration);
+            return { key: "pto", label: "PTO", value: record.pto_code, state: x?.state || "", tip: ["Permit to Operate", record.pto_issued && `Issued ${record.pto_issued}`, record.pto_expiration && `Expires ${record.pto_expiration}${x ? (x.days < 0 ? " (expired)" : x.days <= 30 ? ` (in ${x.days} days)` : "") : ""}`] };
+          })(),
+          (() => {
+            const x = expiryOf(record.wwdp_expiration);
+            return { key: "wwdp", label: "WWDP", value: record.wwdp_code, state: x?.state || "", tip: ["Wastewater Discharge Permit", record.wwdp_issued && `Issued ${record.wwdp_issued}`, record.wwdp_expiration && `Expires ${record.wwdp_expiration}${x ? (x.days < 0 ? " (expired)" : x.days <= 30 ? ` (in ${x.days} days)` : "") : ""}`] };
+          })(),
+          { key: "haz", label: "HWG ID", value: record.haz_id, state: "", tip: ["Hazardous Waste Generator ID", record.haz_issued && `Issued ${record.haz_issued}`] },
+          (() => {
+            const x = expiryOf(record.pco_validity);
+            return { key: "pco", label: "PCO", value: record.pco_no, state: x?.state || "", tip: ["PCO Accreditation", record.pco_name && `PCO: ${record.pco_name}`, record.pco_validity && `Valid until ${record.pco_validity}${x ? (x.days < 0 ? " (expired)" : x.days <= 30 ? ` (in ${x.days} days)` : "") : ""}`] };
+          })(),
+        ];
         return (
-          <div className="permits-clearances-container">
-            {/* ECC / CNC */}
-            {record.ecc_cnc && (
-              <Tooltip
-                title={
-                  <div className="tooltip-content" style={{ fontSize: "11px" }}>
-                    <div>
-                      {record.ecc_cnc.includes("CNC")
-                        ? "CNC Information"
-                        : "ECC Information"}
-                    </div>
-                    <div>Reference No.: {record.ecc_cnc}</div>
-                    <div>Date Approved: {record.date_approved}</div>
-                    {record.date_amend && (
-                      <div>Date Amended: {record.date_amend}</div>
+          <div className="ucds-pc">
+            {lines.map((l) => {
+              const has = l.value && String(l.value).trim() && String(l.value).trim() !== "N/A";
+              const row = (
+                <div key={l.key} className={`ucds-pc-row ${has ? l.state : "is-none"}`}>
+                  <span className="ucds-pc-label">{l.label}</span>
+                  <span className="ucds-pc-value">
+                    {has && l.href ? (
+                      <a className="ucds-pc-link" href={l.href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                        {String(l.value).trim()}
+                      </a>
+                    ) : has ? (
+                      String(l.value).trim()
+                    ) : (
+                      "—"
                     )}
-                  </div>
-                }
-                color={record.ecc_cnc.includes("CNC") ? "#bc6e00" : "#0b5f74"}
-              >
-                <span>
-                  <LabelWithIcon
-                    text={
-                      String(record.ecc_cnc || "").includes("CNC")
-                        ? "CNC"
-                        : "ECC"
-                    }
-                    isPending={checkPendingStatus(String(record.ecc_cnc || ""))}
-                    className={
-                      String(record.ecc_cnc || "").includes("CNC")
-                        ? "custom-span-yellow"
-                        : "custom-span-green"
-                    }
-                  />
-                </span>
-              </Tooltip>
-            )}
-
-            {/* Anchored to ERMS: a green check when the permit is on file
-                with the Records Unit; nothing when it is not. */}
-            {record.ecc_cnc && anchors[record.sort_key]?.status === "found" && (
-              <Tooltip
-                title={
-                  <div style={{ fontSize: 12 }}>
-                    <div>On file in ERMS: {anchors[record.sort_key].serials.join(", ")}</div>
-                    {anchors[record.sort_key].label && <div>{anchors[record.sort_key].label}</div>}
-                    <div style={{ opacity: 0.8 }}>To see the scan, request it in the Document Portal.</div>
-                  </div>
-                }
-              >
-                <CheckCircleFilled className="ucds-erms-anchor" aria-label="On file in ERMS" />
-              </Tooltip>
-            )}
-
-            {/* PTO */}
-            {record.pto_code && (
-              <Tooltip
-                title={
-                  <div style={{ fontSize: "11px" }}>
-                    <div>PTO Information</div>
-                    <div>Code: {record.pto_code}</div>
-                    <div>Date Issued: {record.pto_issued}</div>
-                    <div>
-                      Date of Expiration: {record.pto_expiration}
-                      {ptoStatus.status === "nearly_expired" &&
-                        ` (Expires in ${ptoStatus.daysRemaining} days)`}
-                      {ptoStatus.status === "expired" && " (Expired)"}
-                    </div>
-                  </div>
-                }
-                color={ptoStatus.color || "#643c6a"} // Use status color if available
-              >
-                <span>
-                  <LabelWithIcon
-                    text="PTO"
-                    isPending={checkPendingStatus(
-                      String(record.pto_code || "")
-                    )}
-                    className={
-                      ptoStatus.status === "expired"
-                        ? "custom-span-red"
-                        : "custom-span-blue"
-                    }
-                  />
-                  {ptoStatus.icon}
-                </span>
-              </Tooltip>
-            )}
-
-            {/* WWDP */}
-            {record.wwdp_code && (
-              <Tooltip
-                title={
-                  <div style={{ fontSize: "11px" }}>
-                    <div>WWDP Information</div>
-                    <div>Code: {record.wwdp_code}</div>
-                    <div>Date Issued: {record.wwdp_issued}</div>
-                    <div>
-                      Date of Expiration: {record.wwdp_expiration}
-                      {wwdpStatus.status === "nearly_expired" &&
-                        ` (Expires in ${wwdpStatus.daysRemaining} days)`}
-                      {wwdpStatus.status === "expired" && " (Expired)"}
-                    </div>
-                  </div>
-                }
-                color={wwdpStatus.color || "#b45248"}
-              >
-                <span>
-                  <LabelWithIcon
-                    text="WWDP"
-                    isPending={checkPendingStatus(
-                      String(record.wwdp_code || "")
-                    )}
-                    className={
-                      wwdpStatus.status === "expired"
-                        ? "custom-span-red"
-                        : "custom-span-orange"
-                    }
-                  />
-                  {wwdpStatus.icon}
-                </span>
-              </Tooltip>
-            )}
-
-            {/* Hazwaste */}
-            {record.haz_id && (
-              <Tooltip
-                title={
-                  <div style={{ fontSize: "11px" }}>
-                    <div>Hazwaste Gen. Cert. Information</div>
-                    <div>Code: {record.haz_id}</div>
-                    <div>Date Issued: {record.haz_issued}</div>
-                  </div>
-                }
-                color="#415e20"
-              >
-                <span>
-                  <LabelWithIcon
-                    text="HAZ"
-                    isPending={checkPendingStatus(String(record.haz_id || ""))}
-                    className="custom-span-skyblue"
-                  />
-                </span>
-              </Tooltip>
-            )}
-
-            {/* PCO */}
-            {record.pco_no && (
-              <Tooltip
-                title={
-                  <div style={{ fontSize: "11px" }}>
-                    <div>PCO Accreditation Certificate</div>
-                    <div>PCO No: {record.pco_no}</div>
-                    <div>PCO Name: {record.pco_name}</div>
-                    <div>
-                      PCO Validity (Expires): {record.pco_validity}
-                      {pcoStatus.status === "nearly_expired" &&
-                        ` (Expires in ${pcoStatus.daysRemaining} days)`}
-                      {pcoStatus.status === "expired" && " (Expired)"}
-                    </div>
-                  </div>
-                }
-                color={pcoStatus.color || "#242726"}
-              >
-                <span>
-                  <LabelWithIcon
-                    text="PCO"
-                    isPending={checkPendingStatus(String(record.pco_no || ""))}
-                    className={
-                      pcoStatus.status === "expired"
-                        ? "custom-span-red"
-                        : "custom-span-stone"
-                    }
-                  />
-                  {pcoStatus.icon}
-                </span>
-              </Tooltip>
-            )}
+                    {has && checkPendingStatus(String(l.value)) && <ClockCircleFilled className="ucds-pc-pending" aria-label="pending" />}
+                  </span>
+                </div>
+              );
+              return has ? (
+                <Tooltip key={l.key} placement="left" title={<div style={{ fontSize: 11.5 }}>{l.tip.filter(Boolean).map((t) => <div key={t}>{t}</div>)}</div>}>
+                  {row}
+                </Tooltip>
+              ) : (
+                row
+              );
+            })}
           </div>
         );
       },
@@ -1617,8 +1497,12 @@ const Province = ({ theme, currentUser }) => {
             }}
           >
             {sections.map((section, index) => {
-              const backgroundColor = sectionBackgroundColor(section); // Base background color
-              const darkerBackgroundColor = darkenColor(backgroundColor, -40); // Darker shade
+              // The section's own colour as a soft chip: a light tint behind,
+              // a firmer edge, and the ink a deep (or, in dark mode, light)
+              // shade of the same hue — readable whatever the colour.
+              const backgroundColor = sectionBackgroundColor(section); // the section's colour
+              const darkerBackgroundColor = darkenColor(backgroundColor, -40); // for the tooltip
+              const chip = sectionChip(backgroundColor, theme === "dark");
 
               // Dynamically set tooltip background color based on theme
               const tooltipBackgroundColor =
@@ -1640,22 +1524,9 @@ const Province = ({ theme, currentUser }) => {
                   color={tooltipBackgroundColor}
                   style={{ textAlign: "center" }}
                 >
-                  <div
-                    className="industry-label"
-                    style={{
-                      backgroundColor: backgroundColor,
-                      padding: "5px",
-                      margin: "2px",
-                      display: "inline-block",
-                      overflow: "hidden",
-                      whiteSpace: "nowrap",
-                      borderRadius: "5px",
-                      cursor: "pointer",
-                      fontSize: "10px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {section}
+                  <div className="ucds-section-chip" style={chip}>
+                    <i style={{ background: chip.borderColor }} />
+                    {String(section).replace(/_/g, " ")}
                   </div>
                 </Tooltip>
               );
@@ -1674,7 +1545,8 @@ const Province = ({ theme, currentUser }) => {
       ),
       key: "remarks",
       ...getColumnSearchProps("remarks"),
-      render: (text, record) => <div>{record.remarks}</div>,
+      // From 2027 the RAW workbooks' Remarks/Recommendations column is `recommendations`.
+      render: (text, record) => <div>{isRawLayout(record) ? record.recommendations : record.remarks}</div>,
       align: "center",
       width: 200,
     },
@@ -1794,6 +1666,34 @@ const Province = ({ theme, currentUser }) => {
             </p>
           )}
 
+          {/* 2026: the register's own, else the RAW data's (read by serial). */}
+          {(() => {
+            const iis2026 = [record.iis_no_2026, rawIis[record.sort_key]].find((v) => v && String(v).trim() && String(v).trim() !== "N/A");
+            if (!iis2026) return null;
+            return (
+              <p className="monitoring-label">
+                {String(iis2026)
+                  .split(/[\s,;]+/)
+                  .filter((iis) => iis && iis.trim() !== "" && iis.trim() !== "N/A")
+                  .map((iis, index) => (
+                    <Tooltip key={index} title={<div style={{ fontSize: "10px" }}>2026 IIS reference no.{record.iis_no_2026 ? "" : " (from the RAW data)"}</div>} color="#722ed1">
+                      <span style={{ display: "block", lineHeight: "1.2" }}>
+                        <TagsOutlined style={{ color: "#722ed1", marginRight: 4 }} />
+                        <a
+                          href={`https://iis.emb.gov.ph/embis/dms/documents/tracker/?trn_no=${encodeURIComponent(iis.trim())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#722ed1", textDecoration: "none" }}
+                        >
+                          {iis.trim()}
+                        </a>
+                      </span>
+                    </Tooltip>
+                  ))}
+              </p>
+            );
+          })()}
+
           {/* PISMU Tracking */}
           {record.pismu_tracking && record.pismu_tracking.trim() !== "" && (
             <p className="monitoring-label">
@@ -1848,6 +1748,7 @@ const Province = ({ theme, currentUser }) => {
             <Tooltip title="Reload the table">
               <Button icon={<ReloadOutlined />} onClick={() => handleReload(provinceName)} loading={loading} aria-label="Reload" />
             </Tooltip>
+            <Button icon={<TableOutlined />} onClick={() => setSpreadsheetOpen(true)} disabled={!originalData.length}>Spreadsheet</Button>
             <Button icon={<FileExcelOutlined />} onClick={exportXlsx} loading={exportingXlsx}>Export to Excel</Button>
             <Button icon={<FilePdfOutlined />} onClick={() => handleExportPDF(displayProvinceName)}>Export PDF</Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={showModalAdd}>Add Industry</Button>
@@ -1855,63 +1756,31 @@ const Province = ({ theme, currentUser }) => {
         }
       />
       <div className="header-content ucds-viewers-row">
-
-        {/* Display avatars of other users viewing this province */}
-        {canViewDataHistory && provinceViewers[displayProvinceName] && (
-          <div
-            className="province-viewers-avatars"
-            style={{
-              marginLeft: "15px",
-              display: "flex",
-              alignItems: "center",
-              margin: "12px 0",
-            }}
-          >
-            <Avatar.Group max={{ count: 3 }} size={24}>
-              {provinceViewers[displayProvinceName]
-                .filter((viewer) => viewer.username !== currentUser?.username) // Show OTHERS
-                .map((viewer) => (
-                  <Tooltip
-                    key={viewer.username}
-                    title={
-                      <span style={{ fontSize: "9px" }}>
-                        {`${
-                          viewer.name || viewer.username
-                        } is viewing ${displayProvinceName}`}
-                      </span>
-                    }
-                  >
-                    <Avatar
-                      src={
-                        viewer.avatar
-                          ? `${API_BASE_URL}${viewer.avatar}`
-                          : undefined
-                      }
-                      style={{
-                        marginLeft: -8, // Overlap avatars slightly
-                        border: `2px solid ${
-                          theme === "dark" ? "#262626" : "#fff"
-                        }`, // Border for better visibility
-                      }}
-                    >
-                      {!viewer.avatar && viewer.name
-                        ? viewer.name[0].toUpperCase()
-                        : !viewer.avatar && viewer.username
-                        ? viewer.username[0].toUpperCase()
-                        : null}
-                    </Avatar>
-                  </Tooltip>
-                ))}
-            </Avatar.Group>
-          </div>
-        )}
-
         <AddProvinceModal
           visible={isModalVisibleAdd}
           onCancel={handleCancelAdd}
           zIndex={1000}
         />
       </div>
+
+      {spreadsheetOpen && (
+        <Suspense fallback={null}>
+          <SpreadsheetView
+            open={spreadsheetOpen}
+            onClose={() => setSpreadsheetOpen(false)}
+            rows={originalData}
+            rawIis={rawIis}
+            anchors={anchors}
+            province={displayProvinceName}
+            onOpenRecord={(r) => showModal(r)}
+            // The same rule as the record view's Edit button: read-write on the province.
+            canEdit={currentUser?.provinceStringPermissions?.[provincePermissionKey(provinceName)] === "readWrite"}
+            currentUser={currentUser}
+            // A saved cell updates the page's table too, without reloading it.
+            onSaved={(serial, changes) => setOriginalData((prev) => prev.map((r) => (r.sort_key === serial ? { ...r, ...changes } : r)))}
+          />
+        </Suspense>
+      )}
 
       <FloatingModal
         open={isModalVisible}
@@ -1923,11 +1792,15 @@ const Province = ({ theme, currentUser }) => {
         }
         extra={selectedRecord?.ecc_cnc ? <Tag color="green" style={{ marginInlineEnd: 0, fontFamily: "monospace" }}>{selectedRecord.ecc_cnc}</Tag> : null}
         onCancel={handleCloseModal}
-        // Large by default: the record is read side by side with its tabs.
-        width={1480}
-        height="88vh"
-        maxHeight="94vh"
+        // One fixed size that does not resize: the tab bar and the buttons at
+        // the foot stay put, only the tab's content scrolls between them.
+        width={1400}
+        height="80vh"
+        maxHeight="86vh"
+        bodyStyle={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
+        resizable={false}
         top={20}
+        className="ucds-record-modal"
       >
         {selectedRecord && (
           <ProvinceModal
@@ -2245,12 +2118,18 @@ const Province = ({ theme, currentUser }) => {
           </div>
         </Card>
 
+        {refreshing && (
+          <div className="ucds-refresh-bar" role="progressbar" aria-label="Refreshing the establishments" aria-valuenow={Math.round(progress)}>
+            <span style={{ width: `${progress}%` }} />
+          </div>
+        )}
         {loading ? (
           <div style={{ textAlign: "center", padding: "20px" }}>
             <span>Loading Universe Data...</span> <br />
             <Progress
-              percent={progress}
+              percent={Math.round(progress)}
               status="active"
+              className="ucds-load-progress"
               style={{ width: "50%" }}
             />
           </div>

@@ -241,7 +241,89 @@ async function deleteMenuItem(req, res, next) {
   }
 }
 
+// --- the Planning Unit's own tables (see services/customTables.js) ---------------------
+
+const customTables = require('../services/customTables');
+
+/** The table's design and rows, and whether this account may change them. */
+async function readCustomTable(req, res, next) {
+  try {
+    const t = await customTables.read(req.activeYear, req.params.id);
+    const editing = (await settings.read()).datasets.editing !== false;
+    res.json({ ...t, canEdit: canEdit(req) && editing, canExport: (await settings.read()).datasets.export !== false });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function saveCustomColumns(req, res, next) {
+  try {
+    const columns = await customTables.saveColumns(req.activeYear, req.params.id, req.body?.columns, principalOf(req));
+    await audit.record(req, { domain: 'ucds', action: 'custom-table-columns', label: `table columns saved (${columns.length})`, collection: menuItems.COLLECTION, documentId: req.params.id });
+    res.json({ columns });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function addCustomRows(req, res, next) {
+  try {
+    res.status(201).json(await customTables.addRows(req.activeYear, req.params.id, req.body?.rows, principalOf(req)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateCustomRow(req, res, next) {
+  try {
+    res.json({ row: await customTables.updateRow(req.activeYear, req.params.id, req.params.rowId, req.body?.values, principalOf(req)) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteCustomRows(req, res, next) {
+  try {
+    const r = await customTables.deleteRows(req.activeYear, req.params.id, req.body?.ids);
+    await audit.record(req, { domain: 'ucds', action: 'custom-table-rows-delete', label: `table rows deleted (${r.deleted})`, collection: customTables.ROWS, documentId: req.params.id });
+    res.json(r);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** The table as shown on the page (filtered, sorted, formulas worked out), as .xlsx. */
+async function exportCustomTable(req, res, next) {
+  try {
+    if ((await settings.read()).datasets.export === false) {
+      return res.status(403).json({ code: 'EXPORT_OFF', message: 'Export is switched off in Universe Central DB settings.' });
+    }
+    const item = await menuItems.get(req.activeYear, req.params.id);
+    if (!item || item.kind !== 'table') return res.status(404).json({ message: 'No such table in this year.' });
+    const { buffer, rows } = customTables.workbookOf({ ...req.body, title: item.label });
+    const name = `${req.activeYear}-${item.label}`.replace(/[^\w.\- ]+/g, '').replace(/\s+/g, '-').slice(0, 80) || 'table';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}.xlsx"`);
+    res.setHeader('X-Export-Rows', String(rows));
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Rows');
+    return res.send(buffer);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** Changing a table: canManageData, and editing not switched off in the settings. */
+async function requireTableEdit(req, res, next) {
+  try {
+    if (await editingAllowed(req, res)) return next();
+    return undefined;
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   getSettings, putSettings, importForYear, registry, listForActiveYear, describe, rowsPage, createRow, createColumn, updateRow, deleteRow, importDataset, exportCsv,
   listMenuItems, getMenuItem, requireMenuEdit, createMenuItem, updateMenuItem, deleteMenuItem,
+  readCustomTable, saveCustomColumns, addCustomRows, updateCustomRow, deleteCustomRows, exportCustomTable, requireTableEdit,
 };

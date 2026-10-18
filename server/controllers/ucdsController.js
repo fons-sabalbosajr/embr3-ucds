@@ -1,12 +1,29 @@
 const dayjs = require('dayjs');
 const { connectToMongo, collections, client, ObjectId } = require('../config/db');
 const { withYear, stampYear, registerOf } = require('../services/yearScope');
-const { provinceScoped, requestAllowsProvince } = require('../services/provinces');
+const { provinceScoped, requestAllowsProvince, provinceFilter: provinceFilterOf, userWritableProvinceKeys } = require('../services/provinces');
+const { canAccessAllYears } = require('../services/authorization');
+const { principalOf } = require('../middleware/auth');
 const shortCache = require('../shared/services/shortCache');
+const healthcareList = require('../modules/ucds/services/healthcare');
 
 // The establishment register of the active year, confined to the provinces
 // this request may touch.
 const ucdsFor = (req) => provinceScoped(registerOf(req), req);
+
+/**
+ * The provinces this request may CHANGE, as a register filter (null: all).
+ * Seeing a province ("view") is not changing it: the account needs
+ * "readWrite" on it — the Developer and the Administrators keep every
+ * province of the container, as they see them. Reads use ucdsFor; every
+ * write to an existing establishment also passes this.
+ */
+function writableFilter(req) {
+  const user = principalOf(req);
+  const keys = Array.isArray(req.provinceKeys) ? req.provinceKeys : [];
+  const writable = canAccessAllYears(user) ? keys : keys.filter((k) => userWritableProvinceKeys(user).includes(k));
+  return provinceFilterOf(writable);
+}
 
 // Wraps a log collection so inserts are stamped and reads/deletes are filtered
 // by the active year, without touching each call site individually.
@@ -284,6 +301,9 @@ async function bulkUpdateUcds(req, res) {
 
     const bulkOps = [];
     const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    // Each establishment changed must be in a province the account may change,
+    // not only see. One that is not refuses the whole request — nothing written.
+    const canWrite = writableFilter(req);
 
     for (const item of updatesArray) {
       const { changes, sort_key, id_no } = item;
@@ -296,6 +316,9 @@ async function bulkUpdateUcds(req, res) {
 
       const oldDoc = await ucdsFor(req).findOne(filter);
       if (!oldDoc) continue;
+      if (canWrite && !(await registerOf(req).findOne({ $and: [filter, canWrite] }, { projection: { _id: 1 } }))) {
+        return res.status(403).json({ error: `You may view ${oldDoc.province || 'this province'} but not change it. Ask the administrator for edit access.` });
+      }
 
       const changeLogs = [];
       for (const field in changes) {
@@ -545,9 +568,28 @@ async function permitsSummary(req, res) {
     if (selectedPermitTypesArray.length > 0) {
       finalRecordsToPaginate = finalRecordsToPaginate.filter((establishment) => establishment.permits.some((permit) => (permit.isExpired || permit.isNearExpiry) && selectedPermitTypesArray.includes(permit.type.toUpperCase())));
     }
+    // order=soonest: what expires next first (the soonest upcoming expiry),
+    // then what has already expired, the most recently expired first — the
+    // dashboard's "Permits expiring soonest". Without it, the register's order.
+    if (req.query.order === 'soonest') {
+      const t = now.getTime();
+      const rank = (rec) => {
+        const times = rec.permits.map((p) => new Date(p.expiry).getTime()).filter(Number.isFinite);
+        const upcoming = times.filter((x) => x >= t);
+        return upcoming.length ? [0, Math.min(...upcoming)] : [1, -Math.max(...times)];
+      };
+      finalRecordsToPaginate = finalRecordsToPaginate
+        .map((rec) => ({ rec, r: rank(rec) }))
+        .sort((a, b) => a.r[0] - b.r[0] || a.r[1] - b.r[1])
+        .map((x) => x.rec);
+    }
     const totalRecords = finalRecordsToPaginate.length;
     const dataToSend = finalRecordsToPaginate.slice(skip, skip + pageSizeInt);
-    return res.json({ data: dataToSend, total: totalRecords });
+    // How many permits are already expired and how many expire soon, over the whole list.
+    let expired = 0;
+    let expiringSoon = 0;
+    for (const rec of finalRecordsToPaginate) for (const p of rec.permits) p.isExpired ? (expired += 1) : p.isNearExpiry && (expiringSoon += 1);
+    return res.json({ data: dataToSend, total: totalRecords, summary: { expired, expiringSoon } });
   } catch (err) {
     console.error('Error in /api/permits-summary:', err);
     return res.status(500).send('Internal Server Error');
@@ -626,9 +668,13 @@ async function getProvinceData(req, res) {
     const provinceQuery = req.query.province;
     if (!provinceQuery) return res.status(400).json({ error: 'Province parameter is required.' });
     const province = capitalizeFirstLetter(provinceQuery);
+    // Healthcare Industries is not a province: the year's healthcare list,
+    // across the provinces the account may see (ucdsFor applies that scope).
+    const healthcare = healthcareList.isHealthcare(province);
+    if (healthcare && !healthcareList.hasOwnRegister(req)) return res.json([]);
 
     // A province named in the query is a request, not an entitlement.
-    if (!requestAllowsProvince(req, province)) {
+    if (!healthcare && !requestAllowsProvince(req, province)) {
       return res.status(403).json({
         code: 'PROVINCE_FORBIDDEN',
         error: `${province} is not available in the ${req.activeYear} data container for your account.`,
@@ -646,7 +692,7 @@ async function getProvinceData(req, res) {
     // clearRegisterChecks), so an edit shows at once.
     const formattedData = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}province:${province.toLowerCase()}:`), 30 * 1000, async () => {
     const provinceData = await ucdsFor(req)
-      .find({ province: new RegExp(`^${province}$`, 'i') })
+      .find(healthcare ? healthcareList.healthcareFilter() : healthcareList.provinceFilter(req, new RegExp(`^${province}$`, 'i')))
       .toArray();
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
     return provinceData.map((doc) => ({
@@ -1504,6 +1550,8 @@ async function updateData(req, res) {
         transactionID,
         transactionDate: new Date().toLocaleString('en-US', { hour12: true }),
         actionType: 'Modified',
+        // The record itself: its History is read by serial (an ECC/CNC can be shared, or missing).
+        sort_key: oldDocument.sort_key,
         ecc_cnc: newData.ecc_cnc || oldDocument.ecc_cnc,
         userActed: updatedBy,
         dateActed: new Date().toLocaleString('en-US', { hour12: true }),
@@ -1523,13 +1571,17 @@ async function updateData(req, res) {
 async function revertByEcc(req, res) {
   try {
     await connectToMongo();
-    const { ecc_cnc, field, oldValue, updated_by } = req.body;
-    if (!ecc_cnc || !field || oldValue === undefined) return res.status(400).json({ error: 'Missing required fields: ecc_cnc, field, or oldValue.' });
+    const { ecc_cnc, sort_key, field, oldValue } = req.body;
+    if ((!ecc_cnc && !sort_key) || !field || oldValue === undefined) return res.status(400).json({ error: 'Missing required fields: sort_key (or ecc_cnc), field, or oldValue.' });
+    // Who reverted: the session's account, not a name sent in the body.
+    const updated_by = req.session?.user?.username || req.body.updated_by || 'Unknown User';
 
     const dataCollection = ucdsFor(req);
     const logsCollection = yearBoundLogs(collections.ucdsLog, req.activeYear);
 
-    const filter = { ecc_cnc };
+    // The record by its serial; by ECC/CNC only for an older caller (an ECC can
+    // be on several records, and this changed whichever came first).
+    const filter = sort_key ? { sort_key } : { ecc_cnc };
     const originalDoc = await dataCollection.findOne(filter);
     if (!originalDoc) return res.status(404).json({ error: 'Document not found.' });
 
@@ -1552,7 +1604,8 @@ async function revertByEcc(req, res) {
         transactionID,
         transactionDate: new Date().toLocaleString('en-US', { hour12: true }),
         actionType: 'Reverted',
-        ecc_cnc,
+        sort_key: originalDoc.sort_key,
+        ecc_cnc: originalDoc.ecc_cnc || ecc_cnc,
         userActed: updated_by,
         dateActed: new Date().toLocaleString('en-US', { hour12: true }),
         changes: [ { field, old_value: currentValue, new_value: oldValue } ],

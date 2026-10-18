@@ -28,7 +28,11 @@ const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { connectToMongo, getDb } = require('../../config/db');
 const sharepoint = require('./sharepoint');
-const { analyze } = require('./analyze');
+const { analyze, mergeUnits, addInto, groupOfUnit, ANALYSIS_VERSION } = require('./analyze');
+const { notesFor } = require('./notes');
+
+// The matrix's column order: the provinces, then the 2027 lists that span them.
+const UNIT_ORDER = ['Aurora', 'Bataan', 'Bulacan', 'Nueva_Ecija', 'Pampanga', 'Tarlac', 'Zambales', 'Healthcare Industries', 'Chemical permits', 'TSD / TRC', 'Importers'];
 
 const SEASONS = 'progress-seasons';
 const FILES = 'progress-files';
@@ -54,8 +58,67 @@ const DEFAULT_SOURCES = [
 // extract of every ECC ever approved in the region. Shown, not counted.
 const REFERENCE_FILES = /extracted from co/i;
 
-const MIN_POLL = 30;
+// A look lists the folders (a few small REST calls); a file is downloaded
+// again only when its version moved. 15 s keeps the screen close to live
+// without hammering SharePoint.
+const MIN_POLL = 15;
 const MAX_POLL = 3600;
+const DEFAULT_POLL = 30;
+
+// The old UCD Tracking System's "conditional highlighting" legend: what each
+// fill colour meant, per province. The Planning Unit colours a row as they
+// update it; white (no fill) is "not yet modified". Colours are matched by
+// family (colourFamily), as the workbooks use several shades of each: light
+// and dark greens are one "green", the shades listed under it. The Developer
+// can change these per season (setLegend).
+const DEFAULT_LEGEND = {
+  Aurora: { red: 'Incomplete info; not available OL', yellow: 'Transferred complete', green: 'Duplicate quarry' },
+  Bataan: { orange: 'Additional permits not on V3' },
+  Bulacan: { red: 'Duplicates, incorrect permits (same for DP & HAZ)', green: 'Correct data' },
+  Nueva_Ecija: { red: 'Data not found on universe', green: 'Additional data' },
+  Pampanga: { red: 'No data, no permits, duplicates', green: 'Correct data', yellow: 'Address already corrected', gray: 'Assigned to staff (resolved)' },
+  Tarlac: { red: 'Duplicates', pink: 'PTO data', blue: 'DP data', green: 'HAZ data' },
+  Zambales: { red: 'No barangay', yellow: 'Cleared data', orange: 'Duplicate data' },
+};
+const FAMILIES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
+// Families the legend once kept apart, now folded into their neighbour.
+const MERGED = { beige: 'orange', peach: 'orange', skyblue: 'blue', lightblue: 'blue' };
+
+/** A legend with the old family names folded into the merged ones. */
+function normaliseLegend(legend) {
+  const out = {};
+  for (const [unit, colours] of Object.entries(legend || {})) {
+    for (const [fam, label] of Object.entries(colours || {})) {
+      const to = MERGED[fam] || fam;
+      if (!FAMILIES.includes(to) || !label) continue;
+      const u = (out[unit] ||= {});
+      u[to] = u[to] && u[to] !== label ? `${u[to]} / ${label}` : label;
+    }
+  }
+  return out;
+}
+
+/** A fill colour's family, from its hue, saturation and lightness. */
+function colourFamily(rgb) {
+  const m = /^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(rgb || ''));
+  if (!m) return 'gray';
+  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  if (s < 0.12) return 'gray';
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h < 15 || h >= 345) return 'red';
+  if (h < 45) return 'orange'; // peach and beige shades too
+  if (h < 70) return 'yellow';
+  if (h < 170) return 'green';
+  if (h < 260) return 'blue'; // sky blue shades too
+  if (h < 300) return 'purple';
+  return 'pink';
+}
 const INSTANCE = `${os.hostname()}:${process.pid}:${crypto.randomBytes(3).toString('hex')}`;
 
 const db = () => getDb();
@@ -93,7 +156,7 @@ function validate(input, current = {}) {
   const endsAt = toDate(input.endsAt ?? current.endsAt);
   if (!name) throw Object.assign(new Error('Give the season a name.'), { status: 400 });
   if (!startsAt || !endsAt || endsAt <= startsAt) throw Object.assign(new Error('Give the season a start and an end after it.'), { status: 400 });
-  const pollSeconds = Math.min(MAX_POLL, Math.max(MIN_POLL, Number(input.pollSeconds ?? current.pollSeconds ?? 60) || 60));
+  const pollSeconds = Math.min(MAX_POLL, Math.max(MIN_POLL, Number(input.pollSeconds ?? current.pollSeconds ?? DEFAULT_POLL) || DEFAULT_POLL));
   let sources;
   try {
     sources = cleanSources(input.sources ?? current.sources);
@@ -104,6 +167,12 @@ function validate(input, current = {}) {
 }
 
 const isOpen = (s, now = new Date()) => s && s.status === 'active' && s.startsAt <= now && now <= s.endsAt;
+// Watched from the moment it is opened until its end: before its start the
+// files are read so the baseline is the RAW data as it stands when the
+// season starts (and the screen has figures at once); saves are recorded
+// from the start.
+const isWatched = (s, now = new Date()) => s && s.status === 'active' && now <= s.endsAt;
+const isPreSeason = (s, now = new Date()) => isWatched(s, now) && now < s.startsAt;
 
 async function currentSeason() {
   await connectToMongo();
@@ -117,6 +186,7 @@ async function createSeason(input, user) {
   await db().collection(SEASONS).updateMany({ status: 'active' }, { $set: { status: 'closed', closedAt: new Date() } });
   const { insertedId } = await db().collection(SEASONS).insertOne(doc);
   cache.clear();
+  invalidate();
   schedule(1000);
   return { _id: insertedId, ...doc };
 }
@@ -132,6 +202,7 @@ async function updateSeason(id, input, user) {
   }
   if (JSON.stringify(set.sources) !== JSON.stringify(s.sources)) cache.clear();
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: set });
+  invalidate();
   schedule(1000);
   return { ...s, ...set };
 }
@@ -148,6 +219,7 @@ async function rebaseline(id) {
   await db().collection(EVENTS).insertOne({ season, at: new Date(), kind: 'baseline', note: 'Baseline taken again from the files as they are now.' });
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { baselineAt: null } });
   cache.clear();
+  invalidate();
   schedule(500);
 }
 
@@ -164,7 +236,7 @@ async function takeLease(season) {
 }
 
 const counts = (a) => {
-  const { fingerprints, keys, keyProvince, ...rest } = a;
+  const { fingerprints, keys, keyProvince, keySource, keyCells, keyKind, keyType, records, iis, ...rest } = a;
   return rest;
 };
 
@@ -201,7 +273,10 @@ function compareRaw(baseFp, nowFp) {
 async function poll(season) {
   const seasonId = String(season._id);
   const started = Date.now();
-  const firstLook = !season.baselineAt;
+  const preSeason = isPreSeason(season);
+  // Before the start every reading is the baseline: it follows the files
+  // until the season begins.
+  const firstLook = !season.baselineAt || preSeason;
   const files = db().collection(FILES);
   const events = [];
   let changed = 0;
@@ -229,10 +304,10 @@ async function poll(season) {
         errors.push(`${meta.path}: ${err.message}`);
         continue;
       }
-      cache.set(id, { etag: meta.etag, kind: source.kind, keys: a.keys || [], keyProvince: a.keyProvince || null, reference: REFERENCE_FILES.test(meta.path) });
+      cache.set(id, { etag: meta.etag, kind: source.kind, keys: a.keys || [], keyProvince: a.keyProvince || null, keySource: a.keySource || null, keyCells: a.keyCells || null, keyKind: a.keyKind || null, keyType: a.keyType || null, records: a.records || null, reference: REFERENCE_FILES.test(meta.path) });
 
       const prev = await files.findOne({ _id: id });
-      let base = await db().collection(BASELINES).findOne({ _id: id });
+      let base = preSeason ? null : await db().collection(BASELINES).findOne({ _id: id });
       if (!base) {
         // Read at the season's first look: this is where it starts. A file
         // that appears later in the season starts empty — all of it is new.
@@ -243,7 +318,7 @@ async function poll(season) {
       }
       const baseKeys = new Set(base.keys || []);
       const compare = source.kind === 'raw' ? compareRaw(base.fingerprints, a.fingerprints) : { newSinceBaseline: (a.keys || []).filter((k) => !baseKeys.has(k)).length };
-      const now = { at: new Date(), version: meta.version, counts: counts(a), compare };
+      const now = { at: new Date(), version: meta.version, counts: counts(a), compare, ...(a.iis ? { iis: a.iis } : {}) };
       await files.replaceOne(
         { _id: id },
         {
@@ -263,7 +338,7 @@ async function poll(season) {
         { upsert: true }
       );
       // A save since the last reading: what it changed.
-      if (prev?.current && prev.meta?.etag !== meta.etag) {
+      if (prev?.current && prev.meta?.etag !== meta.etag && !preSeason) {
         changed += 1;
         const p = prev.current.counts || {};
         const c = now.counts;
@@ -306,28 +381,56 @@ async function poll(season) {
   return { changed, errors };
 }
 
+/**
+ * The newly issued permits already in the RAW data: per file, by province and
+ * by kind of permit, and — of those found — whether they sit on a baseline
+ * firm or on one added from ERMS or ECC Online.
+ */
 async function matchPermits(seasonId) {
-  const raw = new Set();
-  for (const [id, c] of cache) if (id.startsWith(`${seasonId}:`) && c.kind === 'raw') for (const k of c.keys) raw.add(k);
+  const raw = new Map(); // key -> 'base' | 'erms' | 'ecconline' | 'other'
+  for (const [id, c] of cache) if (id.startsWith(`${seasonId}:`) && c.kind === 'raw') for (const k of c.keys) if (!raw.has(k)) raw.set(k, c.keySource?.[k] || 'base');
   if (!raw.size) return;
+  const emptyKind = () => ({ issued: 0, inRaw: 0, bySource: { base: 0, erms: 0, ecconline: 0, other: 0 }, status: { new: 0, updated: 0, firmNew: 0 } });
+  // The UCD Tracking System's "Added permits to universe", worked out: a
+  // permit already in the RAW data is FIRM NEW when it came with a firm
+  // added this updating (ERMS, ECC Online), UPDATED when its list says
+  // renewal, NEW otherwise.
+  const statusOf = (k, c) => {
+    const src = raw.get(k);
+    if (src && src !== 'base') return 'firmNew';
+    return c.keyType?.[k] === 'renewal' ? 'updated' : 'new';
+  };
   for (const [id, c] of cache) {
     if (!id.startsWith(`${seasonId}:`) || c.kind !== 'permits') continue;
     const byProvince = {};
+    const byKind = {};
     let inRaw = 0;
     for (const k of c.keys) {
       const p = c.keyProvince?.[k] || '(none)';
-      byProvince[p] ||= { issued: 0, inRaw: 0 };
-      byProvince[p].issued += 1;
+      const kind = c.keyKind?.[k] || 'other';
+      const prov = (byProvince[p] ||= { issued: 0, inRaw: 0, byKind: {} });
+      const pk = (prov.byKind[kind] ||= { issued: 0, inRaw: 0, status: { new: 0, updated: 0, firmNew: 0 } });
+      const kk = (byKind[kind] ||= emptyKind());
+      prov.issued += 1;
+      pk.issued += 1;
+      kk.issued += 1;
       if (raw.has(k)) {
         inRaw += 1;
-        byProvince[p].inRaw += 1;
+        prov.inRaw += 1;
+        pk.inRaw += 1;
+        kk.inRaw += 1;
+        kk.bySource[raw.get(k)] += 1;
+        const st = statusOf(k, c);
+        kk.status[st] += 1;
+        pk.status[st] += 1;
       }
     }
-    await db().collection(FILES).updateOne({ _id: id }, { $set: { 'current.inRaw': inRaw, 'current.inRawByProvince': byProvince } });
+    await db().collection(FILES).updateOne({ _id: id }, { $set: { 'current.inRaw': inRaw, 'current.inRawByProvince': byProvince, 'current.inRawByKind': byKind } });
   }
 }
 
 function broadcast(season) {
+  invalidate();
   if (io) io.emit('progress-tracker:update', { season, at: new Date() });
 }
 
@@ -335,7 +438,7 @@ async function tick() {
   let next = 5 * 60 * 1000;
   try {
     const season = await currentSeason();
-    if (isOpen(season)) {
+    if (isWatched(season)) {
       next = season.pollSeconds * 1000;
       if (await takeLease(season)) {
         running = poll(season);
@@ -367,7 +470,7 @@ function start(socketServer) {
 async function refresh() {
   const season = await currentSeason();
   if (!season) throw Object.assign(new Error('There is no open season to check.'), { status: 409 });
-  if (!isOpen(season)) throw Object.assign(new Error('The season is not open: files are only checked between its dates.'), { status: 409 });
+  if (!isWatched(season)) throw Object.assign(new Error('The season has ended: files are no longer checked.'), { status: 409 });
   if (running) await running;
   if (!(await takeLease(season))) throw Object.assign(new Error('Another server is checking the files right now.'), { status: 409 });
   return poll(season);
@@ -377,8 +480,33 @@ async function refresh() {
 
 const sumPermits = (p) => Object.values(p || {}).reduce((a, n) => a + n, 0);
 
-/** Everything the page shows for a season. */
+// The overview, kept for a short while: every open screen and every public
+// link asks for it each minute, and building it reads every file document.
+// Anything that changes the figures (a save read, the legend, the season,
+// the public link) drops it at once; a request meanwhile shares the build.
+const OVERVIEW_TTL = 20 * 1000;
+const overviews = new Map(); // season id | 'current' -> { at, gen, promise }
+let generation = 0;
+function invalidate() {
+  generation += 1;
+  overviews.clear();
+}
+
+/** Everything the page shows for a season (cached briefly; see above). */
 async function overview(id) {
+  const key = id ? String(id) : 'current';
+  const hit = overviews.get(key);
+  if (hit && hit.gen === generation && Date.now() - hit.at < OVERVIEW_TTL) return hit.promise;
+  const gen = generation;
+  const promise = buildOverview(id).catch((err) => {
+    overviews.delete(key);
+    throw err;
+  });
+  overviews.set(key, { at: Date.now(), gen, promise });
+  return promise;
+}
+
+async function buildOverview(id) {
   await connectToMongo();
   const seasons = await db().collection(SEASONS).find({}, { projection: { lease: 0 } }).sort({ startsAt: -1 }).limit(20).toArray();
   const season = id ? seasons.find((s) => String(s._id) === String(id)) : seasons.find((s) => s.status === 'active') || seasons[0];
@@ -387,7 +515,10 @@ async function overview(id) {
   const files = await db().collection(FILES).find({ season: sid }).sort({ source: 1, path: 1 }).toArray();
   const events = await db().collection(EVENTS).find({ season: sid }).sort({ at: -1 }).limit(80).toArray();
 
-  const raw = files.filter((f) => f.kind === 'raw' && !f.missing);
+  // The Monitoring Plan (the seven provinces) and the healthcare lists. The
+  // ECP monitoring list is not part of the universe's updating: left out.
+  const notTracked = (f) => f.kind === 'raw' && Object.keys(f.current?.counts?.units || {}).every((u) => groupOfUnit(u) === 'other');
+  const raw = files.filter((f) => f.kind === 'raw' && !f.missing && !notTracked(f));
   const permits = files.filter((f) => f.kind === 'permits' && !f.missing);
   const add = (list, get) => list.reduce((a, f) => a + (get(f) || 0), 0);
   const kinds = ['ecc', 'pto', 'wwdp', 'haz', 'pco', 'chemical', 'importer', 'tsd', 'trc'];
@@ -396,13 +527,13 @@ async function overview(id) {
   const counted = permits.filter((f) => !f.reference);
   const issued = add(counted, (f) => f.current?.counts?.rows);
   const inRaw = add(counted, (f) => f.current?.inRaw);
+  // By province (each with its kinds of permit), and by kind of permit (each
+  // with the firms the encoded ones sit on).
   const byProvince = {};
+  const issuedByKind = {};
   for (const f of counted) {
-    for (const [p, v] of Object.entries(f.current?.inRawByProvince || {})) {
-      byProvince[p] ||= { issued: 0, inRaw: 0 };
-      byProvince[p].issued += v.issued;
-      byProvince[p].inRaw += v.inRaw;
-    }
+    for (const [p, v] of Object.entries(f.current?.inRawByProvince || {})) addInto((byProvince[p] ||= { issued: 0, inRaw: 0, byKind: {} }), v);
+    addInto(issuedByKind, f.current?.inRawByKind);
   }
 
   const summary = {
@@ -422,11 +553,114 @@ async function overview(id) {
       permitsNow: add(raw, (f) => sumPermits(f.current?.counts?.permits)),
       withPermitBaseline: add(raw, (f) => f.baseline?.counts?.withPermit),
       withPermitNow: add(raw, (f) => f.current?.counts?.withPermit),
-      byCategory: ['main', 'duplicate', 'delisting', 'deletion'].reduce((o, k) => ({ ...o, [k]: { baseline: add(raw, (f) => f.baseline?.counts?.byCategory?.[k]), now: add(raw, (f) => f.current?.counts?.byCategory?.[k]) } }), {}),
+      byCategory: ['main', 'review', 'duplicate', 'delisting', 'deletion'].reduce((o, k) => ({ ...o, [k]: { baseline: add(raw, (f) => f.baseline?.counts?.byCategory?.[k]), now: add(raw, (f) => f.current?.counts?.byCategory?.[k]) } }), {}),
       permitKinds,
     },
-    permits: { files: counted.length, issued, inRaw, newSinceBaseline: add(counted, (f) => f.current?.compare?.newSinceBaseline), byProvince },
+    permits: { files: counted.length, issued, inRaw, newSinceBaseline: add(counted, (f) => f.current?.compare?.newSinceBaseline), byProvince, byKind: issuedByKind },
   };
+  // The main sheets split by where each firm came from: the baseline (on the
+  // sheet before this updating) and the additions from ERMS and ECC Online,
+  // read from each workbook's additions log.
+  const composition = raw.reduce(
+    (t, f) => addInto(t, { base: f.current?.counts?.base, added: f.current?.counts?.added, pending: f.current?.counts?.pending, addedPermits: f.current?.counts?.addedPermits, addedPermitsByKind: f.current?.counts?.addedPermitsByKind }),
+    { base: 0, added: { erms: 0, ecconline: 0, other: 0 }, pending: { erms: 0, ecconline: 0, other: 0 }, addedPermits: {}, addedPermitsByKind: { erms: {}, ecconline: {}, other: {} } }
+  );
+  const addedPermitsTotal = sumPermits(composition.addedPermits);
+  Object.assign(summary.raw, {
+    base: composition.base,
+    additions: composition.added,
+    pending: composition.pending,
+    review: summary.raw.byCategory.review.now,
+    addedPermits: addedPermitsTotal,
+    basePermits: summary.raw.permitsNow - addedPermitsTotal,
+  });
+  // Each kind of permit on its own — they are not added together: on the
+  // baseline firms, and on the firms added from ERMS and from ECC Online.
+  for (const k of kinds) {
+    const p = summary.raw.permitKinds[k];
+    p.added = composition.addedPermits[k] || 0;
+    p.erms = composition.addedPermitsByKind.erms[k] || 0;
+    p.ecconline = composition.addedPermitsByKind.ecconline[k] || 0;
+    p.other = composition.addedPermitsByKind.other[k] || 0;
+    p.base = p.now - p.added;
+  }
+  // A baseline read under an older reading of the workbooks (before only the
+  // main sheet counted) does not compare with today's: the screen says so.
+  const stale = raw.some((f) => f.baseline?.counts && f.baseline.counts.v !== ANALYSIS_VERSION);
+
+  // The province matrix — the old tracker's tracking_v3 sheet, live: per
+  // province (and per 2027 list) the firms, set-aside rows, permits by kind,
+  // the highlighting by colour with its meaning, and the newly issued permits
+  // already written in.
+  const nowUnits = mergeUnits(raw.map((f) => f.current?.counts?.units));
+  const baseUnits = mergeUnits(raw.map((f) => f.baseline?.counts?.units));
+  const legend = normaliseLegend(season.legend || DEFAULT_LEGEND);
+  const sourceLink = Object.fromEntries((season.sources || []).map((x) => [x.key, x.link]));
+  const openOf = (f) => ({ id: f._id, name: f.name, webUrl: f.meta?.webUrl || null, appUrl: f.meta?.appUrl || null, folderUrl: sourceLink[f.source] || null });
+  const unitFiles = {};
+  for (const f of raw) for (const unit of Object.keys(f.current?.counts?.units || {})) (unitFiles[unit] ||= []).push(openOf(f));
+  const order = (u) => {
+    const i = UNIT_ORDER.indexOf(u);
+    return i < 0 ? UNIT_ORDER.length : i;
+  };
+  const matrix = [...new Set([...Object.keys(nowUnits), ...Object.keys(baseUnits)])]
+    .filter((u) => groupOfUnit(u) !== 'other' && (nowUnits[u]?.rows || 0) + (baseUnits[u]?.rows || 0) > 0)
+    .sort((a, b) => order(a) - order(b) || a.localeCompare(b))
+    .map((unit) => {
+      const u = nowUnits[unit] || {};
+      const b = baseUnits[unit] || {};
+      // The highlighting by colour family, each shade of it listed under it.
+      const families = {};
+      for (const [rgb, rows] of Object.entries(u.rowColors || {})) {
+        const fam = colourFamily(rgb);
+        const f = (families[fam] ||= { family: fam, rows: 0, shades: [] });
+        f.rows += rows;
+        f.shades.push({ rgb, rows });
+      }
+      const baseFamilies = {};
+      for (const [rgb, rows] of Object.entries(b.rowColors || {})) baseFamilies[colourFamily(rgb)] = (baseFamilies[colourFamily(rgb)] || 0) + rows;
+      const p = byProvince[unit] || {};
+      const base = u.base ?? u.rows ?? 0;
+      return {
+        unit,
+        group: groupOfUnit(unit),
+        rows: u.rows || 0,
+        base,
+        added: { erms: u.added?.erms || 0, ecconline: u.added?.ecconline || 0, other: u.added?.other || 0 },
+        baselineRows: b.rows || 0,
+        review: u.review || 0,
+        reviewSheets: u.reviewSheets || {},
+        pending: { erms: u.pending?.erms || 0, ecconline: u.pending?.ecconline || 0, other: u.pending?.other || 0 },
+        duplicate: u.duplicate || 0,
+        delisting: u.delisting || 0,
+        deletion: u.deletion || 0,
+        permits: u.permits || {},
+        addedPermits: u.addedPermits || {},
+        pendingPermits: u.pendingPermits || {},
+        addedPermitsBy: { erms: u.addedPermitsBy?.erms || 0, ecconline: u.addedPermitsBy?.ecconline || 0, other: u.addedPermitsBy?.other || 0 },
+        addedPermitsByKind: { erms: u.addedPermitsByKind?.erms || {}, ecconline: u.addedPermitsByKind?.ecconline || {}, other: u.addedPermitsByKind?.other || {} },
+        issuedByKind: p.byKind || {},
+        // The Data Visualization tab's counts.
+        classes: u.classes || {},
+        cities: u.cities || {},
+        eccYears: u.eccYears || {},
+        // The workbook(s) the unit is read from, to open in Excel.
+        files: unitFiles[unit] || [],
+        baselinePermits: b.permits || {},
+        withPermit: u.withPermit || 0,
+        colored: u.colored || 0,
+        coloredBase: u.coloredBase ?? u.colored ?? 0,
+        baselineColored: b.colored || 0,
+        coloredPermit: u.coloredPermit || 0,
+        // Baseline firms no one has highlighted yet.
+        notModified: Math.max(0, base - (u.coloredBase ?? u.colored ?? 0)),
+        colours: Object.values(families)
+          .sort((x, y) => FAMILIES.indexOf(x.family) - FAMILIES.indexOf(y.family))
+          .map((f) => ({ ...f, shades: f.shades.sort((x, y) => y.rows - x.rows), baseline: baseFamilies[f.family] || 0, label: legend[unit]?.[f.family] || null })),
+        issued: p.issued || 0,
+        inRaw: p.inRaw || 0,
+      };
+    });
 
   const publicFile = (f) => ({
     id: f._id,
@@ -438,18 +672,318 @@ async function overview(id) {
     reference: f.reference,
     missing: f.missing,
     meta: f.meta,
+    open: openOf(f),
     baseline: f.baseline,
     current: f.current && { ...f.current, compare: f.current.compare && { ...f.current.compare, addedSerials: undefined, modifiedSerials: undefined } },
   });
 
   const { lease, ...s } = season;
   return {
-    season: { ...s, id: sid, open: isOpen(season) },
+    season: { ...s, id: sid, open: isOpen(season), watched: isWatched(season), preSeason: isPreSeason(season), baselineStale: stale },
     seasons: seasons.map((x) => ({ id: String(x._id), name: x.name, status: x.status, startsAt: x.startsAt, endsAt: x.endsAt })),
     summary,
-    files: files.map(publicFile),
+    matrix,
+    // The workbooks someone is editing now (Excel saved them in the last minutes).
+    editing: editingNow(files),
+    // VERA's tracking notes: what stands out, as plain sentences.
+    notes: notesFor({ matrix, summary, stale, legend }),
+    legend,
+    families: FAMILIES,
+    files: files.filter((f) => !notTracked(f)).map(publicFile),
     events: events.map(({ _id, ...e }) => ({ id: String(_id), ...e })),
     defaults: { sources: DEFAULT_SOURCES },
+    map: mapConfig(),
+  };
+}
+
+/** The season's colour legend: { unit: { family: meaning } }. */
+async function setLegend(id, input) {
+  await connectToMongo();
+  const s = ObjectId.isValid(id) ? await db().collection(SEASONS).findOne({ _id: new ObjectId(id) }) : null;
+  if (!s) throw Object.assign(new Error('No such season.'), { status: 404 });
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Object.assign(new Error('The legend must list meanings by province and colour.'), { status: 400 });
+  const legend = {};
+  for (const [unit, colours] of Object.entries(input).slice(0, 30)) {
+    if (!colours || typeof colours !== 'object') continue;
+    const name = String(unit).slice(0, 40);
+    for (const [fam, label] of Object.entries(colours)) {
+      const text = String(label ?? '').trim().slice(0, 80);
+      const to = MERGED[fam] || fam;
+      if (FAMILIES.includes(to) && text) (legend[name] ||= {})[to] = text;
+    }
+  }
+  await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { legend, legendUpdatedAt: new Date() } });
+  broadcast(String(s._id));
+  return legend;
+}
+
+// --- the workbooks being edited now ---------------------------------------------
+//
+// SharePoint does not say, through a shared link, who has a workbook open.
+// But Excel saves an open workbook every few seconds while it is edited
+// (AutoSave), and each save is a new version the tracker reads. So a file
+// saved in the last few minutes is being edited now: the screen shows it
+// with its province and who saved it, and it drops off a few minutes after
+// the last save.
+const EDITING_MS = 5 * 60 * 1000;
+function editingNow(files, now = Date.now()) {
+  return files
+    .filter((f) => !f.missing && !f.reference && f.meta?.modifiedAt && now - new Date(f.meta.modifiedAt).getTime() < EDITING_MS)
+    .sort((a, b) => new Date(b.meta.modifiedAt) - new Date(a.meta.modifiedAt))
+    .map((f) => ({
+      id: f._id,
+      name: f.name,
+      kind: f.kind,
+      units: Object.keys(f.current?.counts?.units || {}).filter((u) => groupOfUnit(u) !== 'other'),
+      permitKinds: Object.keys(f.current?.counts?.byKind || {}),
+      by: f.meta.modifiedBy || null,
+      at: f.meta.modifiedAt,
+      version: f.meta.version || null,
+    }));
+}
+
+// --- the Data Visualization tab's firms (Developer only) -----------------------
+//
+// The firm table and the map read the main-sheet rows the last look kept in
+// the server's memory (analyze.js `records`) — never stored, never on the
+// public link. After a restart they return once the files are read again.
+
+/** The rows the last look kept for a season, the ECP list left out. */
+function recordsOf(seasonId) {
+  const out = [];
+  for (const [id, c] of cache) {
+    if (!id.startsWith(`${seasonId}:`) || c.kind !== 'raw' || !c.records) continue;
+    for (const r of c.records) if (groupOfUnit(r.unit) !== 'other') out.push(r);
+  }
+  return out;
+}
+const PERMIT_COLS = ['ecc', 'pto', 'wwdp', 'haz', 'chemical', 'tsd', 'trc', 'pco'];
+const norm = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+
+/** A page of firms: by province or list, and a search on a permit number, a name or a title. */
+async function vizFirms({ season, unit, q, page = 1, pageSize = 25 } = {}) {
+  const s = season ? { _id: season } : await currentSeason();
+  if (!s) return { total: 0, rows: [], ready: false };
+  let rows = recordsOf(String(s._id));
+  const ready = rows.length > 0;
+  if (unit) rows = unit === 'healthcare' ? rows.filter((r) => groupOfUnit(r.unit) === 'healthcare') : rows.filter((r) => r.unit === unit);
+  // In the provinces' order — Aurora first — then the healthcare lists; by serial within each.
+  const rank = (u) => {
+    const i = UNIT_ORDER.indexOf(u);
+    return i < 0 ? UNIT_ORDER.length : i;
+  };
+  rows = [...rows].sort((a, b) => rank(a.unit) - rank(b.unit) || a.serial.localeCompare(b.serial, undefined, { numeric: true }));
+  const text = String(q || '').trim().slice(0, 80);
+  if (text) {
+    const key = norm(text);
+    const lower = text.toLowerCase();
+    rows = rows.filter((r) => (key.length >= 3 && PERMIT_COLS.some((k) => norm(r[k]).includes(key))) || String(r.name || '').toLowerCase().includes(lower) || String(r.title || '').toLowerCase().includes(lower) || r.serial.toLowerCase().includes(lower));
+  }
+  const size = Math.min(100, Math.max(5, Number(pageSize) || 25));
+  const current = Math.max(1, Number(page) || 1);
+  return { total: rows.length, ready, rows: rows.slice((current - 1) * size, current * size).map(({ lat, lng, ...r }) => r) };
+}
+
+/** The firms' coordinates for the map, coloured by province: [lat, lng, unit index, serial]. At most `max`, evenly sampled. */
+async function vizPoints({ unit, max = 30000, seasonId = null } = {}) {
+  const s = seasonId ? { _id: seasonId } : await currentSeason();
+  if (!s) return { units: [], points: [], total: 0 };
+  let rows = recordsOf(String(s._id)).filter((r) => r.lat && r.lng && r.lat > 4 && r.lat < 22 && r.lng > 116 && r.lng < 127);
+  if (unit) rows = unit === 'healthcare' ? rows.filter((r) => groupOfUnit(r.unit) === 'healthcare') : rows.filter((r) => r.unit === unit);
+  const units = [...new Set(rows.map((r) => r.unit))];
+  const step = Math.max(1, Math.ceil(rows.length / max));
+  const points = [];
+  for (let i = 0; i < rows.length; i += step) points.push([rows[i].lat, rows[i].lng, units.indexOf(rows[i].unit), rows[i].serial]);
+  return { units, points, total: rows.length, sampled: step > 1 };
+}
+
+/**
+ * The 2026 IIS reference numbers of a province's firms, by serial, from the
+ * RAW files the open season reads — for the register's Monitoring Status,
+ * which has only 2024 and 2025. { serial: "IIS no." }.
+ */
+async function rawIis(province) {
+  await connectToMongo();
+  const season = await currentSeason();
+  if (!season) return {};
+  const unit = String(province || '').trim().replace(/\s+/g, '_').toLowerCase();
+  const files = await db()
+    .collection(FILES)
+    .find({ season: String(season._id), kind: 'raw', missing: { $ne: true } }, { projection: { 'current.iis': 1, 'current.counts.units': 1 } })
+    .toArray();
+  const out = {};
+  for (const f of files) {
+    const units = Object.keys(f.current?.counts?.units || {}).map((u) => u.toLowerCase());
+    if (unit && !units.includes(unit)) continue;
+    Object.assign(out, f.current?.iis || {});
+  }
+  return out;
+}
+
+/** One firm, for the map's floating card. */
+async function vizFirm(serial, seasonId = null) {
+  const s = seasonId ? { _id: seasonId } : await currentSeason();
+  const r = s && recordsOf(String(s._id)).find((x) => x.serial === String(serial || ''));
+  if (!r) throw Object.assign(new Error('That firm is not in the files the tracker last read.'), { status: 404 });
+  return r;
+}
+
+/**
+ * The map's settings for the page: the MapTiler key from the server's .env
+ * (MAPTILER_KEY, or VITE_MAPTILER_KEY as it may be named there), so it lives
+ * in one place and changes with a restart, not a rebuild. A map key is
+ * always readable in the browser — MapTiler restricts it to our website's
+ * address (its "Allowed HTTP origins") — so sending it is not a leak.
+ */
+function mapConfig() {
+  const key = String(process.env.MAPTILER_KEY || process.env.VITE_MAPTILER_KEY || '').trim();
+  return { maptilerKey: /^[A-Za-z0-9_-]{8,80}$/.test(key) ? key : null };
+}
+
+// --- colouring the encoded permits in the RAW files ------------------------------
+//
+// The tracker does not write to the RAW files: their link is "view" only, and
+// rewriting a workbook here would lose its fills and collide with AutoSave.
+// It says, per RAW file, which cells hold a newly issued permit already
+// encoded — sheet, column, row, the permit number, the fill the cell has —
+// and the page turns that into an Office Script a Planning Unit member runs
+// in Excel for the web, under their own account.
+
+/** Per RAW file, the cells holding a newly issued permit already encoded. */
+async function colourTargets(seasonId = null) {
+  const s = seasonId ? { _id: seasonId } : await currentSeason();
+  if (!s) return { files: [] };
+  const sid = String(s._id);
+  // The newly issued permits (not the reference extracts), with their kind and list.
+  const issued = new Map(); // key -> { kind, type }
+  for (const [id, c] of cache) {
+    if (!id.startsWith(`${sid}:`) || c.kind !== 'permits' || c.reference) continue;
+    for (const k of c.keys) if (!issued.has(k)) issued.set(k, { kind: c.keyKind?.[k] || 'other', type: c.keyType?.[k] || null });
+  }
+  const docs = await db().collection(FILES).find({ season: sid, kind: 'raw', missing: { $ne: true } }, { projection: { name: 1, meta: 1, 'current.counts.units': 1 } }).toArray();
+  const byId = new Map(docs.map((d) => [d._id, d]));
+  const files = [];
+  for (const [id, c] of cache) {
+    if (!id.startsWith(`${sid}:`) || c.kind !== 'raw' || !c.keyCells) continue;
+    const d = byId.get(id);
+    if (!d) continue;
+    const units = Object.keys(d.current?.counts?.units || {}).filter((u) => groupOfUnit(u) !== 'other');
+    if (!units.length) continue;
+    const targets = [];
+    for (const [k, cells] of Object.entries(c.keyCells)) {
+      const hit = issued.get(k);
+      if (!hit) continue;
+      for (const cell of cells) targets.push({ ...cell, permit: k, listKind: hit.kind, status: c.keySource?.[k] && c.keySource[k] !== 'base' ? 'firmNew' : hit.type === 'renewal' ? 'updated' : 'new' });
+    }
+    if (!targets.length) continue;
+    targets.sort((a, b) => a.sheet.localeCompare(b.sheet) || a.row - b.row);
+    files.push({ id, name: d.name, units, version: d.meta?.version || null, webUrl: d.meta?.webUrl || null, targets });
+  }
+  files.sort((a, b) => a.name.localeCompare(b.name));
+  return { files, ready: files.length > 0 || [...cache.keys()].some((k) => k.startsWith(`${sid}:`)) };
+}
+
+// --- the public link ---------------------------------------------------------
+//
+// The Developer can let people without an E-Universe account follow the
+// season: a link with an unguessable token, on or off, with an end date, and
+// given a new token at will (which stops the old link at once). Anyone with
+// the link sees the FIGURES only — the summary, the charts and the tables:
+// no file name or path, no SharePoint or Excel link, no one's name, no
+// activity, no settings, and no VERA.
+
+const newToken = () => crypto.randomBytes(18).toString('base64url');
+const TOKEN_RE = /^[A-Za-z0-9_-]{20,40}$/;
+const shareOpen = (share, now = new Date()) => Boolean(share?.enabled && share.token && (!share.expiresAt || new Date(share.expiresAt) > now));
+
+/** Change a season's public link: { enabled, expiresAt (null: no end), regenerate }. */
+async function setShare(id, input = {}, user) {
+  await connectToMongo();
+  const s = ObjectId.isValid(id) ? await db().collection(SEASONS).findOne({ _id: new ObjectId(id) }) : null;
+  if (!s) throw Object.assign(new Error('No such season.'), { status: 404 });
+  const was = s.share || {};
+  const expiresAt = input.expiresAt === null || input.expiresAt === '' ? null : input.expiresAt !== undefined ? toDate(input.expiresAt) : was.expiresAt || null;
+  if (input.expiresAt && !expiresAt) throw Object.assign(new Error('The end date is not a date.'), { status: 400 });
+  // Only a date being set must be ahead; an old one that passed is kept as it
+  // is (the link then shows "not available" until a later date is set).
+  if (input.expiresAt && expiresAt <= new Date()) throw Object.assign(new Error('The end date must be in the future.'), { status: 400 });
+  const share = {
+    enabled: input.enabled !== undefined ? Boolean(input.enabled) : Boolean(was.enabled),
+    token: input.regenerate || !was.token ? newToken() : was.token,
+    expiresAt,
+    updatedAt: new Date(),
+    updatedBy: user?.username || null,
+    createdAt: input.regenerate || !was.token ? new Date() : was.createdAt || new Date(),
+  };
+  await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { share } });
+  invalidate();
+  return share;
+}
+
+/** The season a public link opens — or a 404 that does not say why. */
+async function sharedSeason(token) {
+  const gone = Object.assign(new Error('This link is not available. It may have been turned off or replaced.'), { status: 404 });
+  if (!TOKEN_RE.test(String(token || ''))) throw gone;
+  await connectToMongo();
+  const s = await db().collection(SEASONS).findOne({ 'share.token': String(token) }, { projection: { _id: 1, share: 1 } });
+  if (!s || !shareOpen(s.share)) throw gone;
+  return s;
+}
+
+/** The map's dots for the public link: a place and a province each, nothing more. */
+async function publicPoints(token, unit) {
+  const s = await sharedSeason(token);
+  return vizPoints({ unit, seasonId: String(s._id) });
+}
+
+/**
+ * One firm for the public map's card: what it is and where — its project,
+ * industry, municipality and province, the kinds of permit it holds and its
+ * source. Not the proponent (often a person), the street address or the
+ * permit numbers.
+ */
+async function publicFirm(token, serial) {
+  const s = await sharedSeason(token);
+  const r = await vizFirm(serial, String(s._id));
+  return {
+    serial: r.serial,
+    unit: r.unit,
+    title: r.title,
+    industry: r.industry,
+    city: r.city,
+    province: r.province || r.unit.replace(/_/g, ' '),
+    source: r.source,
+    holds: PERMIT_COLS.filter((k) => r[k]),
+  };
+}
+
+/** The season's figures for the public link — or a 404 that does not say why. */
+async function publicOverview(token) {
+  const s = await sharedSeason(token);
+  const o = await overview(String(s._id));
+  const season = o.season;
+  return {
+    season: {
+      name: season.name,
+      startsAt: season.startsAt,
+      endsAt: season.endsAt,
+      open: season.open,
+      preSeason: season.preSeason,
+      status: season.status,
+      checkedAt: season.lastPoll?.at || null,
+      baselineAt: season.baselineAt || null,
+      baselineStale: season.baselineStale,
+      linkExpiresAt: s.share.expiresAt || null,
+    },
+    summary: o.summary,
+    // The figures per province and list, without the workbooks behind them.
+    matrix: o.matrix.map(({ files, ...u }) => u),
+    notes: o.notes.map(({ ask, ...n }) => n),
+    // Being updated now: the province or list, or the kind of permit list — not the file or who.
+    editing: (o.editing || []).map((e) => ({ kind: e.kind, units: e.units, permitKinds: e.permitKinds, at: e.at })),
+    legend: o.legend,
+    families: o.families,
+    map: o.map,
   };
 }
 
@@ -465,6 +999,7 @@ async function ensureIndexes() {
   await connectToMongo();
   await db().collection(FILES).createIndex({ season: 1, source: 1, path: 1 });
   await db().collection(EVENTS).createIndex({ season: 1, at: -1 });
+  await db().collection(SEASONS).createIndex({ 'share.token': 1 }, { sparse: true });
 }
 
 module.exports = {
@@ -477,9 +1012,25 @@ module.exports = {
   createSeason,
   updateSeason,
   rebaseline,
+  setLegend,
+  setShare,
+  publicOverview,
+  vizFirms,
+  vizPoints,
+  vizFirm,
+  rawIis,
+  colourTargets,
+  editingNow,
+  publicPoints,
+  publicFirm,
+  shareOpen,
   currentSeason,
   ensureIndexes,
   compareRaw,
   isOpen,
+  isWatched,
+  isPreSeason,
+  colourFamily,
+  DEFAULT_LEGEND,
   _cache: cache,
 };

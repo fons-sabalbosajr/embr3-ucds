@@ -1,7 +1,7 @@
 const { connectToMongo, collections } = require('../config/db');
 const { withYear, stampYear } = require('../services/yearScope');
 const { principalOf } = require('../middleware/auth');
-const { roleOf, ROLES } = require('../services/authorization');
+const { roleOf, ROLES, hasCapability } = require('../services/authorization');
 
 // Transaction logs are year-scoped: a log written while 2026 is active belongs
 // to 2026 and must not surface in the 2025 container. The year always comes
@@ -47,10 +47,20 @@ module.exports.getLogs = getLogs;
 
 // GET /api/ucds-log — migrated from server.js
 async function getUcdsLog(req, res) {
-  const { ecc_cnc } = req.query;
+  const { ecc_cnc, sort_key } = req.query;
   try {
     await connectToMongo();
-    const base = ecc_cnc ? { ecc_cnc: { $regex: ecc_cnc, $options: 'i' } } : {};
+    // One record's History: its entries by serial, and the older entries
+    // written before the serial was kept, by its exact ECC/CNC. (It was a
+    // pattern match on the ECC/CNC: a record without one showed nothing, and
+    // "…-12" also showed the entries of "…-120".)
+    const escapeRx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exactEcc = (v) => ({ $regex: `^${escapeRx(String(v).trim())}$`, $options: 'i' });
+    const base = sort_key
+      ? { $or: [{ sort_key: String(sort_key) }, ...(ecc_cnc ? [{ sort_key: { $exists: false }, ecc_cnc: exactEcc(ecc_cnc) }] : [])] }
+      : ecc_cnc
+        ? { ecc_cnc: exactEcc(ecc_cnc) }
+        : {};
     const logs = await collections.ucdsLog.find(withYear('ucdsLog', req.activeYear, base)).toArray();
     return res.status(200).json(logs);
   } catch (error) {
@@ -64,6 +74,8 @@ module.exports.getUcdsLog = getUcdsLog;
 // DELETE handlers migrated from server.js
 async function deleteUcdsTransaction(req, res) {
   const { transactionID } = req.params;
+  // Deleting History is for an account that may manage the data (it was open to any signed-in user).
+  if (!hasCapability(principalOf(req), 'canManageData')) return res.status(403).json({ message: 'Your account may not delete History entries.' });
   try {
     await connectToMongo();
     const result = await collections.ucdsLog.deleteOne(

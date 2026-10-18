@@ -1,49 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Alert, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Modal, Popconfirm, Progress, Row, Select, Space, Statistic, Table, Tag, Timeline, Tooltip, Typography,
-} from "antd";
-import { CloudSyncOutlined, LineChartOutlined, PlusOutlined, ReloadOutlined, SettingOutlined, UndoOutlined, MinusCircleOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Modal, Popconfirm, Progress, Row, Select, Space, Switch, Table, Tabs, Tag, Timeline, Tooltip, Typography } from "antd";
+import { CloudSyncOutlined, CopyOutlined, FolderOpenOutlined, GlobalOutlined, HistoryOutlined, LineChartOutlined, MessageOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined, SettingOutlined, SyncOutlined, UndoOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import PageHeader from "../../../shared/components/PageHeader";
 import { message } from "../../../shared/feedback";
+import { copyText } from "../../../shared/copyText";
 import { initializeSocket, getSocket } from "../../../api/socketService";
-import { checkNow, createSeason, getProgress, rebaselineSeason, updateSeason } from "./progressService";
+import { useTheme } from "../../../theme/ThemeProvider";
+import { ROUTES } from "../../../config/routes";
+import { openVera } from "../../vera/veraService";
+import { checkNow, createSeason, getProgress, readSnapshot, rebaselineSeason, saveShare, updateSeason, writeSnapshot } from "./progressService";
+import { OpenFileButton, StackBar } from "./ProvinceMatrix";
+import TrackerView, { ACCENT } from "./TrackerView";
+import { KIND_LABEL, n, pct, signed } from "./palette";
 import "./progress.css";
 
 dayjs.extend(relativeTime);
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 // ---------------------------------------------------------------------------
-// Admin Settings › Progress Tracker: the universe updating during an activity
-// season, live from the Planning Unit's SharePoint working files.
+// The Progress Tracker (Developer only; reached from Admin Settings › System,
+// no longer from the menu): the universe updating during an activity season,
+// live from the Planning Unit's SharePoint working files. Only each RAW
+// file's MAIN worksheet counts (the province sheet, or the healthcare lists'
+// sheets); the ECP list is left out.
 //
-//   - the newly issued permits already written into the RAW data (the
-//     encoding's progress), overall and per province;
-//   - the RAW data against its baseline: firms, permits, rows added and
-//     changed (and in which section), rows coloured as updated;
-//   - every file, its version and who saved it last;
-//   - the season's activity: each save and what it moved.
-//
-// The server looks at the folders while the season is open and tells this
-// screen when something changed; the figures come from the admin API.
+// The figures (TrackerView) are the same the public link shows. This screen
+// adds what only the Developer has: the season's settings, the public link's
+// settings, "Check now" and a new baseline, VERA, the files with their Excel
+// buttons, and the activity. The server looks at the folders while the
+// season is open and tells this screen when something changed.
 // ---------------------------------------------------------------------------
 
-const ACCENT = "#2f7ecb";
 const KEY = ["admin", "progress-tracker"];
 const errorText = (e, fallback) => e?.response?.data?.message || fallback;
-const n = (v) => (Number(v) || 0).toLocaleString();
-const pct = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : 0);
-const signed = (v) => (v > 0 ? `+${n(v)}` : v < 0 ? `−${n(-v)}` : "0");
-const KIND_LABEL = { ecc: "ECC / CNC", pto: "PTO", wwdp: "WWDP", haz: "Haz. waste ID", pco: "PCO", chemical: "Chemical permit", importer: "Importer clearance", tsd: "TSD", trc: "Transporter (TRC)" };
-const SECTION_LABEL = { profile: "Profile", monitoring: "Monitoring", permits: "Permits", legal: "Legal" };
 const fileLabel = (f) =>
   f.name
     .replace(/\.xls[xm]?$/i, "")
     .replace(/^(\d{4}_)?(Z_)?UNIVERSE_/i, "")
     .replace(/_RAW$/i, "")
     .replace(/_/g, " ");
+const HEALTHCARE = new Set(["Healthcare Industries", "Chemical permits", "TSD / TRC", "Importers"]);
+/** A file's group: the permit lists, or the group of the RAW list it holds. */
+const fileGroup = (f) => {
+  if (f.kind === "permits") return "permits";
+  if (f.current?.counts?.mainSheet) return "province";
+  const units = Object.keys(f.current?.counts?.units || {});
+  return units.some((u) => HEALTHCARE.has(u)) || /healthcare/i.test(f.path) ? "healthcare" : "other";
+};
+/** The public page's address for a token. */
+export const publicUrl = (token) => `${window.location.origin}${ROUTES.progressPublic.replace(":token", token)}`;
 
 const Delta = ({ value, good = "up" }) => {
   if (!value) return <Text type="secondary">±0</Text>;
@@ -59,7 +67,7 @@ function SeasonModal({ open, season, defaults, onClose }) {
     form.setFieldsValue(
       season
         ? { name: season.name, range: [dayjs(season.startsAt), dayjs(season.endsAt)], pollSeconds: season.pollSeconds, sources: season.sources }
-        : { name: `${dayjs().year() + 1} UCD Updating`, range: [dayjs().startOf("day"), dayjs().add(2, "month").endOf("day")], pollSeconds: 60, sources: defaults?.sources || [] }
+        : { name: `${dayjs().year() + 1} UCD Updating`, range: [dayjs().startOf("day"), dayjs().add(2, "month").endOf("day")], pollSeconds: 30, sources: defaults?.sources || [] }
     );
   }, [open, season, defaults, form]);
   const save = useMutation({
@@ -84,17 +92,17 @@ function SeasonModal({ open, season, defaults, onClose }) {
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="range" label="Activity dates" rules={[{ required: true, message: "Give the dates" }]} extra="The files are only watched between these dates.">
+            <Form.Item name="range" label="Activity dates" rules={[{ required: true, message: "Give the dates" }]} extra="The files are read from the moment the season is opened; until the start that reading is the baseline. Saves are recorded between these dates.">
               <DatePicker.RangePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>
         </Row>
-        <Form.Item name="pollSeconds" label="Look at the files every" extra="Seconds between looks. Only files saved since are read again.">
-          <InputNumber min={30} max={3600} step={30} addonAfter="seconds" />
+        <Form.Item name="pollSeconds" label="Look at the files every" extra="Seconds between looks (15 or more). Only files saved since are read again.">
+          <InputNumber min={15} max={3600} step={15} addonAfter="seconds" />
         </Form.Item>
-        <Text strong>SharePoint folders</Text>
+        <Text strong>SharePoint / OneDrive links</Text>
         <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 8 }}>
-          Each must be shared as &ldquo;Anyone with the link can view&rdquo;. The tracker only reads.
+          A folder (every Excel file in it) or a single Excel file, each shared as &ldquo;Anyone with the link can view&rdquo;. The tracker only reads.
         </Text>
         <Form.List name="sources">
           {(fields, { add, remove }) => (
@@ -113,7 +121,7 @@ function SeasonModal({ open, season, defaults, onClose }) {
                   </Col>
                   <Col xs={22} md={11}>
                     <Form.Item name={[f.name, "link"]} rules={[{ required: true, type: "url", message: "A SharePoint link" }]}>
-                      <Input placeholder="https://…sharepoint.com/:f:/g/…" />
+                      <Input placeholder="https://…sharepoint.com/:f:/g/… or /:x:/g/…" />
                     </Form.Item>
                   </Col>
                   <Col xs={2} md={1}>
@@ -122,7 +130,7 @@ function SeasonModal({ open, season, defaults, onClose }) {
                 </Row>
               ))}
               <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ kind: "raw" })} disabled={fields.length >= 6}>
-                Add a folder
+                Add a link
               </Button>
             </>
           )}
@@ -132,13 +140,119 @@ function SeasonModal({ open, season, defaults, onClose }) {
   );
 }
 
+/**
+ * The public link's settings: on or off, an end date, a new link. Anyone
+ * with the link sees the figures only — no files, links, names or activity.
+ */
+function ShareModal({ open, season, onClose, queryKey }) {
+  const queryClient = useQueryClient();
+  const share = season?.share || {};
+  // Each change is saved at once: a switch that only takes effect after a
+  // separate Save left links "on" on screen and off on the server.
+  const save = useMutation({
+    mutationFn: (body) => saveShare({ id: season.id, ...body }),
+    onSuccess: (data, body) => {
+      queryClient.setQueryData(queryKey, data);
+      const s = data?.season?.share || {};
+      message.success(body.regenerate ? "A new link was made. The old one no longer opens." : body.enabled !== undefined ? (s.enabled ? "The public link is on." : "The public link is off.") : "End date saved.");
+    },
+    onError: (e) => message.error(errorText(e, "The public link could not be saved.")),
+  });
+  const link = share.token ? publicUrl(share.token) : null;
+  const expired = Boolean(share.expiresAt && dayjs(share.expiresAt).isBefore(dayjs()));
+  const working = Boolean(share.enabled && share.token && !expired);
+  const expiresAt = share.expiresAt ? dayjs(share.expiresAt) : null;
+  const copy = async () => {
+    if (await copyText(link)) message.success("Link copied.");
+    else message.info("Select the link and copy it (Ctrl+C).");
+  };
+  return (
+    <Modal open={open} title={<Space><GlobalOutlined />Public link</Space>} onCancel={onClose} footer={<Button onClick={onClose}>Done</Button>} width={620} destroyOnHidden>
+      <Paragraph type="secondary" style={{ fontSize: 13 }}>
+        People without an E-Universe account can follow the season&rsquo;s figures: the tiles, the charts and the tables, read-only. They never see a file name, an Excel or SharePoint link, anyone&rsquo;s name, the activity, VERA or these settings. Changes here are saved at once.
+      </Paragraph>
+      <Space direction="vertical" size={14} style={{ width: "100%" }}>
+        <Space wrap>
+          <Switch checked={Boolean(share.enabled)} loading={save.isPending} onChange={(v) => save.mutate({ enabled: v })} />
+          <Text strong>{share.enabled ? "The link is on" : "The link is off"}</Text>
+          {share.enabled && expired && <Tag color="red">Ended {dayjs(share.expiresAt).format("MMM D")} — set a later end date</Tag>}
+        </Space>
+        <Alert
+          type={working ? "success" : "warning"}
+          showIcon
+          message={working ? "Anyone with the link can open it now." : share.enabled ? "The link has passed its end date: it shows “not available”." : "The link is off: anyone opening it sees “not available”. Turn it on above."}
+        />
+        <div>
+          <Text strong style={{ display: "block", marginBottom: 4 }}>Ends</Text>
+          <DatePicker
+            value={expiresAt}
+            onChange={(d) => save.mutate({ expiresAt: d ? d.endOf("day").toISOString() : null })}
+            disabledDate={(d) => d && d.isBefore(dayjs().startOf("day"))}
+            placeholder="No end date"
+            allowClear
+          />
+          <Text type="secondary" style={{ display: "block", fontSize: 12, marginTop: 4 }}>
+            After this day the link stops opening. Clear it to keep the link until you turn it off.
+          </Text>
+        </div>
+        {link ? (
+          <div>
+            <Text strong style={{ display: "block", marginBottom: 4 }}>The link</Text>
+            <Space.Compact style={{ width: "100%" }}>
+              <Input value={link} readOnly onFocus={(e) => e.target.select()} />
+              <Button icon={<CopyOutlined />} onClick={copy}>Copy</Button>
+            </Space.Compact>
+            <Space size={8} style={{ marginTop: 8 }} wrap>
+              <Button size="small" href={link} target="_blank" rel="noopener noreferrer" disabled={!working}>
+                Open it
+              </Button>
+              <Popconfirm title="Make a new link?" description="The current link stops opening at once; share the new one." okText="Make a new link" onConfirm={() => save.mutate({ regenerate: true })}>
+                <Button size="small" icon={<SyncOutlined />} loading={save.isPending}>
+                  New link
+                </Button>
+              </Popconfirm>
+              {share.updatedAt && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Changed {dayjs(share.updatedAt).fromNow()}
+                  {share.updatedBy ? ` by ${share.updatedBy}` : ""}
+                </Text>
+              )}
+            </Space>
+          </div>
+        ) : (
+          <Text type="secondary">Turn the link on to make it.</Text>
+        )}
+      </Space>
+    </Modal>
+  );
+}
+
 const ProgressTracker = () => {
   const queryClient = useQueryClient();
+  const { mode } = useTheme();
+  const [fileTab, setFileTab] = useState("province");
   const [seasonId, setSeasonId] = useState(null);
   const [editing, setEditing] = useState(null); // null | "new" | "edit"
+  const [sharing, setSharing] = useState(false);
   const [, tick] = useState(0);
+  const queryKey = [...KEY, seasonId];
 
-  const { data, isLoading, error } = useQuery({ queryKey: [...KEY, seasonId], queryFn: () => getProgress(seasonId), refetchInterval: 60 * 1000 });
+  // The last figures this tab saw paint at once; the current ones follow.
+  const snapKey = `admin.${seasonId || "current"}`;
+  const { data, isLoading, error } = useQuery({
+    queryKey,
+    queryFn: () => getProgress(seasonId),
+    // Every 15 s while someone is editing a workbook, every minute otherwise.
+    refetchInterval: (query) => (query.state.data?.editing?.length ? 15 * 1000 : 60 * 1000),
+    staleTime: 30 * 1000,
+    gcTime: 30 * 60 * 1000,
+    placeholderData: (prev) => prev,
+    initialData: () => readSnapshot("admin", snapKey)?.data,
+    initialDataUpdatedAt: () => readSnapshot("admin", snapKey)?.at,
+  });
+  useEffect(() => {
+    if (data) writeSnapshot("admin", snapKey, data);
+  }, [data, snapKey]);
   useEffect(() => {
     if (data && !seasonId) queryClient.setQueryData(KEY, data);
   }, [data, seasonId, queryClient]);
@@ -163,7 +277,7 @@ const ProgressTracker = () => {
   const check = useMutation({
     mutationFn: checkNow,
     onSuccess: (res) => {
-      queryClient.setQueryData([...KEY, seasonId], res);
+      queryClient.setQueryData(queryKey, res);
       message.success(res.changed ? `${res.changed} file(s) changed since the last look.` : "Nothing has changed since the last look.");
     },
     onError: (e) => message.error(errorText(e, "The files could not be checked.")),
@@ -171,42 +285,52 @@ const ProgressTracker = () => {
   const rebaseline = useMutation({
     mutationFn: () => rebaselineSeason(data.season.id),
     onSuccess: (res) => {
-      queryClient.setQueryData([...KEY, seasonId], res);
+      queryClient.setQueryData(queryKey, res);
       message.success("The baseline will be taken again from the files as they are now.");
     },
     onError: (e) => message.error(errorText(e, "The baseline could not be reset.")),
   });
   const close = useMutation({
     mutationFn: () => updateSeason({ id: data.season.id, status: data.season.status === "active" ? "closed" : "active" }),
-    onSuccess: (res) => queryClient.setQueryData([...KEY, seasonId], res),
+    onSuccess: (res) => queryClient.setQueryData(queryKey, res),
     onError: (e) => message.error(errorText(e, "The season could not be changed.")),
   });
 
   const season = data?.season;
-  const s = data?.summary;
-  const files = data?.files || [];
-  const rawFiles = useMemo(() => files.filter((f) => f.kind === "raw"), [files]);
-  const permitFiles = useMemo(() => files.filter((f) => f.kind === "permits"), [files]);
+  const files = useMemo(() => data?.files || [], [data?.files]);
   const live = season?.open;
+  const watched = season?.watched;
   const lastPoll = season?.lastPoll;
+  const stale = Boolean(season?.baselineStale);
+  const editingIds = useMemo(() => new Set((data?.editing || []).map((e) => e.id)), [data?.editing]);
+  const shared = season?.share?.enabled && !(season.share.expiresAt && dayjs(season.share.expiresAt).isBefore(dayjs()));
+  const filesByGroup = useMemo(() => {
+    const out = { province: [], healthcare: [], other: [], permits: [] };
+    for (const f of files) out[fileGroup(f)].push(f);
+    return out;
+  }, [files]);
 
   const header = (
     <PageHeader
       accent={ACCENT}
       icon={<LineChartOutlined />}
       title="Progress Tracker"
-      description="The universe updating during an activity season — read live from the Planning Unit's SharePoint working files."
+      description="The universe updating, read live from the main sheet of each RAW file."
       extra={
         season && (
           <Space size={8} wrap style={{ marginTop: 6 }}>
-            <span className={`pt-live ${live ? "is-live" : ""}`}>
+            <span className={`pt-live ${watched ? "is-live" : ""}`}>
               <span className="pt-live-dot" />
-              {live ? "Live" : season.status === "closed" ? "Season closed" : "Outside the season"}
+              {live ? "Live" : season.preSeason ? `Live · starts ${dayjs(season.startsAt).format("MMM D")}` : season.status === "closed" ? "Closed" : "Ended"}
             </span>
+            {shared && (
+              <Tag icon={<GlobalOutlined />} color="blue" style={{ marginInlineEnd: 0 }}>
+                Public link on
+              </Tag>
+            )}
             <Text type="secondary" style={{ fontSize: 12 }}>
               {season.name} · {dayjs(season.startsAt).format("MMM D")} – {dayjs(season.endsAt).format("MMM D, YYYY")}
               {lastPoll?.at ? ` · checked ${dayjs(lastPoll.at).fromNow()}` : " · not checked yet"}
-              {season.baselineAt ? ` · baseline ${dayjs(season.baselineAt).format("MMM D, h:mm A")}` : ""}
             </Text>
           </Space>
         )
@@ -216,14 +340,24 @@ const ProgressTracker = () => {
           {data?.seasons?.length > 1 && (
             <Select
               size="middle"
-              style={{ width: 220 }}
+              style={{ width: 200 }}
               value={season?.id}
               onChange={(v) => setSeasonId(v)}
               options={data.seasons.map((x) => ({ value: x.id, label: `${x.name}${x.status === "active" ? "" : " (closed)"}` }))}
             />
           )}
           {season && (
-            <Button icon={<ReloadOutlined />} loading={check.isPending} disabled={!live} onClick={() => check.mutate()}>
+            <Button icon={<MessageOutlined />} onClick={() => openVera()}>
+              Ask VERA
+            </Button>
+          )}
+          {season && (
+            <Button icon={<GlobalOutlined />} onClick={() => setSharing(true)}>
+              Public link
+            </Button>
+          )}
+          {season && (
+            <Button icon={<ReloadOutlined />} loading={check.isPending} disabled={!watched} onClick={() => check.mutate()}>
               Check now
             </Button>
           )}
@@ -238,80 +372,111 @@ const ProgressTracker = () => {
 
   if (error) return <Space direction="vertical" style={{ width: "100%" }}>{header}<Alert type="error" showIcon message={errorText(error, "The tracker could not be loaded.")} /></Space>;
 
-  const provinceRows = Object.entries(s?.permits?.byProvince || {})
-    .filter(([p]) => p !== "(none)")
-    .sort((a, b) => a[0].localeCompare(b[0]));
-
+  // --- the admin's own tabs: files and activity ------------------------------
+  const sheetColumns = [
+    { title: "Sheet", dataIndex: "name" },
+    {
+      title: "Counts as",
+      dataIndex: "category",
+      render: (v) =>
+        ({
+          main: <Tag color="blue">Main sheet</Tag>,
+          review: <Tag color="gold">For review</Tag>,
+          log: <Tag color="purple">Additions log</Tag>,
+          duplicate: <Tag>Duplicate</Tag>,
+          delisting: <Tag>For delisting</Tag>,
+          deletion: <Tag>For deletion</Tag>,
+        })[v] || <Tag>{v}</Tag>,
+    },
+    { title: "Rows", dataIndex: "rows", align: "right", render: n },
+    { title: "Highlighted", dataIndex: "colored", align: "right", render: (v, r) => (r.category === "main" ? n(v) : <Text type="secondary">—</Text>) },
+    {
+      title: "Colours",
+      dataIndex: "colors",
+      render: (c, r) =>
+        r.category === "log" ? (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {n(r.bySource?.erms)} ERMS · {n(r.bySource?.ecconline)} ECC Online
+          </Text>
+        ) : (
+          <Space size={4} wrap>
+            {Object.entries(c || {}).map(([rgb, k]) => (
+              <Tooltip key={rgb} title={`#${rgb}: ${k} cell(s)`}>
+                <span className="pt-swatch is-small" style={{ background: `#${rgb}` }} />
+              </Tooltip>
+            ))}
+          </Space>
+        ),
+    },
+  ];
+  const openColumn = { title: "Excel", key: "open", width: 112, render: (_, f) => <OpenFileButton files={[f.open].filter(Boolean)} /> };
   const rawColumns = [
     {
       title: "File",
       key: "file",
       render: (_, f) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{fileLabel(f)}</Text>
+          <Space size={6} wrap>
+            <Text strong>{fileLabel(f)}</Text>
+            {f.current?.counts?.mainSheet && <Tag color="blue">Main: {f.current.counts.mainSheet}</Tag>}
+            {editingIds.has(f.id) && (
+              <Tag color="processing" className="pt-editing-tag">
+                <span className="pt-editing-live" />
+                Editing now
+              </Tag>
+            )}
+            {f.missing && <Tag color="red">No longer in the folder</Tag>}
+          </Space>
           <Text type="secondary" style={{ fontSize: 11.5 }}>
             v{f.meta?.version} · {f.meta?.modifiedBy || "—"} · {f.meta?.modifiedAt ? dayjs(f.meta.modifiedAt).fromNow() : ""}
           </Text>
-          {f.missing && <Tag color="red">No longer in the folder</Tag>}
         </Space>
       ),
     },
-    { title: "Firms", key: "rows", align: "right", render: (_, f) => <Tooltip title={`Baseline ${n(f.baseline?.counts?.rows)}`}>{n(f.current?.counts?.rows)}</Tooltip> },
-    { title: "Added", key: "added", align: "right", render: (_, f) => <Delta value={f.current?.compare?.added} /> },
-    { title: "Changed", key: "modified", align: "right", render: (_, f) => n(f.current?.compare?.modified) },
-    { title: "Coloured rows", key: "colored", align: "right", render: (_, f) => <Tooltip title={`Baseline ${n(f.baseline?.counts?.colored)}`}>{n(f.current?.counts?.colored)}</Tooltip> },
-    { title: "Coloured permits", key: "cp", align: "right", render: (_, f) => n(f.current?.counts?.coloredPermit) },
     {
-      title: "Permits",
-      key: "permits",
-      align: "right",
+      title: "Firms",
+      key: "rows",
+      width: 220,
       render: (_, f) => {
-        const t = (x) => Object.values(x || {}).reduce((a, v) => a + v, 0);
-        const now = t(f.current?.counts?.permits);
+        const c = f.current?.counts || {};
+        const a = c.added || {};
         return (
-          <Space size={4}>
-            {n(now)}
-            <Delta value={now - t(f.baseline?.counts?.permits)} />
-          </Space>
+          <div className="pt-cell">
+            <b>{n(c.rows)}</b>
+            <StackBar thin parts={[{ key: "base", value: c.base ?? c.rows, title: "Baseline" }, { key: "erms", value: a.erms, title: "ERMS" }, { key: "ecconline", value: a.ecconline, title: "ECC Online" }]} />
+          </div>
         );
       },
     },
+    { title: "Highlighted", key: "colored", align: "right", width: 110, render: (_, f) => n(f.current?.counts?.colored) },
+    ...(stale
+      ? []
+      : [
+          { title: "Added", key: "added", align: "right", width: 100, render: (_, f) => <Delta value={f.current?.compare?.added} /> },
+          { title: "Changed", key: "modified", align: "right", width: 100, render: (_, f) => n(f.current?.compare?.modified) },
+        ]),
+    openColumn,
   ];
-
-  const sheetColumns = [
-    { title: "Sheet", dataIndex: "name" },
-    { title: "Kind", dataIndex: "category", render: (v) => <Tag>{v === "main" ? "Main list" : v === "duplicate" ? "Duplicate" : v === "delisting" ? "For delisting" : "For deletion"}</Tag> },
-    { title: "Rows", dataIndex: "rows", align: "right", render: n },
-    { title: "Coloured", dataIndex: "colored", align: "right", render: n },
-    { title: "Coloured permits", dataIndex: "coloredPermit", align: "right", render: n },
-    {
-      title: "Colours used",
-      dataIndex: "colors",
-      render: (c) => (
-        <Space size={4} wrap>
-          {Object.entries(c || {}).map(([rgb, k]) => (
-            <Tooltip key={rgb} title={`#${rgb}: ${k} cell(s)`}>
-              <span className="pt-swatch" style={{ background: `#${rgb}` }} />
-            </Tooltip>
-          ))}
-        </Space>
-      ),
-    },
-  ];
-
   const permitColumns = [
     {
       title: "File",
       key: "file",
       render: (_, f) => (
         <Space direction="vertical" size={0}>
-          <Space size={6}>
+          <Space size={6} wrap>
             <Text strong>{f.name.replace(/\.xls[xm]?$/i, "")}</Text>
             {f.reference && (
               <Tooltip title="Kept for reference (the Central Office's extract): shown, not counted in the progress.">
                 <Tag>Reference</Tag>
               </Tooltip>
             )}
+            {editingIds.has(f.id) && (
+              <Tag color="processing" className="pt-editing-tag">
+                <span className="pt-editing-live" />
+                Editing now
+              </Tag>
+            )}
+            {f.missing && <Tag color="red">No longer in the folder</Tag>}
           </Space>
           <Text type="secondary" style={{ fontSize: 11.5 }}>
             {f.path.includes("/") ? `${f.path.split("/").slice(0, -1).join(" › ")} · ` : ""}v{f.meta?.version} · {f.meta?.modifiedBy || "—"} · {f.meta?.modifiedAt ? dayjs(f.meta.modifiedAt).fromNow() : ""}
@@ -319,20 +484,31 @@ const ProgressTracker = () => {
         </Space>
       ),
     },
-    { title: "Permits listed", key: "rows", align: "right", render: (_, f) => n(f.current?.counts?.rows) },
-    { title: "New since baseline", key: "new", align: "right", render: (_, f) => <Delta value={f.current?.compare?.newSinceBaseline} /> },
     {
-      title: "Already in the RAW data",
+      title: "Kind",
+      key: "kind",
+      width: 110,
+      render: (_, f) => (
+        <Space size={4} wrap>
+          {Object.keys(f.current?.counts?.byKind || {}).map((k) => (
+            <Tag key={k} style={{ marginInlineEnd: 0 }}>{KIND_LABEL[k] || k}</Tag>
+          ))}
+        </Space>
+      ),
+    },
+    { title: "Listed", key: "rows", align: "right", width: 90, render: (_, f) => n(f.current?.counts?.rows) },
+    {
+      title: "In the RAW data",
       key: "inRaw",
-      width: 260,
+      width: 240,
       render: (_, f) => {
-        const total = f.current?.counts?.rows || 0;
+        const t = f.current?.counts?.rows || 0;
         const done = f.current?.inRaw || 0;
-        return total ? (
+        return t && !f.reference ? (
           <Space size={8} style={{ width: "100%" }}>
-            <Progress percent={pct(done, total)} size="small" style={{ width: 140, margin: 0 }} strokeColor={ACCENT} />
+            <Progress percent={pct(done, t)} size="small" style={{ width: 130, margin: 0 }} strokeColor={ACCENT} />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {n(done)} / {n(total)}
+              {n(done)}/{n(t)}
             </Text>
           </Space>
         ) : (
@@ -340,9 +516,94 @@ const ProgressTracker = () => {
         );
       },
     },
+    openColumn,
   ];
+  const fileTabs = [
+    { key: "province", label: `Monitoring Plan (${filesByGroup.province.length})`, list: filesByGroup.province, columns: rawColumns, expand: true },
+    { key: "healthcare", label: `Healthcare (${filesByGroup.healthcare.length})`, list: filesByGroup.healthcare, columns: rawColumns, expand: true },
+    { key: "permits", label: `Newly issued (${filesByGroup.permits.length})`, list: filesByGroup.permits, columns: permitColumns },
+  ].filter((t) => t.list.length);
+  const filesPane = (
+    <Card size="small" className="pt-card">
+      {fileTabs.length ? (
+        <Tabs
+          size="small"
+          activeKey={fileTabs.some((t) => t.key === fileTab) ? fileTab : fileTabs[0].key}
+          onChange={setFileTab}
+          items={fileTabs.map((t) => ({
+            key: t.key,
+            label: t.label,
+            children: (
+              <Table
+                size="small"
+                rowKey="id"
+                pagination={false}
+                columns={t.columns}
+                dataSource={t.list}
+                scroll={{ x: 820 }}
+                expandable={t.expand ? { expandedRowRender: (f) => <Table size="small" rowKey="name" pagination={false} columns={sheetColumns} dataSource={f.current?.counts?.sheets || []} /> } : undefined}
+              />
+            ),
+          }))}
+        />
+      ) : (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No files read yet." />
+      )}
+    </Card>
+  );
 
-  const events = (data?.events || []).slice(0, 40);
+  const events = (data?.events || []).slice(0, 60);
+  const saves = events.filter((e) => e.kind === "save").length;
+  const activity = season && (
+    <Card
+      size="small"
+      title="Activity"
+      className="pt-card"
+      extra={
+        <Space size={4}>
+          <Popconfirm title="Take the baseline again?" description="The comparison starts over from the files as they are now. The activity so far is kept." okText="Take it again" onConfirm={() => rebaseline.mutate()}>
+            <Button size="small" icon={<UndoOutlined />} loading={rebaseline.isPending}>
+              New baseline
+            </Button>
+          </Popconfirm>
+          <Popconfirm title={season.status === "active" ? "Close the season?" : "Reopen the season?"} description={season.status === "active" ? "The files stop being watched. The figures stay." : "The files are watched again between its dates."} onConfirm={() => close.mutate()}>
+            <Button size="small">{season.status === "active" ? "Close season" : "Reopen"}</Button>
+          </Popconfirm>
+        </Space>
+      }
+    >
+      {events.length ? (
+        <Timeline
+          className="pt-timeline"
+          items={events.map((e) => ({
+            color: e.kind === "baseline" ? "gray" : ACCENT,
+            children:
+              e.kind === "baseline" ? (
+                <Text type="secondary">{dayjs(e.at).format("MMM D, h:mm A")} — {e.note}</Text>
+              ) : (
+                <Space direction="vertical" size={2}>
+                  <Text>
+                    <Text strong>{e.modifiedBy || "Someone"}</Text> saved <Text strong>{e.name.replace(/\.xls[xm]?$/i, "")}</Text> <Text type="secondary">v{e.version}</Text>
+                  </Text>
+                  <Space size={4} wrap>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(e.at).format("MMM D, h:mm A")}</Text>
+                    {Object.entries(e.delta || {})
+                      .filter(([, v]) => v)
+                      .map(([k, v]) => (
+                        <Tag key={k} color={v > 0 ? "green" : "red"} style={{ marginInlineEnd: 0 }}>
+                          {signed(v)} {{ rows: "firms", colored: "highlighted", coloredPermit: "highlighted permits", permits: "permits", added: "added", modified: "changed", newSinceBaseline: "new" }[k] || k}
+                        </Tag>
+                      ))}
+                  </Space>
+                </Space>
+              ),
+          }))}
+        />
+      ) : (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No saves since the baseline yet." />
+      )}
+    </Card>
+  );
 
   return (
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -371,169 +632,38 @@ const ProgressTracker = () => {
           {lastPoll?.errors?.length > 0 && (
             <Alert type="warning" showIcon message="Some files could not be read on the last look" description={<ul style={{ margin: 0, paddingInlineStart: 18 }}>{lastPoll.errors.map((e) => <li key={e}>{e}</li>)}</ul>} />
           )}
-          {!season.baselineAt && (
-            <Alert type="info" showIcon icon={<CloudSyncOutlined />} message={live ? "Taking the baseline: the first look reads every file — about a minute." : "The baseline is taken at the season's first look, once it opens."} />
+          {!season.baselineAt && watched && <Alert type="info" showIcon icon={<CloudSyncOutlined />} message="Taking the baseline: the first look reads every file — about a minute." />}
+          {stale && (
+            <Alert
+              type="warning"
+              showIcon
+              message="The season baseline was read the old way"
+              description="Changes “since the baseline” are hidden until a new baseline is taken."
+              action={
+                <Popconfirm title="Take the baseline again?" okText="Take it again" onConfirm={() => rebaseline.mutate()}>
+                  <Button size="small" type="primary" loading={rebaseline.isPending}>
+                    New baseline
+                  </Button>
+                </Popconfirm>
+              }
+            />
           )}
 
-          <Row gutter={[12, 12]}>
-            <Col xs={24} lg={9}>
-              <Card size="small" title="Newly issued permits written into the RAW data" className="pt-card">
-                <div className="pt-headline">
-                  <Progress type="dashboard" percent={pct(s.permits.inRaw, s.permits.issued)} strokeColor={ACCENT} size={150} format={(p) => <span className="pt-headline-pct">{p}%</span>} />
-                  <div>
-                    <Statistic title="In the RAW data" value={s.permits.inRaw} suffix={<Text type="secondary" style={{ fontSize: 14 }}>/ {n(s.permits.issued)}</Text>} />
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {n(s.permits.issued - s.permits.inRaw)} still to encode · {signed(s.permits.newSinceBaseline)} listed since the baseline
-                    </Text>
-                  </div>
-                </div>
-              </Card>
-            </Col>
-            <Col xs={24} lg={15}>
-              <Card size="small" title="By province" className="pt-card">
-                <div className="pt-provinces">
-                  {provinceRows.map(([p, v]) => (
-                    <div key={p} className="pt-province">
-                      <Text className="pt-province-name">{p.replace(/_/g, " ")}</Text>
-                      <Progress percent={pct(v.inRaw, v.issued)} size="small" strokeColor={ACCENT} style={{ margin: 0, flex: 1 }} />
-                      <Text type="secondary" className="pt-province-count">
-                        {n(v.inRaw)} / {n(v.issued)}
-                      </Text>
-                    </div>
-                  ))}
-                  {!provinceRows.length && <Text type="secondary">No permit lists read yet.</Text>}
-                </div>
-              </Card>
-            </Col>
-          </Row>
-
-          <Row gutter={[12, 12]}>
-            {[
-              { title: "Permits in the RAW data", value: s.raw.permitsNow, delta: s.raw.permitsNow - s.raw.permitsBaseline, note: `baseline ${n(s.raw.permitsBaseline)}` },
-              { title: "Firms (main lists)", value: s.raw.rows, delta: s.raw.rows - s.raw.baselineRows, note: `baseline ${n(s.raw.baselineRows)} · ${n(s.raw.added)} added · ${n(s.raw.removed)} removed` },
-              { title: "Rows changed since the baseline", value: s.raw.modified, note: Object.entries(s.raw.bySection).filter(([, v]) => v).map(([k, v]) => `${SECTION_LABEL[k]} ${n(v)}`).join(" · ") || "none yet" },
-              { title: "Rows coloured as updated", value: s.raw.colored, delta: s.raw.colored - s.raw.baselineColored, note: `baseline ${n(s.raw.baselineColored)}` },
-              { title: "Permit rows coloured", value: s.raw.coloredPermit, delta: s.raw.coloredPermit - s.raw.baselineColoredPermit, note: `baseline ${n(s.raw.baselineColoredPermit)}` },
-              { title: "Firms with a permit", value: s.raw.withPermitNow, delta: s.raw.withPermitNow - s.raw.withPermitBaseline, note: `${pct(s.raw.withPermitNow, s.raw.rows)}% of the firms` },
-            ].map((t) => (
-              <Col key={t.title} xs={12} md={8} xl={4}>
-                <Card size="small" className="pt-tile">
-                  <Statistic title={t.title} value={t.value} />
-                  <div className="pt-tile-foot">
-                    {t.delta !== undefined && <Delta value={t.delta} />}
-                    <Text type="secondary">{t.note}</Text>
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-
-          <Row gutter={[12, 12]}>
-            <Col xs={24} xl={8}>
-              <Card size="small" title="Permits by kind" className="pt-card">
-                <Table
-                  size="small"
-                  pagination={false}
-                  rowKey="kind"
-                  dataSource={Object.entries(s.raw.permitKinds).filter(([, v]) => v.baseline || v.now).map(([kind, v]) => ({ kind, ...v }))}
-                  columns={[
-                    { title: "Permit", dataIndex: "kind", render: (k) => KIND_LABEL[k] || k },
-                    { title: "Baseline", dataIndex: "baseline", align: "right", render: n },
-                    { title: "Now", dataIndex: "now", align: "right", render: n },
-                    { title: "Change", key: "d", align: "right", render: (_, r) => <Delta value={r.now - r.baseline} /> },
-                  ]}
-                />
-                <Table
-                  size="small"
-                  pagination={false}
-                  rowKey="k"
-                  style={{ marginTop: 12 }}
-                  dataSource={[["duplicate", "Duplicates"], ["delisting", "For delisting"], ["deletion", "For deletion"]].map(([k, label]) => ({ k, label, ...s.raw.byCategory[k] }))}
-                  columns={[
-                    { title: "Set aside", dataIndex: "label" },
-                    { title: "Baseline", dataIndex: "baseline", align: "right", render: n },
-                    { title: "Now", dataIndex: "now", align: "right", render: n },
-                    { title: "Change", key: "d", align: "right", render: (_, r) => <Delta value={r.now - r.baseline} good="neutral" /> },
-                  ]}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} xl={16}>
-              <Card size="small" title={`RAW data files (${rawFiles.length})`} className="pt-card">
-                <Table
-                  size="small"
-                  rowKey="id"
-                  pagination={false}
-                  columns={rawColumns}
-                  dataSource={rawFiles}
-                  scroll={{ x: 760 }}
-                  expandable={{ expandedRowRender: (f) => <Table size="small" rowKey="name" pagination={false} columns={sheetColumns} dataSource={f.current?.counts?.sheets || []} /> }}
-                />
-              </Card>
-            </Col>
-          </Row>
-
-          <Row gutter={[12, 12]}>
-            <Col xs={24} xl={14}>
-              <Card size="small" title={`Newly issued permit files (${permitFiles.length})`} className="pt-card">
-                <Table size="small" rowKey="id" pagination={false} columns={permitColumns} dataSource={permitFiles} scroll={{ x: 640 }} />
-              </Card>
-            </Col>
-            <Col xs={24} xl={10}>
-              <Card
-                size="small"
-                title="Activity"
-                className="pt-card"
-                extra={
-                  <Space size={4}>
-                    <Popconfirm title="Take the baseline again?" description="The comparison starts over from the files as they are now. The activity so far is kept." okText="Take it again" onConfirm={() => rebaseline.mutate()}>
-                      <Button size="small" icon={<UndoOutlined />} loading={rebaseline.isPending}>
-                        New baseline
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm title={season.status === "active" ? "Close the season?" : "Reopen the season?"} description={season.status === "active" ? "The files stop being watched. The figures stay." : "The files are watched again between its dates."} onConfirm={() => close.mutate()}>
-                      <Button size="small">{season.status === "active" ? "Close season" : "Reopen"}</Button>
-                    </Popconfirm>
-                  </Space>
-                }
-              >
-                {events.length ? (
-                  <Timeline
-                    className="pt-timeline"
-                    items={events.map((e) => ({
-                      color: e.kind === "baseline" ? "gray" : ACCENT,
-                      children:
-                        e.kind === "baseline" ? (
-                          <Text type="secondary">{dayjs(e.at).format("MMM D, h:mm A")} — {e.note}</Text>
-                        ) : (
-                          <Space direction="vertical" size={2}>
-                            <Text>
-                              <Text strong>{e.modifiedBy || "Someone"}</Text> saved <Text strong>{e.name.replace(/\.xls[xm]?$/i, "")}</Text> <Text type="secondary">v{e.version}</Text>
-                            </Text>
-                            <Space size={4} wrap>
-                              <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(e.at).format("MMM D, h:mm A")}</Text>
-                              {Object.entries(e.delta || {})
-                                .filter(([, v]) => v)
-                                .map(([k, v]) => (
-                                  <Tag key={k} color={v > 0 ? "green" : "red"} style={{ marginInlineEnd: 0 }}>
-                                    {signed(v)} {{ rows: "firms", colored: "coloured", coloredPermit: "coloured permits", permits: "permits", added: "added", modified: "changed", newSinceBaseline: "new" }[k] || k}
-                                  </Tag>
-                                ))}
-                            </Space>
-                          </Space>
-                        ),
-                    }))}
-                  />
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No saves since the baseline yet. They appear here as the files change." />
-                )}
-              </Card>
-            </Col>
-          </Row>
+          <TrackerView
+            data={data}
+            mode="admin"
+            theme={mode}
+            queryKey={queryKey}
+            extraTabs={[
+              { key: "files", label: <span><FolderOpenOutlined /> Files</span>, children: filesPane },
+              { key: "activity", label: <span><HistoryOutlined /> Activity{saves ? ` (${saves})` : ""}</span>, children: activity },
+            ]}
+          />
         </>
       )}
 
       <SeasonModal open={Boolean(editing)} season={editing === "edit" ? season : null} defaults={data?.defaults} onClose={() => setEditing(null)} />
+      {season && <ShareModal open={sharing} season={season} onClose={() => setSharing(false)} queryKey={queryKey} />}
     </Space>
   );
 };

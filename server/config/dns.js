@@ -336,11 +336,18 @@ function configureDns() {
       console.error('Falling back to the system resolver.');
     }
   } else if (isUnusable(dns.getServers())) {
-    console.warn(
-      'Warning: Node resolved no usable DNS server and is falling back to 127.0.0.1.\n' +
-        '         SRV lookups will be retried over TCP against public resolvers.\n' +
-        '         Set DNS_SERVERS in server/.env to your resolver, e.g. DNS_SERVERS=8.8.8.8,8.8.4.4'
-    );
+    // c-ares could not read the OS resolvers (on Windows, an adapter that
+    // lists the fec0:: site-local placeholders first is enough) and fell back
+    // to 127.0.0.1, where nothing answers: every SRV/TXT lookup then waited
+    // out the UDP timeout before the TCP fallback. Use the public resolvers
+    // directly instead. DNS_SERVERS in .env still takes precedence.
+    try {
+      dns.setServers(PUBLIC_RESOLVERS);
+      dns.promises.setServers(PUBLIC_RESOLVERS);
+      console.log(`[DNS] No system resolver readable; using ${PUBLIC_RESOLVERS.join(', ')} (set DNS_SERVERS in .env to choose).`);
+    } catch (error) {
+      console.warn(`[DNS] No usable system resolver and the public ones could not be set (${error.message}); lookups fall back to TCP.`);
+    }
   }
 
   patchResolvers();

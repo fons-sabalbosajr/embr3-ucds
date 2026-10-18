@@ -1,486 +1,18 @@
-import React, { useState, useEffect } from "react";
-import {
-  Table,
-  Button,
-  Row,
-  Col,
-  Input,
-  ConfigProvider,
-  AutoComplete,
-} from "antd";
+import { useState, useEffect, useRef } from "react";
+import { Table, Button } from "antd";
+import SuggestInput from "../SuggestInput";
+import { isRawLayout, NOV_RECOMMENDATION } from "../registerLayout";
+import { FullDate } from "../DateInputs";
 import "./permits.css";
+import "../recordform.css";
 
-const ECCOptions = [
-  { value: "ECC Manual" },
-  { value: "ECC Online" },
-  { value: "ECC EMB CO" },
-  { value: "CNC Manual" },
-  { value: "CNC Online" },
-];
+const ECC_PROCESS_OPTIONS = ["ECC Manual", "ECC Online", "ECC EMB CO", "CNC Manual", "CNC Online"];
+const HAZ_PROCESS_OPTIONS = ["MANUAL", "ONLINE"];
 
-const HAZ_PROCESS_OPTIONS = [{ value: "MANUAL" }, { value: "ONLINE" }];
-
-const PD1586_COLUMNS = [
-  {
-    title: "ECC/CNC Reference No.",
-    dataIndex: "ecc_cnc",
-    key: "ecc_cnc",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("ecc_cnc", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Permit Process Source",
-    dataIndex: "permit_process",
-    key: "permit_process",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <ConfigProvider
-          theme={{
-            components: {
-              AutoComplete: {
-                optionFontSize: 10,
-                fontSize: 13,
-                boxShadow: "none",
-              },
-            },
-          }}
-        >
-          <AutoComplete
-            style={{
-              width: "100%",
-              fontSize: 13,
-            }}
-            options={ECCOptions}
-            value={value}
-            onChange={(val) =>
-              record.handleChange("permit_process", val, record.key)
-            }
-            filterOption={(inputValue, option) =>
-              option.value.toLowerCase().includes(inputValue.toLowerCase())
-            }
-            allowClear={true}
-            disabled={!record.isEditing}
-          >
-            <Input
-              style={{
-                marginTop: "2px",
-              }}
-              placeholder="-"
-              readOnly={!record.isEditing}
-            />
-          </AutoComplete>
-        </ConfigProvider>
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date Approved",
-    dataIndex: "date_approved",
-    key: "date_approved",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("date_approved", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date Amended",
-    dataIndex: "date_amended",
-    key: "date_amended",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("date_amended", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Remarks",
-    dataIndex: "pd1586_remarks",
-    key: "pd1586_remarks",
-    align: "center",
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pd1586_remarks", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-];
-
-const RA8749_COLUMNS = [
-  {
-    title: "PTO Code",
-    dataIndex: "pto_code",
-    key: "pto_code",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pto_code", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date Issued",
-    dataIndex: "pto_issued",
-    key: "pto_issued",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pto_issued", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date of Expiration",
-    dataIndex: "pto_expiration",
-    key: "pto_expiration",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      renderWithExpiryCheck(value, record, "pto_expiration"),
-  },
-  {
-    title: "Remarks",
-    dataIndex: "ra8749_remarks",
-    key: "ra8749_remarks",
-    align: "center",
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("ra8749_remarks", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-];
-
-const RA9275_COLUMNS = [
-  {
-    title: "WWDP Code",
-    dataIndex: "wwdp_code",
-    key: "wwdp_code",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("wwdp_code", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date Issued",
-    dataIndex: "wwdp_issued",
-    key: "wwdp_issued",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("wwdp_issued", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date of Expiration",
-    dataIndex: "wwdp_expiration",
-    key: "wwdp_expiration",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      renderWithExpiryCheck(value, record, "wwdp_expiration"),
-  },
-  {
-    title: "Remarks",
-    dataIndex: "ra9275_remarks",
-    key: "ra9275_remarks",
-    align: "center",
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("ra9275_remarks", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-];
-
-const RA6969_COLUMNS = [
-  {
-    title: "Hazwaste ID",
-    dataIndex: "haz_id",
-    key: "haz_id",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("haz_id", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Hazwaste Process Source",
-    dataIndex: "haz_process_source",
-    key: "haz_process_source",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <AutoComplete
-          style={{ width: "100%", fontSize: 13 }}
-          options={HAZ_PROCESS_OPTIONS}
-          value={value}
-          onChange={(val) =>
-            record.handleChange("haz_process_source", val, record.key)
-          }
-          filterOption={(inputValue, option) =>
-            option.value.toLowerCase().includes(inputValue.toLowerCase())
-          }
-          allowClear={true}
-          disabled={!record.isEditing}
-        >
-          <Input
-            style={{ marginTop: "2px" }}
-            placeholder="-"
-            readOnly={!record.isEditing}
-          />
-        </AutoComplete>
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Date Issued",
-    dataIndex: "haz_issued",
-    key: "haz_issued",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("haz_issued", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Remarks",
-    dataIndex: "ra6969_remarks",
-    key: "ra6969_remarks",
-    align: "center",
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("ra6969_remarks", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-];
-
-const PCO_COLUMNS = [
-  {
-    title: "PCO No.",
-    dataIndex: "pco_no",
-    key: "pco_no",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pco_no", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Validity",
-    dataIndex: "pco_validity",
-    key: "pco_validity",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      renderWithExpiryCheck(value, record, "pco_validity"),
-  },
-  {
-    title: "Name",
-    dataIndex: "pco_name",
-    key: "pco_name",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pco_name", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Tel. No.",
-    dataIndex: "pco_tel_no",
-    key: "pco_tel_no",
-    align: "center",
-    width: 200,
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pco_tel_no", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-  {
-    title: "Remarks",
-    dataIndex: "pco_remarks",
-    key: "pco_remarks",
-    align: "center",
-    render: (value, record) =>
-      record.isEditing ? (
-        <Input
-          value={value}
-          onChange={(e) =>
-            record.handleChange("pco_remarks", e.target.value, record.key)
-          }
-          placeholder="-"
-        />
-      ) : (
-        <span>{value || "-"}</span>
-      ),
-  },
-];
-
-function splitMultiValue(str = "") {
-  // Split by comma, semicolon, or newline, trim, and filter out empty
-  return str
-    .split(/[,;\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-}
-
-function expandRowsFromRecord(record, keys, handler, isEditing) {
-  // Find the field with the most values
-  const splitFields = keys.map((k) => splitMultiValue(record?.[k]));
-  const maxLen = Math.max(...splitFields.map((arr) => arr.length), 1);
-
-  // Build rows, filling missing values with ""
-  return Array.from({ length: maxLen }).map((_, idx) => {
-    const row = { key: (idx + 1).toString(), isEditing, handleChange: handler };
-    keys.forEach((k, i) => {
-      row[k] = splitFields[i][idx] || "";
-    });
-    return row;
-  });
-}
+// Reference numbers belong to one establishment each: suggested only once
+// something is typed, never offered from an empty field.
+const CODE_FIELDS = new Set(["ecc_cnc", "pto_code", "wwdp_code", "haz_id", "pco_no", "chemical_permit", "importer_clearance", "tsd_ref_no", "tp_trc_ref_no"]);
+const EXPIRY_FIELDS = new Set(["pto_expiration", "wwdp_expiration", "pco_validity", "chem_permit_exp", "importer_clearance_exp", "tsd_expiration", "tp_trc_expiration"]);
 
 function isExpired(dateStr) {
   if (!dateStr) return false;
@@ -493,535 +25,201 @@ function isExpired(dateStr) {
   return d < today;
 }
 
-function renderWithExpiryCheck(value, record, field) {
-  const expired =
-    field === "pto_expiration" ||
-    field === "wwdp_expiration" ||
-    field === "pco_validity"
-      ? isExpired(value)
-      : false;
-  const style = expired
-    ? { background: "#ffcccc", color: "#a00", fontWeight: "bold" }
-    : {};
-  if (record.isEditing) {
-    return (
-      <Input
-        value={value}
-        onChange={(e) => record.handleChange(field, e.target.value, record.key)}
-        placeholder="-"
-        style={style}
-      />
-    );
-  }
-  return <span style={style}>{value || "-"}</span>;
-}
+// One cell: the value, or while editing a field that suggests the values
+// already encoded for it in the province.
+// The permits' dates: a full day each (issued, approved, amended, expiring).
+const DATE_FIELDS = new Set([
+  "date_approved", "date_amended", "pto_issued", "pto_expiration", "wwdp_issued", "wwdp_expiration", "haz_issued", "pco_validity",
+  "chem_permit_issued", "chem_permit_exp", "importer_clearance_issued", "importer_clearance_exp", "tsd_issued", "tsd_expiration", "tp_trc_issued", "tp_trc_expiration",
+]);
 
-const Permits = ({
-  editedRecord,
-  handleChange,
-  onSaveChanges,
-  isEditing,
-  ra8749Array,
-  onRa8749Change,
-}) => {
-  const [pd1586Data, setPd1586Data] = useState([]);
-  const [ra8749Data, setRa8749Data] = useState([]);
-  const [ra9275Data, setRa9275Data] = useState([]);
-  const [ra6969Data, setRa6969Data] = useState([]);
-  const [pcoData, setPcoData] = useState([]);
-
-  useEffect(() => {
-    if (editedRecord) {
-      setPd1586Data(
-        expandRowsFromRecord(
-          editedRecord,
-          [
-            "ecc_cnc",
-            "permit_process",
-            "date_approved",
-            "date_amended",
-            "pd1586_remarks",
-          ],
-          handleFieldChangePD1586,
-          isEditing
-        )
-      );
-      setRa8749Data(
-        expandRowsFromRecord(
-          editedRecord,
-          ["pto_code", "pto_issued", "pto_expiration", "ra8749_remarks"],
-          handleFieldChangeRA8749,
-          isEditing
-        )
-      );
-      setRa9275Data(
-        expandRowsFromRecord(
-          editedRecord,
-          ["wwdp_code", "wwdp_issued", "wwdp_expiration", "ra9275_remarks"],
-          handleFieldChangeRA9275,
-          isEditing
-        )
-      );
-      setRa6969Data(
-        expandRowsFromRecord(
-          editedRecord,
-          ["haz_id", "haz_process_source", "haz_issued", "ra6969_remarks"],
-          handleFieldChangeRA6969,
-          isEditing
-        )
-      );
-      setPcoData(
-        expandRowsFromRecord(
-          editedRecord,
-          ["pco_no", "pco_validity", "pco_name", "pco_tel_no", "pco_remarks"],
-          handleFieldChangePCO,
-          isEditing
-        )
-      );
-    }
-    // eslint-disable-next-line
-  }, [editedRecord, isEditing]);
-
-  // PD1586 handlers
-  function handleFieldChangePD1586(field, value, key) {
-    setPd1586Data((prev) =>
-      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
-    );
-    if (key === "1") handleChange(field, value);
-  }
-
-  function handleRemoveLastRowPD1586() {
-    setPd1586Data((prev) =>
-      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
-    );
-  }
-
-  const handleAddNewDataPD1586 = () => {
-    const newKey = (pd1586Data.length + 1).toString();
-    setPd1586Data([
-      ...pd1586Data,
-      {
-        key: newKey,
-        isEditing: true,
-        handleChange: handleFieldChangePD1586,
-        ecc_cnc: "",
-        permit_process: "",
-        date_approved: "",
-        date_amended: "",
-        pd1586_remarks: "",
-      },
-    ]);
-  };
-
-  // RA8749 handlers
- function handleFieldChangeRA8749(field, value, key) {
-  const updated = ra8749Array.map((row) =>
-    row.key === key ? { ...row, [field]: value } : row
+function renderCell(value, row, field, base) {
+  const expired = EXPIRY_FIELDS.has(field) && isExpired(value);
+  const style = expired ? { background: "#ffcccc", color: "#a00", fontWeight: "bold" } : undefined;
+  if (!row.isEditing) return <span style={style}>{value || "-"}</span>;
+  if (DATE_FIELDS.has(field)) return <FullDate value={value} onChange={(v) => row.onCell(field, v, row.key)} style={style} />;
+  return (
+    <SuggestInput
+      field={field}
+      split
+      base={base}
+      onEmpty={!CODE_FIELDS.has(field)}
+      value={value}
+      onChange={(v) => row.onCell(field, v, row.key)}
+      placeholder="-"
+      inputStyle={style}
+    />
   );
-  onRa8749Change(updated); // ⬅️ updated via lifted state
-  if (key === "1") handleChange(field, value);
 }
 
-  function handleRemoveLastRowRA8749() {
-    setRa8749Data((prev) =>
-      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
-    );
-  }
+// Every card's columns on one grid: each column but the last the same share
+// of the width, so the first, second and third columns line up from card to
+// card and the last takes what is left.
+const COL_WIDTH = "19%";
+const columnsOf = (cols) =>
+  cols.map(([title, field, base], i) => ({
+    // A date column says so: a full date, picked from a calendar while editing.
+    title: DATE_FIELDS.has(field) ? (
+      <span>
+        {title} <span className="rf-col-hint">full date</span>
+      </span>
+    ) : (
+      title
+    ),
+    dataIndex: field,
+    key: field,
+    align: "left",
+    width: i === cols.length - 1 ? undefined : COL_WIDTH,
+    render: (value, row) => renderCell(value, row, field, base),
+  }));
 
-  const handleAddNewDataRA8749 = () => {
-    const newKey = (ra8749Data.length + 1).toString();
-    setRa8749Data([
-      ...ra8749Data,
-      {
-        key: newKey,
-        isEditing: true,
-        handleChange: handleFieldChangeRA8749,
-        pto_code: "",
-        pto_issued: "",
-        pto_expiration: "",
-        ra8749_remarks: "",
-      },
-    ]);
+// ---------------------------------------------------------------------------
+// The permits, one card per law. Up to 2026 each has free remarks; from 2027
+// the register follows the RAW workbooks (registerLayout.js): a "for issuance
+// of NOV recommendation" per law in their place, no PCO telephone nor
+// hazardous waste process source (never filled in any year), and the
+// chemical, importer, TSD and TRC permits of those universes — shown when the
+// record holds one.
+// ---------------------------------------------------------------------------
+const nov = (field) => ["NOV recommendation", field, NOV_RECOMMENDATION];
+const lawsFor = (raw) => [
+  {
+    key: "ecc", title: "ECC / CNC", law: "PD 1586", tag: "is-ecc",
+    cols: [["ECC/CNC Reference No.", "ecc_cnc"], ["Permit Process Source", "permit_process", ECC_PROCESS_OPTIONS], ["Date Approved", "date_approved"], ["Date Amended", "date_amended"], raw ? nov("pd1586") : ["Remarks", "pd1586_remarks"]],
+  },
+  {
+    key: "pto", title: "Permit to Operate", law: "RA 8749", tag: "is-pto",
+    cols: [["PTO Code", "pto_code"], ["Date Issued", "pto_issued"], ["Date of Expiration", "pto_expiration"], raw ? nov("ra8749") : ["Remarks", "ra8749_remarks"]],
+  },
+  {
+    key: "wwdp", title: "Wastewater Discharge Permit", law: "RA 9275", tag: "is-wwdp",
+    cols: [["WWDP Code", "wwdp_code"], ["Date Issued", "wwdp_issued"], ["Date of Expiration", "wwdp_expiration"], raw ? nov("ra9275") : ["Remarks", "ra9275_remarks"]],
+  },
+  {
+    key: "haz", title: "Hazardous Waste Generator ID", law: "RA 6969", tag: "is-haz",
+    cols: raw
+      ? [["Hazwaste ID", "haz_id"], ["Date Issued", "haz_issued"], nov("ra6969")]
+      : [["Hazwaste ID", "haz_id"], ["Hazwaste Process Source", "haz_process_source", HAZ_PROCESS_OPTIONS], ["Date Issued", "haz_issued"], ["Remarks", "ra6969_remarks"]],
+  },
+  {
+    key: "pco", title: "PCO Accreditation", law: "DAO 2014-02", tag: "is-pco",
+    cols: raw
+      ? [["PCO No.", "pco_no"], ["Validity", "pco_validity"], ["Name", "pco_name"]]
+      : [["PCO No.", "pco_no"], ["Validity", "pco_validity"], ["Name", "pco_name"], ["Tel. No.", "pco_tel_no"], ["Remarks", "pco_remarks"]],
+  },
+  ...(raw
+    ? [
+        { key: "chem", title: "Chemical Permit", law: "RA 6969", tag: "is-haz", whenHeld: true, cols: [["Chemical Permit Reference", "chemical_permit"], ["Date Issued", "chem_permit_issued"], ["Date of Expiration", "chem_permit_exp"]] },
+        { key: "importer", title: "Importer Clearance", law: "RA 6969", tag: "is-haz", whenHeld: true, cols: [["Importer Clearance Reference", "importer_clearance"], ["Date Issued", "importer_clearance_issued"], ["Date of Expiration", "importer_clearance_exp"]] },
+        { key: "tsd", title: "TSD Facility Registration", law: "RA 6969", tag: "is-haz", whenHeld: true, cols: [["TSD Reference No.", "tsd_ref_no"], ["Date Issued", "tsd_issued"], ["Date of Expiration", "tsd_expiration"]] },
+        { key: "trc", title: "Transporter Registration (TRC)", law: "RA 6969", tag: "is-haz", whenHeld: true, cols: [["TRC Reference No.", "tp_trc_ref_no"], ["Date Issued", "tp_trc_issued"], ["Date of Expiration", "tp_trc_expiration"]] },
+      ]
+    : []),
+];
+
+function splitMultiValue(str = "") {
+  // Split by comma, semicolon, or newline, trim, and filter out empty
+  return String(str ?? "")
+    .split(/[,;\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/** A law's entries: a field holding "a, b" is two entries, read across its fields by position. */
+function expandRowsFromRecord(record, keys) {
+  const splitFields = keys.map((k) => splitMultiValue(record?.[k]));
+  const maxLen = Math.max(...splitFields.map((arr) => arr.length), 1);
+  return Array.from({ length: maxLen }).map((_, idx) => {
+    const row = { key: (idx + 1).toString() };
+    keys.forEach((k, i) => {
+      row[k] = splitFields[i][idx] || "";
+    });
+    return row;
+  });
+}
+
+const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
+  const raw = isRawLayout(editedRecord);
+  const laws = lawsFor(raw);
+  const [rows, setRows] = useState({}); // law key -> entries
+  const rowsRef = useRef({});
+  const commit = (next) => {
+    rowsRef.current = next;
+    setRows(next);
   };
 
-  // RA9275 handlers
-  function handleFieldChangeRA9275(field, value, key) {
-    setRa9275Data((prev) =>
-      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
-    );
-    if (key === "1") handleChange(field, value);
-  }
+  // The entries are read from the record when it opens and when editing
+  // starts or ends — not on every keystroke, which re-read them from the
+  // record and lost an entry being added.
+  useEffect(() => {
+    if (!editedRecord) return;
+    commit(Object.fromEntries(laws.map((l) => [l.key, expandRowsFromRecord(editedRecord, l.cols.map((c) => c[1]))])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editedRecord?.sort_key, isEditing, raw]);
 
-  function handleRemoveLastRowRA9275() {
-    setRa9275Data((prev) =>
-      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
+  // A cell changed: the record keeps every entry of that field, comma separated.
+  const onCell = (lawKey, field, value, rowKey) => {
+    const list = (rowsRef.current[lawKey] || []).map((r) => (r.key === rowKey ? { ...r, [field]: value } : r));
+    commit({ ...rowsRef.current, [lawKey]: list });
+    handleChange(
+      field,
+      list
+        .map((r) => String(r[field] ?? "").trim())
+        .filter(Boolean)
+        .join(", ")
     );
-  }
-
-  const handleAddNewDataRA9275 = () => {
-    const newKey = (ra9275Data.length + 1).toString();
-    setRa9275Data([
-      ...ra9275Data,
-      {
-        key: newKey,
-        isEditing: true,
-        handleChange: handleFieldChangeRA9275,
-        wwdp_code: "",
-        wwdp_issued: "",
-        wwdp_expiration: "",
-      },
-    ]);
   };
-
-  // RA6969 handlers
-  function handleFieldChangeRA6969(field, value, key) {
-    setRa6969Data((prev) =>
-      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
-    );
-    if (key === "1") handleChange(field, value);
-  }
-
-  function handleRemoveLastRowRA6969() {
-    setRa6969Data((prev) =>
-      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
-    );
-  }
-
-  const handleAddNewDataRA6969 = () => {
-    const newKey = (ra6969Data.length + 1).toString();
-    setRa6969Data([
-      ...ra6969Data,
-      {
-        key: newKey,
-        isEditing: true,
-        handleChange: handleFieldChangeRA6969,
-        haz_id: "",
-        haz_process_source: "",
-        haz_issued: "",
-      },
-    ]);
+  const addRow = (law) => {
+    const list = rowsRef.current[law.key] || [];
+    commit({ ...rowsRef.current, [law.key]: [...list, { key: String(list.length + 1), ...Object.fromEntries(law.cols.map((c) => [c[1], ""])) }] });
   };
-
-  // PCO handlers
-  function handleFieldChangePCO(field, value, key) {
-    setPcoData((prev) =>
-      prev.map((row) => (row.key === key ? { ...row, [field]: value } : row))
-    );
-    if (key === "1") handleChange(field, value);
-  }
-
-  function handleRemoveLastRowPCO() {
-    setPcoData((prev) =>
-      prev.length > 1 ? prev.slice(0, prev.length - 1) : prev
-    );
-  }
-
-  const handleAddNewDataPCO = () => {
-    const newKey = (pcoData.length + 1).toString();
-    setPcoData([
-      ...pcoData,
-      {
-        key: newKey,
-        isEditing: true,
-        handleChange: handleFieldChangePCO,
-        pco_no: "",
-        pco_validity: "",
-        pco_name: "",
-        pco_tel_no: "",
-        pco_remarks: "",
-      },
-    ]);
+  const removeRow = (law) => {
+    const list = rowsRef.current[law.key] || [];
+    if (list.length < 2) return;
+    const kept = list.slice(0, -1);
+    commit({ ...rowsRef.current, [law.key]: kept });
+    for (const [, field] of law.cols) handleChange(field, kept.map((r) => String(r[field] ?? "").trim()).filter(Boolean).join(", "));
   };
 
   useEffect(() => {
-    if (typeof onRa8749Change === "function") {
-      onRa8749Change(ra8749Data.filter((r) => !r.isAddRow)); // Remove dummy add-row
-    }
-  }, [ra8749Data]);
-  
+    if (typeof onRa8749Change === "function") onRa8749Change(rows.pto || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.pto]);
 
-  const tableDataPD1586 = isEditing
-    ? [...pd1586Data, { key: "add-row", isAddRow: true }]
-    : pd1586Data;
-  const tableDataRA8749 = isEditing
-    ? [...ra8749Data, { key: "add-row", isAddRow: true }]
-    : ra8749Data;
-  const tableDataRA9275 = isEditing
-    ? [...ra9275Data, { key: "add-row", isAddRow: true }]
-    : ra9275Data;
-  const tableDataRA6969 = isEditing
-    ? [...ra6969Data, { key: "add-row", isAddRow: true }]
-    : ra6969Data;
-  const tableDataPCO = isEditing
-    ? [...pcoData, { key: "add-row", isAddRow: true }]
-    : pcoData;
+  const held = (law) => law.cols.some(([, field]) => String(editedRecord?.[field] ?? "").trim());
+
+  // One card per law, each a full line; the columns share one grid (see
+  // columnsOf), and Add / Remove sit under the table while editing.
+  const permitCard = (law) => {
+    const data = (rows[law.key] || []).map((r) => ({ ...r, isEditing, onCell: (f, v, k) => onCell(law.key, f, v, k) }));
+    const empty = data.length <= 1 && !law.cols.some(([, f]) => String(data[0]?.[f] ?? "").trim());
+    return (
+      <section key={law.key} className="rf-section rf-span-6">
+        <header className="rf-section-head">
+          <span className="rf-permit-head">
+            {law.title}
+            <span className={`rf-permit-law ${law.tag}`}>{law.law}</span>
+          </span>
+          <span className="rf-hint">{empty ? "none encoded" : `${data.length} ${data.length === 1 ? "entry" : "entries"}`}</span>
+        </header>
+        <Table columns={columnsOf(law.cols)} dataSource={data} size="small" pagination={false} bordered tableLayout="fixed" rowKey="key" />
+        {isEditing && (
+          <div className="rf-permit-actions">
+            <Button size="small" type="primary" ghost onClick={() => addRow(law)}>
+              Add entry
+            </Button>
+            <Button size="small" danger onClick={() => removeRow(law)} disabled={data.length < 2}>
+              Remove last
+            </Button>
+          </div>
+        )}
+      </section>
+    );
+  };
 
   return (
-    <div>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={24} lg={24}>
-          <div className="card-head pd1586">PD1586</div>
-          <Table
-            columns={PD1586_COLUMNS}
-            dataSource={tableDataPD1586}
-            size="small"
-            pagination={false}
-            bordered
-            showHeader={true}
-            style={{ marginBottom: 24 }}
-            rowKey="key"
-            components={{
-              body: {
-                row: (props) => {
-                  if (props["data-row-key"] === "add-row") {
-                    return (
-                      <tr>
-                        <td
-                          colSpan={PD1586_COLUMNS.length}
-                          style={{ textAlign: "center" }}
-                        >
-                          <Button
-                            type="primary"
-                            onClick={handleAddNewDataPD1586}
-                            style={{ marginRight: 8 }}
-                            size="small"
-                            className="add-new-data-btn"
-                          >
-                            Add New
-                          </Button>
-                          <Button
-                            danger
-                            type="primary"
-                            onClick={handleRemoveLastRowPD1586}
-                            disabled={pd1586Data.length <= 1}
-                            size="small"
-                            className="remove-row-data-btn"
-                          >
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return <tr {...props} />;
-                },
-              },
-            }}
-          />
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={24} lg={24}>
-          <div className="card-head ra8749">RA8749</div>
-          <Table
-            columns={RA8749_COLUMNS}
-            dataSource={tableDataRA8749}
-            size="small"
-            pagination={false}
-            bordered
-            showHeader={true}
-            style={{ marginBottom: 24 }}
-            rowKey="key"
-            components={{
-              body: {
-                row: (props) => {
-                  if (props["data-row-key"] === "add-row") {
-                    return (
-                      <tr>
-                        <td
-                          colSpan={RA8749_COLUMNS.length}
-                          style={{ textAlign: "center" }}
-                        >
-                          <Button
-                            type="primary"
-                            onClick={handleAddNewDataRA8749}
-                            style={{ marginRight: 8 }}
-                            size="small"
-                            className="add-new-data-btn"
-                          >
-                            Add New
-                          </Button>
-                          <Button
-                            danger
-                            type="primary"
-                            onClick={handleRemoveLastRowRA8749}
-                            disabled={ra8749Data.length <= 1}
-                            size="small"
-                            className="remove-row-data-btn"
-                          >
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return <tr {...props} />;
-                },
-              },
-            }}
-          />
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={24} lg={24}>
-          <div className="card-head ra9275">RA9275</div>
-          <Table
-            columns={RA9275_COLUMNS}
-            dataSource={tableDataRA9275}
-            size="small"
-            pagination={false}
-            bordered
-            showHeader={true}
-            style={{ marginBottom: 24 }}
-            rowKey="key"
-            components={{
-              body: {
-                row: (props) => {
-                  if (props["data-row-key"] === "add-row") {
-                    return (
-                      <tr>
-                        <td
-                          colSpan={RA9275_COLUMNS.length}
-                          style={{ textAlign: "center" }}
-                        >
-                          <Button
-                            type="primary"
-                            onClick={handleAddNewDataRA9275}
-                            style={{ marginRight: 8 }}
-                            size="small"
-                            className="add-new-data-btn"
-                          >
-                            Add New
-                          </Button>
-                          <Button
-                            danger
-                            type="primary"
-                            onClick={handleRemoveLastRowRA9275}
-                            disabled={ra9275Data.length <= 1}
-                            size="small"
-                            className="remove-row-data-btn"
-                          >
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return <tr {...props} />;
-                },
-              },
-            }}
-          />
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={24} lg={24}>
-          <div className="card-head ra6969">RA6969</div>
-          <Table
-            columns={RA6969_COLUMNS}
-            dataSource={tableDataRA6969}
-            size="small"
-            pagination={false}
-            bordered
-            showHeader={true}
-            style={{ marginBottom: 24 }}
-            rowKey="key"
-            components={{
-              body: {
-                row: (props) => {
-                  if (props["data-row-key"] === "add-row") {
-                    return (
-                      <tr>
-                        <td
-                          colSpan={RA6969_COLUMNS.length}
-                          style={{ textAlign: "center" }}
-                        >
-                          <Button
-                            type="primary"
-                            onClick={handleAddNewDataRA6969}
-                            style={{ marginRight: 8 }}
-                            size="small"
-                            className="add-new-data-btn"
-                          >
-                            Add New
-                          </Button>
-                          <Button
-                            danger
-                            type="primary"
-                            onClick={handleRemoveLastRowRA6969}
-                            disabled={ra6969Data.length <= 1}
-                            size="small"
-                            className="remove-row-data-btn"
-                          >
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return <tr {...props} />;
-                },
-              },
-            }}
-          />
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={24} md={24} lg={24}>
-          <div className="card-head pco">PCO Accreditation</div>
-          <Table
-            columns={PCO_COLUMNS}
-            dataSource={tableDataPCO}
-            size="small"
-            pagination={false}
-            bordered
-            showHeader={true}
-            style={{ marginBottom: 24 }}
-            rowKey="key"
-            components={{
-              body: {
-                row: (props) => {
-                  if (props["data-row-key"] === "add-row") {
-                    return (
-                      <tr>
-                        <td
-                          colSpan={PCO_COLUMNS.length}
-                          style={{ textAlign: "center" }}
-                        >
-                          <Button
-                            type="primary"
-                            onClick={handleAddNewDataPCO}
-                            style={{ marginRight: 8 }}
-                            size="small"
-                            className="add-new-data-btn"
-                          >
-                            Add New
-                          </Button>
-                          <Button
-                            danger
-                            type="primary"
-                            onClick={handleRemoveLastRowPCO}
-                            disabled={pcoData.length <= 1}
-                            size="small"
-                            className="remove-row-data-btn"
-                          >
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return <tr {...props} />;
-                },
-              },
-            }}
-          />
-        </Col>
-      </Row>
+    <div className={`rf ${isEditing ? "is-editing" : "is-viewing"}`}>
+      <div className="rf-permits">{laws.filter((l) => !l.whenHeld || held(l)).map(permitCard)}</div>
     </div>
   );
 };

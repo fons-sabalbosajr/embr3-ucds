@@ -5,16 +5,16 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { API_BASE_URL } from "../../../config/api";
 import { useYear } from "../../../context/YearContext";
+import CustomTable from "./CustomTable";
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 // ---------------------------------------------------------------------------
 // A user-added item in the year's menu.
 //
-// A folder shows what it holds. A table is the Planning Unit's own — this
-// is where its columns and rows will be designed and filled; for now it
-// says so, and shows the item as saved, so the place exists before the
-// editor does.
+// A folder shows what it holds. A table is the Planning Unit's own: its
+// columns designed, its rows filled, worked out, filtered and exported here
+// (CustomTable.jsx).
 // ---------------------------------------------------------------------------
 
 const fetchItem = async (id) => (await axios.get(`${API_BASE_URL}/api/ucds/menu-items/${id}`, { withCredentials: true })).data;
@@ -54,25 +54,8 @@ const CustomItemPage = () => {
       </Card>
 
       {isTable ? (
-        <Card size="small" title="Table">
-          {item.table?.columns?.length ? (
-            <Paragraph>{item.table.columns.length} columns · {item.table.rowCount} rows</Paragraph>
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <Space direction="vertical">
-                  <Text strong>No columns yet.</Text>
-                  <Text type="secondary">
-                    This table is the Planning Unit’s own. Designing its columns and filling its rows is the next step —
-                    the table exists in {data.year} now, in the menu where it was added.
-                  </Text>
-                  <Tag>table designer: coming next</Tag>
-                </Space>
-              }
-            />
-          )}
-        </Card>
+        // The table itself: its columns, rows, formulas, filters and exports.
+        <CustomTable id={item.id} label={item.label} />
       ) : (
         <Card size="small" title="Contents">
           {children.length ? (

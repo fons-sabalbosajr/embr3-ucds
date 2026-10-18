@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
-// Reading a SharePoint / OneDrive folder through its "anyone with the link"
-// share, the way the Planning Unit shares its working files.
+// Reading a SharePoint / OneDrive folder — or a single workbook — through its
+// "anyone with the link" share, the way the Planning Unit shares its working
+// files.
 //
 // Opening the link gives a guest session cookie (FedAuth) scoped to that
 // folder; with it, SharePoint's REST API lists the folder (names, sizes,
@@ -48,12 +49,22 @@ async function open(link) {
     if (/login\.microsoftonline\.com/i.test(url)) throw new Error('The link asks for a sign-in: it must be shared as "Anyone with the link can view".');
   }
   const final = new URL(url);
+  if (!cookies.some((c) => c.startsWith('FedAuth='))) throw new Error('SharePoint did not open a guest session for the link.');
+  // A file link (":x:/…") lands on Doc.aspx?sourcedoc={guid}: one workbook,
+  // read by its id. A folder link lands on the folder view (?id=/personal/…).
+  const fileId = (final.searchParams.get('sourcedoc') || '').replace(/[{}]/g, '');
+  if (fileId) {
+    const fm = /^(\/(?:personal|sites|teams)\/[^/]+)/.exec(final.pathname);
+    if (!fm || !/^[0-9a-f-]{36}$/i.test(fileId)) throw new Error('The file is not on a SharePoint site the tracker recognises.');
+    const session = { cookies: cookies.join('; '), site: `${final.origin}${fm[1]}`, root: null, fileId, at: Date.now() };
+    sessions.set(link, session);
+    return session;
+  }
   const root = decodeURIComponent(final.searchParams.get('id') || '');
-  if (!root) throw new Error('The link did not open a folder.');
+  if (!root) throw new Error('The link did not open a folder or a file.');
   // The site is the personal (or team) site the folder lives in.
   const m = /^(\/(?:personal|sites|teams)\/[^/]+)/.exec(root);
   if (!m) throw new Error('The folder is not on a SharePoint site the tracker recognises.');
-  if (!cookies.some((c) => c.startsWith('FedAuth='))) throw new Error('SharePoint did not open a guest session for the link.');
   const session = { cookies: cookies.join('; '), site: `${final.origin}${m[1]}`, root, at: Date.now() };
   sessions.set(link, session);
   return session;
@@ -80,15 +91,38 @@ async function api(link, pathAndQuery, { binary = false } = {}) {
 }
 
 /**
+ * Where a file opens: Excel for the web (by the file's id, on its site) and
+ * the Excel app (ms-excel:ofe|u|<address>). Both ask the person to be signed
+ * in to SharePoint with access to the file; the shared folder link (the
+ * source's own) opens for anyone it was shared with.
+ */
+function openLinks(site, f) {
+  const id = String(f.UniqueId || '').replace(/[{}]/g, '');
+  const origin = new URL(site).origin;
+  return {
+    webUrl: /^[0-9a-f-]{36}$/i.test(id) ? `${site}/_layouts/15/Doc.aspx?sourcedoc=%7B${id}%7D&action=default` : null,
+    appUrl: f.ServerRelativeUrl ? `ms-excel:ofe|u|${origin}${encodeURI(f.ServerRelativeUrl)}` : null,
+  };
+}
+
+/**
  * Every file under the link's folder, recursively:
- * { path (relative to the shared folder), name, size, modifiedAt, version, etag, modifiedBy }.
+ * { path (relative to the shared folder), name, size, modifiedAt, version, etag, modifiedBy, webUrl, appUrl }.
  */
 async function list(link, { maxDepth = 4 } = {}) {
   const s = await sessionFor(link);
+  if (s.fileId) {
+    // A single shared workbook: the "folder" is that one file.
+    const f = await api(link, (x) => `web/GetFileById('${x.fileId}')?$expand=ModifiedBy&$select=Name,Length,TimeLastModified,UIVersionLabel,ETag,UniqueId,ServerRelativeUrl,ModifiedBy/Title`);
+    return {
+      root: null,
+      files: [{ path: f.Name, name: f.Name, size: Number(f.Length) || 0, modifiedAt: f.TimeLastModified ? new Date(f.TimeLastModified) : null, version: f.UIVersionLabel || null, etag: f.ETag || null, modifiedBy: f.ModifiedBy?.Title || null, ...openLinks(s.site, f) }],
+    };
+  }
   const out = [];
   const walk = async (rel, depth) => {
     const folder = rel ? `${s.root}/${rel}` : s.root;
-    const j = await api(link, () => `web/GetFolderByServerRelativePath(decodedurl='${encode(folder)}')?$expand=Files/ModifiedBy,Folders&$select=Files/Name,Files/Length,Files/TimeLastModified,Files/UIVersionLabel,Files/ETag,Files/ModifiedBy/Title,Folders/Name`);
+    const j = await api(link, () => `web/GetFolderByServerRelativePath(decodedurl='${encode(folder)}')?$expand=Files/ModifiedBy,Folders&$select=Files/Name,Files/Length,Files/TimeLastModified,Files/UIVersionLabel,Files/ETag,Files/UniqueId,Files/ServerRelativeUrl,Files/ModifiedBy/Title,Folders/Name`);
     for (const f of j.Files || []) {
       out.push({
         path: rel ? `${rel}/${f.Name}` : f.Name,
@@ -98,6 +132,7 @@ async function list(link, { maxDepth = 4 } = {}) {
         version: f.UIVersionLabel || null,
         etag: f.ETag || null,
         modifiedBy: f.ModifiedBy?.Title || null,
+        ...openLinks(s.site, f),
       });
     }
     if (depth >= maxDepth) return;
@@ -112,7 +147,7 @@ async function list(link, { maxDepth = 4 } = {}) {
 
 /** One file's bytes, by its path relative to the shared folder. */
 async function download(link, relPath) {
-  return api(link, (s) => `web/GetFileByServerRelativePath(decodedurl='${encode(`${s.root}/${relPath}`)}')/$value`, { binary: true });
+  return api(link, (s) => (s.fileId ? `web/GetFileById('${s.fileId}')/$value` : `web/GetFileByServerRelativePath(decodedurl='${encode(`${s.root}/${relPath}`)}')/$value`), { binary: true });
 }
 
 module.exports = { list, download, open, _sessions: sessions };

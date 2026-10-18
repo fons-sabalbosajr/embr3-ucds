@@ -61,10 +61,17 @@ export const DataProvider = ({ children }) => {
       if (response.status >= 200 && response.status < 300) {
         const fetchedData = response.data;
 
+        // Serials are PREFIX-number ("AU-0012") or, for the 2027 healthcare
+        // and permit lists, PREFIX-PROVINCE-number ("HC-BU-0012"): the number
+        // is always the last part, the rest is the series.
+        const splitSortKey = (sortKey) => {
+          const m = /^(.*)-(\d+)$/.exec(String(sortKey || ""));
+          return m ? [m[1], parseInt(m[2], 10)] : [String(sortKey || ""), 0];
+        };
         const formatSortKey = (sortKey) => {
           if (typeof sortKey !== "string") return sortKey;
-          const [prefix, numberPart] = sortKey.split("-");
-          return `${prefix}-${parseInt(numberPart, 10)}`;
+          const [series, n] = splitSortKey(sortKey);
+          return /^(.*)-(\d+)$/.test(sortKey) ? `${series}-${n}` : sortKey;
         };
 
         const sortedData = fetchedData
@@ -77,9 +84,11 @@ export const DataProvider = ({ children }) => {
             );
           })
           .sort((a, b) => {
-            const numA = parseInt(a.sort_key?.split("-")[1] || "0", 10);
-            const numB = parseInt(b.sort_key?.split("-")[1] || "0", 10);
-            return numA - numB;
+            const [seriesA, numA] = splitSortKey(a.sort_key);
+            const [seriesB, numB] = splitSortKey(b.sort_key);
+            // One series after another (HC-AU before HC-BA…), each in order.
+            // A province page has one main series, so this is its old order.
+            return seriesA === seriesB ? numA - numB : (a.id_no || 0) - (b.id_no || 0);
           })
           .map((item) => ({
             ...item,
