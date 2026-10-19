@@ -11,6 +11,8 @@ export const createSeason = async (season) => (await client.post("/seasons", sea
 export const updateSeason = async ({ id, ...season }) => (await client.put(`/seasons/${id}`, season)).data;
 export const rebaselineSeason = async (id) => (await client.post(`/seasons/${id}/rebaseline`)).data;
 export const saveLegend = async ({ id, legend }) => (await client.put(`/seasons/${id}/legend`, { legend })).data;
+/** Names for the newly issued lists' colours outside the workshop's legend: { family: name }. */
+export const saveMasterlistNames = async ({ id, names }) => (await client.put(`/seasons/${id}/masterlist-names`, { names })).data;
 // The public link's settings: { enabled, expiresAt (ISO or null), regenerate }.
 export const saveShare = async ({ id, ...share }) => (await client.put(`/seasons/${id}/share`, share)).data;
 // The Data Visualization tab's firm table and map (Developer only).
@@ -62,3 +64,5 @@ export function writeSnapshot(kind, key, data) {
 
 // Per RAW file, the cells holding a newly issued permit already encoded (Developer only).
 export const getColourTargets = async () => (await client.get("/colour-targets")).data;
+/** One kind of newly issued permit, list by list: each permit's colour and standing (Developer only). */
+export const getIssuedDetail = async (kind) => (await client.get(`/issued/${encodeURIComponent(kind)}`)).data;

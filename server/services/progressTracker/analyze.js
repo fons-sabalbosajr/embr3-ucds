@@ -25,7 +25,13 @@
 //
 // Newly issued permit workbooks (kind 'permits'): the permit numbers each
 // holds (the ReferenceNo, HW GR No., Registration No. … column), counted
-// once however many sheets repeat them, by province.
+// once however many sheets repeat them, by province — and the firm each was
+// issued to (its project name or proponent), for the validation check.
+//
+// The validation check (unvalidatedHighlights): a main row coloured since
+// the baseline — marked as updated — while a permit newly issued to that
+// same firm is still nowhere in the RAW data. Colouring a row is the
+// Planning Unit's "validated"; a row coloured without its new permit was not.
 //
 // Pure: a workbook in, numbers out. No I/O.
 // ---------------------------------------------------------------------------
@@ -155,6 +161,62 @@ const coord = (v) => {
   const x = Number(String(v ?? '').trim());
   return Number.isFinite(x) && x !== 0 ? Math.round(x * 1e5) / 1e5 : null;
 };
+
+/** A fill colour's family, from its hue, saturation and lightness (light and dark shades as one). */
+function colourFamily(rgb) {
+  const m = /^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(rgb || ''));
+  if (!m) return 'gray';
+  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  if (s < 0.12) return 'gray';
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h < 15 || h >= 345) return 'red';
+  if (h < 45) return 'orange'; // peach and beige shades too
+  if (h < 70) return 'yellow';
+  if (h < 170) return 'green';
+  if (h < 260) return 'blue'; // sky blue shades too
+  if (h < 300) return 'purple';
+  return 'pink';
+}
+
+// The workshop's rule for the newly issued lists (Workshop No. 1-3, "Input
+// newly issued permits"): the masterlist holder looks each permit up in the
+// RAW data and colours its row on the list by what they found — and so what
+// the RAW data must then show. `inRaw`: the permit must be in the RAW data
+// (true), must not be (false: the firm is not in the universe yet).
+const MASTERLIST_LEGEND = {
+  green: { label: 'Permit found', meaning: 'The firm is in the universe and its permit is already in the records.', inRaw: true },
+  pink: { label: 'Renewed permit', meaning: "The firm is in the universe and was issued a renewed permit: its permit data updated.", inRaw: true },
+  yellow: { label: 'New permit', meaning: 'The firm is in the universe with no permit encoded: the newly issued permit added.', inRaw: true },
+  red: { label: 'Firm not in the universe', meaning: 'The firm is not yet in the universe: for verification with the facilitator.', inRaw: false },
+};
+
+/**
+ * What a permit on a newly issued list stands at, from its colour and the
+ * RAW data:
+ *   todo          no colour, not in the RAW data — not worked on yet
+ *   unmarked      no colour, but already in the RAW data
+ *   ok            the colour and the RAW data agree
+ *   greenButNew   green ("already in the records"), but written in only this
+ *                 updating — pink or yellow was meant
+ *   notEncoded    green, pink or yellow, yet not in the RAW data
+ *   redInRaw      red ("not in the universe"), yet in the RAW data
+ *   otherColour   a colour the workshop does not use
+ */
+function permitStatus(family, inRaw, inRawAtBaseline) {
+  if (!family) return inRaw ? 'unmarked' : 'todo';
+  const rule = MASTERLIST_LEGEND[family];
+  if (!rule) return 'otherColour';
+  if (rule.inRaw && !inRaw) return 'notEncoded';
+  if (!rule.inRaw && inRaw) return 'redInRaw';
+  if (family === 'green' && inRawAtBaseline === false) return 'greenButNew';
+  return 'ok';
+}
 
 /** The fill a cell carries, if any, as an RGB string. */
 function fillOf(c) {
@@ -310,6 +372,10 @@ function readRawSheet(ws, name, ctx = {}) {
     keySource: {},
     keyCells: {},
     records: [],
+    // serial -> the row's highlight fills ("FFFF00,CAEEFB"), coloured rows only.
+    highlights: {},
+    // Each main row as the validation check reads it (memory only).
+    checks: [],
   };
   for (let i = at + 1; i < grid.length; i++) {
     const r = grid[i];
@@ -351,6 +417,7 @@ function readRawSheet(ws, name, ctx = {}) {
     else unit.base += 1;
 
     let any = false;
+    const rowKeys = [];
     for (const [kind, field] of Object.entries(PERMIT_FIELDS)) {
       if (!blank(values[field]) && PENDING_PERMIT.test(String(values[field]))) {
         unit.pendingPermits[kind] += 1;
@@ -368,6 +435,7 @@ function readRawSheet(ws, name, ctx = {}) {
         const j = fields.indexOf(field);
         for (const k of permitKeys(values[field])) {
           out.keys.push(k);
+          rowKeys.push(k);
           // Which firm carries it: a newly issued permit found here is
           // encoded on a baseline firm or came with an addition.
           out.keySource[k] ||= source || 'base';
@@ -446,6 +514,9 @@ function readRawSheet(ws, name, ctx = {}) {
       out.coloredPermit += 1;
       unit.coloredPermit += 1;
     }
+    const hl = [...rowColors].sort().join(',') || null;
+    if (hl) out.highlights[key] = hl;
+    out.checks.push({ serial: key, unit: unitName, sheet: name, row: i + range.s.r + 1, title: v('title'), name: v('name'), keys: rowKeys, hl });
 
     const byGroup = { profile: [], monitoring: [], permits: [], legal: [] };
     for (const [f, v] of Object.entries(values)) byGroup[groupOf(f)].push(`${f}=${v ?? ''}`);
@@ -538,7 +609,7 @@ function analyzeRaw(wb) {
     units,
     additionsLog: logs.map(({ entries, ...rest }) => rest),
     sheets: [
-      ...sheets.map(({ fingerprints, keys, keySource: _k, keyCells: _c, records: _r, provinces: _p, units: _u, ...rest }) => rest),
+      ...sheets.map(({ fingerprints, keys, keySource: _k, keyCells: _c, records: _r, provinces: _p, units: _u, highlights: _h, checks: _ch, ...rest }) => rest),
       ...logs.map(({ entries, markers: _m, ...rest }) => rest),
     ],
     // Not stored with the counts: the comparison material.
@@ -553,6 +624,10 @@ function analyzeRaw(wb) {
     // The main sheets' firms, for the Developer's table and map: kept in the
     // server's memory only, never stored.
     records: main.flatMap((s) => s.records),
+    // The coloured rows' fills, by serial: stored with the baseline (to tell
+    // a row coloured since), and the rows the validation check reads (memory).
+    highlights: Object.assign({}, ...main.map((s) => s.highlights)),
+    checks: main.flatMap((s) => s.checks),
     // The 2026 IIS reference numbers by serial (the register has none yet):
     // stored with the file's reading, small — only the rows that have one.
     iis: Object.fromEntries(main.flatMap((s) => s.records).filter((r) => r.iis2026).map((r) => [r.serial, r.iis2026.slice(0, 200)])),
@@ -565,6 +640,25 @@ const PROVINCE_HEADER = /^province$/i;
 // (HWG ID, TSD, TRC: New / Renewal / Amendment).
 const TYPE_HEADER = /^(application type|sub ?type)$/i;
 const typeOf = (v) => (/renew|amend/i.test(String(v || '')) ? 'renewal' : /new/i.test(String(v || '')) ? 'new' : null);
+// The Planning Unit's mark for a firm of the Healthcare / TSD / TRC universe
+// (the 2027 lists, not a province's Monitoring Plan): the list's "Healthcare /
+// TSD / TRC Firm" column, Yes or blank. Only that column: the row is coloured
+// by the workshop's legend like any other.
+const HEALTHCARE_HEADER = /healthcare|tsd ?\/ ?trc/i;
+const YES = /^(y|yes|oo|true|1|x|✓|✔)$/i;
+// Establishments of that universe, by their PSIC description: health care,
+// medical laboratories, pharmaceuticals; hazardous waste treatment, storage
+// and disposal (TSD) and its transport (TRC). A Yes on anything else is
+// doubtful — worth a second look.
+const HEALTHCARE_PSIC = /hospital|clinic|health|medical|nursing|dental|laborator|pharma|drug|veterinar|hazardous|treatment and disposal|waste (treatment|collection)|collection of (hazardous|waste)|transport.*waste|funeral|mortuar|crematori/i;
+const PSIC_HEADER = /psic|industry ?classification/i;
+// What a permit is for, and where: for the lists' See more (the Developer's only).
+const TITLE_HEADER = /^(project ?(name|title)|establishment( ?name)?|name of (the )?(project|establishment|facility))$/i;
+const CITY_HEADER = /^(municipality|city)( ?\/ ?(city|municipality))?$/i;
+/** Whether an establishment's PSIC description is of the healthcare / TSD / TRC universe (null: none written). */
+const healthcarePsic = (psic) => (psic ? HEALTHCARE_PSIC.test(String(psic)) : null);
+// Who a permit was issued to: the project, the proponent or the establishment.
+const NAME_HEADER = /^(project ?(name|title)|name of (the )?(project|proponent|firm|establishment|company|facility|generator)|(proponent|establishment|company|firm|facility|applicant|generator)( ?name)?)$/i;
 
 // A newly issued permit's kind, from the shape of its number (as permitKey
 // writes it): ECC-OL-R3-2026-564, PTO-OL-R3-2025-8621-R, DP-R3-25-9433,
@@ -593,39 +687,336 @@ function analyzePermits(wb) {
   const keys = new Map(); // key -> province
   const keyKind = {};
   const keyType = {}; // key -> 'new' | 'renewal'
+  const keyNames = {}; // key -> the firm's names, compared loosely (textKey)
+  const keyLabel = {}; // key -> the firm's name as the list writes it
+  // The masterlist holder colours a permit's row on the list as they write it
+  // into the RAW data: key -> the row's fill (the first coloured cell), and
+  // where the row is. A permit repeated on several sheets is coloured when
+  // any of its rows is.
+  const highlights = {};
+  const keyAt = {};
+  // The healthcare mark: key -> true where a row says Yes (or sits on a
+  // Healthcare sheet); `keyReviewed`: the permit is on a sheet that carries
+  // the mark at all — the rest have not been gone through for it yet.
+  const keyHealthcare = {};
+  const keyReviewed = {};
+  const keyPsic = {};
+  // The project or establishment, and the city or municipality, as the list writes them.
+  const keyTitle = {};
+  const keyCity = {};
   const sheets = [];
+  // Every row with a permit number, as its own entry: what the tiles count
+  // (chosen below, countedEntries).
+  const sheetRows = [];
   for (const name of wb.SheetNames) {
-    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: false });
+    const ws = wb.Sheets[name];
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
     const at = grid.findIndex((r) => r.filter((c) => !blank(c)).length >= 3 && r.some((c) => PERMIT_HEADER.test(squeeze(c))));
     if (at < 0) continue;
     const header = grid[at].map(squeeze);
     const col = header.findIndex((h) => PERMIT_HEADER.test(h));
     const pcol = header.findIndex((h) => PROVINCE_HEADER.test(h));
     const tcol = header.findIndex((h) => TYPE_HEADER.test(h));
+    const ncols = header.map((h, j) => (NAME_HEADER.test(h) ? j : -1)).filter((j) => j >= 0).slice(0, 3);
+    // The mark may be repeated (a column copied twice): any of them saying Yes counts.
+    const hcols = header.map((h, j) => (HEALTHCARE_HEADER.test(h) ? j : -1)).filter((j) => j >= 0);
+    const psicCol = header.findIndex((h) => PSIC_HEADER.test(h));
+    const titleCol = header.findIndex((h) => TITLE_HEADER.test(h));
+    const cityCol = header.findIndex((h) => CITY_HEADER.test(h));
+    // A province's own worksheet ("AURORA (44)", "NUEVA  ECIJA"), or a summary (CONSOLIDATED, GENERAL, Sheet1…).
+    const sheetProvince = provinceCell(name.replace(/\(.*?\)/g, ''));
+    const entries = [];
     let rows = 0;
-    for (const r of grid.slice(at + 1)) {
+    let colored = 0;
+    for (let i = at + 1; i < grid.length; i++) {
+      const r = grid[i];
       const v = r[col];
       if (blank(v)) continue;
       const k = permitKey(v);
       if (!/\d/.test(k)) continue;
       rows += 1;
-      if (!keys.has(k)) keys.set(k, pcol >= 0 && !blank(r[pcol]) ? provinceOf(String(r[pcol]).trim().replace(/\s+/g, '_').replace(/^(\w)(.*)$/, (m, a, b) => a + b.toLowerCase())) : null);
+      const sheetRow = i + range.s.r;
+      let fill = null;
+      for (let c = range.s.c; c <= range.e.c && !fill; c++) fill = fillOf(ws[XLSX.utils.encode_cell({ r: sheetRow, c })]);
+      if (fill) colored += 1;
+      if (fill && !highlights[k]) {
+        highlights[k] = fill;
+        keyAt[k] = { sheet: name, row: sheetRow + 1 };
+      }
+      keyAt[k] ||= { sheet: name, row: sheetRow + 1 };
+      if (hcols.length) keyReviewed[k] = true;
+      if (hcols.some((j) => YES.test(String(r[j] ?? '').trim()))) keyHealthcare[k] = true;
+      if (psicCol >= 0 && !blank(r[psicCol])) keyPsic[k] ||= String(r[psicCol]).trim().slice(0, 120);
+      if (titleCol >= 0 && !blank(r[titleCol])) keyTitle[k] ||= String(r[titleCol]).trim().slice(0, 160);
+      if (cityCol >= 0 && !blank(r[cityCol])) keyCity[k] ||= String(r[cityCol]).trim().slice(0, 60);
+      const rowProvince = pcol >= 0 && !blank(r[pcol]) ? provinceCell(r[pcol]) : null;
+      if (!keys.has(k)) keys.set(k, rowProvince);
       keyKind[k] ||= permitKind(k, header[col]);
       if (tcol >= 0 && !keyType[k]) keyType[k] = typeOf(r[tcol]);
+      let label = null;
+      for (const j of ncols) {
+        if (blank(r[j])) continue;
+        const nk = textKey(r[j]);
+        if (nk.length >= MIN_NAME && !(keyNames[k] ||= []).includes(nk)) keyNames[k].push(nk);
+        keyLabel[k] ||= String(r[j]).trim().slice(0, 120);
+        label ||= String(r[j]).trim().slice(0, 120);
+      }
+      const text = (j) => (j >= 0 && !blank(r[j]) ? String(r[j]).trim() : null);
+      entries.push({
+        k,
+        sheet: name,
+        row: sheetRow + 1,
+        fill,
+        province: rowProvince || sheetProvince || null,
+        healthcare: hcols.some((j) => YES.test(String(r[j] ?? '').trim())),
+        reviewed: hcols.length > 0,
+        firm: label,
+        title: text(titleCol)?.slice(0, 160) || null,
+        psic: text(psicCol)?.slice(0, 120) || null,
+        city: text(cityCol)?.slice(0, 60) || null,
+        type: tcol >= 0 ? typeOf(r[tcol]) : null,
+      });
     }
-    sheets.push({ name, rows, column: grid[at][col] });
+    sheets.push({ name, rows, colored, column: grid[at][col], healthcareMark: hcols.length ? 'column' : null, province: sheetProvince || null });
+    sheetRows.push({ name, province: sheetProvince || null, entries });
   }
+  // Each entry's kind, from its permit number.
+  const entries = countedEntries(sheetRows, { highlights, keyAt, keyProvince: Object.fromEntries(keys), keyHealthcare, keyReviewed, keyLabel, keyTitle, keyPsic, keyCity, keyType }).map((e) => ({ ...e, kind: keyKind[e.k] || 'other' }));
   const provinces = {};
-  for (const p of keys.values()) provinces[p || '(none)'] = (provinces[p || '(none)'] || 0) + 1;
   const byKind = {};
-  for (const kind of Object.values(keyKind)) byKind[kind] = (byKind[kind] || 0) + 1;
-  return { kind: 'permits', rows: keys.size, provinces, byKind, sheets, keys: [...keys.keys()], keyProvince: Object.fromEntries(keys), keyKind, keyType };
+  const coloredByKind = {};
+  const rowColors = {};
+  for (const e of entries) {
+    provinces[e.province || '(none)'] = (provinces[e.province || '(none)'] || 0) + 1;
+    byKind[e.kind] = (byKind[e.kind] || 0) + 1;
+    if (!e.fill) continue;
+    coloredByKind[e.kind] = (coloredByKind[e.kind] || 0) + 1;
+    rowColors[e.fill] = (rowColors[e.fill] || 0) + 1;
+  }
+  return {
+    kind: 'permits',
+    // The rows counted (see countedEntries), as the worksheets count them.
+    rows: entries.length,
+    // Distinct permit numbers on the list, for reference.
+    permits: keys.size,
+    colored: entries.filter((e) => e.fill).length,
+    coloredByKind,
+    rowColors,
+    provinces,
+    byKind,
+    sheets,
+    keys: [...keys.keys()],
+    keyProvince: Object.fromEntries(keys),
+    keyKind,
+    keyType,
+    keyNames,
+    keyLabel,
+    // The healthcare mark, counted on the rows: marked Yes; on a sheet that carries the mark.
+    healthcare: entries.filter((e) => e.healthcare).length,
+    healthcareReviewed: entries.filter((e) => e.reviewed).length,
+    // Memory: the rows counted, each with its own colour, province and marks.
+    entries,
+    // Memory, and the baseline: which permits are coloured, and where each sits.
+    highlights,
+    keyAt,
+    keyHealthcare,
+    keyReviewed,
+    keyPsic,
+    keyTitle,
+    keyCity,
+  };
+}
+
+/** A province as a list writes it ("NUEVA ECIJA", "Nueva  Ecija") — the tracker's name for it, or null. */
+function provinceCell(v) {
+  const s = String(v ?? '').trim().replace(/\s+/g, '_');
+  if (!s) return null;
+  const p = provinceOf(s.replace(/^(\w)(.*)$/, (m, a, b) => a + b.toLowerCase()));
+  return PROVINCE_NAMES.has(p) ? p : null;
+}
+
+/**
+ * The rows a newly issued list is counted by — as its worksheets count them:
+ *   province worksheets (AURORA (44), BATAAN (292)…) holding at least as many
+ *     rows as any summary sheet (CONSOLIDATED, Sheet1…): every row on them,
+ *     the summary not counted again — a number on two rows is two entries;
+ *   one worksheet only: its rows;
+ *   otherwise (the province sheets hold fewer rows than a summary — part of
+ *     the list is only on it): each permit number once, as found anywhere.
+ */
+function countedEntries(sheetRows, by) {
+  const provinceSheets = sheetRows.filter((s) => s.province);
+  const provinceRows = provinceSheets.reduce((a, s) => a + s.entries.length, 0);
+  const largestOther = Math.max(0, ...sheetRows.filter((s) => !s.province).map((s) => s.entries.length));
+  if (provinceSheets.length && provinceRows >= largestOther) return provinceSheets.flatMap((s) => s.entries);
+  if (sheetRows.length === 1) return sheetRows[0].entries;
+  // Each number once: coloured if any of its rows is, where that row is.
+  return [...new Set(sheetRows.flatMap((s) => s.entries.map((e) => e.k)))].map((k) => ({
+    k,
+    sheet: by.keyAt[k]?.sheet || null,
+    row: by.keyAt[k]?.row || null,
+    fill: by.highlights[k] || null,
+    province: by.keyProvince[k] || null,
+    healthcare: Boolean(by.keyHealthcare[k]),
+    reviewed: Boolean(by.keyReviewed[k]),
+    firm: by.keyLabel[k] || null,
+    title: by.keyTitle[k] || null,
+    psic: by.keyPsic[k] || null,
+    city: by.keyCity[k] || null,
+    type: by.keyType[k] || null,
+  }));
+}
+
+// A name shorter than this ("Store", "Farm") says too little to name one firm.
+const MIN_NAME = 8;
+// The fill the tracker's Office Script gives the rows of the encoded permits
+// (front-end officeScript.js ENCODED_FILL).
+const ENCODED_FILL = '9DD9F3';
+
+/**
+ * The rows coloured as validated without their newly issued permits.
+ *
+ * `raws`: per RAW file { id, name, checks, baseHighlights, fingerprints,
+ * baseFingerprints } (checks: analyzeRaw's). `lists`: the newly issued
+ * permit lists (analyzePermits'; not the reference extracts).
+ *
+ * A row is flagged when it is coloured, its colouring is not what the
+ * baseline had (coloured since), and a permit issued to that firm — the
+ * list's project or proponent is the row's title or proponent — is nowhere
+ * in the RAW data. A name that several RAW rows carry (a chain's branches)
+ * names no row for sure, and is not used; nor is a permit whose province is
+ * another. A permit already written on any row is validated.
+ *
+ * Returns { [file id]: [{ serial, sheet, row, unit, title, name, fill,
+ * unchanged, byScript, missing: [{ permit, kind, label }] }] }.
+ */
+function unvalidatedHighlights(raws, lists) {
+  const inRaw = new Set();
+  const rowsNamed = new Map();
+  for (const r of raws) {
+    for (const c of r.checks || []) {
+      for (const k of c.keys) inRaw.add(k);
+      for (const nk of new Set([textKey(c.title), textKey(c.name)])) if (nk) rowsNamed.set(nk, (rowsNamed.get(nk) || 0) + 1);
+    }
+  }
+  const issuedTo = new Map(); // name -> the permits issued to it not yet in the RAW data
+  for (const l of lists) {
+    for (const k of l.keys || []) {
+      if (inRaw.has(k)) continue;
+      for (const nk of l.keyNames?.[k] || []) {
+        const at = issuedTo.get(nk) || [];
+        if (!at.some((p) => p.permit === k)) at.push({ permit: k, kind: l.keyKind?.[k] || 'other', province: l.keyProvince?.[k] || null, label: l.keyLabel?.[k] || null });
+        issuedTo.set(nk, at);
+      }
+    }
+  }
+  const out = {};
+  if (!issuedTo.size) return out;
+  for (const r of raws) {
+    for (const c of r.checks || []) {
+      if (!c.hl || r.baseHighlights?.[c.serial] === c.hl) continue;
+      // Only the universe's lists (the provinces, the healthcare lists): the
+      // ECP monitoring list is not part of the updating, as elsewhere in the
+      // tracker. Its permits still count as written in (above).
+      if (groupOfUnit(c.unit) === 'other') continue;
+      const names = [...new Set([textKey(c.title), textKey(c.name)])].filter((nk) => nk.length >= MIN_NAME && rowsNamed.get(nk) === 1);
+      const missing = [];
+      for (const nk of names) {
+        for (const p of issuedTo.get(nk) || []) {
+          if (p.province && PROVINCE_NAMES.has(c.unit) && p.province !== c.unit) continue;
+          if (!missing.some((m) => m.permit === p.permit)) missing.push({ permit: p.permit, kind: p.kind, label: p.label });
+        }
+      }
+      if (!missing.length) continue;
+      (out[r.id] ||= []).push({
+        serial: c.serial,
+        sheet: c.sheet,
+        row: c.row,
+        unit: c.unit,
+        title: c.title,
+        name: c.name,
+        fill: c.hl.split(',')[0],
+        // Nothing on the row changed since the baseline: coloured, not worked on.
+        unchanged: Boolean(r.fingerprints?.[c.serial] && r.fingerprints[c.serial] === r.baseFingerprints?.[c.serial]),
+        // Coloured light blue by the tracker's script (another permit of the row was encoded).
+        byScript: c.hl === ENCODED_FILL,
+        missing: missing.slice(0, 5),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The permits coloured on a newly issued list whose colour the RAW data
+ * contradicts (MASTERLIST_LEGEND): green, pink or yellow — written in — yet
+ * not in the RAW data (`notEncoded`), or red — not in the universe — yet in
+ * it (`redInRaw`). A colour the workshop does not use is not judged.
+ *
+ * `lists`: per list { id, highlights, baseHighlights, keyAt, keyKind,
+ * keyProvince, keyLabel } (analyzePermits', the reference extracts left out);
+ * `inRaw`: every permit number on the RAW files. A permit coloured as it was
+ * at the baseline is left: only colouring since counts. Returns rows shaped
+ * as unvalidatedHighlights' ({ [list id]: [...] }), the permit as `missing`,
+ * with the `reason` and the colour's `family`.
+ */
+function unencodedHighlights(lists, inRaw) {
+  const out = {};
+  for (const l of lists) {
+    for (const [k, fill] of Object.entries(l.highlights || {})) {
+      if (l.baseHighlights?.[k] === fill) continue;
+      const family = colourFamily(fill);
+      const reason = permitStatus(family, inRaw.has(k));
+      if (reason !== 'notEncoded' && reason !== 'redInRaw') continue;
+      const at = l.keyAt?.[k] || {};
+      (out[l.id] ||= []).push({
+        reason,
+        family,
+        serial: null,
+        sheet: at.sheet || null,
+        row: at.row || null,
+        unit: l.keyProvince?.[k] || null,
+        title: l.keyLabel?.[k] || null,
+        name: null,
+        fill,
+        unchanged: false,
+        byScript: false,
+        missing: [{ permit: k, kind: l.keyKind?.[k] || 'other', label: l.keyLabel?.[k] || null }],
+      });
+    }
+  }
+  return out;
+}
+
+// One save that colours this many rows or more…
+const BULK_MIN_ROWS = 25;
+// …faster than this many a minute…
+const BULK_PER_MINUTE = 5;
+// …and leaves this share of them or more unchanged: a block filled with colour, not rows checked.
+const BULK_UNCHANGED = 0.8;
+
+/**
+ * The rows a save coloured, against the reading before it: { rows, unchanged,
+ * minutes, serials } when they look filled in bulk, else null. The tracker's
+ * own light blue (its Office Script) is not counted.
+ */
+function bulkHighlight(before, now, minutes) {
+  if (!before?.highlights || !now?.highlights) return null;
+  const coloured = Object.entries(now.highlights).filter(([serial, hl]) => hl !== ENCODED_FILL && before.highlights[serial] !== hl).map(([serial]) => serial);
+  if (coloured.length < BULK_MIN_ROWS) return null;
+  const unchanged = coloured.filter((s) => before.fingerprints?.[s] && before.fingerprints[s] === now.fingerprints?.[s]).length;
+  const mins = Math.max(1, Number(minutes) || 1);
+  if (unchanged / coloured.length < BULK_UNCHANGED || coloured.length / mins < BULK_PER_MINUTE) return null;
+  return { rows: coloured.length, unchanged, minutes: Math.round(mins), serials: coloured.slice(0, 20) };
 }
 
 /** A workbook's bytes, read as the tracked kind. */
 function analyze(buffer, kind) {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellStyles: kind === 'raw', cellDates: true });
+  // With their fills, both kinds: the RAW rows coloured as updated, the
+  // permits coloured on the newly issued lists as written in.
+  const wb = XLSX.read(buffer, { type: 'buffer', cellStyles: true, cellDates: true });
   return kind === 'raw' ? analyzeRaw(wb) : analyzePermits(wb);
 }
 
-module.exports = { ANALYSIS_VERSION, analyze, analyzeRaw, analyzePermits, permitKey, permitKeys, permitKind, eccYear, fillOf, mergeUnits, addInto, unitOf, groupOfUnit, sourceOf };
+module.exports = { ANALYSIS_VERSION, ENCODED_FILL, MASTERLIST_LEGEND, colourFamily, permitStatus, healthcarePsic, analyze, analyzeRaw, analyzePermits, permitKey, permitKeys, permitKind, eccYear, fillOf, mergeUnits, addInto, unitOf, groupOfUnit, sourceOf, unvalidatedHighlights, unencodedHighlights, bulkHighlight };

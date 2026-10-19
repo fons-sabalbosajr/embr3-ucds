@@ -63,30 +63,42 @@ function calculateTimeAgo(date) {
   return "offline";
 }
 
+// Runs every 10 minutes.
+//
+// node-cron drops a tick that fires more than a second late and logs "missed
+// execution". Startup (the Mongo connection, the DNS fallback, loading every
+// module) keeps the event loop busy for longer than that, so a restart just
+// before :x0 lost that run. A tick up to a minute late still runs, and a run
+// never starts while the previous one is still writing.
 cron.schedule("*/10 * * * *", async () => {
-  // Runs every 10 minutes
+  // Nothing to update until the database is connected (see connectWithRetry).
+  if (!collections.users) return;
   try {
     const users = await collections.users
-      .find({ status: { $ne: "online" } })
+      .find({ status: { $ne: "online" } }, { projection: { status: 1, lastLogout: 1 } })
       .toArray();
 
-    const bulkOps = users.map((user) => {
+    // Write only the statuses that changed: most offline users already say
+    // "offline", and rewriting them every ten minutes is wasted load on the cluster.
+    const bulkOps = [];
+    for (const user of users) {
       const updatedStatus = calculateTimeAgo(user.lastLogout);
-      return {
+      if (updatedStatus === user.status) continue;
+      bulkOps.push({
         updateOne: {
           filter: { _id: user._id },
           update: { $set: { status: updatedStatus } },
         },
-      };
-    });
+      });
+    }
 
     if (bulkOps.length > 0) {
-      await collections.users.bulkWrite(bulkOps);
+      await collections.users.bulkWrite(bulkOps, { ordered: false });
     }
   } catch (error) {
     console.error("Error updating user statuses:", error);
   }
-});
+}, { noOverlap: true, missedExecutionTolerance: 60_000 });
 
 // Handle graceful shutdown
 process.on("SIGINT", async () => {

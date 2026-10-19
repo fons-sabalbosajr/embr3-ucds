@@ -90,7 +90,11 @@ body[data-theme="dark"] {
 .pt-dot.is-erms { background: var(--pt-erms); }
 .pt-dot.is-ecc { background: var(--pt-ecc); }
 .pt-dot.is-other { background: var(--pt-other); }
-
+/* A healthcare / TSD / TRC firm (the newly issued lists' "Healthcare / TSD / TRC Firm" column). */
+.pt-dot.pt-dot-healthcare { background: #722ed1; }
+body[data-theme="dark"] .pt-dot.pt-dot-healthcare { background: #9254de; }
+/* A row counted inside the one above it (the colours inside Highlighted). */
+.pt-summary-row.is-sub { padding-inline-start: 14px; }
 /* Motion: tiles rise in, bars grow from the left — none for "reduce motion". */
 @keyframes pt-rise {
   from { opacity: 0; transform: translateY(6px); }
@@ -1309,6 +1313,290 @@ body[data-theme="dark"] .ts-pct.is-low { color: #ff7875; }
   display: block;
   font-size: 11.5px;
   padding: 8px 10px;
+}
+/* The interpretation's heading with its kind of permit, and each province's done/issued. */
+.ts-ind-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.ts-ind-done {
+  font-size: 11.5px;
+  font-weight: 400;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+/* The workshop's colours above the interpretation. */
+.ts-ind-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pt-track);
+}
+
+/* The newly issued lists' colours (IssuedHighlighting.jsx, IssuedKindDetail.jsx). */
+.pt-mlist-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 6px;
+}
+/* A permit tile's live mark (IssuedHighlighting.jsx LiveMark): a writing
+   pencil while its list or a RAW file is being edited, the pulsing "Live"
+   dot while the tracker watches. Reuses the "Being edited now" animations. */
+.pt-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pt-tile-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 9px 1px 4px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pt-tile-live.is-highlighting {
+  background: rgba(196, 29, 127, 0.1);
+  color: #c41d7f;
+}
+.pt-tile-live.is-encoding {
+  background: rgba(47, 126, 203, 0.12);
+  color: #2f7ecb;
+}
+.pt-tile-live.is-highlighting .pt-editing-ring {
+  border-color: rgba(196, 29, 127, 0.55);
+}
+.pt-tile-live.is-highlighting .pt-editing-dots i {
+  background: #c41d7f;
+}
+.pt-tile-pen {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.pt-tile-idle {
+  padding: 1px 9px;
+  white-space: nowrap;
+}
+body[data-theme="dark"] .pt-tile-live.is-highlighting {
+  background: rgba(247, 89, 171, 0.16);
+  color: #f759ab;
+}
+body[data-theme="dark"] .pt-tile-live.is-encoding {
+  background: rgba(64, 150, 255, 0.16);
+  color: #69b1ff;
+}
+
+/* The newly issued lists per province (IssuedHighlighting.jsx): figures
+   larger than a small table's, in even-width digits so the columns line up. */
+.pt-issued-table .ant-table-tbody > tr > td {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.pt-issued-table .ant-table-tbody > tr > td .ant-typography {
+  font-size: inherit;
+}
+.pt-issued-name {
+  font-weight: 600;
+}
+/* A municipality under its province: a step smaller and quieter. */
+.pt-issued-table .pt-issued-city > td {
+  font-size: 14px;
+  background: rgba(140, 140, 140, 0.04);
+}
+
+/* The province table, one kind of permit at a time. */
+.pt-issued-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pt-issued-title {
+  font-size: 14px;
+}
+
+/* A tile's eye: see the permits behind a figure. */
+.pt-eye.ant-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  margin-inline-start: -2px;
+}
+
+/* "Colour does not match the RAW data", explained (IssuedKindDetail.jsx). */
+.pt-explain {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--pt-track);
+  border-radius: 8px;
+  background: rgba(47, 126, 203, 0.04);
+}
+.pt-explain-icon {
+  color: #2f7ecb;
+  font-size: 16px;
+  margin-top: 2px;
+}
+.pt-explain-cases {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pt-explain-case {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--pt-track);
+}
+.pt-explain-case.is-failing {
+  border-color: rgba(207, 19, 34, 0.35);
+  background: rgba(207, 19, 34, 0.04);
+}
+.pt-explain-swatches {
+  display: flex;
+  gap: 3px;
+  flex: none;
+  padding-top: 2px;
+  min-width: 54px;
+}
+.pt-explain-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+}
+.pt-explain-fix {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.pt-explain-count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+  min-width: 64px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The highlighted rows, broken down by colour (IssuedKindDetail.jsx HighlightedBreakdown). */
+.pt-hl-breakdown {
+  width: 100%;
+  max-width: 760px;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.pt-hl-breakdown th,
+.pt-hl-breakdown td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pt-track);
+  text-align: left;
+}
+.pt-hl-breakdown th {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.pt-hl-breakdown .num,
+.pt-hl-breakdown th:not(:first-child) {
+  text-align: right;
+}
+.pt-hl-breakdown tfoot td {
+  font-weight: 700;
+  border-bottom: none;
+}
+
+/* The colours outside the workshop's legend: their very shades, and their name. */
+.pt-shade-set {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.pt-shade-more {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-inline-start: 2px;
+}
+.pt-other-colour .pt-other-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pt-other-colour .pt-other-edit {
+  padding: 0 4px;
+  height: auto;
+  font-size: 12px;
+}
+.pt-name-colour {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pt-mlist-show {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 4px;
+  margin-bottom: 10px;
+}
+.pt-mlist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.pt-mlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--pt-track);
+  border-radius: 8px;
+}
+.pt-mlist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  flex-wrap: wrap;
+}
+.pt-mlist-label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.pt-mlist-num {
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pt-mlist-pct {
+  min-width: 48px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Colour the encoded permits (ColourEncoded.jsx). */

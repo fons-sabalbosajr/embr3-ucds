@@ -17,6 +17,13 @@
 //   and the newly issued permits with the RAW files: how many of them are
 //     already written into the universe — the progress of the encoding.
 //
+// And it watches that the colouring means what it says (validation): a row
+// coloured as updated while a permit newly issued to that firm is still not
+// in the RAW data, or a save that colours a block of rows nobody changed, is
+// a warning — in the season's activity, on the Validation tab, and as a
+// notice to the Developers (the Planning Unit edits in Excel, where the
+// tracker cannot reach them; the warning names who saved).
+//
 // Open screens are told at once (Socket.IO 'progress-tracker:update'); they
 // fetch the figures through the admin API, so nothing travels on the socket.
 // Outside a season nothing is polled. Only one server instance polls at a
@@ -28,7 +35,7 @@ const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { connectToMongo, getDb } = require('../../config/db');
 const sharepoint = require('./sharepoint');
-const { analyze, mergeUnits, addInto, groupOfUnit, ANALYSIS_VERSION } = require('./analyze');
+const { analyze, mergeUnits, addInto, groupOfUnit, unvalidatedHighlights, unencodedHighlights, bulkHighlight, colourFamily, permitStatus, healthcarePsic, MASTERLIST_LEGEND, ANALYSIS_VERSION } = require('./analyze');
 const { notesFor } = require('./notes');
 
 // The matrix's column order: the provinces, then the 2027 lists that span them.
@@ -98,27 +105,7 @@ function normaliseLegend(legend) {
   return out;
 }
 
-/** A fill colour's family, from its hue, saturation and lightness. */
-function colourFamily(rgb) {
-  const m = /^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(rgb || ''));
-  if (!m) return 'gray';
-  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16) / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-  if (s < 0.12) return 'gray';
-  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  h = (h * 60 + 360) % 360;
-  if (h < 15 || h >= 345) return 'red';
-  if (h < 45) return 'orange'; // peach and beige shades too
-  if (h < 70) return 'yellow';
-  if (h < 170) return 'green';
-  if (h < 260) return 'blue'; // sky blue shades too
-  if (h < 300) return 'purple';
-  return 'pink';
-}
+// A fill colour's family (analyze.js colourFamily).
 const INSTANCE = `${os.hostname()}:${process.pid}:${crypto.randomBytes(3).toString('hex')}`;
 
 const db = () => getDb();
@@ -127,6 +114,13 @@ const fileId = (season, source, path) => `${season}:${source}:${path}`;
 // file id -> { etag, keys, keyProvince } — the comparison material, which is
 // not stored: after a restart the first look reads every file again.
 const cache = new Map();
+// The seasons whose figures this server has worked out since it started.
+const countedSince = new Set();
+/** Drop every reading in memory: the next look reads the files again and works the figures out anew. */
+function forget() {
+  cache.clear();
+  countedSince.clear();
+}
 
 let io = null;
 let timer = null;
@@ -185,7 +179,7 @@ async function createSeason(input, user) {
   // One season at a time: the new one closes any still open.
   await db().collection(SEASONS).updateMany({ status: 'active' }, { $set: { status: 'closed', closedAt: new Date() } });
   const { insertedId } = await db().collection(SEASONS).insertOne(doc);
-  cache.clear();
+  forget();
   invalidate();
   schedule(1000);
   return { _id: insertedId, ...doc };
@@ -200,7 +194,7 @@ async function updateSeason(id, input, user) {
   if (set.status === 'active' && s.status !== 'active') {
     await db().collection(SEASONS).updateMany({ status: 'active', _id: { $ne: s._id } }, { $set: { status: 'closed', closedAt: new Date() } });
   }
-  if (JSON.stringify(set.sources) !== JSON.stringify(s.sources)) cache.clear();
+  if (JSON.stringify(set.sources) !== JSON.stringify(s.sources)) forget();
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: set });
   invalidate();
   schedule(1000);
@@ -218,7 +212,7 @@ async function rebaseline(id) {
   await db().collection(FILES).deleteMany({ season });
   await db().collection(EVENTS).insertOne({ season, at: new Date(), kind: 'baseline', note: 'Baseline taken again from the files as they are now.' });
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { baselineAt: null } });
-  cache.clear();
+  forget();
   invalidate();
   schedule(500);
 }
@@ -236,7 +230,7 @@ async function takeLease(season) {
 }
 
 const counts = (a) => {
-  const { fingerprints, keys, keyProvince, keySource, keyCells, keyKind, keyType, records, iis, ...rest } = a;
+  const { fingerprints, keys, keyProvince, keySource, keyCells, keyKind, keyType, keyNames, keyLabel, keyAt, keyHealthcare, keyReviewed, keyPsic, keyTitle, keyCity, entries, records, iis, highlights, checks, ...rest } = a;
   return rest;
 };
 
@@ -304,7 +298,35 @@ async function poll(season) {
         errors.push(`${meta.path}: ${err.message}`);
         continue;
       }
-      cache.set(id, { etag: meta.etag, kind: source.kind, keys: a.keys || [], keyProvince: a.keyProvince || null, keySource: a.keySource || null, keyCells: a.keyCells || null, keyKind: a.keyKind || null, keyType: a.keyType || null, records: a.records || null, reference: REFERENCE_FILES.test(meta.path) });
+      const entry = {
+        etag: meta.etag,
+        kind: source.kind,
+        keys: a.keys || [],
+        keyProvince: a.keyProvince || null,
+        keySource: a.keySource || null,
+        keyCells: a.keyCells || null,
+        keyKind: a.keyKind || null,
+        keyType: a.keyType || null,
+        keyNames: a.keyNames || null,
+        keyLabel: a.keyLabel || null,
+        keyAt: a.keyAt || null,
+        // A newly issued list's healthcare / TSD / TRC mark, and each permit's PSIC description.
+        keyHealthcare: a.keyHealthcare || null,
+        keyReviewed: a.keyReviewed || null,
+        keyPsic: a.keyPsic || null,
+        keyTitle: a.keyTitle || null,
+        keyCity: a.keyCity || null,
+        // A newly issued list's rows as counted (analyze.js countedEntries).
+        entries: a.entries || null,
+        records: a.records || null,
+        // The validation check's material: this reading's rows and colouring.
+        checks: a.checks || null,
+        highlights: a.highlights || null,
+        fingerprints: a.fingerprints || null,
+        modifiedAt: meta.modifiedAt || new Date(),
+        reference: REFERENCE_FILES.test(meta.path),
+      };
+      cache.set(id, entry);
 
       const prev = await files.findOne({ _id: id });
       let base = preSeason ? null : await db().collection(BASELINES).findOne({ _id: id });
@@ -312,13 +334,25 @@ async function poll(season) {
         // Read at the season's first look: this is where it starts. A file
         // that appears later in the season starts empty — all of it is new.
         base = firstLook || !prev
-          ? { _id: id, at: new Date(), version: meta.version, fingerprints: firstLook ? a.fingerprints || {} : {}, keys: firstLook ? a.keys || [] : [], counts: firstLook ? counts(a) : null }
+          ? { _id: id, at: new Date(), version: meta.version, fingerprints: firstLook ? a.fingerprints || {} : {}, highlights: firstLook ? a.highlights || {} : {}, keys: firstLook ? a.keys || [] : [], counts: firstLook ? counts(a) : null }
           : base;
         if (base) await db().collection(BASELINES).replaceOne({ _id: id }, base, { upsert: true });
       }
+      // A baseline taken before the tracker kept the colouring (of the RAW
+      // rows, or of the permit lists): what is coloured now is taken as the
+      // start, and colouring counts from here.
+      if (base && !base.highlights) {
+        base.highlights = a.highlights || {};
+        await db().collection(BASELINES).updateOne({ _id: id }, { $set: { highlights: base.highlights } });
+      }
+      entry.baseHighlights = base?.highlights || {};
+      entry.baseFingerprints = base?.fingerprints || {};
+      // The permit numbers the file held at the baseline ("already in the records").
+      entry.baseKeys = base?.keys || [];
       const baseKeys = new Set(base.keys || []);
       const compare = source.kind === 'raw' ? compareRaw(base.fingerprints, a.fingerprints) : { newSinceBaseline: (a.keys || []).filter((k) => !baseKeys.has(k)).length };
       const now = { at: new Date(), version: meta.version, counts: counts(a), compare, ...(a.iis ? { iis: a.iis } : {}) };
+      const activity = source.kind === 'raw' && prev && prev.meta?.etag !== meta.etag && !preSeason ? encodingActivity(prev, cached, a, meta) : prev?.activity || null;
       await files.replaceOne(
         { _id: id },
         {
@@ -333,6 +367,10 @@ async function poll(season) {
           meta,
           baseline: { at: base.at, version: base.version, counts: base.counts },
           current: now,
+          // The validation check's last finding (checkValidation), kept across readings.
+          validation: prev?.validation || null,
+          // A RAW file: the kinds of permit its recent saves wrote in (encodingActivity).
+          activity,
           missing: false,
         },
         { upsert: true }
@@ -359,6 +397,17 @@ async function poll(season) {
               ? { rows: d('rows'), colored: d('colored'), coloredPermit: d('coloredPermit'), permits: permitsTotal(c) - permitsTotal(p), added: compare.added - (prev.current.compare?.added || 0), modified: compare.modified - (prev.current.compare?.modified || 0) }
               : { permits: d('rows'), newSinceBaseline: compare.newSinceBaseline - (prev.current.compare?.newSinceBaseline || 0) },
         });
+        // A block of rows coloured in one go, with nothing on them changed.
+        // Against the reading before, which only memory holds (none after a restart).
+        // Not on the ECP monitoring list, which is not part of the updating.
+        const tracked = Object.keys(a.units || {}).some((u) => groupOfUnit(u) !== 'other');
+        if (source.kind === 'raw' && cached && tracked) {
+          const minutes = (new Date(meta.modifiedAt || Date.now()) - new Date(cached.modifiedAt || prev.current.at)) / 60000;
+          const bulk = bulkHighlight(cached, a, minutes);
+          if (bulk) {
+            events.push({ season: seasonId, at: meta.modifiedAt || new Date(), seenAt: new Date(), kind: 'warning', check: 'bulk', file: id, name: meta.name, source: source.label, version: meta.version, modifiedBy: meta.modifiedBy, ...bulk });
+          }
+        }
       } else if (!prev) {
         changed += 1;
       }
@@ -370,15 +419,62 @@ async function poll(season) {
     await files.updateMany({ season: seasonId, _id: { $nin: [...seen] }, missing: false }, { $set: { missing: true, missingSince: new Date() } });
   }
 
-  // The newly issued permits already written into the RAW files.
-  if (changed || firstLook) await matchPermits(seasonId);
+  // The newly issued permits already written into the RAW files, and the
+  // rows coloured without theirs (warned of from the season's start only).
+  // Also on the first look since the server started: the figures are worked
+  // out from the readings in memory, so a new way of counting (a new server)
+  // shows at once rather than at the next save.
+  const recount = changed || firstLook || !countedSince.has(seasonId);
+  if (recount) {
+    await matchPermits(seasonId);
+    events.push(...(await checkValidation(seasonId, { record: !preSeason })));
+    countedSince.add(seasonId);
+  }
 
   if (events.length) await db().collection(EVENTS).insertMany(events);
+  const warnings = events.filter((e) => e.kind === 'warning');
+  if (warnings.length) warnDevelopers(warnings);
   const set = { lastPoll: { at: new Date(), ms: Date.now() - started, changed, errors: errors.slice(0, 10) } };
   if (firstLook && !errors.length) set.baselineAt = new Date();
   await db().collection(SEASONS).updateOne({ _id: season._id }, { $set: set });
-  if (changed || firstLook) broadcast(seasonId);
+  if (recount) broadcast(seasonId);
   return { changed, errors };
+}
+
+/**
+ * A city or municipality as a key of the stored figures: as the list writes
+ * it, in capitals, single-spaced; a dot kept as a look-alike (MongoDB keys
+ * take none: "STO. TOMAS"). "(no city)" when the list has none.
+ */
+const cityKey = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\./g, '․')
+    .replace(/^\$+/, '')
+    .slice(0, 60) || '(no city)';
+
+/**
+ * One newly issued permit counted into its universe's figures (`scopes.plan`
+ * or `scopes.healthcare`) at each level it is counted at — the same issued,
+ * in the RAW data, highlighted and by-colour counts as the level's own.
+ */
+function tallyScope(levels, scope, fill, inRaw) {
+  const written = inRaw ? 1 : 0;
+  const fam = fill ? colourFamily(fill) : null;
+  for (const at of levels) {
+    const s = ((at.scopes ||= {})[scope] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {} });
+    s.issued += 1;
+    s.inRaw += written;
+    if (!fill) continue;
+    s.colored += 1;
+    s.coloredInRaw += written;
+    const f = (s.families[fam] ||= { rows: 0, inRaw: 0, shades: {} });
+    f.rows += 1;
+    f.inRaw += written;
+    f.shades[fill] = (f.shades[fill] || 0) + 1;
+  }
 }
 
 /**
@@ -390,7 +486,12 @@ async function matchPermits(seasonId) {
   const raw = new Map(); // key -> 'base' | 'erms' | 'ecconline' | 'other'
   for (const [id, c] of cache) if (id.startsWith(`${seasonId}:`) && c.kind === 'raw') for (const k of c.keys) if (!raw.has(k)) raw.set(k, c.keySource?.[k] || 'base');
   if (!raw.size) return;
-  const emptyKind = () => ({ issued: 0, inRaw: 0, bySource: { base: 0, erms: 0, ecconline: 0, other: 0 }, status: { new: 0, updated: 0, firmNew: 0 } });
+  // `colored`: the permits the masterlist holder coloured on the list (as
+  // written in); `coloredInRaw`: of those, the ones really in the RAW data.
+  // `rowColors`: the same by fill — { rgb: { rows, inRaw } }.
+  // `families`: by colour family (the workshop's green, pink, yellow, red; any
+  // other) — { family: { rows, inRaw } }.
+  const emptyKind = () => ({ issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, rowColors: {}, families: {}, bySource: { base: 0, erms: 0, ecconline: 0, other: 0 }, status: { new: 0, updated: 0, firmNew: 0 } });
   // The UCD Tracking System's "Added permits to universe", worked out: a
   // permit already in the RAW data is FIRM NEW when it came with a firm
   // added this updating (ERMS, ECC Online), UPDATED when its list says
@@ -405,15 +506,40 @@ async function matchPermits(seasonId) {
     const byProvince = {};
     const byKind = {};
     let inRaw = 0;
-    for (const k of c.keys) {
-      const p = c.keyProvince?.[k] || '(none)';
-      const kind = c.keyKind?.[k] || 'other';
-      const prov = (byProvince[p] ||= { issued: 0, inRaw: 0, byKind: {} });
-      const pk = (prov.byKind[kind] ||= { issued: 0, inRaw: 0, status: { new: 0, updated: 0, firmNew: 0 } });
+    // The list's rows as counted (analyze.js countedEntries): each its own
+    // colour, province, municipality and healthcare mark; its permit number
+    // looked for in the RAW data.
+    for (const e of c.entries || []) {
+      const k = e.k;
+      const p = e.province || '(none)';
+      const kind = e.kind || c.keyKind?.[k] || 'other';
+      const prov = (byProvince[p] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {}, byKind: {} });
+      const pk = (prov.byKind[kind] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {}, status: { new: 0, updated: 0, firmNew: 0 } });
       const kk = (byKind[kind] ||= emptyKind());
       prov.issued += 1;
       pk.issued += 1;
       kk.issued += 1;
+      const fill = e.fill;
+      if (fill) {
+        const written = raw.has(k) ? 1 : 0;
+        prov.colored += 1;
+        pk.colored += 1;
+        kk.colored += 1;
+        prov.coloredInRaw += written;
+        pk.coloredInRaw += written;
+        kk.coloredInRaw += written;
+        const shade = (kk.rowColors[fill] ||= { rows: 0, inRaw: 0 });
+        shade.rows += 1;
+        shade.inRaw += written;
+        const fam = colourFamily(fill);
+        for (const at of [prov, pk, kk]) {
+          // The family, and under it the very shades used ({ rgb: permits }).
+          const f = (at.families[fam] ||= { rows: 0, inRaw: 0, shades: {} });
+          f.rows += 1;
+          f.inRaw += written;
+          f.shades[fill] = (f.shades[fill] || 0) + 1;
+        }
+      }
       if (raw.has(k)) {
         inRaw += 1;
         prov.inRaw += 1;
@@ -424,9 +550,158 @@ async function matchPermits(seasonId) {
         kk.status[st] += 1;
         pk.status[st] += 1;
       }
+      // The same figures again within the permit's universe — the province's
+      // Monitoring Plan, or Healthcare / TSD / TRC as the list marks it — so
+      // the tiles can show either; and the mark's own counts: permits marked,
+      // permits on a sheet that carries the mark (gone through for it), and
+      // marks on an establishment whose PSIC is not of that universe.
+      const healthcare = Boolean(e.healthcare);
+      // The kind's permits again per city or municipality, as the list writes it.
+      const ck = ((pk.cities ||= {})[cityKey(e.city)] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {} });
+      ck.issued += 1;
+      if (raw.has(k)) ck.inRaw += 1;
+      if (fill) {
+        const written = raw.has(k) ? 1 : 0;
+        const fam = colourFamily(fill);
+        ck.colored += 1;
+        ck.coloredInRaw += written;
+        const f = (ck.families[fam] ||= { rows: 0, inRaw: 0, shades: {} });
+        f.rows += 1;
+        f.inRaw += written;
+        f.shades[fill] = (f.shades[fill] || 0) + 1;
+      }
+      tallyScope([prov, pk, kk, ck], healthcare ? 'healthcare' : 'plan', fill, raw.has(k));
+      for (const at of [prov, pk, kk]) {
+        if (healthcare) at.healthcare = (at.healthcare || 0) + 1;
+        if (e.reviewed) at.healthcareReviewed = (at.healthcareReviewed || 0) + 1;
+        if (healthcare && healthcarePsic(e.psic) === false) at.healthcareDoubtful = (at.healthcareDoubtful || 0) + 1;
+      }
     }
     await db().collection(FILES).updateOne({ _id: id }, { $set: { 'current.inRaw': inRaw, 'current.inRawByProvince': byProvince, 'current.inRawByKind': byKind } });
   }
+}
+
+// --- validation: colouring that does not mean what it says ---------------------
+
+/**
+ * Colouring that does not mean what it says, kept on each file's document:
+ *   the rows of each RAW file coloured since the baseline without their
+ *     newly issued permits (analyze.js unvalidatedHighlights);
+ *   the permits coloured on each newly issued list since the baseline — as
+ *     written in — that are not in the RAW data (unencodedHighlights).
+ * Returns a warning event per file with rows not flagged before (none when
+ * `record` is off: before the season starts).
+ */
+async function checkValidation(seasonId, { record = true } = {}) {
+  const raws = [];
+  const lists = [];
+  const inRaw = new Set();
+  for (const [id, c] of cache) {
+    if (!id.startsWith(`${seasonId}:`)) continue;
+    if (c.kind === 'raw') for (const k of c.keys || []) inRaw.add(k);
+    if (c.kind === 'raw' && c.checks) raws.push({ id, checks: c.checks, baseHighlights: c.baseHighlights, fingerprints: c.fingerprints, baseFingerprints: c.baseFingerprints });
+    else if (c.kind === 'permits' && !c.reference) lists.push({ id, ...c });
+  }
+  // No RAW file read: nothing to hold the lists against.
+  if (!raws.length) return [];
+  const flagged = { ...unvalidatedHighlights(raws, lists), ...unencodedHighlights(lists, inRaw) };
+  const docs = await db()
+    .collection(FILES)
+    .find({ season: seasonId, reference: { $ne: true }, missing: { $ne: true } }, { projection: { name: 1, kind: 1, meta: 1, validation: 1 } })
+    .toArray();
+  const warnings = [];
+  for (const d of docs) {
+    // A file not read this time round (it failed to download) keeps its finding.
+    const read = cache.get(d._id);
+    if (!read || (d.kind === 'raw' && !read.checks)) continue;
+    const rows = flagged[d._id] || [];
+    const idOf = (r, m) => `${r.serial || ''}|${m.permit}`;
+    const ids = rows.flatMap((r) => r.missing.map((m) => idOf(r, m)));
+    const before = new Set(d.validation?.ids || []);
+    const fresh = rows.filter((r) => r.missing.some((m) => !before.has(idOf(r, m))));
+    const same = (d.validation?.flagged || 0) === rows.length && ids.length === before.size && ids.every((x) => before.has(x));
+    if (!same) {
+      await db()
+        .collection(FILES)
+        .updateOne({ _id: d._id }, { $set: { validation: { at: new Date(), flagged: rows.length, unchanged: rows.filter((r) => r.unchanged).length, rows: rows.slice(0, 300), ids: ids.slice(0, 2000) } } });
+      invalidate();
+    }
+    if (record && fresh.length) {
+      warnings.push({
+        season: seasonId,
+        at: new Date(),
+        seenAt: new Date(),
+        kind: 'warning',
+        // A RAW row coloured without its permit; a permit coloured on its list without being in the RAW data.
+        check: d.kind === 'permits' ? 'unencoded' : 'unvalidated',
+        file: d._id,
+        name: d.name,
+        version: d.meta?.version || null,
+        modifiedBy: d.meta?.modifiedBy || null,
+        rows: fresh.length,
+        unchanged: fresh.filter((r) => r.unchanged).length,
+        ...(d.kind === 'permits' ? { notEncoded: fresh.filter((r) => r.reason === 'notEncoded').length, redInRaw: fresh.filter((r) => r.reason === 'redInRaw').length } : {}),
+        sample: fresh.slice(0, 5).map((r) => ({ serial: r.serial, sheet: r.sheet, row: r.row, title: r.title, name: r.name, reason: r.reason || null, missing: r.missing.slice(0, 2) })),
+      });
+    }
+  }
+  return warnings;
+}
+
+const fileTitle = (name) => String(name || '').replace(/\.xls[xm]?$/i, '');
+
+/** The warning's notice: a title and a line. */
+function noticeOf(w) {
+  const who = w.modifiedBy ? ` Last saved by ${w.modifiedBy}.` : '';
+  if (w.check === 'bulk') {
+    return {
+      title: 'Progress Tracker: rows highlighted in bulk',
+      body: `${w.rows} rows of ${fileTitle(w.name)} were highlighted in about ${w.minutes} min; ${w.unchanged} of them had nothing on the row changed.${who}`,
+    };
+  }
+  const first = w.sample?.[0];
+  if (w.check === 'unencoded') {
+    const example = first ? ` For example ${first.missing.map((m) => m.permit).join(', ')}${first.title ? ` (${first.title})` : ''}.` : '';
+    const notEncoded = w.notEncoded ?? w.rows;
+    const redInRaw = w.redInRaw || 0;
+    const parts = [
+      notEncoded && `${notEncoded} highlighted green, pink or yellow (written in) but not in the RAW data`,
+      redInRaw && `${redInRaw} highlighted red (firm not in the universe) but already in the RAW data`,
+    ].filter(Boolean);
+    return {
+      title: 'Progress Tracker: highlight does not match the RAW data',
+      body: `${fileTitle(w.name)}: ${parts.join('; ')}.${example}${who}`,
+    };
+  }
+  const example = first ? ` For example ${first.title || first.name || first.serial}: ${first.missing.map((m) => m.permit).join(', ')}.` : '';
+  return {
+    title: 'Progress Tracker: highlighted without validating',
+    body: `${w.rows} row${w.rows === 1 ? '' : 's'} of ${fileTitle(w.name)} ${w.rows === 1 ? 'was' : 'were'} highlighted as updated without the newly issued permit.${example}${who}`,
+  };
+}
+
+/** Tell the Developers (the tracker is theirs), on every screen and device. Not awaited. */
+function warnDevelopers(warnings) {
+  const notifier = require('../notifier');
+  const developers = async () => {
+    await connectToMongo();
+    const rows = await db().collection('users').find({ permission: { $regex: /^developer$/i } }, { projection: { username: 1 } }).toArray();
+    return rows.map((u) => u.username);
+  };
+  const url = '/e-universe/admin/progress-tracker?tab=validation';
+  // A few at most, each on its own; more than that in one notice.
+  if (warnings.length <= 3) {
+    for (const w of warnings) notifier.notifyLater(developers, { ...noticeOf(w), url, kind: 'security', tag: `progress-${w.check}-${String(w.file).slice(-24)}` });
+    return;
+  }
+  const rows = warnings.reduce((a, w) => a + (w.rows || 0), 0);
+  notifier.notifyLater(developers, {
+    title: 'Progress Tracker: validation warnings',
+    body: `${warnings.length} warnings across ${new Set(warnings.map((w) => w.file)).size} RAW files, ${rows} rows in all. Open the Validation tab.`,
+    url,
+    kind: 'security',
+    tag: 'progress-validation',
+  });
 }
 
 function broadcast(season) {
@@ -556,7 +831,17 @@ async function buildOverview(id) {
       byCategory: ['main', 'review', 'duplicate', 'delisting', 'deletion'].reduce((o, k) => ({ ...o, [k]: { baseline: add(raw, (f) => f.baseline?.counts?.byCategory?.[k]), now: add(raw, (f) => f.current?.counts?.byCategory?.[k]) } }), {}),
       permitKinds,
     },
-    permits: { files: counted.length, issued, inRaw, newSinceBaseline: add(counted, (f) => f.current?.compare?.newSinceBaseline), byProvince, byKind: issuedByKind },
+    permits: {
+      files: counted.length,
+      issued,
+      inRaw,
+      // Highlighted on the lists by the masterlist holder (as written in), and of those the ones really in the RAW data.
+      colored: Object.values(issuedByKind).reduce((a, k) => a + (k.colored || 0), 0),
+      coloredInRaw: Object.values(issuedByKind).reduce((a, k) => a + (k.coloredInRaw || 0), 0),
+      newSinceBaseline: add(counted, (f) => f.current?.compare?.newSinceBaseline),
+      byProvince,
+      byKind: issuedByKind,
+    },
   };
   // The main sheets split by where each firm came from: the baseline (on the
   // sheet before this updating) and the additions from ERMS and ECC Online,
@@ -659,8 +944,40 @@ async function buildOverview(id) {
           .map((f) => ({ ...f, shades: f.shades.sort((x, y) => y.rows - x.rows), baseline: baseFamilies[f.family] || 0, label: legend[unit]?.[f.family] || null })),
         issued: p.issued || 0,
         inRaw: p.inRaw || 0,
+        // Of the newly issued: highlighted on their lists, and of those really in the RAW data.
+        issuedColored: p.colored || 0,
+        issuedColoredInRaw: p.coloredInRaw || 0,
+        // …by colour family, as the workshop's legend reads them (masterlistLegend).
+        issuedFamilies: p.families || {},
+        // …within each universe (plan: the Monitoring Plan; healthcare: Healthcare / TSD / TRC).
+        issuedScopes: p.scopes || {},
       };
     });
+
+  // Validation: the RAW rows coloured without their newly issued permits, the
+  // permits coloured on their lists without being in the RAW data, per file,
+  // and the bulk-colouring warnings. The Developer's screen only.
+  const validation = { flagged: 0, unchanged: 0, unencoded: 0, bulk: events.filter((e) => e.kind === 'warning' && e.check === 'bulk').length, files: [] };
+  for (const f of [...raw, ...counted]) {
+    const v = f.validation;
+    if (!v?.flagged) continue;
+    if (f.kind === 'permits') validation.unencoded += v.flagged;
+    else validation.flagged += v.flagged;
+    validation.unchanged += v.unchanged || 0;
+    validation.files.push({
+      id: f._id,
+      name: f.name,
+      kind: f.kind,
+      units: f.kind === 'permits' ? Object.keys(f.current?.counts?.provinces || {}).filter((p) => p !== '(none)') : Object.keys(f.current?.counts?.units || {}).filter((u) => groupOfUnit(u) !== 'other'),
+      open: openOf(f),
+      modifiedBy: f.meta?.modifiedBy || null,
+      at: v.at,
+      flagged: v.flagged,
+      unchanged: v.unchanged || 0,
+      rows: v.rows || [],
+    });
+  }
+  validation.files.sort((a, b) => b.flagged - a.flagged);
 
   const publicFile = (f) => ({
     id: f._id,
@@ -689,8 +1006,13 @@ async function buildOverview(id) {
     notes: notesFor({ matrix, summary, stale, legend }),
     legend,
     families: FAMILIES,
+    // What each colour on the newly issued lists means (the workshop's rule),
+    // and the Developer's names for the colours the workshop does not use.
+    masterlistLegend: MASTERLIST_LEGEND,
+    masterlistNames: season.masterlistNames || {},
     files: files.filter((f) => !notTracked(f)).map(publicFile),
     events: events.map(({ _id, ...e }) => ({ id: String(_id), ...e })),
+    validation,
     defaults: { sources: DEFAULT_SOURCES },
     map: mapConfig(),
   };
@@ -717,6 +1039,29 @@ async function setLegend(id, input) {
   return legend;
 }
 
+/**
+ * The Developer's names for the colours on the newly issued lists that the
+ * workshop's legend does not use (orange, blue, purple, gray): { family:
+ * name }. Named, not judged — the RAW data is not held against them. An empty
+ * name takes the name off.
+ */
+async function setMasterlistNames(id, input) {
+  await connectToMongo();
+  const s = ObjectId.isValid(id) ? await db().collection(SEASONS).findOne({ _id: new ObjectId(id) }) : null;
+  if (!s) throw Object.assign(new Error('No such season.'), { status: 404 });
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Object.assign(new Error('The names must be given by colour.'), { status: 400 });
+  const names = {};
+  for (const [fam, label] of Object.entries(input)) {
+    const to = MERGED[fam] || fam;
+    const text = String(label ?? '').trim().slice(0, 60);
+    // Not the workshop's four.
+    if (FAMILIES.includes(to) && !MASTERLIST_LEGEND[to] && text) names[to] = text;
+  }
+  await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { masterlistNames: names, masterlistNamesUpdatedAt: new Date() } });
+  broadcast(String(s._id));
+  return names;
+}
+
 // --- the workbooks being edited now ---------------------------------------------
 //
 // SharePoint does not say, through a shared link, who has a workbook open.
@@ -736,10 +1081,43 @@ function editingNow(files, now = Date.now()) {
       kind: f.kind,
       units: Object.keys(f.current?.counts?.units || {}).filter((u) => groupOfUnit(u) !== 'other'),
       permitKinds: Object.keys(f.current?.counts?.byKind || {}),
+      // A RAW file: the permits of each kind its saves of the last minutes
+      // wrote in — "encoding" for those kinds only, not for every kind.
+      encoded: f.kind === 'raw' && f.activity?.at && now - new Date(f.activity.at).getTime() < EDITING_MS ? f.activity.kinds || {} : {},
       by: f.meta.modifiedBy || null,
       at: f.meta.modifiedAt,
       version: f.meta.version || null,
     }));
+}
+
+/**
+ * What a save of a RAW file wrote in: { at, kinds: { kind: permits } } — the
+ * permit numbers it holds that the reading before did not, by kind. Saves
+ * close together (within the editing window) add up, so a tile stays
+ * "encoding" while someone works through a list; a save that wrote no permit
+ * keeps the earlier saves' record, which then runs out. After a restart the
+ * reading before is not in memory: the counts per kind are compared instead.
+ */
+function encodingActivity(prev, before, a, meta) {
+  const kinds = {};
+  if (before?.keys) {
+    const had = new Set(before.keys);
+    for (const k of a.keys || []) {
+      if (had.has(k)) continue;
+      const kind = a.keyCells?.[k]?.[0]?.kind || 'other';
+      kinds[kind] = (kinds[kind] || 0) + 1;
+    }
+  } else {
+    for (const [kind, now] of Object.entries(a.permits || {})) {
+      const d = now - (prev.current?.counts?.permits?.[kind] || 0);
+      if (d > 0) kinds[kind] = d;
+    }
+  }
+  const at = meta.modifiedAt || new Date();
+  const was = prev.activity;
+  const recent = was?.at && new Date(at) - new Date(was.at) < EDITING_MS;
+  if (!Object.keys(kinds).length) return recent ? was : null;
+  return { at, kinds: recent ? addInto({ ...was.kinds }, kinds) : kinds };
 }
 
 // --- the Data Visualization tab's firms (Developer only) -----------------------
@@ -883,6 +1261,88 @@ async function colourTargets(seasonId = null) {
   return { files, ready: files.length > 0 || [...cache.keys()].some((k) => k.startsWith(`${sid}:`)) };
 }
 
+// --- one kind of newly issued permit, list by list (Developer only) ---------------
+//
+// The Highlighting tab's "See more": for each newly issued list of the kind,
+// every permit on it — where it sits, whom it was issued to, its colour, and
+// where it stands against the RAW data (analyze.js permitStatus) — from the
+// readings kept in memory. Permit numbers and firms: never on the public link.
+
+/** { kind, legend, files: [{ id, name, open, …, issued, byStatus, byFamily, rows }], ready }. */
+async function issuedDetail(kind, seasonId = null) {
+  const s = seasonId ? await db().collection(SEASONS).findOne({ _id: new ObjectId(seasonId) }) : await currentSeason();
+  if (!s) return { kind, legend: MASTERLIST_LEGEND, files: [], ready: false };
+  const sid = String(s._id);
+  const inRaw = new Set();
+  const atBaseline = new Set();
+  for (const [id, c] of cache) {
+    if (!id.startsWith(`${sid}:`) || c.kind !== 'raw') continue;
+    for (const k of c.keys || []) inRaw.add(k);
+    for (const k of c.baseKeys || []) atBaseline.add(k);
+  }
+  const docs = await db().collection(FILES).find({ season: sid, kind: 'permits', reference: { $ne: true }, missing: { $ne: true } }, { projection: { name: 1, path: 1, source: 1, meta: 1 } }).toArray();
+  const folderOf = Object.fromEntries((s.sources || []).map((x) => [x.key, x.link]));
+  const files = [];
+  for (const d of docs) {
+    const c = cache.get(d._id);
+    if (!c) continue;
+    const rows = [];
+    const byStatus = {};
+    const byFamily = {};
+    // The list's rows as counted (analyze.js countedEntries): one line each.
+    for (const e of c.entries || []) {
+      const k = e.k;
+      if ((e.kind || c.keyKind?.[k] || 'other') !== kind) continue;
+      const fill = e.fill || null;
+      const family = fill ? colourFamily(fill) : null;
+      const status = permitStatus(family, inRaw.has(k), atBaseline.has(k));
+      byStatus[status] = (byStatus[status] || 0) + 1;
+      const f = (byFamily[family || 'none'] ||= { rows: 0, inRaw: 0 });
+      f.rows += 1;
+      if (inRaw.has(k)) f.inRaw += 1;
+      rows.push({
+        permit: k,
+        firm: e.firm || null,
+        // What the permit is for, its industry classification, and where.
+        title: e.title || null,
+        industry: e.psic || null,
+        city: e.city || null,
+        province: e.province || null,
+        type: e.type || c.keyType?.[k] || null,
+        sheet: e.sheet || null,
+        row: e.row || null,
+        fill,
+        family,
+        inRaw: inRaw.has(k),
+        status,
+        // The row's "Healthcare / TSD / TRC Firm" column: true (Yes), false
+        // (blank), null (its sheet has no such column); `doubtful`: Yes, yet
+        // its PSIC is not of that universe.
+        healthcare: e.healthcare ? true : e.reviewed ? false : null,
+        psic: e.psic || null,
+        doubtful: Boolean(e.healthcare && healthcarePsic(e.psic) === false),
+      });
+    }
+    if (!rows.length) continue;
+    rows.sort((a, b) => String(a.sheet).localeCompare(String(b.sheet)) || (a.row || 0) - (b.row || 0));
+    files.push({
+      id: d._id,
+      name: d.name,
+      path: d.path,
+      open: { id: d._id, name: d.name, webUrl: d.meta?.webUrl || null, appUrl: d.meta?.appUrl || null, folderUrl: folderOf[d.source] || null },
+      version: d.meta?.version || null,
+      modifiedBy: d.meta?.modifiedBy || null,
+      modifiedAt: d.meta?.modifiedAt || null,
+      issued: rows.length,
+      byStatus,
+      byFamily,
+      rows,
+    });
+  }
+  files.sort((a, b) => b.issued - a.issued);
+  return { kind, legend: MASTERLIST_LEGEND, names: s.masterlistNames || {}, files, ready: [...cache.keys()].some((k) => k.startsWith(`${sid}:`)) };
+}
+
 // --- the public link ---------------------------------------------------------
 //
 // The Developer can let people without an E-Universe account follow the
@@ -980,9 +1440,11 @@ async function publicOverview(token) {
     matrix: o.matrix.map(({ files, ...u }) => u),
     notes: o.notes.map(({ ask, ...n }) => n),
     // Being updated now: the province or list, or the kind of permit list — not the file or who.
-    editing: (o.editing || []).map((e) => ({ kind: e.kind, units: e.units, permitKinds: e.permitKinds, at: e.at })),
+    editing: (o.editing || []).map((e) => ({ kind: e.kind, units: e.units, permitKinds: e.permitKinds, encoded: e.encoded, at: e.at })),
     legend: o.legend,
     families: o.families,
+    masterlistLegend: o.masterlistLegend,
+    masterlistNames: o.masterlistNames,
     map: o.map,
   };
 }
@@ -1013,6 +1475,7 @@ module.exports = {
   updateSeason,
   rebaseline,
   setLegend,
+  setMasterlistNames,
   setShare,
   publicOverview,
   vizFirms,
@@ -1020,6 +1483,7 @@ module.exports = {
   vizFirm,
   rawIis,
   colourTargets,
+  issuedDetail,
   editingNow,
   publicPoints,
   publicFirm,
@@ -1027,6 +1491,9 @@ module.exports = {
   currentSeason,
   ensureIndexes,
   compareRaw,
+  checkValidation,
+  noticeOf,
+  warnDevelopers,
   isOpen,
   isWatched,
   isPreSeason,

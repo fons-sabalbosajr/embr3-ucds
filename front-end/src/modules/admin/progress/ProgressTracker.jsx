@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Modal, Popconfirm, Progress, Row, Select, Space, Switch, Table, Tabs, Tag, Timeline, Tooltip, Typography } from "antd";
-import { CloudSyncOutlined, CopyOutlined, FolderOpenOutlined, GlobalOutlined, HistoryOutlined, LineChartOutlined, MessageOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined, SettingOutlined, SyncOutlined, UndoOutlined } from "@ant-design/icons";
+import { CloudSyncOutlined, CopyOutlined, FolderOpenOutlined, GlobalOutlined, HistoryOutlined, LineChartOutlined, MessageOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined, SafetyOutlined, SettingOutlined, SyncOutlined, UndoOutlined, WarningOutlined } from "@ant-design/icons";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -14,6 +15,7 @@ import { openVera } from "../../vera/veraService";
 import { checkNow, createSeason, getProgress, readSnapshot, rebaselineSeason, saveShare, updateSeason, writeSnapshot } from "./progressService";
 import { OpenFileButton, StackBar } from "./ProvinceMatrix";
 import TrackerView, { ACCENT } from "./TrackerView";
+import ValidationWarnings from "./ValidationWarnings";
 import { KIND_LABEL, n, pct, signed } from "./palette";
 import "./progress.css";
 
@@ -234,6 +236,7 @@ const ProgressTracker = () => {
   const [seasonId, setSeasonId] = useState(null);
   const [editing, setEditing] = useState(null); // null | "new" | "edit"
   const [sharing, setSharing] = useState(false);
+  const [, setParams] = useSearchParams();
   const [, tick] = useState(0);
   const queryKey = [...KEY, seasonId];
 
@@ -554,6 +557,19 @@ const ProgressTracker = () => {
 
   const events = (data?.events || []).slice(0, 60);
   const saves = events.filter((e) => e.kind === "save").length;
+  // Validation: rows highlighted without their newly issued permits, and bulk colouring.
+  const flagged = data?.validation?.flagged || 0;
+  const unencoded = data?.validation?.unencoded || 0;
+  const warningCount = flagged + unencoded + (data?.validation?.bulk || 0);
+  const openValidation = () =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        next.set("tab", "validation");
+        return next;
+      },
+      { replace: true }
+    );
   const activity = season && (
     <Card
       size="small"
@@ -576,10 +592,26 @@ const ProgressTracker = () => {
         <Timeline
           className="pt-timeline"
           items={events.map((e) => ({
-            color: e.kind === "baseline" ? "gray" : ACCENT,
+            color: e.kind === "baseline" ? "gray" : e.kind === "warning" ? "red" : ACCENT,
+            dot: e.kind === "warning" ? <WarningOutlined style={{ color: "#cf1322" }} /> : undefined,
             children:
               e.kind === "baseline" ? (
                 <Text type="secondary">{dayjs(e.at).format("MMM D, h:mm A")} — {e.note}</Text>
+              ) : e.kind === "warning" ? (
+                <Space direction="vertical" size={2}>
+                  <Text>
+                    <Text strong type="danger">{e.check === "bulk" ? "Highlighted in bulk" : e.check === "unencoded" ? "Highlighted but not encoded" : "Highlighted without validating"}</Text> in <Text strong>{e.name.replace(/\.xls[xm]?$/i, "")}</Text>
+                    {e.modifiedBy && <Text type="secondary"> · last saved by {e.modifiedBy}</Text>}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {dayjs(e.at).format("MMM D, h:mm A")} ·{" "}
+                    {e.check === "bulk"
+                      ? `${n(e.rows)} rows coloured in about ${n(e.minutes)} min, ${n(e.unchanged)} with nothing changed`
+                      : e.check === "unencoded"
+                        ? `${n(e.rows)} permit${e.rows === 1 ? "" : "s"} coloured on the list but not in the RAW data${e.sample?.[0] ? ` (e.g. ${e.sample[0].missing?.[0]?.permit})` : ""}`
+                        : `${n(e.rows)} row${e.rows === 1 ? "" : "s"} coloured without the newly issued permit${e.sample?.[0] ? ` (e.g. ${e.sample[0].title || e.sample[0].name || e.sample[0].serial})` : ""}`}
+                  </Text>
+                </Space>
               ) : (
                 <Space direction="vertical" size={2}>
                   <Text>
@@ -649,12 +681,41 @@ const ProgressTracker = () => {
             />
           )}
 
+          {flagged + unencoded > 0 && (
+            <Alert
+              type="error"
+              showIcon
+              icon={<WarningOutlined />}
+              message={[
+                flagged && `${n(flagged)} RAW row${flagged === 1 ? " was" : "s were"} highlighted as updated without the newly issued permit`,
+                unencoded && `${n(unencoded)} permit${unencoded === 1 ? " is" : "s are"} highlighted on the newly issued lists but not in the RAW data`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              description="Marked as done since the baseline, yet the newly issued permit is not in the RAW data: marked as validated or encoded without being so."
+              action={
+                <Button size="small" danger onClick={openValidation}>
+                  Review
+                </Button>
+              }
+            />
+          )}
+
           <TrackerView
             data={data}
             mode="admin"
             theme={mode}
             queryKey={queryKey}
             extraTabs={[
+              {
+                key: "validation",
+                label: (
+                  <span>
+                    {warningCount ? <WarningOutlined style={{ color: "#cf1322" }} /> : <SafetyOutlined />} Validation{warningCount ? ` (${warningCount})` : ""}
+                  </span>
+                ),
+                children: <ValidationWarnings validation={data?.validation} events={data?.events || []} />,
+              },
               { key: "files", label: <span><FolderOpenOutlined /> Files</span>, children: filesPane },
               { key: "activity", label: <span><HistoryOutlined /> Activity{saves ? ` (${saves})` : ""}</span>, children: activity },
             ]}

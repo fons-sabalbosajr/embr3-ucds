@@ -9,6 +9,7 @@ import { VeraFlame } from "../../vera/VeraMark";
 import DataViz from "./DataViz";
 import TrackingSummary from "./TrackingSummary";
 import ColourEncoded from "./ColourEncoded";
+import IssuedHighlighting from "./IssuedHighlighting";
 import EditingNow from "./EditingNow";
 import { ColourKey, HighlightingPanel, IssuedTable, PermitTable, StackBar, UnitTable, totalOf } from "./ProvinceMatrix";
 import { CompositionChart, IssuedKindChart, PermitKindChart, ReviewedChart } from "./charts";
@@ -437,6 +438,23 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
         accent={ACCENT}
         dark={dark}
         readOnly={!admin}
+        masterlistNames={data?.masterlistNames || {}}
+      />
+      {/* The permits the masterlist holder coloured on the newly issued lists. */}
+      <IssuedHighlighting
+        byKind={s.permits.byKind}
+        kinds={[...MAIN_KINDS, ...EXTRA_KINDS]}
+        units={byGroup[currentGroup] || []}
+        accent={ACCENT}
+        admin={admin}
+        // Live: the workbooks being edited now, and whether the tracker is reading the folders.
+        editing={data?.editing || []}
+        watching={Boolean(data?.season?.watched ?? (data?.season?.open || data?.season?.preSeason))}
+        checkedAt={data?.season?.lastPoll?.at || data?.season?.checkedAt || null}
+        // The Developer's names for the colours outside the workshop's legend (named here, admin only).
+        names={data?.masterlistNames || {}}
+        seasonId={admin ? data?.season?.id : null}
+        queryKey={queryKey}
       />
     </div>
   );
@@ -490,7 +508,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       // The UCD Tracking System's summary sheet, live.
       key: "summary",
       label: <span><ProfileOutlined /> Tracking summary</span>,
-      children: <TrackingSummary matrix={tracked} checkedAt={data?.season?.lastPoll?.at || data?.season?.checkedAt} seasonName={data?.season?.name} />,
+      children: <TrackingSummary matrix={tracked} checkedAt={data?.season?.lastPoll?.at || data?.season?.checkedAt} seasonName={data?.season?.name} names={data?.masterlistNames || {}} />,
     },
     {
       key: "dataviz",

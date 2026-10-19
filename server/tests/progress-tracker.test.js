@@ -69,6 +69,22 @@ describe('reading a RAW universe workbook', () => {
     expect(a.provinces).toEqual({ Aurora: 1, Bataan: 1 });
   });
 
+  it('counts a list by its province worksheets\' rows, as they count themselves — a number on two rows is two', () => {
+    const head = ['App No.', 'Certificate No.', 'Establishment Name', 'MUNICIPALITY/CITY', 'PROVINCE'];
+    const wb = XLSX.utils.book_new();
+    const aurora = XLSX.utils.aoa_to_sheet([head, ['1', 'DP-R03-26-00001', 'Baler Clinic', 'BALER', 'AURORA'], ['2', 'DP-R03-26-00002', 'Bay Resort', 'BALER', 'AURORA']]);
+    aurora.A2.s = { patternType: 'solid', fgColor: { rgb: '00B050' } };
+    aurora.A3.s = { patternType: 'solid', fgColor: { rgb: 'FFFF00' } };
+    XLSX.utils.book_append_sheet(wb, aurora, 'AURORA (2)');
+    // The same certificate number on two rows (two establishments): two entries.
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ['3', 'DP-R03-26-00003', 'Mill A', 'TARLAC CITY', 'TARLAC'], ['4', 'DP-R03-26-00003', 'Mill B', 'CAPAS', 'TARLAC']]), 'TARLAC (2) ');
+    // The summary sheet repeats every row: not counted again.
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ['1', 'DP-R03-26-00001'], ['2', 'DP-R03-26-00002'], ['3', 'DP-R03-26-00003'], ['4', 'DP-R03-26-00003']]), 'CONSOLIDATED');
+    const a = analyzePermits(wb);
+    expect(a).toMatchObject({ rows: 4, permits: 3, colored: 2, provinces: { Aurora: 2, Tarlac: 2 } });
+    expect(a.entries.map((e) => [e.sheet, e.row, e.city])).toEqual([['AURORA (2)', 2, 'BALER'], ['AURORA (2)', 3, 'BALER'], ['TARLAC (2) ', 2, 'TARLAC CITY'], ['TARLAC (2) ', 3, 'CAPAS']]);
+  });
+
   it('counts only the province sheet, and splits it into baseline firms and those added from ERMS and ECC Online', () => {
     const wb = rawBook([
       ['AU-1', 'Alpha Corp', 'Alpha Mill', 'Aurora', 'ECC-OL-R03-2017-0370', null, null],
@@ -187,6 +203,180 @@ describe('reading a RAW universe workbook', () => {
   });
 });
 
+describe('validation: rows highlighted without their newly issued permits', () => {
+  const { unvalidatedHighlights, bulkHighlight } = analyzeModule;
+  const fill = (ws, ref, rgb) => (ws[ref].s = { patternType: 'solid', fgColor: { rgb } });
+
+  const raw = () => {
+    const wb = rawBook([
+      ['AU-1', 'Delta Builders', 'Delta Road Widening', 'Aurora', null, null, null], // its new ECC not written in
+      ['AU-2', 'Gamma Resorts', 'Gamma Beach Resort', 'Aurora', 'ECC-OL-R03-2026-0600', null, null], // its new ECC written in
+      ['AU-3', 'Sari Store', 'Sari Sari Store', 'Aurora', null, null, null], // a name on two rows
+      ['AU-4', 'Sari Store', 'Sari Sari Store', 'Aurora', null, null, null],
+      ['AU-5', 'Omega Mills', 'Omega Rice Mill', 'Aurora', null, null, null], // not coloured
+    ]);
+    const ws = wb.Sheets.AURORA;
+    for (const r of [3, 4, 5]) fill(ws, `B${r}`, 'C6E0B4');
+    return analyzeRaw(wb);
+  };
+  const permits = analyzePermits(
+    permitsBook([
+      ['Delta Road Widening', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0564', 'Approved'],
+      ['Gamma Beach Resort', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0600', 'Approved'],
+      ['Sari Sari Store', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0601', 'Approved'],
+      ['Omega Rice Mill', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0602', 'Approved'],
+    ])
+  );
+
+  it('reads whom each newly issued permit was issued to', () => {
+    expect(permits.keyNames[permitKey('ECC-OL-R03-2026-0564')]).toEqual(['deltaroadwidening']);
+    expect(permits.keyLabel[permitKey('ECC-OL-R03-2026-0564')]).toBe('Delta Road Widening');
+  });
+
+  it('flags a row coloured since the baseline whose firm has a newly issued permit nowhere in the RAW data', () => {
+    const a = raw();
+    const flagged = unvalidatedHighlights([{ id: 'f', checks: a.checks, baseHighlights: {}, fingerprints: a.fingerprints, baseFingerprints: a.fingerprints }], [permits]);
+    expect(flagged.f.map((r) => r.serial)).toEqual(['AU-00001']);
+    expect(flagged.f[0]).toMatchObject({ sheet: 'AURORA', row: 3, unit: 'Aurora', fill: 'C6E0B4', unchanged: true, missing: [{ permit: permitKey('ECC-OL-R03-2026-0564'), kind: 'ecc', label: 'Delta Road Widening' }] });
+  });
+
+  it('leaves a row coloured as it was at the baseline, or a permit of another province', () => {
+    const a = raw();
+    const asBefore = unvalidatedHighlights([{ id: 'f', checks: a.checks, baseHighlights: a.highlights }], [permits]);
+    expect(asBefore).toEqual({});
+    const elsewhere = { ...permits, keyProvince: Object.fromEntries(permits.keys.map((k) => [k, 'Bataan'])) };
+    expect(unvalidatedHighlights([{ id: 'f', checks: a.checks, baseHighlights: {} }], [elsewhere])).toEqual({});
+  });
+
+  it('reads the permits the masterlist holder coloured on a newly issued list, once however many sheets repeat them', () => {
+    const wb = permitsBook([
+      ['Delta Road Widening', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0564', 'Approved'],
+      ['Gamma Beach Resort', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0600', 'Approved'],
+    ]);
+    // Row 4 of Sheet1 (Delta) coloured; the AURORA sheet repeats Delta, uncoloured.
+    fill(wb.Sheets.Sheet1, 'A4', 'FFFF00');
+    const a = analyzePermits(wb);
+    expect(a.colored).toBe(1);
+    expect(a.coloredByKind).toEqual({ ecc: 1 });
+    expect(a.rowColors).toEqual({ FFFF00: 1 });
+    expect(a.highlights).toEqual({ [permitKey('ECC-OL-R03-2026-0564')]: 'FFFF00' });
+    expect(a.keyAt[permitKey('ECC-OL-R03-2026-0564')]).toEqual({ sheet: 'Sheet1', row: 4 });
+  });
+
+  it('flags a permit coloured on its list since the baseline that is not in the RAW data', () => {
+    const { unencodedHighlights } = analyzeModule;
+    const delta = permitKey('ECC-OL-R03-2026-0564');
+    const gamma = permitKey('ECC-OL-R03-2026-0600');
+    const list = { ...permits, id: 'list', highlights: { [delta]: 'FFFF00', [gamma]: 'FFFF00' }, keyAt: { [delta]: { sheet: 'Sheet1', row: 4 } } };
+    // Both yellow (new permit, written in): Gamma's ECC is in the RAW data; Delta's is not.
+    const flagged = unencodedHighlights([{ ...list, baseHighlights: {} }], new Set([gamma]));
+    expect(flagged.list).toHaveLength(1);
+    expect(flagged.list[0]).toMatchObject({ reason: 'notEncoded', family: 'yellow', sheet: 'Sheet1', row: 4, unit: 'Aurora', title: 'Delta Road Widening', fill: 'FFFF00', missing: [{ permit: delta, kind: 'ecc' }] });
+    // Coloured as it was at the baseline: left.
+    expect(unencodedHighlights([{ ...list, baseHighlights: list.highlights }], new Set([gamma]))).toEqual({});
+  });
+
+  it('reads red as "firm not in the universe": expected missing from the RAW data, a mismatch when it is there', () => {
+    const { unencodedHighlights } = analyzeModule;
+    const delta = permitKey('ECC-OL-R03-2026-0564');
+    const gamma = permitKey('ECC-OL-R03-2026-0600');
+    // Red (C00000, the workshop's): Delta not in the RAW data — as it should be; Gamma in it — a mismatch.
+    const list = { ...permits, id: 'list', highlights: { [delta]: 'C00000', [gamma]: 'C00000' }, baseHighlights: {} };
+    const flagged = unencodedHighlights([list], new Set([gamma]));
+    expect(flagged.list.map((r) => [r.missing[0].permit, r.reason])).toEqual([[gamma, 'redInRaw']]);
+    // A colour the workshop does not use (blue) is not judged.
+    expect(unencodedHighlights([{ ...list, highlights: { [delta]: 'BDD7EE' } }], new Set())).toEqual({});
+  });
+
+  it("gives each permit on a newly issued list its standing, by the workshop's colours", () => {
+    const { permitStatus, colourFamily } = analyzeModule;
+    // The workshop sheet's colours.
+    expect(['B3F5D6', 'FF66CC', 'FFFF33', 'C00000'].map(colourFamily)).toEqual(['green', 'pink', 'yellow', 'red']);
+    expect(permitStatus(null, false)).toBe('todo');
+    expect(permitStatus(null, true)).toBe('unmarked');
+    expect(permitStatus('green', true, true)).toBe('ok');
+    expect(permitStatus('green', true, false)).toBe('greenButNew');
+    expect(permitStatus('pink', false)).toBe('notEncoded');
+    expect(permitStatus('yellow', true)).toBe('ok');
+    expect(permitStatus('red', false)).toBe('ok');
+    expect(permitStatus('red', true)).toBe('redInRaw');
+    expect(permitStatus('blue', true)).toBe('otherColour');
+  });
+
+  it('reads the healthcare / TSD / TRC mark from its column only: Yes (in any copy of the column) or blank', () => {
+    const { healthcarePsic } = analyzeModule;
+    const wb = XLSX.utils.book_new();
+    const head = ['Healthcare / TSD / TRC Universe', 'App No.', 'Certificate No.', 'Establishment Name', 'PSIC Code', 'PROVINCE', 'Healthcare / TSD / TRC Universe'];
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        head,
+        ['Yes', '1', 'DP-R03-26-00001', 'Mercy Hospital', 'Hospitals, clinics, nursing homes and other human health', 'BATAAN', null],
+        ['Yes', '2', 'DP-R03-26-00002', 'Big Piggery Farm', 'Animal production', 'BATAAN', null], // Yes on a farm: doubtful
+        [null, '3', 'DP-R03-26-00003', 'Town Resort', 'Hotels, motels, resorts', 'BATAAN', 'yes'], // the second copy of the column
+        [null, '4', 'DP-R03-26-00004', 'Corner Diner', 'Restaurants', 'BATAAN', null],
+      ]),
+      'BATAAN (4)'
+    );
+    // A sheet without the column: not marked, whatever its name says.
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['App No.', 'Certificate No.', 'Establishment Name', 'PROVINCE'], ['5', 'DP-R03-26-00005', 'Rice Mill', 'TARLAC']]), 'TARLAC (1)');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['App No.', 'Certificate No.', 'Establishment Name', 'PROVINCE'], ['6', 'DP-R03-26-00006', 'City Clinic', 'TARLAC']]), 'Healthcare');
+    const a = analyzePermits(wb);
+    const key = (n) => permitKey(`DP-R03-26-0000${n}`);
+    expect(Object.keys(a.keyHealthcare).sort()).toEqual([key(1), key(2), key(3)].sort());
+    expect(a.keyReviewed[key(4)]).toBe(true);
+    expect(a.keyReviewed[key(5)]).toBeUndefined();
+    expect(a).toMatchObject({ healthcare: 3, healthcareReviewed: 4 });
+    expect(a.sheets.map((s) => s.healthcareMark)).toEqual(['column', null, null]);
+    // What each permit is for, its industry and where, for See more.
+    expect(a.keyTitle[key(1)]).toBe('Mercy Hospital');
+    expect(a.keyPsic[key(2)]).toBe('Animal production');
+    expect(healthcarePsic(a.keyPsic[key(1)])).toBe(true);
+    expect(healthcarePsic(a.keyPsic[key(2)])).toBe(false);
+    expect(healthcarePsic(undefined)).toBe(null);
+
+    // Only the column: a TSD list without it marks nothing, nor does a row's colour.
+    const tsd = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(tsd, XLSX.utils.aoa_to_sheet([['App No.', 'Province', 'Sub Type', 'Registration No.', 'Name of Company'], ['1', 'BULACAN', 'Renewal', 'OL-TR-R3-14-002068', 'Waste Movers']]), 'Sheet1');
+    expect(analyzePermits(tsd)).toMatchObject({ healthcare: 0, healthcareReviewed: 0 });
+    const coloured = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Healthcare / TSD / TRC Firm', 'Certificate No.', 'Establishment Name', 'PROVINCE'],
+      ['Yes', 'DP-R03-26-00011', 'Mercy Hospital', 'BATAAN'], // Yes, coloured green by the workshop's legend
+      [null, 'DP-R03-26-00012', 'Town Resort', 'BATAAN'], // blank, coloured blue: not marked
+    ]);
+    ws.A2.s = { patternType: 'solid', fgColor: { rgb: 'B3F5D6' } };
+    ws.B3.s = { patternType: 'solid', fgColor: { rgb: '00B0F0' } };
+    XLSX.utils.book_append_sheet(coloured, ws, 'BATAAN');
+    const c = analyzePermits(coloured);
+    expect(c.healthcare).toBe(1);
+    expect(Object.keys(c.keyHealthcare)).toEqual([permitKey('DP-R03-26-00011')]);
+  });
+
+  it('leaves out the ECP monitoring list, which is not part of the updating', () => {
+    const row = { serial: 'ECP1STSEM-1', sheet: '1ST SEM 2026_ECP_monitoring', row: 3, title: 'Delta Road Widening', name: 'Delta Builders', keys: [], hl: 'FFFF00' };
+    const ecp = [{ id: 'ecp', checks: [{ ...row, unit: 'ECP · 1st sem' }], baseHighlights: {} }];
+    expect(unvalidatedHighlights(ecp, [permits])).toEqual({});
+    // The same row on a province's list is flagged.
+    const province = [{ id: 'au', checks: [{ ...row, unit: 'Aurora' }], baseHighlights: {} }];
+    expect(Object.keys(unvalidatedHighlights(province, [permits]))).toEqual(['au']);
+  });
+
+  it('warns of a save that colours a block of rows nobody changed, not of rows worked on one by one', () => {
+    const serials = Array.from({ length: 30 }, (_, i) => `AU-${i}`);
+    const fp = Object.fromEntries(serials.map((s) => [s, 'a.b.c.d']));
+    const before = { highlights: {}, fingerprints: fp };
+    const now = { highlights: Object.fromEntries(serials.map((s) => [s, 'FFFF00'])), fingerprints: fp };
+    expect(bulkHighlight(before, now, 2)).toMatchObject({ rows: 30, unchanged: 30, minutes: 2 });
+    // The same rows over an hour: someone working through them.
+    expect(bulkHighlight(before, now, 60)).toBe(null);
+    // Rows that were edited as they were coloured.
+    expect(bulkHighlight(before, { ...now, fingerprints: Object.fromEntries(serials.map((s) => [s, 'x.b.c.d'])) }, 2)).toBe(null);
+    // The tracker's own light blue (its Office Script).
+    expect(bulkHighlight(before, { ...now, highlights: Object.fromEntries(serials.map((s) => [s, '9DD9F3'])) }, 2)).toBe(null);
+  });
+});
+
 describe('a season followed through a save', () => {
   const files = new Map();
   const put = (source, path, wb, version) => files.set(`${source}|${path}`, { buf: bytes(wb), version });
@@ -255,11 +445,114 @@ describe('a season followed through a save', () => {
     expect(o.summary.permits).toMatchObject({ issued: 2, inRaw: 2 });
     const save = o.events.find((e) => e.kind === 'save');
     expect(save).toMatchObject({ version: '2.0', modifiedBy: 'Planning Officer', delta: { rows: 1, added: 1, modified: 1, permits: 1 } });
+    // Being edited, and what the save wrote in: one ECC — "encoding" on the ECC tile only.
+    const raw = o.editing.find((e) => e.kind === 'raw');
+    expect(raw.encoded).toEqual({ ecc: 1 });
 
     // Nothing saved since: nothing read again.
     const again = await tracker.poll(await tracker.currentSeason());
     expect(again.changed).toBe(0);
     expect(sharepoint.download).toHaveBeenCalledTimes(4);
+  });
+
+  it('warns when a row is highlighted without its newly issued permit, and clears once it is written in', async () => {
+    const seasonId = String(season._id);
+    const rawId = `${seasonId}:raw:MONITORING_PLAN_RAW/2026_UNIVERSE_AURORA_RAW.xlsx`;
+    // The workbooks here are written without their fills (SheetJS's free
+    // build does not write styles), so the colouring Excel would have saved
+    // is set on the reading the tracker keeps in memory.
+    const colourBeta = () => {
+      const c = tracker._cache.get(rawId);
+      const row = c.checks.find((x) => x.serial === 'AU-00002');
+      row.hl = '00B050';
+      c.highlights = { ...c.highlights, 'AU-00002': '00B050' };
+    };
+    put('permits', 'PTO/PTO 2026.xlsx', permitsBook([['Beta Farms', 'Aurora', '10/1/2026', 'PTO-OL-R03-2026-00099', 'Approved']]), '1.0');
+    // Beta Farms not written in yet; uncoloured, nothing to warn of.
+    put('raw', 'MONITORING_PLAN_RAW/2026_UNIVERSE_AURORA_RAW.xlsx', rawBook([
+      ['AU-1', 'Alpha Corp', 'Alpha Mill', 'Aurora', 'ECC-OL-R03-2017-0370', null, null],
+      ['AU-2', 'Beta Inc', 'Beta Farms', 'Aurora', null, null, null],
+      ['AU-3', 'Road Office', 'New Road', 'Aurora', 'ECC-OL-R03-2026-0564', null, null],
+    ]), '3.0');
+    await tracker.poll(await tracker.currentSeason());
+    expect((await tracker.overview()).validation.flagged).toBe(0);
+
+    // Beta Farms coloured as updated, its new PTO still not written in.
+    colourBeta();
+    const warnings = await tracker.checkValidation(seasonId);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ kind: 'warning', check: 'unvalidated', rows: 1, modifiedBy: 'Planning Officer' });
+    const o = await tracker.overview(seasonId);
+    expect(o.validation).toMatchObject({ flagged: 1 });
+    expect(o.validation.files[0].rows[0]).toMatchObject({ serial: 'AU-00002', row: 4, missing: [{ permit: permitKey('PTO-OL-R03-2026-00099'), kind: 'pto' }] });
+    // The notice names the firm and the permit it is missing.
+    expect(tracker.noticeOf(warnings[0])).toMatchObject({ title: 'Progress Tracker: highlighted without validating' });
+    expect(tracker.noticeOf(warnings[0]).body).toMatch(/Beta Farms: PTO-OL-R3-2026-99/);
+    // Looked at again: still flagged, nobody told twice.
+    expect(await tracker.checkValidation(seasonId)).toHaveLength(0);
+
+    // The masterlist holder colours Beta Farms' PTO on its list — as written
+    // in — but it is not in the RAW data yet.
+    const listId = `${seasonId}:permits:PTO/PTO 2026.xlsx`;
+    const pto = permitKey('PTO-OL-R03-2026-00099');
+    const list = tracker._cache.get(listId);
+    Object.assign(list, { highlights: { [pto]: 'FFFF00' }, baseHighlights: {} });
+    // …and on its row, which the counts read.
+    for (const e of list.entries) if (e.k === pto) e.fill = 'FFFF00';
+    const listed = await tracker.checkValidation(seasonId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ check: 'unencoded', rows: 1, notEncoded: 1, redInRaw: 0, name: 'PTO 2026.xlsx' });
+    expect(tracker.noticeOf(listed[0])).toMatchObject({ title: 'Progress Tracker: highlight does not match the RAW data' });
+    expect(tracker.noticeOf(listed[0]).body).toMatch(/1 highlighted green, pink or yellow \(written in\) but not in the RAW data/);
+    // The tile's "See more": the PTO on its list, yellow, not in the RAW data yet.
+    const detail = await tracker.issuedDetail('pto');
+    expect(detail.files[0]).toMatchObject({ name: 'PTO 2026.xlsx', issued: 1, byStatus: { notEncoded: 1 } });
+    expect(detail.files[0].rows[0]).toMatchObject({ permit: pto, firm: 'Beta Farms', title: 'Beta Farms', province: 'Aurora', family: 'yellow', inRaw: false, status: 'notEncoded' });
+    expect((await tracker.overview(seasonId)).validation).toMatchObject({ flagged: 1, unencoded: 1 });
+
+    // The PTO written in: the warning clears.
+    put('raw', 'MONITORING_PLAN_RAW/2026_UNIVERSE_AURORA_RAW.xlsx', rawBook([
+      ['AU-1', 'Alpha Corp', 'Alpha Mill', 'Aurora', 'ECC-OL-R03-2017-0370', null, null],
+      ['AU-2', 'Beta Inc', 'Beta Farms', 'Aurora', null, 'PTO-OL-R03-2026-00099', null],
+      ['AU-3', 'Road Office', 'New Road', 'Aurora', 'ECC-OL-R03-2026-0564', null, null],
+    ]), '4.0');
+    await tracker.poll(await tracker.currentSeason());
+    colourBeta();
+    expect(await tracker.checkValidation(seasonId)).toHaveLength(0);
+    const after = await tracker.overview(seasonId);
+    expect(after.validation).toMatchObject({ flagged: 0, unencoded: 0 });
+    // The Highlighting tab's count: the PTO highlighted on its list, and in the RAW data.
+    expect(after.summary.permits).toMatchObject({ colored: 1, coloredInRaw: 1 });
+    expect(after.summary.permits.byKind.pto).toMatchObject({ colored: 1, coloredInRaw: 1, rowColors: { FFFF00: { rows: 1, inRaw: 1 } }, families: { yellow: { rows: 1, inRaw: 1, shades: { FFFF00: 1 } } } });
+    expect(after.matrix.find((u) => u.unit === 'Aurora')).toMatchObject({ issuedColored: 1, issuedFamilies: { yellow: { rows: 1, inRaw: 1 } } });
+    // Per city or municipality too (this list has no city column: "(no city)").
+    expect(after.matrix.find((u) => u.unit === 'Aurora').issuedByKind.pto.cities).toMatchObject({ '(no city)': { issued: 1, colored: 1, families: { yellow: { rows: 1 } } } });
+    // No healthcare mark on these lists: every permit is the Monitoring Plan's.
+    expect(after.summary.permits.byKind.pto.scopes).toMatchObject({ plan: { issued: 1, inRaw: 1, colored: 1 } });
+    expect(after.summary.permits.byKind.pto.scopes.healthcare).toBeUndefined();
+    expect((await tracker.issuedDetail('pto')).files[0].rows[0]).toMatchObject({ inRaw: true, status: 'ok' });
+    files.delete('permits|PTO/PTO 2026.xlsx');
+  });
+
+  it('tells the Developers of a warning, as a security notice that opens the Validation tab', () => {
+    const notifier = nodeRequire('../services/notifier.js');
+    const notice = vi.spyOn(notifier, 'notifyLater').mockImplementation(() => {});
+    try {
+      tracker.warnDevelopers([{ check: 'bulk', file: 'f', name: 'AURORA_RAW.xlsx', rows: 40, unchanged: 38, minutes: 3, modifiedBy: 'Planning Officer' }]);
+      expect(notice).toHaveBeenCalledTimes(1);
+      expect(notice.mock.calls[0][1]).toMatchObject({ kind: 'security', url: '/e-universe/admin/progress-tracker?tab=validation', title: 'Progress Tracker: rows highlighted in bulk' });
+      expect(notice.mock.calls[0][1].body).toMatch(/40 rows of AURORA_RAW were highlighted in about 3 min; 38 of them had nothing on the row changed\. Last saved by Planning Officer\./);
+    } finally {
+      notice.mockRestore();
+    }
+  });
+
+  it('lets the Developer name the colours on the newly issued lists the workshop does not use, not its own four', async () => {
+    // Peach folds into orange; green is the workshop's.
+    const names = await tracker.setMasterlistNames(String(season._id), { purple: '  For endorsement  ', peach: 'Pending verification', green: 'not allowed', gray: '' });
+    expect(names).toEqual({ purple: 'For endorsement', orange: 'Pending verification' });
+    expect((await tracker.overview(String(season._id))).masterlistNames).toEqual({ purple: 'For endorsement', orange: 'Pending verification' });
+    await expect(tracker.setMasterlistNames(String(season._id), ['x'])).rejects.toMatchObject({ status: 400 });
   });
 
   it('refuses a season without dates in order, or a source that is not SharePoint', async () => {
@@ -311,6 +604,17 @@ describe('the workbooks being edited now', () => {
     const list = tracker.editingNow([file('a.xlsx', 1), file('b.xlsx', 4), file('c.xlsx', 12), file('d.xlsx', 2, { missing: true })], now);
     expect(list.map((e) => e.name)).toEqual(['a.xlsx', 'b.xlsx']);
     expect(list[0]).toMatchObject({ units: ['Bulacan'], by: 'Planning Officer', version: '9.0' });
+  });
+
+  it('says which kinds of permit a RAW file is having written in, and only for the last minutes', () => {
+    const now = Date.parse('2026-10-17T05:00:00Z');
+    const raw = (activityMinutesAgo) => ({
+      _id: 'r', name: 'r.xlsx', kind: 'raw', meta: { modifiedAt: new Date(now - 60000) }, current: { counts: { units: { Bulacan: {} } } },
+      activity: { at: new Date(now - activityMinutesAgo * 60000), kinds: { pto: 3 } },
+    });
+    expect(tracker.editingNow([raw(1)], now)[0].encoded).toEqual({ pto: 3 });
+    // Saved a minute ago, but its last permit written in ten minutes ago: open, not encoding.
+    expect(tracker.editingNow([raw(10)], now)[0].encoded).toEqual({});
   });
 
   it("lists the firms Aurora first, in the provinces' order, then by serial", async () => {

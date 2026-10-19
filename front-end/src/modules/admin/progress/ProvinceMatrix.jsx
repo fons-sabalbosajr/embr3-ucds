@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Dropdown, Empty, Input, Modal, Progress, Row, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Col, Dropdown, Empty, Input, Modal, Progress, Row, Segmented, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { BgColorsOutlined, CloudOutlined, DesktopOutlined, DownOutlined, EditOutlined, FileExcelOutlined, FolderOpenOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
 import { saveLegend } from "./progressService";
 import { FamilyChart } from "./charts";
-import { DOT_CLASS, FAMILY, KIND_LABEL, NO_COLOUR, SOURCES, addedOf, kindsShown, n, pct, permitSplit, plus, shadeName, signed, sum, unitLabel } from "./palette";
+import { DOT_CLASS, FAMILY, KIND_LABEL, MASTERLIST, MASTERLIST_FAMILY, NO_COLOUR, SOURCES, addedOf, kindsShown, n, pct, permitSplit, plus, shadeName, signed, sum, unitLabel } from "./palette";
 
 // ---------------------------------------------------------------------------
 // The old UCD Tracking System (the "tracking_v3" sheet of UCD TRACKING
@@ -545,9 +545,37 @@ function HighlightCard({ u, accent }) {
 }
 
 /** The conditional-highlighting pane for one group: a chart across the units, then a card each. */
-export function HighlightingPanel({ units, legend, families, seasonId, queryKey, accent, dark, matrix, readOnly = false }) {
+export function HighlightingPanel({ units, legend, families, seasonId, queryKey, accent, dark, matrix, readOnly = false, masterlistNames = {} }) {
   const [editing, setEditing] = useState(false);
   const shown = useMemo(() => units.filter((u) => u.rows > 0), [units]);
+  // The chart reads one newly issued list's kind at a time (a province's DP
+  // list done is not mixed with its untouched ECC or PTO lists): per province,
+  // its permits by the colour the masterlist holder gave them (the workshop's
+  // meanings), and the ones not yet highlighted. Until one is picked: the kind
+  // furthest along in its highlighting.
+  const listKinds = useMemo(() => kindsShown(() => true).filter((k) => units.some((u) => u.issuedByKind?.[k]?.issued)), [units]);
+  const [chartPicked, setChartPicked] = useState(null);
+  const coloredOf = (k) => units.reduce((a, u) => a + (u.issuedByKind?.[k]?.colored || 0), 0);
+  const chartKind = listKinds.includes(chartPicked) ? chartPicked : [...listKinds].sort((a, b) => coloredOf(b) - coloredOf(a))[0] || null;
+  const issuedUnits = useMemo(
+    () =>
+      units
+        .map((u) => ({ unit: u.unit, x: u.issuedByKind?.[chartKind] }))
+        .filter(({ x }) => x?.issued > 0)
+        .map(({ unit, x }) => ({
+          unit,
+          base: x.issued,
+          notModified: Math.max(0, x.issued - (x.colored || 0)),
+          colours: Object.entries(x.families || {}).map(([family, f]) => ({ family, rows: f.rows })),
+        })),
+    [units, chartKind]
+  );
+  const issuedFamilies = [...MASTERLIST.map((m) => m.family), ...families.filter((f) => !MASTERLIST_FAMILY[f])];
+  // The workshop's colours by their meaning; the others by the Developer's name, when named.
+  const issuedPalette = useMemo(
+    () => ({ ...Object.fromEntries(Object.entries(masterlistNames).map(([f, label]) => [f, { label, hex: FAMILY[f]?.hex }])), ...MASTERLIST_FAMILY }),
+    [masterlistNames]
+  );
   return (
     <div className="pt-pane">
       <Card
@@ -556,7 +584,29 @@ export function HighlightingPanel({ units, legend, families, seasonId, queryKey,
         title={
           <Space size={6}>
             <BgColorsOutlined />
-            Highlighted rows by colour
+            Highlighted rows by colour{chartKind ? ` · newly issued ${KIND_LABEL[chartKind] || chartKind}` : ""}
+          </Space>
+        }
+        extra={
+          listKinds.length > 1 ? (
+            <Segmented size="small" value={chartKind} onChange={setChartPicked} options={listKinds.map((k) => ({ value: k, label: KIND_LABEL[k] || k }))} />
+          ) : (
+            <Text type="secondary" className="pt-card-hint">the newly issued permit list</Text>
+          )
+        }
+      >
+        <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+          One kind of permit&rsquo;s list, per province, by the colour the masterlist holder gave each permit — green: permit found; pink: renewed permit; yellow: new permit; red: firm not in the universe. No colour comes first: not yet highlighted.
+        </Text>
+        <FamilyChart units={issuedUnits} families={issuedFamilies} dark={dark} palette={issuedPalette} noun="permits" />
+      </Card>
+      <Card
+        size="small"
+        className="pt-card"
+        title={
+          <Space size={6}>
+            <BgColorsOutlined />
+            RAW data files: rows highlighted as updated
           </Space>
         }
         extra={
@@ -567,10 +617,9 @@ export function HighlightingPanel({ units, legend, families, seasonId, queryKey,
           )
         }
       >
-        <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          No colour comes first: baseline firms not yet highlighted. Light and dark shades count as one colour; open a row below to see its shades.
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          Per province, the main sheet&rsquo;s baseline firms by the colour they were given in the RAW file. Light and dark shades count as one colour; open a row to see its shades.
         </Text>
-        <FamilyChart units={shown} families={families} dark={dark} />
       </Card>
       {shown.length ? (
         <div className="pt-hl-grid">

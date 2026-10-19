@@ -164,14 +164,19 @@ export function ReviewedChart({ units, color, dark }) {
 }
 
 /**
- * Rows per unit by the workbooks' colour: "No colour" (baseline firms not yet
- * highlighted) first, then each colour family in the legend's order.
+ * Rows per unit by the workbooks' colour: "No colour" (not yet highlighted)
+ * first, then each colour family in the order given. `palette` names and
+ * paints a family (the workshop's meanings for the newly issued lists);
+ * `noun` is what a row is ("rows", "permits").
  */
-export function FamilyChart({ units, families, dark }) {
+export function FamilyChart({ units, families, dark, palette = {}, noun = "rows" }) {
   const rows = units.filter((u) => u.base > 0 || u.colours?.length);
   if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No highlighting yet." />;
   const used = families.filter((f) => rows.some((u) => u.colours.some((c) => c.family === f)));
-  const series = [{ key: NO_COLOUR.key, label: NO_COLOUR.label, hex: NO_COLOUR.hex }, ...used.map((f) => ({ key: f, label: FAMILY[f]?.label || f, hex: FAMILY[f]?.hex || "#bfbfbf" }))];
+  const series = [
+    { key: NO_COLOUR.key, label: NO_COLOUR.label, hex: NO_COLOUR.hex },
+    ...used.map((f) => ({ key: f, label: palette[f]?.label || FAMILY[f]?.label || f, hex: palette[f]?.hex || FAMILY[f]?.hex || "#bfbfbf" })),
+  ];
   const data = rows.flatMap((u) =>
     series.map((s) => ({ unit: unitLabel(u.unit), family: s.label, white: s.key === NO_COLOUR.key, value: s.key === NO_COLOUR.key ? u.notModified : u.colours.find((c) => c.family === s.key)?.rows || 0 }))
   );
@@ -190,10 +195,10 @@ export function FamilyChart({ units, families, dark }) {
       style={{ stroke: (d) => (d.white ? NO_COLOUR.stroke : surface(dark)), lineWidth: (d) => (d.white ? 1 : 2), maxWidth: 26 }}
       axis={axisOf(dark)}
       legend={legend}
-      tooltip={{ items: [{ channel: "y", valueFormatter: (v) => `${n(v)} rows` }] }}
+      tooltip={{ items: [{ channel: "y", valueFormatter: (v) => `${n(v)} ${noun}` }] }}
       animate={grow("x")}
       interaction={interaction}
-      aria-label="Rows per province by colour, no colour first"
+      aria-label={`${noun[0].toUpperCase()}${noun.slice(1)} per province by colour, no colour first`}
     />
   );
 }

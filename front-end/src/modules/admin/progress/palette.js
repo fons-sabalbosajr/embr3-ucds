@@ -47,6 +47,56 @@ export const shadeName = (rgb) => {
   return l >= 0.82 ? "Light" : l <= 0.45 ? "Dark" : "Medium";
 };
 
+// The newly issued lists' colours, as the workshop sets them (Workshop No.
+// 1-3, "Input newly issued permits"): the masterlist holder looks each permit
+// up in the RAW data and colours its row by what they found. The swatches
+// are the workshop sheet's; the server sends the same meanings
+// (masterlistLegend) and judges each permit by them.
+export const MASTERLIST = [
+  { family: "green", label: "Permit found", hex: "#b3f5d6", text: "#1f8a55", hint: "The firm is in the universe and its permit is already in the records — cross-checked." },
+  { family: "pink", label: "Renewed permit", hex: "#ff66cc", text: "#c41d7f", hint: "The firm is in the universe and was issued a renewed permit — its permit data updated in the RAW data." },
+  { family: "yellow", label: "New permit", hex: "#ffff33", text: "#ad8b00", hint: "The firm is in the universe with no permit encoded — the newly issued permit added to the RAW data." },
+  { family: "red", label: "Firm not in the universe", hex: "#c00000", text: "#c00000", hint: "The firm is not yet in the universe — for verification with the facilitator, then endorsed." },
+];
+export const MASTERLIST_FAMILY = Object.fromEntries(MASTERLIST.map((m) => [m.family, m]));
+// A healthcare / TSD / TRC firm on a newly issued list: Yes in the list's
+// "Healthcare / TSD / TRC Firm" column (blank: not). A mark beside the
+// colour, not a colour — the row is coloured by the workshop's legend like any other.
+export const HEALTHCARE = { label: "Healthcare / TSD / TRC firms", hint: "Yes in the list's “Healthcare / TSD / TRC Firm” column. Their rows are coloured by the same legend as every other permit, and counted in the colours above." };
+/**
+ * A colour on a newly issued list: as the workshop names it; else as the
+ * Developer named it (`names`, the season's masterlistNames); else the
+ * colour's own name, marked as outside the legend.
+ */
+export const masterlistLabel = (family, names = {}) => MASTERLIST_FAMILY[family]?.label || names?.[family] || `${FAMILY[family]?.label || family} (not in the workshop's legend)`;
+/** A colour the workshop's legend does not use: one the Developer may name. */
+export const isOtherColour = (family) => !MASTERLIST_FAMILY[family];
+/** The swatch of a colour on a newly issued list: the workshop's, or the colour family's. */
+export const masterlistHex = (family) => MASTERLIST_FAMILY[family]?.hex || FAMILY[family]?.hex || "#bfbfbf";
+
+// The universe a newly issued permit belongs to, as its list marks it in the
+// "Healthcare / TSD / TRC Firm" column: Healthcare / TSD / TRC (Yes), or the
+// province's Monitoring Plan (blank).
+export const SCOPES = [
+  { key: "all", label: "All permits" },
+  { key: "plan", label: "Monitoring Plan", hint: "Permits whose “Healthcare / TSD / TRC Firm” column is blank" },
+  { key: "healthcare", label: "Healthcare / TSD / TRC", hint: "Permits with Yes in the list's “Healthcare / TSD / TRC Firm” column" },
+];
+const EMPTY_SCOPE = { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {} };
+/** A level's figures (a kind's, a province's) within a universe: its own for "all". */
+export const inScope = (x, scope) => (!scope || scope === "all" ? x || EMPTY_SCOPE : x?.scopes?.[scope] || EMPTY_SCOPE);
+
+// Where a newly issued permit stands against the RAW data (server permitStatus).
+export const PERMIT_STATUS = {
+  todo: { label: "Not yet highlighted", color: "default", hint: "No colour on the list, and not in the RAW data: not worked on yet." },
+  unmarked: { label: "In the RAW data, not highlighted", color: "blue", hint: "Already in the RAW data, but its row on the list has no colour yet." },
+  ok: { label: "Matches", color: "green", hint: "The colour and the RAW data agree." },
+  greenButNew: { label: "Green, but written in this season", color: "gold", hint: "Green means already in the records, yet the permit was not in the RAW data at the baseline: pink or yellow was meant." },
+  notEncoded: { label: "Highlighted, not in the RAW data", color: "red", hint: "Green, pink or yellow says it is in the RAW data, but it is not." },
+  redInRaw: { label: "Red, but in the RAW data", color: "red", hint: "Red says the firm is not in the universe, but the permit is already in the RAW data." },
+  otherColour: { label: "Colour not in the legend", color: "purple", hint: "A colour the workshop does not use." },
+};
+
 // "No colour" in the workbooks: the rows nobody has highlighted. Always first.
 export const NO_COLOUR = { key: "white", label: "No colour", hint: "Not yet highlighted", hex: "#ffffff", stroke: "#bfbfbf" };
 

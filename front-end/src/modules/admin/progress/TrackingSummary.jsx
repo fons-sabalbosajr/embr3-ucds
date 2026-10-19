@@ -1,10 +1,11 @@
-import { Button, Empty, Space, Tooltip, Typography } from "antd";
+import { useState } from "react";
+import { Button, Empty, Segmented, Space, Tooltip, Typography } from "antd";
 import { CopyOutlined, DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import Papa from "papaparse";
 import { message } from "../../../shared/feedback";
 import { copyText } from "../../../shared/copyText";
-import { FAMILY, n, unitLabel } from "./palette";
+import { MASTERLIST, MASTERLIST_FAMILY, NO_COLOUR, masterlistHex, masterlistLabel, n, unitLabel } from "./palette";
 
 const { Text } = Typography;
 
@@ -21,7 +22,10 @@ const { Text } = Typography;
 //   3. "Added permits to universe": of each list, the permits already in the
 //      RAW data — NEW, UPDATED (a renewal), FIRM NEW (with a firm added this
 //      updating) — their sum, the list's count and the share done;
-//   4. the conditional highlights' interpretation, colour by colour.
+//   4. the conditional highlights' interpretation, colour by colour — from
+//      the newly issued lists, as the workshop's legend reads them (green:
+//      permit found; pink: renewed; yellow: new; red: firm not in the
+//      universe), with the permits not yet highlighted.
 //
 // The sheet's hand counts (NEW / UPDATE / FIRM NEW typed against each row)
 // are worked out here: the list says new or renewal, the RAW data says on
@@ -36,6 +40,9 @@ const LISTS = [
   { key: "haz", label: "HAZ", name: "HWG ID" },
 ];
 const sumOf = (o) => Object.values(o || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+// The kinds of newly issued list the interpretation can read, and their names here.
+const HL_KINDS = ["wwdp", "pto", "haz", "ecc", "pco", "tsd", "trc", "chemical", "importer"];
+const KIND_NAME = { wwdp: "DP", pto: "PTO", haz: "HWG ID", ecc: "ECC/CNC", pco: "PCO", tsd: "TSD", trc: "TP/TRC", chemical: "Chemical", importer: "Importer" };
 
 /** A number cell: right-aligned, "—" for none when asked. */
 const Num = ({ v, dash, strong, tone }) => <td className={`ts-num${strong ? " is-strong" : ""}${tone ? ` ${tone}` : ""}`}>{dash && !v ? "—" : n(v)}</td>;
@@ -44,8 +51,12 @@ const Pct = ({ a, b }) => {
   return <td className={`ts-num ts-pct${p === null ? "" : p >= 100 ? " is-done" : p >= 50 ? " is-mid" : " is-low"}`}>{p === null ? "—" : `${p}%`}</td>;
 };
 
-export default function TrackingSummary({ matrix = [], checkedAt, seasonName }) {
+export default function TrackingSummary({ matrix = [], checkedAt, seasonName, names = {} }) {
   const units = PROVINCES.map((p) => matrix.find((u) => u.unit === p)).filter(Boolean);
+  // Block 4 reads one kind of permit's list at a time — a province's DP list
+  // done is not mixed with its untouched ECC or PTO lists. Until one is
+  // picked: the kind furthest along in its highlighting.
+  const [hlPicked, setHlPicked] = useState(null);
   if (!units.length) return <Empty description="No RAW data read yet." />;
 
   const total = (get) => units.reduce((a, u) => a + (Number(get(u)) || 0), 0);
@@ -87,6 +98,15 @@ export default function TrackingSummary({ matrix = [], checkedAt, seasonName }) 
     { key: "trc", label: "TP/TRC" },
   ].filter((k) => total((u) => issued(u, k.key).issued) > 0);
 
+  // Block 4: the newly issued lists' colours, by the workshop's meaning — one kind of permit.
+  const hlKinds = HL_KINDS.filter((k) => total((u) => u.issuedByKind?.[k]?.issued) > 0);
+  const hlKind = hlKinds.includes(hlPicked) ? hlPicked : [...hlKinds].sort((a, b) => total((u) => u.issuedByKind?.[b]?.colored) - total((u) => u.issuedByKind?.[a]?.colored))[0] || null;
+  const listOf = (u, k = hlKind) => u.issuedByKind?.[k] || {};
+  const colourOf = (u, f, k) => listOf(u, k).families?.[f]?.rows || 0;
+  const issuedOf = (u, k) => listOf(u, k).issued || 0;
+  const notYet = (u, k) => Math.max(0, issuedOf(u, k) - (listOf(u, k).colored || 0));
+  const otherColours = (u, k) => Object.entries(listOf(u, k).families || {}).filter(([f]) => !MASTERLIST_FAMILY[f]);
+
   // The whole summary as rows of text (CSV / copy).
   const asRows = () => {
     const out = [["UCD TRACKING SYSTEM SUMMARY", seasonName || "", checkedAt ? dayjs(checkedAt).format("M/D/YYYY h:mm A") : ""], [], ["Description", ...units.map((u) => unitLabel(u.unit).toUpperCase()), "TOTAL"]];
@@ -97,6 +117,15 @@ export default function TrackingSummary({ matrix = [], checkedAt, seasonName }) 
     }
     out.push([], ["MASTERLIST", ...units.map((u) => SHORT[u.unit]), "TOTAL"]);
     for (const k of masterKinds) out.push([k.label, ...units.map((u) => issued(u, k.key).issued), total((u) => issued(u, k.key).issued)]);
+    // Each kind of permit's list on its own block; the colours outside the
+    // workshop's legend found on any province's list, each its own column.
+    for (const k of hlKinds) {
+      const others = [...new Set(units.flatMap((u) => otherColours(u, k).map(([f]) => f)))];
+      out.push([], [`CONDITIONAL HIGHLIGHTS — INTERPRETATION (newly issued ${KIND_NAME[k] || k} list)`, "ISSUED", "HIGHLIGHTED", ...MASTERLIST.map((m) => `${m.family.toUpperCase()}: ${m.label}`), ...others.map((f) => `${f.toUpperCase()}: ${masterlistLabel(f, names)}`), "NOT YET HIGHLIGHTED"]);
+      for (const u of units) {
+        out.push([unitLabel(u.unit), issuedOf(u, k), listOf(u, k).colored || 0, ...MASTERLIST.map((m) => colourOf(u, m.family, k)), ...others.map((f) => colourOf(u, f, k)), notYet(u, k)]);
+      }
+    }
     out.push([], ["ADDED PERMITS TO UNIVERSE", ...LISTS.flatMap((l) => [`${l.label} NEW`, `${l.label} UPDATED`, `${l.label} FIRM NEW`, `${l.label} ACCOMP.`, `${l.label} COUNT`, `${l.label} n%`])]);
     for (const u of units) {
       out.push([
@@ -236,31 +265,80 @@ export default function TrackingSummary({ matrix = [], checkedAt, seasonName }) 
             </table>
           </div>
 
-          {/* 4. The conditional highlights, colour by colour. */}
+          {/* 4. The conditional highlights, colour by colour — the newly issued lists. */}
           <div className="ts-block">
             <table className="ts-table ts-fit ts-indicators">
               <thead>
                 <tr>
                   <th className="ts-desc" colSpan={2}>
-                    CONDITIONAL HIGHLIGHTS — INTERPRETATION
+                    <div className="ts-ind-head">
+                      <span>CONDITIONAL HIGHLIGHTS — INTERPRETATION{hlKind ? ` · ${KIND_NAME[hlKind] || hlKind}` : ""}</span>
+                      {hlKinds.length > 1 && (
+                        <Segmented size="small" value={hlKind} onChange={setHlPicked} options={hlKinds.map((k) => ({ value: k, label: KIND_NAME[k] || k }))} />
+                      )}
+                    </div>
                   </th>
+                </tr>
+                <tr>
+                  <td colSpan={2} className="ts-ind-key">
+                    {MASTERLIST.map((m) => (
+                      <Tooltip key={m.family} title={m.hint}>
+                        <span className="ts-ind">
+                          <i style={{ background: m.hex }} />
+                          {m.label}
+                        </span>
+                      </Tooltip>
+                    ))}
+                  </td>
                 </tr>
               </thead>
               <tbody>
                 {units.map((u) => (
                   <tr key={u.unit}>
-                    <td className="ts-desc">{unitLabel(u.unit)}</td>
+                    <td className="ts-desc">
+                      {unitLabel(u.unit)}
+                      {issuedOf(u) > 0 && (
+                        <Tooltip title={`${n(listOf(u).colored)} of ${n(issuedOf(u))} newly issued ${KIND_NAME[hlKind] || hlKind} highlighted`}>
+                          <div className="ts-ind-done">
+                            {n(listOf(u).colored)}/{n(issuedOf(u))}
+                          </div>
+                        </Tooltip>
+                      )}
+                    </td>
                     <td>
                       <div className="ts-ind-list">
-                        {(u.colours || []).slice(0, 5).map((c) => (
-                          <Tooltip key={c.family} title={`${n(c.rows)} rows`}>
+                        {MASTERLIST.filter((m) => colourOf(u, m.family)).map((m) => (
+                          <Tooltip key={m.family} title={`${m.label}: ${m.hint} ${n(listOf(u).families[m.family].inRaw)} of them in the RAW data.`}>
                             <span className="ts-ind">
-                              <i style={{ background: c.shades?.[0] ? `#${c.shades[0].rgb}` : FAMILY[c.family]?.hex }} />
-                              {c.label || <Text type="secondary">{FAMILY[c.family]?.label || c.family}</Text>}
+                              <i style={{ background: m.hex }} />
+                              {m.label} <b>{n(colourOf(u, m.family))}</b>
                             </span>
                           </Tooltip>
                         ))}
-                        {!u.colours?.length && <Text type="secondary">No highlighting</Text>}
+                        {otherColours(u).map(([f, x]) => (
+                          <Tooltip key={f} title={`${names[f] ? "Named for this season" : "A colour the workshop does not use"}; not checked against the RAW data.${Object.keys(x.shades || {}).length ? ` Shades: ${Object.keys(x.shades).map((s) => `#${s}`).join(", ")}.` : ""}`}>
+                            <span className="ts-ind">
+                              <i style={{ background: Object.keys(x.shades || {})[0] ? `#${Object.keys(x.shades)[0]}` : masterlistHex(f) }} />
+                              <Text type={names[f] ? undefined : "secondary"}>{masterlistLabel(f, names)}</Text> <b>{n(x.rows)}</b>
+                            </span>
+                          </Tooltip>
+                        ))}
+                        {issuedOf(u) > 0 ? (
+                          notYet(u) > 0 ? (
+                            <Tooltip title="Permits on the list with no colour yet: not worked on.">
+                              <span className="ts-ind">
+                                <i style={{ background: NO_COLOUR.hex, outline: `1px solid ${NO_COLOUR.stroke}` }} />
+                                <Text type="secondary">Not yet highlighted</Text> <b>{n(notYet(u))}</b>
+                              </span>
+                            </Tooltip>
+                          ) : (
+                            <Text strong style={{ color: "#389e0d", fontSize: 12 }}>
+                              All highlighted
+                            </Text>
+                          )
+                        ) : (
+                          <Text type="secondary">No newly issued {KIND_NAME[hlKind] || ""} list</Text>
+                        )}
                       </div>
                     </td>
                   </tr>

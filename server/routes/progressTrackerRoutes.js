@@ -68,6 +68,19 @@ router.get('/api/admin/progress-tracker/colour-targets', admin, async (req, res,
   }
 });
 
+// One kind of newly issued permit, list by list: every permit with its
+// colour and where it stands against the RAW data (the Highlighting tab's
+// "See more"). Developer only: permit numbers and firms.
+router.get('/api/admin/progress-tracker/issued/:kind', admin, async (req, res, next) => {
+  try {
+    const kind = String(req.params.kind || '').toLowerCase();
+    if (!/^[a-z]{2,12}$/.test(kind)) return res.status(400).json({ message: 'Unknown kind of permit.' });
+    res.json(await tracker.issuedDetail(kind));
+  } catch (err) {
+    fail(res, err, next);
+  }
+});
+
 router.post('/api/admin/progress-tracker/seasons', admin, async (req, res, next) => {
   try {
     const season = await tracker.createSeason(req.body || {}, principalOf(req));
@@ -103,6 +116,17 @@ router.put('/api/admin/progress-tracker/seasons/:id/legend', admin, async (req, 
   try {
     await tracker.setLegend(req.params.id, req.body?.legend);
     await audit.record(req, { domain: 'admin', action: 'progress-season-legend', label: 'progress tracker colour legend changed', collection: 'progress-seasons', documentId: req.params.id });
+    res.json(await tracker.overview(req.params.id));
+  } catch (err) {
+    fail(res, err, next);
+  }
+});
+
+// Names for the colours on the newly issued lists outside the workshop's legend.
+router.put('/api/admin/progress-tracker/seasons/:id/masterlist-names', admin, async (req, res, next) => {
+  try {
+    await tracker.setMasterlistNames(req.params.id, req.body?.names);
+    await audit.record(req, { domain: 'admin', action: 'progress-season-masterlist-names', label: 'progress tracker newly issued list colour names changed', collection: 'progress-seasons', documentId: req.params.id });
     res.json(await tracker.overview(req.params.id));
   } catch (err) {
     fail(res, err, next);
