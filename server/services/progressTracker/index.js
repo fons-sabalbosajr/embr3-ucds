@@ -35,7 +35,8 @@ const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { connectToMongo, getDb } = require('../../config/db');
 const sharepoint = require('./sharepoint');
-const { analyze, mergeUnits, addInto, groupOfUnit, unvalidatedHighlights, unencodedHighlights, bulkHighlight, colourFamily, permitStatus, healthcarePsic, MASTERLIST_LEGEND, ANALYSIS_VERSION } = require('./analyze');
+const { analyzeOff, mapLimit } = require('./analyzePool');
+const { mergeUnits, addInto, groupOfUnit, unitOf,unvalidatedHighlights, unencodedHighlights, bulkHighlight, colourFamily, permitStatus, healthcareIndex, healthcareUnitOf, notHealthcareByPsic, masterlistUnitOf, copiesOf, MASTERLIST_LEGEND, ANALYSIS_VERSION } = require('./analyze');
 const { notesFor } = require('./notes');
 
 // The matrix's column order: the provinces, then the 2027 lists that span them.
@@ -69,6 +70,8 @@ const REFERENCE_FILES = /extracted from co/i;
 // again only when its version moved. 15 s keeps the screen close to live
 // without hammering SharePoint.
 const MIN_POLL = 15;
+// Workbooks downloaded and read at once on a look (the worker pool reads two at a time).
+const READ_AT_ONCE = 3;
 const MAX_POLL = 3600;
 const DEFAULT_POLL = 30;
 
@@ -114,12 +117,29 @@ const fileId = (season, source, path) => `${season}:${source}:${path}`;
 // file id -> { etag, keys, keyProvince } — the comparison material, which is
 // not stored: after a restart the first look reads every file again.
 const cache = new Map();
+// file id -> its season baseline, as stored (read once per file, not on each save).
+const baselines = new Map();
 // The seasons whose figures this server has worked out since it started.
 const countedSince = new Set();
 /** Drop every reading in memory: the next look reads the files again and works the figures out anew. */
 function forget() {
   cache.clear();
+  baselines.clear();
   countedSince.clear();
+}
+
+// The open screens told a RAW file's firms are in as soon as it is recorded,
+// before the rest of the look (the newly issued lists, the permit matching,
+// the validation) — at most once every SOON_MS; the look's end tells them again.
+const SOON_MS = 1500;
+let soonTimer = null;
+function soon(seasonId) {
+  if (soonTimer) return;
+  soonTimer = setTimeout(() => {
+    soonTimer = null;
+    broadcast(seasonId);
+  }, SOON_MS);
+  soonTimer.unref?.();
 }
 
 let io = null;
@@ -230,7 +250,7 @@ async function takeLease(season) {
 }
 
 const counts = (a) => {
-  const { fingerprints, keys, keyProvince, keySource, keyCells, keyKind, keyType, keyNames, keyLabel, keyAt, keyHealthcare, keyReviewed, keyPsic, keyTitle, keyCity, entries, records, iis, highlights, checks, ...rest } = a;
+  const { fingerprints, keys, keyProvince, keySource, keyCells, keyKind, keyType, keyNames, keyLabel, keyAt, keyHealthcare, keyReviewed, keyPsic, keyTitle, keyCity, entries, records, classifications, iis, highlights, checks, ...rest } = a;
   return rest;
 };
 
@@ -277,12 +297,16 @@ async function poll(season) {
   const errors = [];
   const seen = new Set();
 
-  for (const source of season.sources) {
-    let listing;
-    try {
-      listing = await sharepoint.list(source.link);
-    } catch (err) {
-      errors.push(`${source.label}: ${err.message}`);
+  // The folders listed together (a few REST calls each).
+  const listings = await Promise.all(season.sources.map((s) => sharepoint.list(s.link).then((listing) => ({ listing }), (err) => ({ err }))));
+  // When, from the look's start, each stage was done (ms): kept with the look, to see where the time goes.
+  const stages = { listed: Date.now() - started };
+  // The files saved since the last look, of every source…
+  const jobs = [];
+  for (const [s, source] of season.sources.entries()) {
+    const { listing, err: listErr } = listings[s];
+    if (listErr) {
+      errors.push(`${source.label}: ${listErr.message}`);
       continue;
     }
     for (const meta of listing.files) {
@@ -290,14 +314,71 @@ async function poll(season) {
       const id = fileId(seasonId, source.key, meta.path);
       seen.add(id);
       const cached = cache.get(id);
-      if (cached && cached.etag === meta.etag) continue;
-      let a;
+      if (!cached || cached.etag !== meta.etag) jobs.push({ meta, source });
+    }
+  }
+  // …the newly issued lists first (small: under a second each, where a RAW
+  // file takes three), so their colours — "Firm not in the universe" among
+  // them — are counted before the RAW files are read…
+  jobs.sort((x, y) => (x.source.kind === 'permits' ? 0 : 1) - (y.source.kind === 'permits' ? 0 : 1));
+  let listsLeft = jobs.filter((j) => j.source.kind === 'permits').length;
+  // …and, the lists read, the permits matched against the RAW data held in
+  // memory and the screens told at once. Not on the first look since the
+  // server started: the RAW files are not all in memory yet.
+  const matchEarly = listsLeft > 0 && countedSince.has(seasonId) && !firstLook;
+  // Downloaded and read a few at a time, in worker threads (analyzePool.js):
+  // the server goes on answering meanwhile. Each is recorded as soon as it is
+  // read — one at a time, in the order they finish — and a RAW file's firms
+  // reach the open screens at once (soon), not after every other file and the
+  // permit matching.
+  let recording = Promise.resolve();
+  /**
+   * A RAW file's serials at the season's baseline: a workbook without an
+   * additions log (the healthcare lists) counts as added the firms not among
+   * them (analyze.js baselineMatcher). None on the season's first look —
+   * everything is the baseline then; a file new since then had none (all added).
+   */
+  const baseSerialsOf = async (id) => {
+    if (firstLook) return null;
+    const base = baselines.get(id) || (await db().collection(BASELINES).findOne({ _id: id }, { projection: { fingerprints: 1 } }));
+    return Object.keys(base?.fingerprints || {});
+  };
+  await mapLimit(jobs, READ_AT_ONCE, async ({ meta, source }) => {
+    let reading;
+    try {
+      const opts = { reference: REFERENCE_FILES.test(meta.path), baseSerials: source.kind === 'raw' ? await baseSerialsOf(fileId(seasonId, source.key, meta.path)) : null };
+      reading = { meta, source, a: await analyzeOff(await sharepoint.download(source.link, meta.path), source.kind, opts) };
+    } catch (err) {
+      reading = { meta, source, err };
+    }
+    recording = recording.then(async () => {
       try {
-        a = analyze(await sharepoint.download(source.link, meta.path), source.kind);
+        await record(reading);
       } catch (err) {
         errors.push(`${meta.path}: ${err.message}`);
-        continue;
       }
+      if (source.kind !== 'permits') return;
+      listsLeft -= 1;
+      if (listsLeft === 0 && matchEarly) {
+        await matchPermits(seasonId);
+        broadcast(seasonId);
+        stages.listsShown = Date.now() - started;
+      }
+    });
+  });
+  await recording;
+  stages.read = Date.now() - started;
+  stages.files = jobs.length;
+
+  /** One file's reading recorded: the cache, its document, its baseline, the activity. */
+  async function record({ meta, a, err, source }) {
+    {
+      if (err) {
+        errors.push(`${meta.path}: ${err.message}`);
+        return;
+      }
+      const id = fileId(seasonId, source.key, meta.path);
+      const cached = cache.get(id);
       const entry = {
         etag: meta.etag,
         kind: source.kind,
@@ -319,17 +400,23 @@ async function poll(season) {
         // A newly issued list's rows as counted (analyze.js countedEntries).
         entries: a.entries || null,
         records: a.records || null,
+        // A RAW workbook's standard industry classifications: the PSIC basis.
+        classifications: a.classifications || null,
         // The validation check's material: this reading's rows and colouring.
         checks: a.checks || null,
         highlights: a.highlights || null,
         fingerprints: a.fingerprints || null,
         modifiedAt: meta.modifiedAt || new Date(),
         reference: REFERENCE_FILES.test(meta.path),
+        // A working copy of another list (matchPermits works it out again after the look).
+        copyOf: cached?.copyOf || null,
       };
       cache.set(id, entry);
 
       const prev = await files.findOne({ _id: id });
-      let base = preSeason ? null : await db().collection(BASELINES).findOne({ _id: id });
+      // The baseline does not change during the season: read once, then kept
+      // (a large province's is half a megabyte, read again on every save before).
+      let base = preSeason ? null : baselines.get(id) || (await db().collection(BASELINES).findOne({ _id: id }));
       if (!base) {
         // Read at the season's first look: this is where it starts. A file
         // that appears later in the season starts empty — all of it is new.
@@ -345,13 +432,26 @@ async function poll(season) {
         base.highlights = a.highlights || {};
         await db().collection(BASELINES).updateOne({ _id: id }, { $set: { highlights: base.highlights } });
       }
+      if (base && !preSeason) baselines.set(id, base);
       entry.baseHighlights = base?.highlights || {};
       entry.baseFingerprints = base?.fingerprints || {};
       // The permit numbers the file held at the baseline ("already in the records").
       entry.baseKeys = base?.keys || [];
       const baseKeys = new Set(base.keys || []);
       const compare = source.kind === 'raw' ? compareRaw(base.fingerprints, a.fingerprints) : { newSinceBaseline: (a.keys || []).filter((k) => !baseKeys.has(k)).length };
-      const now = { at: new Date(), version: meta.version, counts: counts(a), compare, ...(a.iis ? { iis: a.iis } : {}) };
+      const now = {
+        at: new Date(),
+        version: meta.version,
+        counts: counts(a),
+        compare,
+        ...(a.iis ? { iis: a.iis } : {}),
+        // A list's permits matched against the RAW data, as last worked out —
+        // kept until matchPermits works them out again, so a screen told of a
+        // save meanwhile never sees the list at nought.
+        ...(source.kind === 'permits' && prev?.current?.inRawByKind
+          ? { inRaw: prev.current.inRaw, inRawByProvince: prev.current.inRawByProvince, inRawByKind: prev.current.inRawByKind }
+          : {}),
+      };
       const activity = source.kind === 'raw' && prev && prev.meta?.etag !== meta.etag && !preSeason ? encodingActivity(prev, cached, a, meta) : prev?.activity || null;
       await files.replaceOne(
         { _id: id },
@@ -364,6 +464,7 @@ async function poll(season) {
           path: meta.path,
           name: meta.name,
           reference: REFERENCE_FILES.test(meta.path),
+          copyOf: entry.copyOf,
           meta,
           baseline: { at: base.at, version: base.version, counts: base.counts },
           current: now,
@@ -375,6 +476,8 @@ async function poll(season) {
         },
         { upsert: true }
       );
+      // Its firms — the count, the added ones — on the screens now, not at the look's end.
+      if (source.kind === 'raw') soon(seasonId);
       // A save since the last reading: what it changed.
       if (prev?.current && prev.meta?.etag !== meta.etag && !preSeason) {
         changed += 1;
@@ -427,17 +530,23 @@ async function poll(season) {
   const recount = changed || firstLook || !countedSince.has(seasonId);
   if (recount) {
     await matchPermits(seasonId);
+    stages.matched = Date.now() - started;
+    // The figures on the screens now: the validation below (several seconds
+    // on a busy look) only adds its warnings, told when it is done.
+    broadcast(seasonId);
     events.push(...(await checkValidation(seasonId, { record: !preSeason })));
+    stages.validated = Date.now() - started;
     countedSince.add(seasonId);
   }
 
   if (events.length) await db().collection(EVENTS).insertMany(events);
   const warnings = events.filter((e) => e.kind === 'warning');
   if (warnings.length) warnDevelopers(warnings);
-  const set = { lastPoll: { at: new Date(), ms: Date.now() - started, changed, errors: errors.slice(0, 10) } };
+  const set = { lastPoll: { at: new Date(), ms: Date.now() - started, changed, errors: errors.slice(0, 10), stages } };
   if (firstLook && !errors.length) set.baselineAt = new Date();
   await db().collection(SEASONS).updateOne({ _id: season._id }, { $set: set });
-  if (recount) broadcast(seasonId);
+  // Told again only for what the validation and the activity added.
+  if (recount && events.length) broadcast(seasonId);
   return { changed, errors };
 }
 
@@ -478,14 +587,90 @@ function tallyScope(levels, scope, fill, inRaw) {
 }
 
 /**
+ * The season's healthcare universe from the RAW readings in memory: the
+ * healthcare lists' permits and firms, and the PSIC basis (the workbooks'
+ * standard classifications, judged by where their firms are). analyze.js healthcareIndex.
+ */
+function seasonHealthcareIndex(seasonId) {
+  const raws = [...cache].filter(([id, c]) => id.startsWith(`${seasonId}:`) && c.kind === 'raw').map(([, c]) => c);
+  return healthcareIndex(
+    raws.map((c) => c.checks),
+    raws.map((c) => c.records),
+    raws.map((c) => c.classifications || [])
+  );
+}
+
+/**
+ * The four healthcare lists (Healthcare Industries, Chemical permits, TSD /
+ * TRC, Importers) by kind of permit — ECC/CNC, PTO, WWDP, HW ID — with the
+ * duplicates taken out. One establishment is often on several lists (a
+ * hospital also on Chemical permits; a firm on both TSD and TRC), and a
+ * permit number now and then on two rows of one list: each counts once.
+ * Per list: the numbers listed and the distinct ones; across the four: the
+ * distinct ones (the total), and the numbers on more than one row, with
+ * where — for the Planning Unit to clear them from the workbooks.
+ */
+const HC_PERMIT_KINDS = ['ecc', 'pto', 'wwdp', 'haz'];
+function healthcarePermits(seasonId) {
+  const empty = () => Object.fromEntries(HC_PERMIT_KINDS.map((k) => [k, { listed: 0, keys: new Set() }]));
+  const units = {};
+  const where = Object.fromEntries(HC_PERMIT_KINDS.map((k) => [k, new Map()])); // kind -> permit -> [{ unit, serial }]
+  for (const [id, c] of cache) {
+    if (!id.startsWith(`${seasonId}:`) || c.kind !== 'raw' || !c.keyCells) continue;
+    for (const [key, cells] of Object.entries(c.keyCells)) {
+      for (const cell of cells) {
+        if (!HC_PERMIT_KINDS.includes(cell.kind)) continue;
+        const unit = unitOf(String(cell.serial || ''), null);
+        if (groupOfUnit(unit) !== 'healthcare') continue;
+        const u = (units[unit] ||= empty())[cell.kind];
+        u.listed += 1;
+        u.keys.add(key);
+        const at = where[cell.kind].get(key) || [];
+        if (!at.some((w) => w.serial === cell.serial)) at.push({ unit, serial: cell.serial });
+        where[cell.kind].set(key, at);
+      }
+    }
+  }
+  const count = (k) => ({ listed: k.listed, distinct: k.keys.size });
+  const total = Object.fromEntries(
+    HC_PERMIT_KINDS.map((kind) => [kind, { listed: Object.values(units).reduce((a, u) => a + u[kind].listed, 0), distinct: where[kind].size }])
+  );
+  const duplicates = HC_PERMIT_KINDS.flatMap((kind) =>
+    [...where[kind]].filter(([, at]) => at.length > 1).map(([permit, at]) => ({ kind, permit, at, across: new Set(at.map((w) => w.unit)).size > 1 }))
+  );
+  return {
+    kinds: HC_PERMIT_KINDS,
+    units: Object.entries(units)
+      .map(([unit, kinds]) => ({ unit, kinds: Object.fromEntries(HC_PERMIT_KINDS.map((k) => [k, count(kinds[k])])) }))
+      .sort((a, b) => UNIT_ORDER.indexOf(a.unit) - UNIT_ORDER.indexOf(b.unit)),
+    total,
+    duplicateCount: duplicates.length,
+    duplicates: duplicates.slice(0, 1000),
+  };
+}
+
+/**
  * The newly issued permits already in the RAW data: per file, by province and
  * by kind of permit, and — of those found — whether they sit on a baseline
  * firm or on one added from ERMS or ECC Online.
  */
 async function matchPermits(seasonId) {
+  // Working copies of a list (its rows set aside for someone to check): shown
+  // in the Files tab, not counted — their permits are the list's own.
+  const lists = [...cache].filter(([id, c]) => id.startsWith(`${seasonId}:`) && c.kind === 'permits' && !c.reference);
+  const copies = copiesOf(lists.map(([id, c]) => ({ id, name: (id.split(':').pop() || '').split('/').pop(), keys: c.keys, rows: (c.entries || []).length })));
+  for (const [id, c] of lists) {
+    const copyOf = copies[id] || null;
+    if ((c.copyOf || null) === copyOf) continue;
+    c.copyOf = copyOf;
+    await db().collection(FILES).updateOne({ _id: id }, { $set: { copyOf } });
+  }
   const raw = new Map(); // key -> 'base' | 'erms' | 'ecconline' | 'other'
   for (const [id, c] of cache) if (id.startsWith(`${seasonId}:`) && c.kind === 'raw') for (const k of c.keys) if (!raw.has(k)) raw.set(k, c.keySource?.[k] || 'base');
   if (!raw.size) return;
+  // The healthcare universe in the RAW data: a newly issued permit of it is
+  // counted under its healthcare list, apart from the Monitoring Plan's provinces.
+  const hcIndex = seasonHealthcareIndex(seasonId);
   // `colored`: the permits the masterlist holder coloured on the list (as
   // written in); `coloredInRaw`: of those, the ones really in the RAW data.
   // `rowColors`: the same by fill — { rgb: { rows, inRaw } }.
@@ -502,7 +687,7 @@ async function matchPermits(seasonId) {
     return c.keyType?.[k] === 'renewal' ? 'updated' : 'new';
   };
   for (const [id, c] of cache) {
-    if (!id.startsWith(`${seasonId}:`) || c.kind !== 'permits') continue;
+    if (!id.startsWith(`${seasonId}:`) || c.kind !== 'permits' || c.copyOf) continue;
     const byProvince = {};
     const byKind = {};
     let inRaw = 0;
@@ -511,14 +696,23 @@ async function matchPermits(seasonId) {
     // looked for in the RAW data.
     for (const e of c.entries || []) {
       const k = e.k;
-      const p = e.province || '(none)';
       const kind = e.kind || c.keyKind?.[k] || 'other';
+      // Counted as the list's own sheets count it (analyze.js
+      // masterlistUnitOf): a province sheet's rows under that province, the
+      // healthcare firms the list keeps apart under their healthcare list.
+      const names = c.keyNames?.[k] || [];
+      const p = masterlistUnitOf({ ...e, kind }, hcIndex, names);
+      // Of the healthcare universe (marked, TSD / TRC, or on the healthcare
+      // RAW lists): a breakdown within the unit — the Universe switch.
+      const hcUnit = healthcareUnitOf({ ...e, kind }, hcIndex, names);
       const prov = (byProvince[p] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {}, byKind: {} });
       const pk = (prov.byKind[kind] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {}, status: { new: 0, updated: 0, firmNew: 0 } });
       const kk = (byKind[kind] ||= emptyKind());
       prov.issued += 1;
       pk.issued += 1;
       kk.issued += 1;
+      // Sanitary landfills: counted as the sheet counts them, shown apart.
+      if (e.landfill) for (const at of [prov, pk, kk]) at.landfills = (at.landfills || 0) + 1;
       const fill = e.fill;
       if (fill) {
         const written = raw.has(k) ? 1 : 0;
@@ -555,7 +749,7 @@ async function matchPermits(seasonId) {
       // the tiles can show either; and the mark's own counts: permits marked,
       // permits on a sheet that carries the mark (gone through for it), and
       // marks on an establishment whose PSIC is not of that universe.
-      const healthcare = Boolean(e.healthcare);
+      const healthcare = Boolean(hcUnit);
       // The kind's permits again per city or municipality, as the list writes it.
       const ck = ((pk.cities ||= {})[cityKey(e.city)] ||= { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {} });
       ck.issued += 1;
@@ -574,9 +768,14 @@ async function matchPermits(seasonId) {
       for (const at of [prov, pk, kk]) {
         if (healthcare) at.healthcare = (at.healthcare || 0) + 1;
         if (e.reviewed) at.healthcareReviewed = (at.healthcareReviewed || 0) + 1;
-        if (healthcare && healthcarePsic(e.psic) === false) at.healthcareDoubtful = (at.healthcareDoubtful || 0) + 1;
+        if (notHealthcareByPsic({ ...e, kind }, hcIndex)) at.healthcareDoubtful = (at.healthcareDoubtful || 0) + 1;
       }
     }
+    // Written only when they changed: a look that read only RAW files often
+    // leaves most lists' figures as they were.
+    const sig = JSON.stringify([inRaw, byProvince, byKind]);
+    if (c.matchSig === sig) continue;
+    c.matchSig = sig;
     await db().collection(FILES).updateOne({ _id: id }, { $set: { 'current.inRaw': inRaw, 'current.inRawByProvince': byProvince, 'current.inRawByKind': byKind } });
   }
 }
@@ -600,7 +799,7 @@ async function checkValidation(seasonId, { record = true } = {}) {
     if (!id.startsWith(`${seasonId}:`)) continue;
     if (c.kind === 'raw') for (const k of c.keys || []) inRaw.add(k);
     if (c.kind === 'raw' && c.checks) raws.push({ id, checks: c.checks, baseHighlights: c.baseHighlights, fingerprints: c.fingerprints, baseFingerprints: c.baseFingerprints });
-    else if (c.kind === 'permits' && !c.reference) lists.push({ id, ...c });
+    else if (c.kind === 'permits' && !c.reference && !c.copyOf) lists.push({ id, ...c });
   }
   // No RAW file read: nothing to hold the lists against.
   if (!raws.length) return [];
@@ -666,7 +865,7 @@ function noticeOf(w) {
     const redInRaw = w.redInRaw || 0;
     const parts = [
       notEncoded && `${notEncoded} highlighted green, pink or yellow (written in) but not in the RAW data`,
-      redInRaw && `${redInRaw} highlighted red (firm not in the universe) but already in the RAW data`,
+      redInRaw && `${redInRaw} highlighted red (firm not in the universe) but already in the RAW data — to turn orange (firm added in the universe RAW)`,
     ].filter(Boolean);
     return {
       title: 'Progress Tracker: highlight does not match the RAW data',
@@ -799,7 +998,8 @@ async function buildOverview(id) {
   const kinds = ['ecc', 'pto', 'wwdp', 'haz', 'pco', 'chemical', 'importer', 'tsd', 'trc'];
   const permitKinds = Object.fromEntries(kinds.map((k) => [k, { baseline: add(raw, (f) => f.baseline?.counts?.permits?.[k]), now: add(raw, (f) => f.current?.counts?.permits?.[k]) }]));
 
-  const counted = permits.filter((f) => !f.reference);
+  // Not the reference extracts, nor a working copy of another list (matchPermits).
+  const counted = permits.filter((f) => !f.reference && !f.copyOf);
   const issued = add(counted, (f) => f.current?.counts?.rows);
   const inRaw = add(counted, (f) => f.current?.inRaw);
   // By province (each with its kinds of permit), and by kind of permit (each
@@ -839,6 +1039,8 @@ async function buildOverview(id) {
       colored: Object.values(issuedByKind).reduce((a, k) => a + (k.colored || 0), 0),
       coloredInRaw: Object.values(issuedByKind).reduce((a, k) => a + (k.coloredInRaw || 0), 0),
       newSinceBaseline: add(counted, (f) => f.current?.compare?.newSinceBaseline),
+      // Sanitary landfills' permits on the lists: left out of every count above.
+      landfills: add(counted, (f) => f.current?.counts?.landfills),
       byProvince,
       byKind: issuedByKind,
     },
@@ -879,7 +1081,11 @@ async function buildOverview(id) {
   // already written in.
   const nowUnits = mergeUnits(raw.map((f) => f.current?.counts?.units));
   const baseUnits = mergeUnits(raw.map((f) => f.baseline?.counts?.units));
-  const legend = normaliseLegend(season.legend || DEFAULT_LEGEND);
+  // The family legend the Developer saved for the season, if any. The old
+  // UCD Tracking System's (DEFAULT_LEGEND) no longer stands in for it: its
+  // meanings were that sheet's, not the RAW files' (the colours are named
+  // one by one now: rawColourNames).
+  const legend = normaliseLegend(season.legend || {});
   const sourceLink = Object.fromEntries((season.sources || []).map((x) => [x.key, x.link]));
   const openOf = (f) => ({ id: f._id, name: f.name, webUrl: f.meta?.webUrl || null, appUrl: f.meta?.appUrl || null, folderUrl: sourceLink[f.source] || null });
   const unitFiles = {};
@@ -942,6 +1148,12 @@ async function buildOverview(id) {
         colours: Object.values(families)
           .sort((x, y) => FAMILIES.indexOf(x.family) - FAMILIES.indexOf(y.family))
           .map((f) => ({ ...f, shades: f.shades.sort((x, y) => y.rows - x.rows), baseline: baseFamilies[f.family] || 0, label: legend[unit]?.[f.family] || null })),
+        // The very fills the RAW file's main sheet uses, as Excel shows them (no
+        // shades merged): each with its rows, its rows at the baseline, and the
+        // name the Developer gave it (rawColourNameOf).
+        fills: Object.entries(u.rowColors || {})
+          .map(([rgb, rows]) => ({ rgb, rows, family: colourFamily(rgb), baseline: b.rowColors?.[rgb] || 0, label: rawColourNameOf(season.rawColourNames, unit, rgb) }))
+          .sort((x, y) => y.rows - x.rows || x.rgb.localeCompare(y.rgb)),
         issued: p.issued || 0,
         inRaw: p.inRaw || 0,
         // Of the newly issued: highlighted on their lists, and of those really in the RAW data.
@@ -979,6 +1191,25 @@ async function buildOverview(id) {
   }
   validation.files.sort((a, b) => b.flagged - a.flagged);
 
+  // A file as the Files tab shows it: its reading's counts and sheets, not the
+  // per-unit and per-province detail the matrix and the summary already carry
+  // (half the page's weight, sent on every refresh of every open screen).
+  const slimCounts = (c) =>
+    c && {
+      rows: c.rows,
+      base: c.base,
+      added: c.added,
+      colored: c.colored,
+      coloredPermit: c.coloredPermit,
+      withPermit: c.withPermit,
+      permits: c.permits,
+      byKind: c.byKind,
+      landfills: c.landfills,
+      mainSheet: c.mainSheet,
+      sheets: c.sheets,
+      // Which units the file holds (the Files tab groups by them), without their figures.
+      units: Object.fromEntries(Object.keys(c.units || {}).map((u) => [u, true])),
+    };
   const publicFile = (f) => ({
     id: f._id,
     source: f.source,
@@ -987,11 +1218,18 @@ async function buildOverview(id) {
     path: f.path,
     name: f.name,
     reference: f.reference,
+    copyOf: f.copyOf || null,
     missing: f.missing,
     meta: f.meta,
     open: openOf(f),
-    baseline: f.baseline,
-    current: f.current && { ...f.current, compare: f.current.compare && { ...f.current.compare, addedSerials: undefined, modifiedSerials: undefined } },
+    baseline: f.baseline && { at: f.baseline.at, version: f.baseline.version },
+    current: f.current && {
+      at: f.current.at,
+      version: f.current.version,
+      inRaw: f.current.inRaw,
+      counts: slimCounts(f.current.counts),
+      compare: f.current.compare && { ...f.current.compare, addedSerials: undefined, modifiedSerials: undefined },
+    },
   });
 
   const { lease, ...s } = season;
@@ -1000,6 +1238,8 @@ async function buildOverview(id) {
     seasons: seasons.map((x) => ({ id: String(x._id), name: x.name, status: x.status, startsAt: x.startsAt, endsAt: x.endsAt })),
     summary,
     matrix,
+    // The healthcare lists by kind of permit, duplicates removed (healthcarePermits).
+    healthcarePermits: healthcarePermits(sid),
     // The workbooks someone is editing now (Excel saved them in the last minutes).
     editing: editingNow(files),
     // VERA's tracking notes: what stands out, as plain sentences.
@@ -1037,6 +1277,48 @@ async function setLegend(id, input) {
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { legend, legendUpdatedAt: new Date() } });
   broadcast(String(s._id));
   return legend;
+}
+
+// A RAW file's colour names: per province, or for every province ('*'); a
+// province's own name wins.
+const ALL_UNITS = '*';
+const rawColourNameOf = (names, unit, rgb) => names?.[unit]?.[rgb] || names?.[ALL_UNITS]?.[rgb] || null;
+
+/**
+ * Name one colour of the RAW files' main sheets — what it means when a row is
+ * filled with it. `unit`: the province (or list) it is named for; `allUnits`:
+ * for every province instead (its own names for the colour taken off). An
+ * empty label takes the name off. Stored on the season: rawColourNames
+ * { unit | '*': { RGB: label } }.
+ */
+async function setRawColourName(id, input) {
+  await connectToMongo();
+  const s = ObjectId.isValid(id) ? await db().collection(SEASONS).findOne({ _id: new ObjectId(id) }) : null;
+  if (!s) throw Object.assign(new Error('No such season.'), { status: 404 });
+  const rgb = String(input?.rgb || '').replace(/^#/, '').toUpperCase();
+  if (!/^[0-9A-F]{6}$/.test(rgb)) throw Object.assign(new Error('Name a colour by its RGB (e.g. FFFF00).'), { status: 400 });
+  const unit = String(input?.unit || '').trim().slice(0, 40);
+  if (!input?.allUnits && (!unit || unit === ALL_UNITS)) throw Object.assign(new Error('Say which province the name is for.'), { status: 400 });
+  const label = String(input?.label ?? '').trim().slice(0, 80);
+  const names = JSON.parse(JSON.stringify(s.rawColourNames || {}));
+  const put = (key) => {
+    if (label) (names[key] ||= {})[rgb] = label;
+    else if (names[key]) delete names[key][rgb];
+    if (names[key] && !Object.keys(names[key]).length) delete names[key];
+  };
+  if (input?.allUnits) {
+    put(ALL_UNITS);
+    // Every province reads the shared name from now on.
+    for (const key of Object.keys(names)) if (key !== ALL_UNITS && names[key]?.[rgb] !== undefined) {
+      delete names[key][rgb];
+      if (!Object.keys(names[key]).length) delete names[key];
+    }
+  } else {
+    put(unit);
+  }
+  await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { rawColourNames: names, rawColourNamesUpdatedAt: new Date() } });
+  broadcast(String(s._id));
+  return names;
 }
 
 /**
@@ -1235,7 +1517,7 @@ async function colourTargets(seasonId = null) {
   // The newly issued permits (not the reference extracts), with their kind and list.
   const issued = new Map(); // key -> { kind, type }
   for (const [id, c] of cache) {
-    if (!id.startsWith(`${sid}:`) || c.kind !== 'permits' || c.reference) continue;
+    if (!id.startsWith(`${sid}:`) || c.kind !== 'permits' || c.reference || c.copyOf) continue;
     for (const k of c.keys) if (!issued.has(k)) issued.set(k, { kind: c.keyKind?.[k] || 'other', type: c.keyType?.[k] || null });
   }
   const docs = await db().collection(FILES).find({ season: sid, kind: 'raw', missing: { $ne: true } }, { projection: { name: 1, meta: 1, 'current.counts.units': 1 } }).toArray();
@@ -1280,12 +1562,13 @@ async function issuedDetail(kind, seasonId = null) {
     for (const k of c.keys || []) inRaw.add(k);
     for (const k of c.baseKeys || []) atBaseline.add(k);
   }
+  const hcIndex = seasonHealthcareIndex(sid);
   const docs = await db().collection(FILES).find({ season: sid, kind: 'permits', reference: { $ne: true }, missing: { $ne: true } }, { projection: { name: 1, path: 1, source: 1, meta: 1 } }).toArray();
   const folderOf = Object.fromEntries((s.sources || []).map((x) => [x.key, x.link]));
   const files = [];
   for (const d of docs) {
     const c = cache.get(d._id);
-    if (!c) continue;
+    if (!c || c.copyOf) continue;
     const rows = [];
     const byStatus = {};
     const byFamily = {};
@@ -1319,8 +1602,13 @@ async function issuedDetail(kind, seasonId = null) {
         // (blank), null (its sheet has no such column); `doubtful`: Yes, yet
         // its PSIC is not of that universe.
         healthcare: e.healthcare ? true : e.reviewed ? false : null,
+        // The healthcare list it is counted under (null: the Monitoring Plan's province).
+        hcUnit: healthcareUnitOf({ ...e, kind }, hcIndex, c.keyNames?.[k] || []),
         psic: e.psic || null,
-        doubtful: Boolean(e.healthcare && healthcarePsic(e.psic) === false),
+        // Marked, yet its PSIC Code names a RAW classification that is not a
+        // healthcare one: that classification, for See more to say so.
+        psicClass: hcIndex.classify(e.psic)?.label || null,
+        doubtful: Boolean(notHealthcareByPsic({ ...e, kind }, hcIndex)),
       });
     }
     if (!rows.length) continue;
@@ -1340,7 +1628,15 @@ async function issuedDetail(kind, seasonId = null) {
     });
   }
   files.sort((a, b) => b.issued - a.issued);
-  return { kind, legend: MASTERLIST_LEGEND, names: s.masterlistNames || {}, files, ready: [...cache.keys()].some((k) => k.startsWith(`${sid}:`)) };
+  return {
+    kind,
+    legend: MASTERLIST_LEGEND,
+    names: s.masterlistNames || {},
+    // The PSIC basis, to show: the RAW data's classifications counted as healthcare ones.
+    healthcareClasses: hcIndex.classify.healthcareClasses || [],
+    files,
+    ready: [...cache.keys()].some((k) => k.startsWith(`${sid}:`)),
+  };
 }
 
 // --- the public link ---------------------------------------------------------
@@ -1438,6 +1734,8 @@ async function publicOverview(token) {
     summary: o.summary,
     // The figures per province and list, without the workbooks behind them.
     matrix: o.matrix.map(({ files, ...u }) => u),
+    // The counts only: no permit number, no serial.
+    healthcarePermits: o.healthcarePermits && { ...o.healthcarePermits, duplicates: [] },
     notes: o.notes.map(({ ask, ...n }) => n),
     // Being updated now: the province or list, or the kind of permit list — not the file or who.
     editing: (o.editing || []).map((e) => ({ kind: e.kind, units: e.units, permitKinds: e.permitKinds, encoded: e.encoded, at: e.at })),
@@ -1476,6 +1774,7 @@ module.exports = {
   rebaseline,
   setLegend,
   setMasterlistNames,
+  setRawColourName,
   setShare,
   publicOverview,
   vizFirms,
@@ -1500,4 +1799,5 @@ module.exports = {
   colourFamily,
   DEFAULT_LEGEND,
   _cache: cache,
+  _healthcarePermits: healthcarePermits,
 };

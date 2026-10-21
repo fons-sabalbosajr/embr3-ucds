@@ -36,6 +36,14 @@ const permitsBook = (rows) => {
   return wb;
 };
 const bytes = (wb) => XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+/** A newly issued list's row coloured as the masterlist holder does: every cell of it (`row` 1-based). */
+const fillRow = (ws, row, fgColor) => {
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const ref = XLSX.utils.encode_cell({ r: row - 1, c });
+    (ws[ref] ||= { t: 'z' }).s = { patternType: 'solid', fgColor };
+  }
+};
 
 describe('reading a RAW universe workbook', () => {
   it('counts rows, permits by kind, and the rows coloured as updated (in the permits or anywhere)', () => {
@@ -73,8 +81,8 @@ describe('reading a RAW universe workbook', () => {
     const head = ['App No.', 'Certificate No.', 'Establishment Name', 'MUNICIPALITY/CITY', 'PROVINCE'];
     const wb = XLSX.utils.book_new();
     const aurora = XLSX.utils.aoa_to_sheet([head, ['1', 'DP-R03-26-00001', 'Baler Clinic', 'BALER', 'AURORA'], ['2', 'DP-R03-26-00002', 'Bay Resort', 'BALER', 'AURORA']]);
-    aurora.A2.s = { patternType: 'solid', fgColor: { rgb: '00B050' } };
-    aurora.A3.s = { patternType: 'solid', fgColor: { rgb: 'FFFF00' } };
+    fillRow(aurora, 2, { rgb: '00B050' });
+    fillRow(aurora, 3, { rgb: 'FFFF00' });
     XLSX.utils.book_append_sheet(wb, aurora, 'AURORA (2)');
     // The same certificate number on two rows (two establishments): two entries.
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ['3', 'DP-R03-26-00003', 'Mill A', 'TARLAC CITY', 'TARLAC'], ['4', 'DP-R03-26-00003', 'Mill B', 'CAPAS', 'TARLAC']]), 'TARLAC (2) ');
@@ -254,7 +262,7 @@ describe('validation: rows highlighted without their newly issued permits', () =
       ['Gamma Beach Resort', 'Aurora', '9/27/2026', 'ECC-OL-R03-2026-0600', 'Approved'],
     ]);
     // Row 4 of Sheet1 (Delta) coloured; the AURORA sheet repeats Delta, uncoloured.
-    fill(wb.Sheets.Sheet1, 'A4', 'FFFF00');
+    fillRow(wb.Sheets.Sheet1, 4, { rgb: 'FFFF00' });
     const a = analyzePermits(wb);
     expect(a.colored).toBe(1);
     expect(a.coloredByKind).toEqual({ ecc: 1 });
@@ -300,10 +308,223 @@ describe('validation: rows highlighted without their newly issued permits', () =
     expect(permitStatus('yellow', true)).toBe('ok');
     expect(permitStatus('red', false)).toBe('ok');
     expect(permitStatus('red', true)).toBe('redInRaw');
+    // Orange — the red firm since added to the RAW data — must be in it.
+    expect(permitStatus('orange', true)).toBe('ok');
+    expect(permitStatus('orange', false)).toBe('notEncoded');
     expect(permitStatus('blue', true)).toBe('otherColour');
   });
 
-  it('reads the healthcare / TSD / TRC mark from its column only: Yes (in any copy of the column) or blank', () => {
+  it('counts a list with its healthcare firms on their own sheet as the WWDP list is counted: the province and Healthcare sheets row by row, not the summary or a sheet beside it', () => {
+    const head = ['App #', 'Province', 'Sub Type', 'HW GR No.', 'Name of Company'];
+    const wb = XLSX.utils.book_new();
+    const rows = {
+      GENERAL: [['1', 'BATAAN', 'New', 'OL-G-R3-08-000001', 'Bataan Foods Inc'], ['2', 'BATAAN', 'New', 'OL-G-R3-08-000002', 'Bataan Medical Center'], ['3', 'TARLAC', 'Renewal', 'OL-G-R3-69-000003', 'Tarlac Mills Corp']],
+      BATAAN: [['1', 'BATAAN', 'New', 'OL-G-R3-08-000001', 'Bataan Foods Inc']],
+      TARLAC: [['3', 'TARLAC', 'Renewal', 'OL-G-R3-69-000003', 'Tarlac Mills Corp']],
+      Healthcare: [['2', 'BATAAN', 'New', 'OL-G-R3-08-000002', 'Bataan Medical Center']],
+      // Issued after the season's period, on its own sheet: not counted.
+      'OCTOBER 2026': [['9', 'TARLAC', 'New', 'OL-G-R3-69-000009', 'Late Corp']],
+    };
+    for (const [name, r] of Object.entries(rows)) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ...r]), name);
+    const a = analyzePermits(wb);
+    expect(a.rows).toBe(3);
+    expect(a.entries.map((e) => e.k).sort()).toEqual(['OL-G-R3-8-1', 'OL-G-R3-8-2', 'OL-G-R3-69-3'].sort());
+    expect(a.entries.find((e) => e.k === 'OL-G-R3-8-2')).toMatchObject({ healthcare: true, province: 'Bataan' });
+    expect(a.byKind).toEqual({ haz: 3 });
+  });
+
+  it('counts sanitary landfills as the province sheet does, and marks them apart: by their name, project or PSIC — not their address', () => {
+    const head = ['App No.', 'Certificate No.', 'Establishment Name', 'PSIC Code', 'Address', 'PROVINCE'];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        head,
+        ['1', 'DP-R03-26-00001', 'Orani Sanitary Landfill', 'Waste disposal', 'Orani', 'BATAAN'],
+        ['2', 'DP-R03-26-00002', 'San Juan Land Fill', 'Waste disposal', 'Balanga', 'BATAAN'],
+        ['3', 'DP-R03-26-00003', 'LGU Mariveles', 'Sanitary landfill for domestic wastes only', 'Mariveles', 'BATAAN'],
+        ['4', 'DP-R03-26-00004', 'Corner Diner', 'Restaurants', 'Beside the old landfill road', 'BATAAN'],
+      ]),
+      'BATAAN (4)'
+    );
+    const a = analyzePermits(wb);
+    // AURORA (44) is 44: every row on the sheet counted.
+    expect(a.rows).toBe(4);
+    expect(a.landfills).toBe(3);
+    expect(a.entries.filter((e) => e.landfill).map((e) => e.k)).toEqual(['1', '2', '3'].map((n) => permitKey(`DP-R03-26-0000${n}`)));
+    expect(a.sheets[0]).toMatchObject({ rows: 4, landfills: 3 });
+  });
+
+  it("counts each permit in the masterlist under the province whose sheet it is on — its healthcare firms included — and the lists' healthcare sheet apart", () => {
+    const { masterlistUnitOf, healthcareIndex } = analyzeModule;
+    const index = healthcareIndex([[{ unit: 'Healthcare Industries', keys: ['DP-R3-26-1'], title: 'Mercy General Hospital' }]]);
+    // On the AURORA sheet, marked healthcare and on the healthcare RAW list: still Aurora's.
+    expect(masterlistUnitOf({ k: 'DP-R3-26-1', kind: 'wwdp', province: 'Aurora', onProvinceSheet: true, healthcare: true }, index)).toBe('Aurora');
+    // On the list's own Healthcare sheet (its Province cell says Aurora): Healthcare.
+    expect(masterlistUnitOf({ k: 'OL-G-R3-1', kind: 'haz', province: 'Aurora', onProvinceSheet: false, healthcare: true }, index)).toBe('Healthcare Industries');
+    // A TSD list without province sheets.
+    expect(masterlistUnitOf({ k: 'OL-T-R3-1', kind: 'tsd', province: 'Bataan', onProvinceSheet: false }, index)).toBe('TSD / TRC');
+    // A province sheet's row is that province's, whatever its Province cell says.
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Certificate No.', 'Establishment Name', 'PROVINCE'], ['DP-R03-26-00009', 'Misfiled Corp', 'BATAAN']]), 'AURORA (1)');
+    expect(analyzePermits(wb).entries[0]).toMatchObject({ province: 'Aurora', onProvinceSheet: true });
+  });
+
+  it("judges a list's PSIC Code by the RAW data's standard classification: healthcare when the healthcare lists' firms carry it", () => {
+    const { healthcareIndex, healthcareUnitOf, notHealthcareByPsic } = analyzeModule;
+    const vocab = [['Animal Production', 'Clinic', 'Hospital', 'Nursing Home', 'Medical Laboratory', 'Treatment and disposal of hazardous waste', 'Blood Service Facility', 'Commercial Building']];
+    const records = [
+      [
+        ...Array.from({ length: 5 }, () => ({ unit: 'Healthcare Industries', industry: 'Clinic' })),
+        ...Array.from({ length: 4 }, () => ({ unit: 'Healthcare Industries', industry: 'Hospital' })),
+        ...Array.from({ length: 3 }, () => ({ unit: 'Healthcare Industries', industry: 'Medical Laboratory' })),
+        ...Array.from({ length: 3 }, () => ({ unit: 'TSD / TRC', industry: 'Treatment and disposal of hazardous waste' })),
+        ...Array.from({ length: 6 }, () => ({ unit: 'Tarlac', industry: 'Animal Production' })),
+        ...Array.from({ length: 2 }, () => ({ unit: 'Pampanga', industry: 'Nursing Home' })),
+      ],
+    ];
+    const index = healthcareIndex([], records, vocab);
+    expect(index.classify('Animal production')).toEqual({ label: 'Animal Production', healthcare: false });
+    // Several named: a healthcare one decides (not Nursing Home, a province's here).
+    expect(index.classify('Hospitals, clinics, nursing homes and other human health and residential care activities')).toMatchObject({ healthcare: true });
+    expect(index.classify('Other human health activities - medical laboratories inside and outside of medical facilities')).toEqual({ label: 'Medical Laboratory', healthcare: true });
+    expect(index.classify('Treatment and disposal of hazardous')).toMatchObject({ healthcare: true });
+    expect(index.classify('Treatment and disposal of non-hazardous waste')).toBeNull();
+    // A health establishment by its name, though no RAW firm carries it yet.
+    expect(index.classify('Blood Service Facility')).toEqual({ label: 'Blood Service Facility', healthcare: true });
+    // On the standard list, not a health establishment by name, and no RAW firm carries it: not judged.
+    expect(index.classify('Commercial Building')).toEqual({ label: 'Commercial Building', healthcare: null });
+    // The basis, to show.
+    expect(index.classify.healthcareClasses).toEqual(['Blood Service Facility', 'Clinic', 'Hospital', 'Medical Laboratory', 'Nursing Home', 'Treatment and disposal of hazardous waste']);
+    // One word naming nothing on the list exactly: not judged.
+    expect(index.classify('Commercial')).toBeNull();
+    // Marked healthcare on the list, PSIC Animal production: not healthcare, and the mark to check.
+    const farm = { k: 'DP-R3-26-1', kind: 'wwdp', healthcare: true, psic: 'Animal production' };
+    expect(healthcareUnitOf(farm, index)).toBeNull();
+    expect(notHealthcareByPsic(farm, index)).toBe('Animal Production');
+    // Unmarked, PSIC a healthcare classification: healthcare.
+    expect(healthcareUnitOf({ k: 'DP-R3-26-2', kind: 'wwdp', psic: 'Hospitals, clinics, nursing homes and other human health' }, index)).toBe('Healthcare Industries');
+    // Marked, PSIC not judged: the mark stands.
+    expect(healthcareUnitOf({ k: 'DP-R3-26-3', kind: 'wwdp', healthcare: true, psic: 'Commercial' }, index)).toBe('Healthcare Industries');
+  });
+
+  it('still counts a province sheet the Planning Unit has renamed ("Done | AURORA (44)") as that province\'s', () => {
+    const head = ['App No.', 'Healthcare / TSD / TRC Firm', 'Certificate No.', 'Establishment Name', 'PROVINCE'];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([head, ['1', 'Yes', 'DP-R03-26-00001', 'Baler Clinic', 'AURORA'], ['2', null, 'DP-R03-26-00002', 'Baler Resort', 'AURORA']]),
+      'Done | AURORA (2)'
+    );
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ['3', null, 'DP-R03-26-00003', 'Orani Mill', 'BATAAN']]), 'BATAAN (1)');
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([head, ['1', 'Yes', 'DP-R03-26-00001', 'Baler Clinic', 'AURORA'], ['2', null, 'DP-R03-26-00002', 'Baler Resort', 'AURORA'], ['3', null, 'DP-R03-26-00003', 'Orani Mill', 'BATAAN']]),
+      'CONSOLIDATED'
+    );
+    const a = analyzePermits(wb);
+    expect(a.sheets.map((s) => s.province)).toEqual(['Aurora', 'Bataan', null]);
+    expect(a.rows).toBe(3);
+    // Every row of the renamed sheet is Aurora's, its healthcare firm too.
+    expect(a.entries.filter((e) => e.onProvinceSheet && e.province === 'Aurora')).toHaveLength(2);
+  });
+
+  it("cuts a sheet's range to its table, a stray value far below it left out (PAMPANGA: A1:CD306963 for 6,000 firms)", () => {
+    const { trimRange } = analyzeModule;
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Serial_No', 'Proponent_Name', 'Project_Title'],
+      ['PA-0001', 'A Corp', 'A Plant'],
+      [null, null, null],
+      ['PA-0003', 'C Corp', 'C Plant'],
+    ]);
+    // A stray value 300,000 rows down.
+    XLSX.utils.sheet_add_aoa(ws, [['x']], { origin: 'B300000' });
+    expect(ws['!ref']).toBe('A1:C300000');
+    expect(trimRange(ws)).toBe(300000 - 4);
+    expect(ws['!ref']).toBe('A1:C4');
+    // A table without a stray value is left as it is.
+    const plain = XLSX.utils.aoa_to_sheet([['a', 'b'], ['c', 'd']]);
+    expect(trimRange(plain)).toBe(0);
+    expect(plain['!ref']).toBe('A1:B2');
+  });
+
+  it('reads a fill picked from the theme palette as Excel shows it: the theme colour with its tint', () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['App No.', 'Certificate No.', 'Establishment Name', 'PROVINCE'],
+      ['1', 'DP-R03-26-00001', 'A Corp', 'AURORA'],
+      ['2', 'DP-R03-26-00002', 'B Corp', 'AURORA'],
+      ['3', 'DP-R03-26-00003', 'C Corp', 'AURORA'],
+    ]);
+    // Accent 3 (196B24), 80% lighter — as the file keeps it: no RGB, a theme number and a tint.
+    fillRow(ws, 2, { theme: 6, tint: 0.7999816888943144 });
+    // White, 15% darker.
+    fillRow(ws, 3, { theme: 0, tint: -0.1499984740745262 });
+    // An RGB fill, as before.
+    fillRow(ws, 4, { rgb: 'FFFF00' });
+    XLSX.utils.book_append_sheet(wb, ws, 'AURORA (3)');
+    wb.Themes = { themeElements: { clrScheme: ['FFFFFF', '000000', 'E8E8E8', '0E2841', '156082', 'E97132', '196B24', '0F9ED5', 'A02B93', '4EA72E'].map((rgb) => ({ rgb })) } };
+    const a = analyzePermits(wb);
+    const fill = (n) => a.entries.find((e) => e.k === permitKey(`DP-R03-26-0000${n}`)).fill;
+    expect(fill(1)).toBe('C2F1C8');
+    expect(fill(2)).toBe('D9D9D9');
+    expect(fill(3)).toBe('FFFF00');
+  });
+
+  it("does not take a column shaded down the sheet for highlighting (the HWG ID list's HW GR No., \"White, Darker 5%\")", () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['App #', 'Region', 'Province', 'Sub Type', 'Date Issued', 'HW GR No.', 'Name of Company', 'Company Address'],
+      ['1', 'Region 3', 'AURORA', 'New', 'June 1, 2026', 'OL-G-R3-77-000001', 'A Corp', 'Baler'],
+      ['2', 'Region 3', 'AURORA', 'New', 'June 2, 2026', 'OL-G-R3-77-000002', 'B Corp', 'Baler'],
+      ['3', 'Region 3', 'AURORA', 'New', 'June 3, 2026', 'OL-G-R3-77-000003', 'C Corp', 'Baler'],
+    ]);
+    // The HW GR No. column shaded on every row: formatting.
+    for (const r of [2, 3, 4]) ws[`F${r}`].s = { patternType: 'solid', fgColor: { theme: 0, tint: -0.0499893185216834 } };
+    // One row coloured by the masterlist holder, across the row.
+    fillRow(ws, 3, { rgb: 'FFFF00' });
+    XLSX.utils.book_append_sheet(wb, ws, 'AURORA');
+    wb.Themes = { themeElements: { clrScheme: ['FFFFFF', '000000'].map((rgb) => ({ rgb })) } };
+    const a = analyzePermits(wb);
+    expect(a.rows).toBe(3);
+    expect(a.colored).toBe(1);
+    expect(a.rowColors).toEqual({ FFFF00: 1 });
+  });
+
+  it('takes a list whose permits are nine in ten on a larger list for a working copy of it', () => {
+    const { copiesOf } = analyzeModule;
+    const big = Array.from({ length: 50 }, (_, i) => `DP-R3-26-${i}`);
+    const copies = copiesOf([
+      { id: 'dp', name: 'MASTERLIST_DP.xlsx', keys: big, rows: 52 },
+      { id: 'stephen', name: 'RED HIGHLIGHTED - STEPHEN.xlsx', keys: big.slice(0, 20), rows: 20 },
+      { id: 'pto', name: 'MASTERLIST_PTO.xlsx', keys: ['PTO-R3-1', 'PTO-R3-2', 'DP-R3-26-1'], rows: 3 },
+      { id: 'empty', name: 'Book.xlsx', keys: [], rows: 0 },
+    ]);
+    expect(copies).toEqual({ stephen: 'MASTERLIST_DP.xlsx' });
+    // Two identical lists: one of them is counted.
+    expect(Object.keys(copiesOf([{ id: 'a', name: 'A', keys: big, rows: 50 }, { id: 'b', name: 'B', keys: big, rows: 50 }]))).toHaveLength(1);
+  });
+
+  it('counts a healthcare firm\'s newly issued permit under its healthcare list, apart from the Monitoring Plan', () => {
+    const { healthcareIndex, healthcareUnitOf } = analyzeModule;
+    const index = healthcareIndex([
+      [
+        { unit: 'Healthcare Industries', keys: ['DP-R3-26-10'], title: 'Mercy General Hospital', name: 'Mercy Inc' },
+        { unit: 'Chemical permits', keys: [], title: 'Acme Chemicals Corporation', name: null },
+      ],
+      // A province's row: not the healthcare universe.
+      [{ unit: 'Bataan', keys: ['DP-R3-26-11'], title: 'Bataan Rice Mill', name: null }],
+    ]);
+    expect(healthcareUnitOf({ k: 'OL-T-R3-1', kind: 'tsd' }, index)).toBe('TSD / TRC');
+    expect(healthcareUnitOf({ k: 'DP-R3-26-10', kind: 'wwdp' }, index)).toBe('Healthcare Industries');
+    expect(healthcareUnitOf({ k: 'DP-R3-26-12', kind: 'wwdp', title: 'Acme Chemicals Corporation' }, index)).toBe('Chemical permits');
+    expect(healthcareUnitOf({ k: 'DP-R3-26-13', kind: 'wwdp', healthcare: true }, index)).toBe('Healthcare Industries');
+    expect(healthcareUnitOf({ k: 'DP-R3-26-11', kind: 'wwdp', title: 'Bataan Rice Mill' }, index)).toBeNull();
+    // A PSIC description alone does not make it healthcare.
+    expect(healthcareUnitOf({ k: 'DP-R3-26-14', kind: 'pto', psic: 'Office building with no hazardous materials' }, index)).toBeNull();
+  });
+
+  it('reads the healthcare / TSD / TRC mark from its column — Yes (in any copy of the column) or blank — or from the list\'s own Healthcare sheet', () => {
     const { healthcarePsic } = analyzeModule;
     const wb = XLSX.utils.book_new();
     const head = ['Healthcare / TSD / TRC Universe', 'App No.', 'Certificate No.', 'Establishment Name', 'PSIC Code', 'PROVINCE', 'Healthcare / TSD / TRC Universe'];
@@ -318,16 +539,17 @@ describe('validation: rows highlighted without their newly issued permits', () =
       ]),
       'BATAAN (4)'
     );
-    // A sheet without the column: not marked, whatever its name says.
+    // A province sheet without the column: not marked.
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['App No.', 'Certificate No.', 'Establishment Name', 'PROVINCE'], ['5', 'DP-R03-26-00005', 'Rice Mill', 'TARLAC']]), 'TARLAC (1)');
+    // The list's own Healthcare sheet (the HWG ID list keeps its healthcare firms there): every row on it marked.
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['App No.', 'Certificate No.', 'Establishment Name', 'PROVINCE'], ['6', 'DP-R03-26-00006', 'City Clinic', 'TARLAC']]), 'Healthcare');
     const a = analyzePermits(wb);
     const key = (n) => permitKey(`DP-R03-26-0000${n}`);
-    expect(Object.keys(a.keyHealthcare).sort()).toEqual([key(1), key(2), key(3)].sort());
+    expect(Object.keys(a.keyHealthcare).sort()).toEqual([key(1), key(2), key(3), key(6)].sort());
     expect(a.keyReviewed[key(4)]).toBe(true);
     expect(a.keyReviewed[key(5)]).toBeUndefined();
-    expect(a).toMatchObject({ healthcare: 3, healthcareReviewed: 4 });
-    expect(a.sheets.map((s) => s.healthcareMark)).toEqual(['column', null, null]);
+    expect(a).toMatchObject({ healthcare: 4, healthcareReviewed: 5 });
+    expect(a.sheets.map((s) => s.healthcareMark)).toEqual(['column', null, 'sheet']);
     // What each permit is for, its industry and where, for See more.
     expect(a.keyTitle[key(1)]).toBe('Mercy Hospital');
     expect(a.keyPsic[key(2)]).toBe('Animal production');
@@ -668,7 +890,7 @@ describe("VERA's tracking notes", () => {
   });
   const matrix = [
     unit('Aurora', { rows: 732, base: 551, added: { erms: 150, ecconline: 31, other: 0 }, coloredBase: 30, notModified: 521, review: 5, reviewSheets: { 'NEW - CHECK DUPLICATE': 5 } }),
-    unit('Tarlac', { rows: 3141, base: 2000, added: { erms: 1000, ecconline: 141, other: 0 }, coloredBase: 800, notModified: 1200, colours: [{ family: 'orange', rows: 40, shades: [] }] }),
+    unit('Tarlac', { rows: 3141, base: 2000, added: { erms: 1000, ecconline: 141, other: 0 }, coloredBase: 800, notModified: 1200, colours: [{ family: 'orange', rows: 40, shades: [] }], fills: [{ rgb: 'F6C6AD', family: 'orange', rows: 40, label: null }] }),
   ];
   const summary = { raw: { rows: 3873, base: 2551, additions: { erms: 1150, ecconline: 172, other: 0 } }, permits: { issued: 10, inRaw: 4 } };
 
@@ -677,7 +899,11 @@ describe("VERA's tracking notes", () => {
     expect(notes).toMatch(/2,551 baseline, 1,150 added from ERMS and 172 from ECC Online/);
     expect(notes).toMatch(/Aurora is furthest behind on highlighting: 5%/);
     expect(notes).toMatch(/5 firms are waiting on review sheets/);
-    expect(notes).toMatch(/orange on 40 rows in Tarlac/);
+    // A RAW colour without a name, by the fill the file uses.
+    expect(notes).toMatch(/#F6C6AD on 40 rows in Tarlac/);
+    // Named (its pencil on the Highlighting tab): no longer reported.
+    const named = matrix.map((u) => (u.fills ? { ...u, fills: u.fills.map((f) => ({ ...f, label: 'PTO data' })) } : u));
+    expect(notesFor({ matrix: named, summary, legend: {} }).map((x) => x.text).join('\n')).not.toMatch(/without a name/);
     expect(notesFor({ matrix, summary, stale: true })[0].tone).toBe('warn');
   });
 

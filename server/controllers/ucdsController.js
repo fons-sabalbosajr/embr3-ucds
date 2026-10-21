@@ -6,6 +6,7 @@ const { canAccessAllYears } = require('../services/authorization');
 const { principalOf } = require('../middleware/auth');
 const shortCache = require('../shared/services/shortCache');
 const healthcareList = require('../modules/ucds/services/healthcare');
+const { unitOf, groupOfUnit } = require('../services/progressTracker/analyze');
 
 // The establishment register of the active year, confined to the provinces
 // this request may touch.
@@ -638,14 +639,48 @@ async function dashboardStats(req, res) {
     // field absent as well as blank. Only the blank ones were counted, so the
     // dashboard said 0 while thousands had never been monitored.
     projectStatusBreakdown.notYetMonitored = await ucdsFor(req).countDocuments({ $or: [{ title_status: { $exists: false } }, { title_status: null }, { title_status: { $regex: '^\\s*$' } }] });
-    const industriesCursor = ucdsFor(req).find({}, { projection: { _id: 1, ecc_cnc: 1, pto_code: 1, wwdp_code: 1, haz_id: 1, pco_no: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1 } });
+    // The years before this one whose IIS numbers the register carries: an
+    // establishment with one was monitored that year (the monitoring history).
+    const year = Number(req.activeYear) || new Date().getFullYear();
+    const historyYears = Array.from({ length: 4 }, (_, i) => year - 4 + i);
+    const iisField = (y) => `iis_no_${y}`;
+    const industriesCursor = ucdsFor(req).find(
+      {},
+      { projection: { _id: 1, sort_key: 1, province: 1, ecc_cnc: 1, pto_code: 1, wwdp_code: 1, haz_id: 1, pco_no: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1, date_monitored: 1, ...Object.fromEntries(historyYears.map((y) => [iisField(y), 1])) } }
+    );
     const industriesWithAnyPermitSet = new Set();
     const industriesWithExpiredPermitSet = new Set();
+    // Per province of the Monitoring Plan and per list (Healthcare Industries,
+    // Chemical permits, TSD / TRC, Importers — the 2027 registers' own series),
+    // as the Progress Tracker counts them (analyze.js unitOf).
+    const byUnit = new Map();
+    const monitoringHistory = Object.fromEntries(historyYears.map((y) => [y, 0]));
+    let monitoredThisYear = 0;
     await industriesCursor.forEach((item) => {
       if (item.ecc_cnc || item.pto_code || item.wwdp_code || item.haz_id || item.pco_no) industriesWithAnyPermitSet.add(item._id.toString());
       if (isPermitExpired(item.pto_expiration) || isPermitExpired(item.wwdp_expiration) || isPermitExpired(item.pco_validity)) industriesWithExpiredPermitSet.add(item._id.toString());
+      const unit = unitOf(String(item.sort_key || ''), item.province);
+      byUnit.set(unit, (byUnit.get(unit) || 0) + 1);
+      for (const y of historyYears) if (String(item[iisField(y)] ?? '').trim()) monitoringHistory[y] += 1;
+      if (String(item.date_monitored ?? '').trim()) monitoredThisYear += 1;
     });
-    return res.json({ totalIndustries, industriesWithAnyPermit: industriesWithAnyPermitSet.size, industriesWithAtLeastOneExpiredPermit: industriesWithExpiredPermitSet.size, permitBreakdown, sectionBreakdown: sectionBreakdownResults, projectStatusBreakdown });
+    const unitRank = (u) => (groupOfUnit(u) === 'province' ? 0 : groupOfUnit(u) === 'healthcare' ? 1 : 2);
+    const byList = [...byUnit]
+      .map(([unit, count]) => ({ unit, label: unit.replace(/_/g, ' '), group: groupOfUnit(unit), count }))
+      .sort((a, b) => unitRank(a.unit) - unitRank(b.unit) || (a.group === 'province' ? a.unit.localeCompare(b.unit) : b.count - a.count));
+    return res.json({
+      totalIndustries,
+      industriesWithAnyPermit: industriesWithAnyPermitSet.size,
+      industriesWithAtLeastOneExpiredPermit: industriesWithExpiredPermitSet.size,
+      permitBreakdown,
+      sectionBreakdown: sectionBreakdownResults,
+      projectStatusBreakdown,
+      year,
+      byList,
+      // Only the years the register has any IIS number for.
+      monitoringHistory: Object.entries(monitoringHistory).filter(([, n]) => n > 0).map(([y, count]) => ({ year: Number(y), count })),
+      monitoredThisYear,
+    });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     return res.status(500).json({ error: 'Failed to fetch dashboard statistics.' });

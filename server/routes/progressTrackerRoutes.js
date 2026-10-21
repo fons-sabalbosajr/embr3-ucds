@@ -122,6 +122,17 @@ router.put('/api/admin/progress-tracker/seasons/:id/legend', admin, async (req, 
   }
 });
 
+// A name for one colour of the RAW files' main sheets: { unit, rgb, label, allUnits }.
+router.put('/api/admin/progress-tracker/seasons/:id/raw-colour-names', admin, async (req, res, next) => {
+  try {
+    await tracker.setRawColourName(req.params.id, req.body || {});
+    await audit.record(req, { domain: 'admin', action: 'progress-season-raw-colour-name', label: 'progress tracker RAW colour renamed', collection: 'progress-seasons', documentId: req.params.id });
+    res.json(await tracker.overview(req.params.id));
+  } catch (err) {
+    fail(res, err, next);
+  }
+});
+
 // Names for the colours on the newly issued lists outside the workshop's legend.
 router.put('/api/admin/progress-tracker/seasons/:id/masterlist-names', admin, async (req, res, next) => {
   try {

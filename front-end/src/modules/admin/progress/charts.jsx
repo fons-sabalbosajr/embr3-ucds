@@ -1,3 +1,4 @@
+import { memo, useEffect, useRef } from "react";
 import { Empty } from "antd";
 import { Bar, Column } from "@ant-design/plots";
 import { FAMILY, KIND_LABEL, NO_COLOUR, REMAINING, SOURCES, n, pct, permitSplit, reducedMotion, unitLabel } from "./palette";
@@ -26,6 +27,18 @@ const heightFor = (rows) => Math.max(180, rows * 40 + 90);
 const surface = (dark) => (dark ? "#1f1f1f" : "#ffffff");
 const ink = (dark) => (dark ? "#e6e6e3" : "#2b2b29");
 const grow = (dir) => (reducedMotion() ? false : { enter: { type: dir === "x" ? "growInX" : "growInY", duration: 900, easing: "ease-out" } });
+/**
+ * The bars grow in when the chart first appears, not again on each refresh:
+ * the figures come back every few seconds while the files are edited, and
+ * replaying the animation each time made every update look slow.
+ */
+function useGrow(dir) {
+  const first = useRef(true);
+  useEffect(() => {
+    first.current = false;
+  }, []);
+  return first.current ? grow(dir) : false;
+}
 /** A total written at the end of each bar (horizontal) or over each column. */
 const totalsAt = (rows, xKey, dark, horizontal) => ({
   type: "text",
@@ -37,7 +50,8 @@ const totalsAt = (rows, xKey, dark, horizontal) => ({
 });
 
 /** Firms per unit, stacked by source. */
-export function CompositionChart({ units, dark }) {
+function CompositionChartView({ units, dark }) {
+  const animate = useGrow("x");
   const rows = units.filter((u) => u.rows > 0);
   if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No RAW data read yet." />;
   const data = rows.flatMap((u) => {
@@ -61,7 +75,7 @@ export function CompositionChart({ units, dark }) {
       legend={legend}
       annotations={[totalsAt(totals, "unit", dark, true)]}
       tooltip={{ items: [{ channel: "y", valueFormatter: (v) => n(v) }] }}
-      animate={grow("x")}
+      animate={animate}
       interaction={interaction}
       aria-label="Firms per province by source"
     />
@@ -69,7 +83,8 @@ export function CompositionChart({ units, dark }) {
 }
 
 /** Permits on the main sheets, one column per kind, stacked by source. `total`: a unit-shaped total. */
-export function PermitKindChart({ total, kinds, dark }) {
+function PermitKindChartView({ total, kinds, dark }) {
+  const animate = useGrow("y");
   const data = kinds.flatMap((k) => {
     const p = permitSplit(total, k);
     return SOURCES.map((s) => ({ kind: KIND_LABEL[k] || k, source: s.label, value: p[s.key] || 0 }));
@@ -92,7 +107,7 @@ export function PermitKindChart({ total, kinds, dark }) {
       legend={legend}
       annotations={[totalsAt(totals, "kind", dark, false)]}
       tooltip={{ items: [{ channel: "y", valueFormatter: (v) => n(v) }] }}
-      animate={grow("y")}
+      animate={animate}
       interaction={interaction}
       aria-label="Permits on the main sheets by kind and source"
     />
@@ -104,7 +119,8 @@ export function PermitKindChart({ total, kinds, dark }) {
  * data (on baseline firms, with ERMS additions, with ECC Online additions)
  * and those not yet encoded. `byKind`: { kind: { issued, inRaw, bySource } }.
  */
-export function IssuedKindChart({ byKind, kinds, dark }) {
+function IssuedKindChartView({ byKind, kinds, dark }) {
+  const animate = useGrow("y");
   const parts = [
     ...SOURCES.map((s) => ({ key: s.key, label: s.key === "base" ? "Encoded · baseline" : `Encoded · ${s.label}`, colour: dark ? s.dark : s.light })),
     { key: "left", label: REMAINING.label, colour: dark ? REMAINING.dark : REMAINING.light },
@@ -131,7 +147,7 @@ export function IssuedKindChart({ byKind, kinds, dark }) {
       legend={legend}
       tooltip={{ items: [{ channel: "y", valueFormatter: (v) => n(v) }] }}
       annotations={[{ ...totalsAt(totals, "kind", dark, false), encode: { x: "kind", y: "total", text: (d) => `${d.done}% of ${n(d.total)}` } }]}
-      animate={grow("y")}
+      animate={animate}
       interaction={interaction}
       aria-label="Newly issued permits by kind: encoded and still to encode"
     />
@@ -139,7 +155,8 @@ export function IssuedKindChart({ byKind, kinds, dark }) {
 }
 
 /** The share of each unit's baseline firms highlighted as updated, as a percentage. */
-export function ReviewedChart({ units, color, dark }) {
+function ReviewedChartView({ units, color, dark }) {
+  const animate = useGrow("x");
   const rows = units.filter((u) => u.base > 0);
   if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No RAW data read yet." />;
   const data = rows.map((u) => ({ unit: unitLabel(u.unit), value: pct(u.coloredBase, u.base), done: u.coloredBase, of: u.base }));
@@ -156,7 +173,7 @@ export function ReviewedChart({ units, color, dark }) {
       axis={{ ...axisOf(dark), y: { ...axisOf(dark).y, labelFormatter: (v) => `${v}%` } }}
       label={{ text: (d) => `${d.value}%`, position: "right", dx: 6, fontSize: 12, fontWeight: 600, fill: ink(dark) }}
       tooltip={{ title: (d) => d.unit, items: [{ field: "done", name: "Highlighted", valueFormatter: (v) => n(v) }, { field: "of", name: "Baseline firms", valueFormatter: (v) => n(v) }] }}
-      animate={grow("x")}
+      animate={animate}
       interaction={interaction}
       aria-label="Baseline firms highlighted, per province"
     />
@@ -167,23 +184,33 @@ export function ReviewedChart({ units, color, dark }) {
  * Rows per unit by the workbooks' colour: "No colour" (not yet highlighted)
  * first, then each colour family in the order given. `palette` names and
  * paints a family (the workshop's meanings for the newly issued lists);
- * `noun` is what a row is ("rows", "permits").
+ * `noun` is what a row is ("rows", "permits"). Each segment carries its
+ * count where it fits, each bar its total and the share highlighted, and the
+ * legend each colour's count across the units.
  */
-export function FamilyChart({ units, families, dark, palette = {}, noun = "rows" }) {
+function FamilyChartView({ units, families, dark, palette = {}, noun = "rows" }) {
+  const animate = useGrow("x");
   const rows = units.filter((u) => u.base > 0 || u.colours?.length);
   if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No highlighting yet." />;
-  const used = families.filter((f) => rows.some((u) => u.colours.some((c) => c.family === f)));
+  const used = families.filter((f) => rows.some((u) => u.colours.some((c) => c.family === f && c.rows > 0)));
+  const countOf = (u, key) => (key === NO_COLOUR.key ? u.notModified : u.colours.find((c) => c.family === key)?.rows || 0);
+  // The legend names each colour with its count over every unit shown ("Permit found · 1,234").
   const series = [
-    { key: NO_COLOUR.key, label: NO_COLOUR.label, hex: NO_COLOUR.hex },
-    ...used.map((f) => ({ key: f, label: palette[f]?.label || FAMILY[f]?.label || f, hex: palette[f]?.hex || FAMILY[f]?.hex || "#bfbfbf" })),
-  ];
-  const data = rows.flatMap((u) =>
-    series.map((s) => ({ unit: unitLabel(u.unit), family: s.label, white: s.key === NO_COLOUR.key, value: s.key === NO_COLOUR.key ? u.notModified : u.colours.find((c) => c.family === s.key)?.rows || 0 }))
-  );
+    { key: NO_COLOUR.key, name: NO_COLOUR.label, hex: NO_COLOUR.hex },
+    ...used.map((f) => ({ key: f, name: palette[f]?.label || FAMILY[f]?.label || f, hex: palette[f]?.hex || FAMILY[f]?.hex || "#bfbfbf" })),
+  ].map((s) => ({ ...s, label: `${s.name} · ${n(rows.reduce((a, u) => a + countOf(u, s.key), 0))}` }));
+  // Zero segments left out: they would only stack empty labels.
+  const data = rows.flatMap((u) => series.map((s) => ({ unit: unitLabel(u.unit), family: s.label, name: s.name, white: s.key === NO_COLOUR.key, value: countOf(u, s.key) }))).filter((d) => d.value > 0);
+  // Each bar's total: the unit's rows (or permits), and the share with a colour.
+  const totals = rows.map((u) => {
+    const total = series.reduce((a, s) => a + countOf(u, s.key), 0);
+    return { unit: unitLabel(u.unit), total, done: pct(total - (u.notModified || 0), total) };
+  });
   return (
     <Bar
       data={data}
-      paddingRight={64}
+      // Room for the total and the share highlighted at each bar's end.
+      paddingRight={120}
       xField="unit"
       yField="value"
       colorField="family"
@@ -195,10 +222,27 @@ export function FamilyChart({ units, families, dark, palette = {}, noun = "rows"
       style={{ stroke: (d) => (d.white ? NO_COLOUR.stroke : surface(dark)), lineWidth: (d) => (d.white ? 1 : 2), maxWidth: 26 }}
       axis={axisOf(dark)}
       legend={legend}
-      tooltip={{ items: [{ channel: "y", valueFormatter: (v) => `${n(v)} ${noun}` }] }}
-      animate={grow("x")}
+      // The count inside each segment, dropped where the segment is too narrow for it.
+      label={{
+        text: (d) => (d.value ? n(d.value) : ""),
+        position: "inside",
+        fontSize: 11,
+        fontWeight: 600,
+        fill: "#1f1f1f",
+        transform: [{ type: "contrastReverse" }, { type: "overflowHide" }],
+      }}
+      annotations={[{ ...totalsAt(totals, "unit", dark, true), encode: { x: "unit", y: "total", text: (d) => `${n(d.total)} · ${d.done}%` } }]}
+      tooltip={{ title: (d) => d.unit, items: [(d) => ({ name: d.name, value: `${n(d.value)} ${noun}` })] }}
+      animate={animate}
       interaction={interaction}
       aria-label={`${noun[0].toUpperCase()}${noun.slice(1)} per province by colour, no colour first`}
     />
   );
 }
+
+// Redrawn only when their figures change, not on every render of the page around them.
+export const CompositionChart = memo(CompositionChartView);
+export const PermitKindChart = memo(PermitKindChartView);
+export const IssuedKindChart = memo(IssuedKindChartView);
+export const ReviewedChart = memo(ReviewedChartView);
+export const FamilyChart = memo(FamilyChartView);

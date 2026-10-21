@@ -15,17 +15,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // `reserve` is what must stay visible below the measured element's top
 // besides the scrolling part: the table's own header, the pagination, the
 // footer. Never returns less than `min`, so a short window still shows rows.
+//
+// The third value is the element's width — what the table really has, the
+// sidebar open or shut — for a table that fits its columns to it.
 // ---------------------------------------------------------------------------
 
 export default function useFitHeight(reserve = 0, min = 240) {
   const ref = useRef(null);
   const [height, setHeight] = useState(min);
+  const [width, setWidth] = useState(0);
 
   const measure = useCallback(() => {
     const el = ref.current;
     if (!el) return;
     const top = el.getBoundingClientRect().top;
     setHeight(Math.max(min, Math.floor(window.innerHeight - top - reserve)));
+    setWidth(el.clientWidth);
   }, [reserve, min]);
 
   useEffect(() => {
@@ -41,5 +46,5 @@ export default function useFitHeight(reserve = 0, min = 240) {
     };
   }, [measure]);
 
-  return [ref, height];
+  return [ref, height, width];
 }

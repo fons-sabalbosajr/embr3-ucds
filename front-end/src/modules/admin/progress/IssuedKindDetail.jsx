@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Empty, Input, Segmented, Skeleton, Space, Table, Tabs, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Checkbox, Empty, Input, Segmented, Skeleton, Space, Table, Tabs, Tag, Tooltip, Typography } from "antd";
 import { InfoCircleOutlined, SearchOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import dayjs from "dayjs";
@@ -33,7 +33,7 @@ const VIEWS = [
   { value: "done", label: "Matches", has: (s) => s === "ok" },
   // The list's healthcare / TSD / TRC mark: the permits marked, and the marks
   // on an establishment that is not of that universe (offered when there are any).
-  { value: "healthcare", label: "Healthcare / TSD / TRC firms", has: (s, r) => r.healthcare === true, optional: true },
+  { value: "healthcare", label: "Healthcare / TSD / TRC firms", has: (s, r) => Boolean(r.hcUnit) || r.healthcare === true, optional: true },
   { value: "doubtful", label: "Healthcare mark doubtful", has: (s, r) => r.doubtful, optional: true },
   { value: "all", label: "All", has: () => true },
 ];
@@ -87,32 +87,244 @@ function FamilyBreakdown({ byFamily = {}, issued, names = {} }) {
   );
 }
 
-/** A long text in a narrow cell: one line, the whole of it on hover. */
-const Clip = ({ v, width }) =>
-  v ? (
-    <Tooltip title={v}>
-      <Text ellipsis style={{ maxWidth: width, display: "block" }}>
-        {v}
-      </Text>
-    </Tooltip>
-  ) : (
-    <Text type="secondary">—</Text>
-  );
+/** A long text in a narrow cell: wrapped onto as many lines as it needs, never cut. */
+const Clip = ({ v, width }) => (v ? <span className="pt-wrap-text" style={{ maxWidth: width }}>{v}</span> : <Text type="secondary">—</Text>);
 
-const columnsFor = (names) => [
-  { title: "Row", key: "at", width: 120, render: (_, r) => (r.sheet ? <Text code>{`${r.sheet}!${r.row}`}</Text> : "—") },
-  { title: "Permit", dataIndex: "permit", width: 190, render: (v) => <Text code>{v}</Text> },
-  // What the permit is for and where — as the list writes them.
-  { title: "Project title", dataIndex: "title", width: 220, render: (v, r) => <Clip v={v || r.firm} width={204} /> },
-  { title: "Proponent", dataIndex: "firm", width: 170, render: (v) => <Clip v={v} width={154} /> },
-  { title: "Industry classification", dataIndex: "industry", width: 220, render: (v) => <Clip v={v} width={204} /> },
-  { title: "City / municipality", dataIndex: "city", width: 140, render: (v) => (v ? unitLabel(v) : <Text type="secondary">—</Text>) },
-  { title: "Province", dataIndex: "province", width: 110, render: (v) => (v ? unitLabel(v) : "—") },
-  { title: "Type", dataIndex: "type", width: 90, render: (v) => (v ? <Tag style={{ marginInlineEnd: 0 }}>{v === "renewal" ? "Renewal" : "New"}</Tag> : "—") },
+// --- the table's column filters ---------------------------------------------------
+
+const BLANK = "\u0000blank";
+
+/**
+ * A column filtered by the values its rows hold: each value once, with how
+ * many rows of the list hold it, searchable when there are many. `of(r)`: the
+ * row's value (null: blank); `label(v)`: how a value reads.
+ */
+const pickFilter = (rows, of, label = (v) => v) => {
+  const counts = new Map();
+  for (const r of rows) {
+    const v = of(r) ?? BLANK;
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  const text = (v) => (v === BLANK ? "(blank)" : String(label(v)));
+  return {
+    filters: [...counts].sort((a, b) => text(a[0]).localeCompare(text(b[0]))).map(([v, c]) => ({ text: `${text(v)} (${n(c)})`, value: v })),
+    onFilter: (value, r) => (of(r) ?? BLANK) === value,
+    filterSearch: counts.size > 8,
+  };
+};
+
+/** A column filtered by the text in it ("contains"), for the permit numbers and the names. */
+const textFilter = (of, placeholder) => ({
+  filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+    <div style={{ padding: 8, width: 240 }} onKeyDown={(e) => e.stopPropagation()}>
+      <Input
+        autoFocus
+        allowClear
+        size="small"
+        placeholder={placeholder}
+        value={selectedKeys[0]}
+        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+        onPressEnter={() => confirm()}
+        style={{ marginBottom: 8 }}
+      />
+      <Space size={6} style={{ width: "100%", justifyContent: "flex-end" }}>
+        <Button
+          size="small"
+          onClick={() => {
+            clearFilters?.();
+            confirm();
+          }}
+        >
+          Reset
+        </Button>
+        <Button size="small" type="primary" icon={<SearchOutlined />} onClick={() => confirm()}>
+          Filter
+        </Button>
+      </Space>
+    </div>
+  ),
+  filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? "#1677ff" : undefined }} />,
+  onFilter: (value, r) => String(of(r) || "").toLowerCase().includes(String(value).trim().toLowerCase()),
+});
+
+/**
+ * A column holding two values, filtered by both: each outer value (with how
+ * many rows hold it) opens onto the inner values found under it. Ticking an
+ * outer value takes all of its rows. `outer(r)`, `inner(r)`: the row's values
+ * (null: blank); `outerLabel`, `innerLabel`: how they read.
+ */
+const SEP = "\u0001";
+const treeFilter = (rows, outer, inner, outerLabel = (v) => v, innerLabel = (v) => v) => {
+  const tree = new Map(); // outer -> { count, inner: Map(inner -> count) }
+  for (const r of rows) {
+    const o = String(outer(r) ?? BLANK);
+    const i = String(inner(r) ?? BLANK);
+    const t = tree.get(o) || { count: 0, inner: new Map() };
+    t.count += 1;
+    t.inner.set(i, (t.inner.get(i) || 0) + 1);
+    tree.set(o, t);
+  }
+  const text = (label) => (v) => (v === BLANK ? "(blank)" : String(label(v)));
+  const ot = text(outerLabel);
+  const it = text(innerLabel);
+  const byText = (f) => (a, b) => f(a[0]).localeCompare(f(b[0]));
+  return {
+    filterMode: "tree",
+    filterSearch: [...tree.values()].reduce((a, t) => a + 1 + t.inner.size, 0) > 8,
+    filters: [...tree].sort(byText(ot)).map(([o, t]) => ({
+      text: `${ot(o)} (${n(t.count)})`,
+      value: `o${SEP}${o}`,
+      children: [...t.inner].sort(byText(it)).map(([i, c]) => ({ text: `${it(i)} (${n(c)})`, value: `i${SEP}${o}${SEP}${i}` })),
+    })),
+    onFilter: (value, r) => {
+      const [level, o, i] = String(value).split(SEP);
+      const same = String(outer(r) ?? BLANK) === o;
+      return level === "o" ? same : same && String(inner(r) ?? BLANK) === i;
+    },
+  };
+};
+
+/** The newly issued list's Type, as the Permit column shows it under the number. */
+const typeLabel = (v) => (v === "renewal" ? "Renewal" : v ? "New" : "(blank)");
+
+/**
+ * The Permit column's filter: the permit number ("contains") and the Type
+ * (New / Renewal), together. Both are kept in the one filter key, as JSON.
+ */
+const permitFilter = (rows) => {
+  const types = new Map();
+  for (const r of rows) types.set(r.type || BLANK, (types.get(r.type || BLANK) || 0) + 1);
+  const read = (key) => {
+    try {
+      return JSON.parse(key || "{}");
+    } catch {
+      return {};
+    }
+  };
+  return {
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => {
+      const f = read(selectedKeys[0]);
+      const set = (next) => {
+        const v = { ...f, ...next };
+        setSelectedKeys(v.q || v.types?.length ? [JSON.stringify(v)] : []);
+      };
+      return (
+        <div style={{ padding: 8, width: 240 }} onKeyDown={(e) => e.stopPropagation()}>
+          <Input autoFocus allowClear size="small" placeholder="Permit number contains…" value={f.q} onChange={(e) => set({ q: e.target.value })} onPressEnter={() => confirm()} style={{ marginBottom: 8 }} />
+          {types.size > 1 && (
+            <Checkbox.Group
+              style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}
+              value={f.types || []}
+              onChange={(v) => set({ types: v })}
+              options={[...types].map(([t, c]) => ({ label: `${typeLabel(t === BLANK ? null : t)} (${n(c)})`, value: t }))}
+            />
+          )}
+          <Space size={6} style={{ width: "100%", justifyContent: "flex-end" }}>
+            <Button
+              size="small"
+              onClick={() => {
+                clearFilters?.();
+                confirm();
+              }}
+            >
+              Reset
+            </Button>
+            <Button size="small" type="primary" icon={<SearchOutlined />} onClick={() => confirm()}>
+              Filter
+            </Button>
+          </Space>
+        </div>
+      );
+    },
+    filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? "#1677ff" : undefined }} />,
+    onFilter: (value, r) => {
+      const f = read(value);
+      const q = String(f.q || "").trim().toLowerCase();
+      return (!q || String(r.permit || "").toLowerCase().includes(q)) && (!f.types?.length || f.types.includes(r.type || BLANK));
+    },
+  };
+};
+
+/** A second value under a cell's first, smaller and grey. */
+const Under = ({ children }) => (
+  <Text type="secondary" style={{ fontSize: 11.5, display: "block" }}>
+    {children}
+  </Text>
+);
+
+/** Where a permit stands on the healthcare / TSD / TRC mark, as the column shows it. */
+const healthcareOf = (r) => (r.hcUnit ? unitLabel(r.hcUnit) : r.healthcare === true ? (r.doubtful ? "Marked — PSIC not healthcare" : "Marked") : null);
+
+const columnsFor = (names, rows = []) => [
+  { title: "Row", key: "at", width: 120, render: (_, r) => (r.sheet ? <Text code>{`${r.sheet}!${r.row}`}</Text> : "—"), ...pickFilter(rows, (r) => r.sheet) },
+  // The permit number, and under it the list's Type (new or renewal).
+  {
+    title: "Permit / Type",
+    dataIndex: "permit",
+    width: 200,
+    ...permitFilter(rows),
+    render: (v, r) => (
+      <>
+        <Text code>{v}</Text>
+        {r.type && (
+          <div style={{ marginTop: 4 }}>
+            <Tag style={{ marginInlineEnd: 0 }}>{typeLabel(r.type)}</Tag>
+          </div>
+        )}
+      </>
+    ),
+  },
+  // What the permit is for and whose — as the list writes them.
+  {
+    title: "Project title / Proponent",
+    dataIndex: "title",
+    width: 300,
+    render: (v, r) =>
+      v ? (
+        <>
+          <Clip v={v} width={284} />
+          {r.firm && r.firm !== v && <Under>{r.firm}</Under>}
+        </>
+      ) : (
+        <Clip v={r.firm} width={284} />
+      ),
+    ...textFilter((r) => `${r.title || ""} ${r.firm || ""}`, "Project title or proponent contains…"),
+  },
+  {
+    ...pickFilter(rows, (r) => r.industry),
+    // The list's own PSIC Code, and the RAW data's classification it matched (the healthcare basis).
+    title: "PSIC Code → RAW classification",
+    dataIndex: "industry",
+    width: 240,
+    render: (v, r) => (
+      <>
+        <Clip v={v} width={224} />
+        {r.psicClass && (
+          <Text type="secondary" style={{ fontSize: 11.5, display: "block" }}>
+            → {r.psicClass}
+          </Text>
+        )}
+      </>
+    ),
+  },
+  // The city or municipality, and under it the province; filtered province by province.
+  {
+    title: "City / municipality, Province",
+    key: "place",
+    width: 170,
+    render: (_, r) => (
+      <>
+        {r.city ? unitLabel(r.city) : <Text type="secondary">—</Text>}
+        {r.province && <Under>{unitLabel(r.province)}</Under>}
+      </>
+    ),
+    ...treeFilter(rows, (r) => r.province, (r) => r.city, unitLabel, unitLabel),
+  },
   {
     title: "Colour",
     key: "colour",
     width: 190,
+    ...pickFilter(rows, (r) => r.family || "none", (v) => (v === "none" ? "No colour" : masterlistLabel(v, names))),
     render: (_, r) => (
       <Space size={6}>
         <Swatch fill={r.fill} family={r.family} />
@@ -121,17 +333,24 @@ const columnsFor = (names) => [
     ),
   },
   {
-    // The list's "Healthcare / TSD / TRC Firm" column, as written: Yes, or blank.
+    // The healthcare list it is counted under: marked on the list, or found in the healthcare RAW lists.
     title: "Healthcare / TSD / TRC firm",
     key: "healthcare",
-    width: 150,
+    width: 170,
     align: "center",
+    ...pickFilter(rows, healthcareOf),
     render: (_, r) =>
-      r.healthcare === true ? (
+      r.hcUnit || r.healthcare === true ? (
         <Space size={4} wrap>
-          <Tag color="purple" style={{ marginInlineEnd: 0 }}>Yes</Tag>
+          {r.hcUnit ? (
+            <Tooltip title={r.healthcare === true ? "Marked on the list (its Healthcare column or sheet)" : "Its PSIC Code is a healthcare classification of the RAW data, it is on the healthcare RAW lists, or a TSD / TRC permit"}>
+              <Tag color="purple" style={{ marginInlineEnd: 0 }}>{unitLabel(r.hcUnit)}</Tag>
+            </Tooltip>
+          ) : (
+            <Tag style={{ marginInlineEnd: 0 }}>Marked</Tag>
+          )}
           {r.doubtful && (
-            <Tooltip title={`Marked Yes, but its PSIC is “${r.psic}” — not a healthcare, laboratory, TSD or transporter establishment. Check the mark.`}>
+            <Tooltip title={`Marked healthcare, but its PSIC Code “${r.psic}” matches the RAW data's classification “${r.psicClass || r.psic}”, which is not a healthcare one. Not counted as healthcare; check the mark.`}>
               <Tag color="orange" style={{ marginInlineEnd: 0 }}>Check</Tag>
             </Tooltip>
           )}
@@ -140,24 +359,39 @@ const columnsFor = (names) => [
         <Text type="secondary">—</Text>
       ),
   },
-  { title: "In RAW", dataIndex: "inRaw", width: 80, align: "center", render: (v) => (v ? <Tag color="green" style={{ marginInlineEnd: 0 }}>Yes</Tag> : <Tag style={{ marginInlineEnd: 0 }}>No</Tag>) },
+  // Where the permit stands, and under it whether it is in the RAW data;
+  // filtered by "in the RAW data" or not, then by standing.
   {
-    title: "Standing",
+    title: "Standing / In RAW",
     key: "status",
-    width: 200,
+    width: 210,
+    ...treeFilter(
+      rows,
+      (r) => (r.inRaw ? "Yes" : "No"),
+      (r) => standingOf(r, names),
+      (v) => (v === "Yes" ? "In the RAW data" : "Not in the RAW data"),
+      (s) => (s === "named" ? "Named colour" : PERMIT_STATUS[s]?.label || s)
+    ),
     render: (_, r) => {
       const s = standingOf(r, names);
-      if (s === "named") {
-        return (
+      const standing =
+        s === "named" ? (
           <Tooltip title="A colour outside the workshop's legend, named for this season. Not checked against the RAW data.">
             <Tag style={{ marginInlineEnd: 0 }}>{names[r.family]}</Tag>
           </Tooltip>
+        ) : (
+          <Tooltip title={PERMIT_STATUS[s]?.hint}>
+            <Tag color={PERMIT_STATUS[s]?.color} style={{ marginInlineEnd: 0 }}>{PERMIT_STATUS[s]?.label || s}</Tag>
+          </Tooltip>
         );
-      }
       return (
-        <Tooltip title={PERMIT_STATUS[s]?.hint}>
-          <Tag color={PERMIT_STATUS[s]?.color} style={{ marginInlineEnd: 0 }}>{PERMIT_STATUS[s]?.label || s}</Tag>
-        </Tooltip>
+        <>
+          {standing}
+          <div style={{ marginTop: 4 }}>
+            <Text type="secondary" style={{ fontSize: 11.5 }}>In RAW: </Text>
+            {r.inRaw ? <Tag color="green" style={{ marginInlineEnd: 0 }}>Yes</Tag> : <Tag style={{ marginInlineEnd: 0 }}>No</Tag>}
+          </div>
+        </>
       );
     },
   },
@@ -166,21 +400,22 @@ const columnsFor = (names) => [
 /**
  * "Colour does not match the RAW data", explained: what each colour claims,
  * how the claim is checked, how many fail it, and what to do. `counts`:
- * { green, pink, yellow } — coloured but not in the RAW data — and `red` —
- * red but in it.
+ * { green, pink, yellow, orange } — coloured but not in the RAW data — and
+ * `red` — red but in it.
  */
+const IN_RAW_COLOURS = ["green", "pink", "yellow", "orange"];
 function MismatchExplainer({ counts, kind }) {
   const what = KIND_LABEL[kind] || kind;
-  const missing = (counts.green || 0) + (counts.pink || 0) + (counts.yellow || 0);
+  const missing = IN_RAW_COLOURS.reduce((a, f) => a + (counts[f] || 0), 0);
   const total = missing + (counts.red || 0);
   const cases = [
     {
       key: "missing",
-      colours: ["green", "pink", "yellow"],
-      claim: `Green, pink and yellow each say the ${what} is in the RAW data — already there (green), updated to the renewal (pink) or newly added (yellow).`,
+      colours: IN_RAW_COLOURS,
+      claim: `Green, pink, yellow and orange each say the ${what} is in the RAW data — already there (green), updated to the renewal (pink), newly added (yellow), or added with its firm (orange).`,
       fails: `…but the permit number is on no RAW file.`,
       count: missing,
-      parts: ["green", "pink", "yellow"].filter((f) => counts[f]).map((f) => `${n(counts[f])} ${MASTERLIST_FAMILY[f].label.toLowerCase()}`),
+      parts: IN_RAW_COLOURS.filter((f) => counts[f]).map((f) => `${n(counts[f])} ${MASTERLIST_FAMILY[f].label.toLowerCase()}`),
       fix: "Write the permit into the RAW data on the firm's row — or, if it was coloured by mistake, take the colour off the list.",
     },
     {
@@ -190,7 +425,7 @@ function MismatchExplainer({ counts, kind }) {
       fails: "…but the permit number is already on a RAW file.",
       count: counts.red || 0,
       parts: [],
-      fix: "If the firm is in the universe, recolour the row green, pink or yellow. If not, the permit was written on the wrong firm: take it off that row.",
+      fix: "The firm has been added to the universe: turn the row orange (firm added in the universe RAW) — orange rises as red falls. If the firm was already there, recolour it green, pink or yellow; if the permit was written on the wrong firm, take it off that row.",
     },
   ];
   return (
@@ -330,7 +565,7 @@ function HighlightedBreakdown({ byFamily = {}, names = {}, kind }) {
 
 /** The explainer's counts from a list's permits. */
 const mismatchCounts = (rows) => {
-  const c = { green: 0, pink: 0, yellow: 0, red: 0 };
+  const c = { green: 0, pink: 0, yellow: 0, orange: 0, red: 0 };
   for (const r of rows) {
     if (r.status === "notEncoded" && c[r.family] != null) c[r.family] += 1;
     if (r.status === "redInRaw") c.red += 1;
@@ -342,7 +577,8 @@ const mismatchCounts = (rows) => {
 function ListPane({ file, names, initialView }) {
   const [view, setView] = useState(initialView || "todo");
   const [q, setQ] = useState("");
-  const columns = useMemo(() => columnsFor(names), [names]);
+  // The filters offer what the whole list holds, whatever the view picked.
+  const columns = useMemo(() => columnsFor(names, file.rows), [names, file.rows]);
   const counts = Object.fromEntries(VIEWS.map((v) => [v.value, file.rows.filter((r) => v.has(standingOf(r, names), r)).length]));
   const views = VIEWS.filter((v) => !v.optional || counts[v.value] > 0 || v.value === view);
   const rows = useMemo(() => {
@@ -373,7 +609,16 @@ function ListPane({ file, names, initialView }) {
         <Input allowClear size="middle" prefix={<SearchOutlined />} placeholder="Permit, project, proponent, industry or city" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 320 }} />
       </Space>
       {/* One line per row of the list: a permit number on two rows is two lines. */}
-      <Table size="small" rowKey={(r) => `${r.sheet}!${r.row}|${r.permit}`} columns={columns} dataSource={rows} pagination={{ pageSize: 15, showSizeChanger: false, hideOnSinglePage: true }} scroll={{ x: 1880 }} />
+      <Table
+        className="pt-wrap-table"
+        size="small"
+        tableLayout="fixed"
+        rowKey={(r) => `${r.sheet}!${r.row}|${r.permit}`}
+        columns={columns}
+        dataSource={rows}
+        pagination={{ pageSize: 15, showSizeChanger: false, hideOnSinglePage: true, showTotal: (total) => `${n(total)} row${total === 1 ? "" : "s"}` }}
+        scroll={{ x: 1600 }}
+      />
     </Space>
   );
 }
@@ -387,7 +632,7 @@ function PublicCounts({ x, names, kind, view }) {
   return (
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
       {view === "highlighted" && <HighlightedBreakdown byFamily={f} names={names} kind={kind} />}
-      {view === "mismatch" && <MismatchExplainer kind={kind} counts={{ green: missing("green"), pink: missing("pink"), yellow: missing("yellow"), red: f.red?.inRaw || 0 }} />}
+      {view === "mismatch" && <MismatchExplainer kind={kind} counts={{ green: missing("green"), pink: missing("pink"), yellow: missing("yellow"), orange: missing("orange"), red: f.red?.inRaw || 0 }} />}
       <FamilyBreakdown byFamily={byFamily} issued={x.issued} names={names} />
     </Space>
   );
@@ -399,7 +644,7 @@ function PublicCounts({ x, names, kind, view }) {
  */
 function fileInScope(f, scope) {
   if (!scope || scope === "all") return f;
-  const rows = f.rows.filter((r) => (scope === "healthcare" ? r.healthcare === true : r.healthcare !== true));
+  const rows = f.rows.filter((r) => (scope === "healthcare" ? Boolean(r.hcUnit) : !r.hcUnit));
   const byFamily = {};
   for (const r of rows) {
     const t = (byFamily[r.family || "none"] ||= { rows: 0, inRaw: 0 });
@@ -442,8 +687,25 @@ export default function IssuedKindDetail({ kind, x, admin, names: given, view = 
       <Alert
         type="warning"
         showIcon
-        message="Marked Healthcare / TSD / TRC, but the establishment is not one"
-        description="These permits have Yes in the list's “Healthcare / TSD / TRC Firm” column, yet their PSIC description is not a hospital, clinic, laboratory, TSD or transporter one (a farm, a gas station, a hotel…). Until the Yes is corrected they count as Healthcare / TSD / TRC firms, not the province's Monitoring Plan."
+        message="Marked Healthcare / TSD / TRC, but its PSIC Code is not a healthcare one"
+        description={
+          <Space direction="vertical" size={6}>
+            <span>
+              The basis: each permit&rsquo;s own <b>PSIC Code</b> on this masterlist, looked up in the RAW data&rsquo;s standard Industry Classification list. These rows
+              are marked Yes in the &ldquo;Healthcare / TSD / TRC Firm&rdquo; column, but their PSIC Code is a classification that is not a healthcare one — e.g.
+              &ldquo;Animal production&rdquo; is the RAW data&rsquo;s Animal Production. They stay in their province&rsquo;s count, under the Monitoring Plan, until the Yes or
+              the PSIC Code is corrected. Each row shows its PSIC Code and the classification it matched.
+            </span>
+            {data?.healthcareClasses?.length > 0 && (
+              <span>
+                <b>Healthcare classifications:</b> {data.healthcareClasses.join(", ")}.
+              </span>
+            )}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              A PSIC Code matching none of the list is not judged: the Yes stands. The HWG ID list has no PSIC Code column; its healthcare firms are those on its Healthcare sheet.
+            </Text>
+          </Space>
+        }
       />
     ) : null;
   // A list with none of the permits the eye opened on opens on those not yet highlighted instead.

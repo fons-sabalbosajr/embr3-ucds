@@ -7,6 +7,7 @@ import { EditOutlined, EyeInvisibleOutlined, EyeOutlined, FileDoneOutlined, Righ
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import IssuedKindDetail from "./IssuedKindDetail";
+import { FoldCard, FoldTitle, setFoldAll, useFold } from "./Fold";
 import { FAMILY, HEALTHCARE, KIND_LABEL, MASTERLIST, MASTERLIST_FAMILY, NO_COLOUR, SCOPES, inScope, isOtherColour, masterlistHex, n, pct, unitLabel } from "./palette";
 
 dayjs.extend(relativeTime);
@@ -126,15 +127,25 @@ const Shades = ({ shades = {}, family }) => {
 
 /** One kind of permit's list(s): highlighted of issued, by colour, and what is left. */
 function KindCard({ k, x, accent, onMore, live, names, onName, scope = "all", mark = null }) {
+  // Folded: the percentage and its bar only, the breakdown hidden.
+  const [open, setOpen] = useFold(`hl-kind-${k}`, true, "hl-kinds");
   const families = x.families || {};
   const left = notYetOf(x);
   const others = Object.entries(families).filter(([f]) => isOtherColour(f));
   return (
-    <Card size="small" className="pt-summary pt-tile-in">
+    <Card size="small" className={`pt-summary pt-tile-in${open ? "" : " is-folded"}`}>
       <div className="pt-summary-head pt-tile-head">
         <Text type="secondary" className="pt-summary-title">
-          <FileDoneOutlined />
-          {KIND_LABEL[k] || k}
+          <FoldTitle open={open} onToggle={setOpen}>
+            <FileDoneOutlined />
+            {KIND_LABEL[k] || k}
+          </FoldTitle>
+          {!open && (
+            <span className="pt-fold-summary">
+              {" "}
+              · {n(x.colored)} / {n(x.issued)}
+            </span>
+          )}
         </Text>
         <LiveMark k={k} {...live} />
       </div>
@@ -203,8 +214,8 @@ function KindCard({ k, x, accent, onMore, live, names, onName, scope = "all", ma
         {scope === "all" && mark?.healthcareDoubtful > 0 && (
           <div className="pt-summary-row is-sub">
             <span style={{ width: 10 }} />
-            <Tooltip title="Yes in the “Healthcare / TSD / TRC Firm” column, but the establishment's PSIC description is not a healthcare, laboratory, TSD or transporter one (a farm, a gas station, a hotel…). Check the Yes.">
-              <Text type="warning">…of which not a healthcare establishment</Text>
+            <Tooltip title="Marked Yes in the list's “Healthcare / TSD / TRC Firm” column, but the permit's own PSIC Code on the masterlist is, in the RAW data's standard Industry Classification list, not a healthcare classification (healthcare: hospital, clinic, dental, diagnostic, dialysis, laboratory, nursing home, blood service, ultrasound, treatment and disposal of hazardous waste). E.g. “Animal production” is Animal Production. Kept under the Monitoring Plan; open the eye to see each one.">
+              <Text type="warning">…marked, but not a healthcare establishment</Text>
             </Tooltip>
             <Tooltip title="See these permits">
               <Button type="text" size="small" className="pt-eye" icon={<EyeOutlined />} onClick={() => onMore("doubtful")} aria-label={`See the ${KIND_LABEL[k] || k} permits marked healthcare on a non-healthcare firm`} />
@@ -343,35 +354,118 @@ export default function IssuedHighlighting({ byKind = {}, kinds = [], units = []
   // Each province's figures worked out once, so every column can sort on them;
   // `order` keeps the provinces' own order (Aurora first) when no sort is set.
   // Each opens into its cities and municipalities, counted the same way.
+  // With All permits, each row's Issued — the province sheet's count (AURORA
+  // (44) is 44) — split into its Monitoring Plan firms and its healthcare /
+  // TSD / TRC firms, the two adding up to it.
+  const split = (x) => ({ plan: inScope(x, "plan").issued || 0, hc: inScope(x, "healthcare").issued || 0 });
   const rows = units
     .map((u, order) => {
       const cities = Object.entries(u.issuedByKind?.[tableKind]?.cities || {})
-        .map(([city, c]) => ({ unit: `${u.unit}|${city}`, ...figuresOf(inScope(c, scope)), name: unitLabel(city.replace(/․/g, ".")), order: 0, city: true }))
+        .map(([city, c]) => ({ unit: `${u.unit}|${city}`, ...figuresOf(inScope(c, scope)), ...split(c), name: unitLabel(city.replace(/․/g, ".")), order: 0, city: true }))
         .filter((c) => c.issued > 0)
         .sort((a, b) => a.name.localeCompare(b.name));
       // `children`: the table's tree rows — the municipalities open under their province.
-      return { unit: u.unit, ...figuresOf(unitOfKinds(u, tableKind ? [tableKind] : [], scope)), order, name: unitLabel(u.unit), ...(cities.length ? { children: cities } : {}) };
+      return {
+        unit: u.unit,
+        ...figuresOf(unitOfKinds(u, tableKind ? [tableKind] : [], scope)),
+        ...split(u.issuedByKind?.[tableKind]),
+        order,
+        name: unitLabel(u.unit),
+        ...(cities.length ? { children: cities } : {}),
+      };
     })
     .filter((u) => u.issued > 0);
+  // The table's Total: every province and healthcare list, each counted once.
+  const tableTotal = rows.reduce(
+    (t, r) => {
+      for (const k of ["issued", "colored", "plan", "hc", "otherColours", "left", "mismatched"]) t[k] += r[k] || 0;
+      for (const m of MASTERLIST) t.byColour[m.family] += r.byColour?.[m.family] || 0;
+      return t;
+    },
+    { issued: 0, colored: 0, plan: 0, hc: 0, otherColours: 0, left: 0, mismatched: 0, byColour: Object.fromEntries(MASTERLIST.map((m) => [m.family, 0])) }
+  );
   const byNumber = (get) => (a, b) => get(a) - get(b) || a.order - b.order;
+  const tableColumns = [
+    {
+      title: "Province / municipality",
+      dataIndex: "name",
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (v, r) => (r.city ? <span>{v}</span> : <span className="pt-issued-name">{v}</span>),
+    },
+    // As on the tiles: Issued = Highlighted (the colours after it) + Not yet highlighted.
+    { title: <Tooltip title="As the list's province sheet counts it — AURORA (44) is 44">Issued</Tooltip>, dataIndex: "issued", align: "right", sorter: byNumber((u) => u.issued), render: (v) => <b>{n(v)}</b> },
+    // All permits: Issued = Monitoring Plan + Healthcare / TSD / TRC.
+    ...(scope === "all"
+      ? [
+          { title: <Tooltip title="Permits of the Monitoring Plan's firms">Monitoring Plan</Tooltip>, dataIndex: "plan", align: "right", sorter: byNumber((u) => u.plan), render: n },
+          { title: <Tooltip title={HEALTHCARE.hint}>Healthcare / TSD / TRC</Tooltip>, dataIndex: "hc", align: "right", sorter: byNumber((u) => u.hc), render: n },
+        ]
+      : []),
+    { title: "Highlighted", dataIndex: "colored", align: "right", sorter: byNumber((u) => u.colored), render: (v) => <b>{n(v)}</b> },
+    ...MASTERLIST.map((m) => ({
+      title: (
+        <Tooltip title={m.hint}>
+          <Space size={4}>
+            <span className="pt-swatch is-small" style={{ background: m.hex }} />
+            {m.label}
+          </Space>
+        </Tooltip>
+      ),
+      key: m.family,
+      align: "right",
+      sorter: byNumber((u) => u.byColour[m.family]),
+      render: (_, u) => n(u.byColour[m.family]),
+    })),
+    ...(rows.some((u) => u.otherColours || u.children?.some((c) => c.otherColours))
+      ? [{ title: <Tooltip title="Colours the workshop's legend does not use">Other colours</Tooltip>, dataIndex: "otherColours", align: "right", sorter: byNumber((u) => u.otherColours), render: n }]
+      : []),
+    { title: "Not yet highlighted", dataIndex: "left", align: "right", sorter: byNumber((u) => u.left), render: (v) => <b>{n(v)}</b> },
+    {
+      title: "Does not match",
+      dataIndex: "mismatched",
+      align: "right",
+      sorter: byNumber((u) => u.mismatched),
+      render: (v) => (v ? <Text type="danger" strong>{n(v)}</Text> : <Text type="secondary">0</Text>),
+    },
+  ];
+  const allIssued = shown.reduce((a, k) => a + (scoped(k).issued || 0), 0);
+  const allColored = shown.reduce((a, k) => a + (scoped(k).colored || 0), 0);
   return (
-    <Card
-      size="small"
-      className="pt-card"
+    <FoldCard
+      id="hl-issued-lists"
       title={
         <Space size={6}>
           <FileDoneOutlined />
           Highlighted on the newly issued lists
         </Space>
       }
-      extra={
-        canName && otherColours.length > 0 ? (
-          <Button size="small" icon={<EditOutlined />} onClick={() => setNaming(otherColours[0][0])}>
-            Name other colours
-          </Button>
-        ) : (
-          <Text type="secondary" className="pt-card-hint">the newly issued permit folder</Text>
+      summary={
+        allIssued > 0 && (
+          <Text type="secondary" className="pt-fold-summary">
+            {pct(allColored, allIssued)}% highlighted · {shown.length} {shown.length === 1 ? "kind" : "kinds"}
+          </Text>
         )
+      }
+      extra={
+        <Space size={6}>
+          {shown.length > 1 && (
+            <>
+              <Button size="small" onClick={() => setFoldAll("hl-kinds", true)}>
+                Expand tiles
+              </Button>
+              <Button size="small" onClick={() => setFoldAll("hl-kinds", false)}>
+                Collapse tiles
+              </Button>
+            </>
+          )}
+          {canName && otherColours.length > 0 ? (
+            <Button size="small" icon={<EditOutlined />} onClick={() => setNaming(otherColours[0][0])}>
+              Name other colours
+            </Button>
+          ) : (
+            <Text type="secondary" className="pt-card-hint">the newly issued permit folder</Text>
+          )}
+        </Space>
       }
     >
       <div className="pt-mlist-key">
@@ -469,49 +563,27 @@ export default function IssuedHighlighting({ byKind = {}, kinds = [], units = []
                   rowKey="unit"
                   pagination={false}
                   dataSource={rows}
-                  scroll={{ x: 900 }}
+                  scroll={{ x: scope === "all" ? 1120 : 900 }}
                   expandable={{ indentSize: 18 }}
                   rowClassName={(r) => (r.city ? "pt-issued-city" : "")}
                   // Click a heading: ascending, descending, then back to the provinces' order
                   // (the municipalities sort the same way under their province).
                   sortDirections={["ascend", "descend"]}
                   showSorterTooltip={{ title: "Sort" }}
-                  columns={[
-                    {
-                      title: "Province / municipality",
-                      dataIndex: "name",
-                      sorter: (a, b) => a.name.localeCompare(b.name),
-                      render: (v, r) => (r.city ? <span>{v}</span> : <span className="pt-issued-name">{v}</span>),
-                    },
-                    // As on the tiles: Issued = Highlighted (the colours after it) + Not yet highlighted.
-                    { title: "Issued", dataIndex: "issued", align: "right", sorter: byNumber((u) => u.issued), render: n },
-                    { title: "Highlighted", dataIndex: "colored", align: "right", sorter: byNumber((u) => u.colored), render: (v) => <b>{n(v)}</b> },
-                    ...MASTERLIST.map((m) => ({
-                      title: (
-                        <Tooltip title={m.hint}>
-                          <Space size={4}>
-                            <span className="pt-swatch is-small" style={{ background: m.hex }} />
-                            {m.label}
-                          </Space>
-                        </Tooltip>
-                      ),
-                      key: m.family,
-                      align: "right",
-                      sorter: byNumber((u) => u.byColour[m.family]),
-                      render: (_, u) => n(u.byColour[m.family]),
-                    })),
-                    ...(rows.some((u) => u.otherColours || u.children?.some((c) => c.otherColours))
-                      ? [{ title: <Tooltip title="Colours the workshop's legend does not use">Other colours</Tooltip>, dataIndex: "otherColours", align: "right", sorter: byNumber((u) => u.otherColours), render: n }]
-                      : []),
-                    { title: "Not yet highlighted", dataIndex: "left", align: "right", sorter: byNumber((u) => u.left), render: (v) => <b>{n(v)}</b> },
-                    {
-                      title: "Does not match",
-                      dataIndex: "mismatched",
-                      align: "right",
-                      sorter: byNumber((u) => u.mismatched),
-                      render: (v) => (v ? <Text type="danger" strong>{n(v)}</Text> : <Text type="secondary">0</Text>),
-                    },
-                  ]}
+                  columns={tableColumns}
+                  summary={() =>
+                    rows.length > 1 && (
+                      <Table.Summary fixed>
+                        <Table.Summary.Row className="pt-row-total">
+                          {tableColumns.map((c, i) => (
+                            <Table.Summary.Cell key={c.key || c.dataIndex} index={i} align={c.align}>
+                              {i === 0 ? <b>Total</b> : c.render(tableTotal[c.dataIndex], tableTotal)}
+                            </Table.Summary.Cell>
+                          ))}
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    )
+                  }
                 />
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={`No newly issued ${KIND_LABEL[tableKind] || tableKind} with a province.`} />
@@ -556,6 +628,6 @@ export default function IssuedHighlighting({ byKind = {}, kinds = [], units = []
         {more && <IssuedKindDetail kind={more.kind} x={inScope(byKind[more.kind], more.scope)} admin={admin} names={names} view={more.view} scope={more.scope} />}
       </Modal>
       {canName && <NameColours open={Boolean(naming)} focus={naming} colours={otherColours} names={names} seasonId={seasonId} queryKey={queryKey} onClose={() => setNaming(null)} />}
-    </Card>
+    </FoldCard>
   );
 }

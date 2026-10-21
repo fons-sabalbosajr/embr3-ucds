@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   fetchAuthorizedYears,
   selectYearContainer,
@@ -25,12 +26,26 @@ export const useYear = () => {
 };
 
 export const YearProvider = ({ children }) => {
+  const queryClient = useQueryClient();
   const [years, setYears] = useState([]);
   const [activeYear, setActiveYearState] = useState(null);
-  const setActiveYear = useCallback((year) => {
-    currentActiveYear = year ?? null;
-    setActiveYearState(currentActiveYear);
-  }, []);
+  // The last container whose data this tab has fetched. Entering another one
+  // forgets the register's cached answers (every query under ["ucds", …]: the
+  // dashboard, the reports, the calendar): their keys carry no year, so the
+  // new container's screens would otherwise show the old one's figures —
+  // 2026's shared register on 2027's dashboard — until they went stale.
+  const lastYear = useRef(null);
+  const setActiveYear = useCallback(
+    (year) => {
+      currentActiveYear = year ?? null;
+      if (currentActiveYear != null) {
+        if (lastYear.current != null && lastYear.current !== currentActiveYear) queryClient.removeQueries({ queryKey: ["ucds"] });
+        lastYear.current = currentActiveYear;
+      }
+      setActiveYearState(currentActiveYear);
+    },
+    [queryClient]
+  );
   const [role, setRole] = useState(null);
   const [canAccessAllYears, setCanAccessAllYears] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -64,7 +79,7 @@ export const YearProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setActiveYear]);
 
   useEffect(() => {
     refresh();
@@ -75,12 +90,12 @@ export const YearProvider = ({ children }) => {
     const { activeYear: confirmed } = await selectYearContainer(year);
     setActiveYear(confirmed);
     return confirmed;
-  }, []);
+  }, [setActiveYear]);
 
   const leaveYear = useCallback(async () => {
     await clearYearContainer();
     setActiveYear(null);
-  }, []);
+  }, [setActiveYear]);
 
   const value = useMemo(
     () => ({

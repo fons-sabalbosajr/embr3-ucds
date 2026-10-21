@@ -42,11 +42,22 @@ const TARGET = `ucds-data-${YEAR}`;
 const { YEARLY, LOOKUP_SHEETS, SET_ASIDE, squeeze, fieldsOf, cell, serial, provinceOf } = require('../../modules/ucds/services/rawWorkbook');
 
 
+// Only the sheets the Progress Tracker counts as the universe (the province's
+// own sheet, the 2027 lists' sheets): not the additions logs (NEW ADDITIONS
+// LOG, ADDED FIRM SUMMARY), whose rows are already on the main sheet, nor the
+// review sheets (NEW - CHECK DUPLICATE, HAZWASTE ID ONLY (ERMS)), still pending.
+const { mainSheetsOf } = require('../../services/progressTracker/analyze');
+
 function readWorkbook(file) {
   const wb = XLSX.readFile(file, { cellDates: true });
+  const main = new Set(mainSheetsOf(wb));
   const sheets = [];
   for (const name of wb.SheetNames) {
     if (LOOKUP_SHEETS.test(name) || SET_ASIDE.test(name)) continue;
+    if (!main.has(name)) {
+      console.log(`${path.basename(file)} › ${name}: not a main sheet — not loaded`);
+      continue;
+    }
     const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true });
     const at = grid.findIndex((r) => r.some((c) => squeeze(c).startsWith('serial_no')));
     if (at < 0) continue;
@@ -119,12 +130,15 @@ async function main() {
     const db = getDb();
     const container = await db.collection('year-containers').findOne({ year: YEAR });
     if (!container) throw new Error(`There is no ${YEAR} container.`);
-    const col = db.collection(TARGET);
-    await col.deleteMany({});
-    for (let i = 0; i < docs.length; i += 1000) await col.insertMany(docs.slice(i, i + 1000), { ordered: true });
-    const count = await col.countDocuments();
-    if (count !== docs.length) throw new Error(`Loaded ${count} of ${docs.length}; the container was not switched.`);
-    for (const key of [{ sort_key: 1 }, { id_no: 1 }, { province: 1 }, { ecc_cnc: 1 }, { province: 1, sort_key: 1 }]) await col.createIndex(key);
+    // Loaded beside the register, then put in its place at once: the year's
+    // screens never see it empty or half loaded.
+    const staging = db.collection(`${TARGET}-loading`);
+    await staging.drop().catch(() => null);
+    for (let i = 0; i < docs.length; i += 1000) await staging.insertMany(docs.slice(i, i + 1000), { ordered: true });
+    const count = await staging.countDocuments();
+    if (count !== docs.length) throw new Error(`Loaded ${count} of ${docs.length}; the register was not replaced.`);
+    for (const key of [{ sort_key: 1 }, { id_no: 1 }, { province: 1 }, { ecc_cnc: 1 }, { province: 1, sort_key: 1 }]) await staging.createIndex(key);
+    await staging.rename(TARGET, { dropTarget: true });
     await db.collection('year-containers').updateOne({ year: YEAR }, { $set: { register: TARGET, registerLoadedAt: new Date(), registerSource: files.map((f) => path.basename(f)) } });
     console.log(`\nLoaded ${count} records into ${TARGET}; the ${YEAR} container now reads it.`);
   } finally {

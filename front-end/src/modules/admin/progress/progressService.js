@@ -13,6 +13,8 @@ export const rebaselineSeason = async (id) => (await client.post(`/seasons/${id}
 export const saveLegend = async ({ id, legend }) => (await client.put(`/seasons/${id}/legend`, { legend })).data;
 /** Names for the newly issued lists' colours outside the workshop's legend: { family: name }. */
 export const saveMasterlistNames = async ({ id, names }) => (await client.put(`/seasons/${id}/masterlist-names`, { names })).data;
+/** A name for one colour of the RAW files' main sheets: { unit, rgb, label, allUnits } (an empty label takes it off). */
+export const saveRawColourName = async ({ id, ...body }) => (await client.put(`/seasons/${id}/raw-colour-names`, body)).data;
 // The public link's settings: { enabled, expiresAt (ISO or null), regenerate }.
 export const saveShare = async ({ id, ...share }) => (await client.put(`/seasons/${id}/share`, share)).data;
 // The Data Visualization tab's firm table and map (Developer only).

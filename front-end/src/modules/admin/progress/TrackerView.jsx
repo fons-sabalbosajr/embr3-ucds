@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Col, Empty, Modal, Progress, Row, Segmented, Space, Table, Tabs, Tooltip, Typography } from "antd";
 import {
   BgColorsOutlined, CheckCircleOutlined, DashboardOutlined, FileDoneOutlined, InfoCircleOutlined, MessageOutlined, PieChartOutlined, ProfileOutlined, RightOutlined, SafetyCertificateOutlined, TableOutlined, TeamOutlined, WarningOutlined,
@@ -10,6 +11,7 @@ import DataViz from "./DataViz";
 import TrackingSummary from "./TrackingSummary";
 import ColourEncoded from "./ColourEncoded";
 import IssuedHighlighting from "./IssuedHighlighting";
+import HealthcarePermits from "./HealthcarePermits";
 import EditingNow from "./EditingNow";
 import { ColourKey, HighlightingPanel, IssuedTable, PermitTable, StackBar, UnitTable, totalOf } from "./ProvinceMatrix";
 import { CompositionChart, IssuedKindChart, PermitKindChart, ReviewedChart } from "./charts";
@@ -31,6 +33,10 @@ const { Text } = Typography;
 
 export const ACCENT = "#2f7ecb";
 const TAB_KEYS = ["overview", "summary", "dataviz", "firms", "permits", "highlighting", "issued"];
+// The queries the tabs make for themselves, under the screen's prefix (the
+// Developer's ["admin", "progress-tracker", …] or the public link's
+// ["public-progress", token, …]): fetched again when the figures change.
+const DEPENDENT = new Set(["issued", "viz-firms", "viz-points", "viz-firm", "colour-targets", "points", "firm"]);
 
 /** A summary tile: a short title, the number, a bar, a few parts, and "See more". */
 function Tile({ icon, title, value, suffix, bar, rows, onMore, moreLabel = "See more" }) {
@@ -215,7 +221,27 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       { replace: true }
     );
   const [group, setGroup] = useState("province");
-  const [more, setMore] = useState(null); // { title, body }
+  // Which "See more" is open — { of: "firms" | "kind" | "highlight" | "issued", k } —
+  // not its contents: they are drawn from the current figures, so an open
+  // window follows a save like the rest of the page.
+  const [more, setMore] = useState(null);
+
+  // The tabs that fetch their own data (the eye's permit lists, the Data
+  // Visualization's firms and map, the encoded cells) fetched again whenever
+  // the figures change — a save to a masterlist or a RAW file — whether the
+  // server's live message reached this screen or the minute's refresh found it.
+  const queryClient = useQueryClient();
+  const seen = useRef(null);
+  const files = data?.files;
+  useEffect(() => {
+    if (!data?.summary) return;
+    const now = [data.matrix, data.summary, files];
+    const before = seen.current;
+    seen.current = now;
+    if (!before || now.every((v, i) => v === before[i])) return;
+    const prefix = token ? ["public-progress", token] : ["admin", "progress-tracker"];
+    queryClient.invalidateQueries({ queryKey: prefix, predicate: (q) => DEPENDENT.has(q.queryKey[2]) });
+  }, [data?.matrix, data?.summary, files, token, queryClient]);
 
   const s = data?.summary;
   const matrix = useMemo(() => data?.matrix || [], [data?.matrix]);
@@ -226,66 +252,68 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
   const groupOptions = GROUPS.filter((g) => byGroup[g.key]?.length).map((g) => ({ value: g.key, label: `${g.label} (${byGroup[g.key].length})` }));
   const currentGroup = byGroup[group]?.length ? group : groupOptions[0]?.value || "province";
   const groupSwitch = groupOptions.length > 1 && <Segmented options={groupOptions} value={currentGroup} onChange={setGroup} />;
+  // Worked out once per set of figures, so the charts (memo) redraw only when these change.
+  const provinceTotal = useMemo(() => totalOf(byGroup.province || []), [byGroup]);
+  const groupTotal = useMemo(() => totalOf(byGroup[currentGroup] || []), [byGroup, currentGroup]);
+  const groupKinds = useMemo(() => kindsShown((k) => groupTotal.permits?.[k]), [groupTotal]);
+  const issuedKinds = useMemo(() => [...MAIN_KINDS, ...EXTRA_KINDS.filter((k) => s?.permits?.byKind?.[k]?.issued)], [s?.permits?.byKind]);
   if (!s) return null;
 
   // --- the "See more" breakdowns -------------------------------------------------
-  const firmsMore = () =>
-    setMore({
-      title: "Firms by province and list",
-      body: (
-        <GroupedTable
-          byGroup={byGroup}
-          rowOf={(u) => ({ rows: u.rows, base: u.base, erms: u.added.erms, ecconline: u.added.ecconline, parts: { base: u.base, erms: u.added.erms, ecconline: u.added.ecconline } })}
-          columns={[
-            num("rows", "Firms"),
-            { ...num("base"), title: dotTitle("base", "Baseline") },
-            { ...num("erms", null, true), title: dotTitle("erms", "ERMS") },
-            { ...num("ecconline", null, true), title: dotTitle("ecconline", "ECC Online") },
-            { title: "Split", key: "bar", width: 140, render: (_, r) => <StackBar thin parts={sourceParts(r.parts)} /> },
-          ]}
-        />
-      ),
-    });
-  const kindMore = (k) =>
-    setMore({
-      title: `${KIND_LABEL[k]} by province and list`,
-      body: (
-        <GroupedTable
-          byGroup={byGroup}
-          rowOf={(u) => ({ ...permitSplit(u, k), firms: u.rows })}
-          columns={[
-            num("total", "Now"),
-            { ...num("base"), title: dotTitle("base", "Baseline") },
-            { ...num("erms", null, true), title: dotTitle("erms", "ERMS") },
-            { ...num("ecconline", null, true), title: dotTitle("ecconline", "ECC Online") },
-            { title: "% of firms", key: "share", align: "right", render: (_, r) => `${pct(r.total, r.firms)}%` },
-            { title: "Split", key: "bar", width: 140, render: (_, r) => <StackBar thin parts={sourceParts(r)} /> },
-          ]}
-        />
-      ),
-    });
-  const highlightMore = () =>
-    setMore({
-      title: "Highlighting by province and list",
-      body: (
-        <GroupedTable
-          byGroup={byGroup}
-          rowOf={(u) => ({ base: u.base, coloredBase: u.coloredBase, notModified: u.notModified })}
-          columns={[
-            num("base", "Baseline firms"),
-            num("coloredBase", "Highlighted"),
-            num("notModified", "No colour"),
-            { title: "Progress", key: "p", width: 180, render: (_, r) => <Progress percent={pct(r.coloredBase, r.base)} size="small" strokeColor={ACCENT} style={{ margin: 0 }} /> },
-          ]}
-        />
-      ),
-    });
-  const issuedKinds = [...MAIN_KINDS, ...EXTRA_KINDS.filter((k) => s.permits.byKind?.[k]?.issued)];
-  const issuedMore = () =>
-    setMore({
-      title: "Newly issued permits by province and kind",
-      body: <IssuedTable units={tracked} kinds={issuedKinds} accent={ACCENT} />,
-    });
+  const firmsMore = () => ({
+    title: "Firms by province and list",
+    body: (
+      <GroupedTable
+        byGroup={byGroup}
+        rowOf={(u) => ({ rows: u.rows, base: u.base, erms: u.added.erms, ecconline: u.added.ecconline, parts: { base: u.base, erms: u.added.erms, ecconline: u.added.ecconline } })}
+        columns={[
+          num("rows", "Firms"),
+          { ...num("base"), title: dotTitle("base", "Baseline") },
+          { ...num("erms", null, true), title: dotTitle("erms", "ERMS") },
+          { ...num("ecconline", null, true), title: dotTitle("ecconline", "ECC Online") },
+          { title: "Split", key: "bar", width: 140, render: (_, r) => <StackBar thin parts={sourceParts(r.parts)} /> },
+        ]}
+      />
+    ),
+  });
+  const kindMore = (k) => ({
+    title: `${KIND_LABEL[k]} by province and list`,
+    body: (
+      <GroupedTable
+        byGroup={byGroup}
+        rowOf={(u) => ({ ...permitSplit(u, k), firms: u.rows })}
+        columns={[
+          num("total", "Now"),
+          { ...num("base"), title: dotTitle("base", "Baseline") },
+          { ...num("erms", null, true), title: dotTitle("erms", "ERMS") },
+          { ...num("ecconline", null, true), title: dotTitle("ecconline", "ECC Online") },
+          { title: "% of firms", key: "share", align: "right", render: (_, r) => `${pct(r.total, r.firms)}%` },
+          { title: "Split", key: "bar", width: 140, render: (_, r) => <StackBar thin parts={sourceParts(r)} /> },
+        ]}
+      />
+    ),
+  });
+  const highlightMore = () => ({
+    title: "Highlighting by province and list",
+    body: (
+      <GroupedTable
+        byGroup={byGroup}
+        rowOf={(u) => ({ base: u.base, coloredBase: u.coloredBase, notModified: u.notModified })}
+        columns={[
+          num("base", "Baseline firms"),
+          num("coloredBase", "Highlighted"),
+          num("notModified", "No colour"),
+          { title: "Progress", key: "p", width: 180, render: (_, r) => <Progress percent={pct(r.coloredBase, r.base)} size="small" strokeColor={ACCENT} style={{ margin: 0 }} /> },
+        ]}
+      />
+    ),
+  });
+  const issuedMore = () => ({
+    title: "Newly issued permits by province and kind",
+    body: <IssuedTable units={tracked} kinds={issuedKinds} accent={ACCENT} />,
+  });
+  const moreOf = { firms: firmsMore, kind: kindMore, highlight: highlightMore, issued: issuedMore };
+  const moreShown = more ? moreOf[more.of](more.k) : null;
 
   // --- the summary tiles ---------------------------------------------------------
   const tiles = (
@@ -303,7 +331,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
               { dot: "ecconline", label: "ECC Online", value: plus(total.added.ecconline) },
               ...GROUPS.filter((g) => byGroup[g.key]?.length).map((g, i) => ({ label: g.label, value: n(totalOf(byGroup[g.key]).rows), divider: i === 0 })),
             ]}
-            onMore={firmsMore}
+            onMore={() => setMore({ of: "firms" })}
           />
         </Col>
         <Col xs={24} md={12} xl={8}>
@@ -317,7 +345,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
               { label: "Highlighted", value: n(total.coloredBase) },
               { label: "No colour", value: n(total.notModified) },
             ]}
-            onMore={highlightMore}
+            onMore={() => setMore({ of: "highlight" })}
           />
         </Col>
         <Col xs={24} md={12} xl={8}>
@@ -341,7 +369,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
                 })}
               </div>
             }
-            onMore={issuedMore}
+            onMore={() => setMore({ of: "issued" })}
           />
         </Col>
       </Row>
@@ -360,7 +388,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
                   { dot: "erms", label: "ERMS", value: plus(p.erms) },
                   { dot: "ecconline", label: "ECC Online", value: plus(p.ecconline) },
                 ]}
-                onMore={() => kindMore(k)}
+                onMore={() => setMore({ of: "kind", k })}
               />
             </Col>
           );
@@ -385,7 +413,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       <Row gutter={[12, 12]}>
         <Col xs={24} xl={12}>
           <Card size="small" className="pt-card" title="Permits by kind" extra={<Text type="secondary" className="pt-card-hint">Monitoring Plan</Text>}>
-            <PermitKindChart total={totalOf(byGroup.province || [])} kinds={MAIN_KINDS} dark={dark} />
+            <PermitKindChart total={provinceTotal} kinds={MAIN_KINDS} dark={dark} />
           </Card>
         </Col>
         <Col xs={24} xl={12}>
@@ -411,14 +439,15 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
     </Card>
   );
 
-  const groupTotal = totalOf(byGroup[currentGroup] || []);
-  const groupKinds = kindsShown((k) => groupTotal.permits?.[k]);
   const permits = (
     <div className="pt-pane">
       {groupSwitch && <div>{groupSwitch}</div>}
       <Card size="small" className="pt-card" title="Permits by kind" extra={<Text type="secondary" className="pt-card-hint">Each kind on its own</Text>}>
         <PermitKindChart total={groupTotal} kinds={groupKinds} dark={dark} />
       </Card>
+      {/* The healthcare lists overlap (one establishment on several): their
+          permits by kind, each counted once. */}
+      {currentGroup === "healthcare" && <HealthcarePermits data={data?.healthcarePermits} admin={admin} />}
       <Card size="small" className="pt-card" title="Permits per province">
         <PermitTable units={byGroup[currentGroup] || []} />
       </Card>
@@ -431,7 +460,6 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       <HighlightingPanel
         units={byGroup[currentGroup] || []}
         matrix={matrix}
-        legend={data?.legend}
         families={data?.families || []}
         seasonId={admin ? data?.season?.id : null}
         queryKey={queryKey}
@@ -444,7 +472,8 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       <IssuedHighlighting
         byKind={s.permits.byKind}
         kinds={[...MAIN_KINDS, ...EXTRA_KINDS]}
-        units={byGroup[currentGroup] || []}
+        // The seven provinces: each as its sheet counts it, Monitoring Plan + healthcare firms.
+        units={byGroup.province || []}
         accent={ACCENT}
         admin={admin}
         // Live: the workbooks being edited now, and whether the tracker is reading the folders.
@@ -508,7 +537,7 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       // The UCD Tracking System's summary sheet, live.
       key: "summary",
       label: <span><ProfileOutlined /> Tracking summary</span>,
-      children: <TrackingSummary matrix={tracked} checkedAt={data?.season?.lastPoll?.at || data?.season?.checkedAt} seasonName={data?.season?.name} names={data?.masterlistNames || {}} />,
+      children: <TrackingSummary matrix={tracked} checkedAt={data?.season?.lastPoll?.at || data?.season?.checkedAt} seasonName={data?.season?.name} names={data?.masterlistNames || {}} landfills={s.permits.landfills || 0} />,
     },
     {
       key: "dataviz",
@@ -530,8 +559,8 @@ export default function TrackerView({ data, mode = "admin", theme = "light", que
       {/* Only the open tab is mounted: the charts of the others cost nothing
           until they are opened (and nothing on each refresh). */}
       <Tabs className="pt-tabs" activeKey={tab} onChange={setTab} items={items} destroyOnHidden />
-      <Modal open={Boolean(more)} title={more?.title} onCancel={() => setMore(null)} footer={null} width={860} destroyOnHidden>
-        {more?.body}
+      <Modal open={Boolean(moreShown)} title={moreShown?.title} onCancel={() => setMore(null)} footer={null} width={860} destroyOnHidden>
+        {moreShown?.body}
       </Modal>
     </div>
   );

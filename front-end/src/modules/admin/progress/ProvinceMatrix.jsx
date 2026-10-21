@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Dropdown, Empty, Input, Modal, Progress, Row, Segmented, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Checkbox, Col, Dropdown, Empty, Input, Popover, Progress, Row, Segmented, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { BgColorsOutlined, CloudOutlined, DesktopOutlined, DownOutlined, EditOutlined, FileExcelOutlined, FolderOpenOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
-import { saveLegend } from "./progressService";
+import { saveRawColourName } from "./progressService";
 import { FamilyChart } from "./charts";
-import { DOT_CLASS, FAMILY, KIND_LABEL, MASTERLIST, MASTERLIST_FAMILY, NO_COLOUR, SOURCES, addedOf, kindsShown, n, pct, permitSplit, plus, shadeName, signed, sum, unitLabel } from "./palette";
+import { FoldCard, FoldTitle, setFoldAll, useFold } from "./Fold";
+import { DOT_CLASS, FAMILY, KIND_LABEL, MASTERLIST, MASTERLIST_FAMILY, NO_COLOUR, SCOPES, SOURCES, addedOf, inScope, kindsShown, n, pct, permitSplit, plus, shadeName, signed, sum, unitLabel } from "./palette";
 
 // ---------------------------------------------------------------------------
 // The old UCD Tracking System (the "tracking_v3" sheet of UCD TRACKING
@@ -394,78 +395,114 @@ const Swatch = ({ rgb, family, small }) => (
   <span className={`pt-swatch${small ? " is-small" : ""}`} style={{ background: rgb ? `#${rgb}` : FAMILY[family]?.hex || "#fff" }} />
 );
 
-function LegendModal({ open, onClose, seasonId, matrix, legend, families, queryKey }) {
+/** A fill's own name, before anyone names its meaning: "Yellow", "Light green", "Dark red". */
+const fillName = (rgb, family) => {
+  const base = FAMILY[family]?.label || family || "Colour";
+  const shade = shadeName(rgb);
+  return shade && shade !== "Medium" ? `${shade} ${base.toLowerCase()}` : base;
+};
+
+/**
+ * Rename one colour of a RAW file — what a row filled with it means — for
+ * this province, or for every province at once. An empty name takes it off.
+ */
+function RenameColour({ unit, fill, seasonId, queryKey }) {
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState({});
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [allUnits, setAllUnits] = useState(false);
   useEffect(() => {
-    if (open) setDraft(JSON.parse(JSON.stringify(legend || {})));
-  }, [open, legend]);
+    if (open) {
+      setLabel(fill.label || "");
+      setAllUnits(false);
+    }
+  }, [open, fill.label]);
   const save = useMutation({
-    mutationFn: () => saveLegend({ id: seasonId, legend: draft }),
-    onSuccess: (data) => {
+    mutationFn: (text) => saveRawColourName({ id: seasonId, unit, rgb: fill.rgb, label: text, allUnits }),
+    onSuccess: (data, text) => {
       queryClient.setQueryData(queryKey, data);
-      message.success("Colour legend saved.");
-      onClose();
+      message.success(text ? `Colour named${allUnits ? " for every province" : ""}.` : "Name taken off.");
+      setOpen(false);
     },
-    onError: (e) => message.error(e?.response?.data?.message || "The legend could not be saved."),
+    onError: (e) => message.error(e?.response?.data?.message || "The name could not be saved."),
   });
-  // Every province in the matrix, with the colours it uses and those its legend names.
-  const units = matrix.map((u) => u.unit);
-  for (const u of Object.keys(legend || {})) if (!units.includes(u)) units.push(u);
-  const set = (unit, fam, value) => setDraft((d) => ({ ...d, [unit]: { ...(d[unit] || {}), [fam]: value } }));
   return (
-    <Modal open={open} title="Colour legend" onCancel={onClose} onOk={() => save.mutate()} okText="Save" confirmLoading={save.isPending} width={760} destroyOnHidden>
-      <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-        What each fill colour means in each province&rsquo;s main sheet. Light and dark shades of a colour count as one. Leave a meaning blank to show the colour without one.
-      </Text>
-      <div style={{ maxHeight: "60vh", overflowY: "auto", paddingInlineEnd: 6 }}>
-        {units.map((unit) => {
-          const used = (matrix.find((u) => u.unit === unit)?.colours || []).map((c) => c.family);
-          const fams = families.filter((f) => used.includes(f) || draft[unit]?.[f] !== undefined);
-          const extra = families.filter((f) => !fams.includes(f));
-          return (
-            <Card key={unit} size="small" title={unitLabel(unit)} style={{ marginBottom: 10 }}>
-              <Row gutter={[8, 8]}>
-                {fams.map((f) => (
-                  <Col key={f} xs={24} md={12}>
-                    <Input prefix={<Swatch family={f} small />} addonBefore={FAMILY[f]?.label || f} value={draft[unit]?.[f] || ""} onChange={(e) => set(unit, f, e.target.value)} placeholder={used.includes(f) ? "Meaning" : "Meaning (not used yet)"} />
-                  </Col>
-                ))}
-              </Row>
-              {extra.length > 0 && (
-                <Space size={4} wrap style={{ marginTop: 8 }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Add a colour:</Text>
-                  {extra.map((f) => (
-                    <Button key={f} size="small" onClick={() => set(unit, f, "")} icon={<Swatch family={f} small />}>
-                      {FAMILY[f]?.label || f}
-                    </Button>
-                  ))}
-                </Space>
-              )}
-            </Card>
-          );
-        })}
-      </div>
-    </Modal>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      trigger="click"
+      placement="bottomLeft"
+      title={
+        <Space size={6}>
+          <Swatch rgb={fill.rgb} small />
+          Name #{fill.rgb}
+        </Space>
+      }
+      content={
+        <Space direction="vertical" size={8} style={{ width: 280 }}>
+          <Input
+            autoFocus
+            maxLength={80}
+            placeholder={`What ${fillName(fill.rgb, fill.family).toLowerCase()} means here`}
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onPressEnter={() => save.mutate(label.trim())}
+          />
+          <Checkbox checked={allUnits} onChange={(e) => setAllUnits(e.target.checked)}>
+            The same name for every province
+          </Checkbox>
+          <Space size={6} style={{ justifyContent: "flex-end", width: "100%" }}>
+            {fill.label && (
+              <Button size="small" onClick={() => save.mutate("")} loading={save.isPending && !label}>
+                Remove name
+              </Button>
+            )}
+            <Button size="small" type="primary" onClick={() => save.mutate(label.trim())} loading={save.isPending} disabled={!label.trim()}>
+              Save
+            </Button>
+          </Space>
+        </Space>
+      }
+    >
+      <Button type="text" size="small" className="pt-eye" icon={<EditOutlined />} aria-label={`Rename the colour #${fill.rgb} of ${unitLabel(unit)}`} />
+    </Popover>
   );
 }
 
-/** One unit's highlighting: progress, then a row per colour family with its shades under it. */
-function HighlightCard({ u, accent }) {
-  const coloured = u.colours.reduce((a, c) => a + c.rows, 0);
+/**
+ * One unit's highlighting: progress, then a row per colour its RAW file's
+ * main sheet uses — each fill as Excel shows it (#FFFF00, theme colours
+ * too), with the name given to it, renamed in place. Folds to its title and
+ * percentage.
+ */
+function HighlightCard({ u, accent, seasonId, queryKey, readOnly }) {
+  const [open, setOpen] = useFold(`hl-raw-${u.unit}`, true, "hl-raw");
+  // The fills, as the server reads them; a reading kept from before, by its colours' shades.
+  const fills = u.fills || (u.colours || []).flatMap((c) => (c.shades || []).map((s) => ({ rgb: s.rgb, rows: s.rows, family: c.family, label: null })));
+  const coloured = fills.reduce((a, f) => a + f.rows, 0);
+  const canName = !readOnly && seasonId && queryKey;
   // No colour first — the firms nobody has touched — then the colours.
-  const rows = [
-    { key: NO_COLOUR.key, family: NO_COLOUR.key, label: "Not yet highlighted", rows: u.notModified, shades: [], white: true },
-    ...u.colours.map((c) => ({ key: c.family, ...c })),
-  ];
+  const rows = [{ key: NO_COLOUR.key, rgb: "FFFFFF", rows: u.notModified, white: true }, ...fills.map((f) => ({ key: f.rgb, ...f }))];
   return (
     <Card
       size="small"
-      className="pt-hl-card"
-      title={unitLabel(u.unit)}
+      className={`pt-hl-card pt-fold${open ? "" : " is-folded"}`}
+      styles={open ? undefined : { body: { display: "none" } }}
+      title={
+        <Space size={8} wrap>
+          <FoldTitle open={open} onToggle={setOpen}>
+            {unitLabel(u.unit)}
+          </FoldTitle>
+          {!open && (
+            <Text type="secondary" className="pt-fold-summary">
+              {pct(u.coloredBase, u.base)}% · {n(u.coloredBase)} / {n(u.base)}
+            </Text>
+          )}
+        </Space>
+      }
       extra={
         <Space size={8}>
-          <Text type="secondary" style={{ fontSize: 12 }}>{n(u.base)} baseline firms</Text>
+          {open && <Text type="secondary" style={{ fontSize: 12 }}>{n(u.base)} baseline firms</Text>}
           <OpenFileButton files={u.files} />
         </Space>
       }
@@ -493,20 +530,34 @@ function HighlightCard({ u, accent }) {
         showHeader
         columns={[
           {
-            title: "Colour",
+            title: "Colour in the RAW file",
             key: "c",
-            width: 130,
+            width: 150,
             render: (_, r) => (
               <Space size={6}>
-                <Swatch rgb={r.white ? "FFFFFF" : r.shades[0]?.rgb} family={r.family} />
-                <span>{r.white ? "No colour" : FAMILY[r.family]?.label || r.family}</span>
+                <Swatch rgb={r.rgb} family={r.family} />
+                {r.white ? (
+                  <span>No colour</span>
+                ) : (
+                  <Tooltip title={`${fillName(r.rgb, r.family)} — the fill as the RAW file has it`}>
+                    <code className="pt-hex">#{r.rgb}</code>
+                  </Tooltip>
+                )}
               </Space>
             ),
           },
           {
-            title: "Meaning",
+            title: "Name",
             key: "m",
-            render: (_, r) => (r.white ? <Text type="secondary">Not yet highlighted</Text> : r.label ? r.label : <Tag style={{ marginInlineEnd: 0 }}>No meaning set</Tag>),
+            render: (_, r) =>
+              r.white ? (
+                <Text type="secondary">Not yet highlighted</Text>
+              ) : (
+                <Space size={2} className="pt-colour-name">
+                  {r.label ? <span>{r.label}</span> : <Text type="secondary">{fillName(r.rgb, r.family)}</Text>}
+                  {canName && <RenameColour unit={u.unit} fill={r} seasonId={seasonId} queryKey={queryKey} />}
+                </Space>
+              ),
           },
           {
             title: "Rows",
@@ -517,50 +568,44 @@ function HighlightCard({ u, accent }) {
               <Tooltip title={r.white ? `${pct(r.rows, u.base)}% of the baseline firms` : `${pct(r.rows, coloured)}% of the highlighted rows${r.baseline ? ` · ${n(r.baseline)} at the season baseline` : ""}`}>
                 <div className="pt-cell" style={{ alignItems: "flex-end" }}>
                   <b>{n(r.rows)}</b>
-                  {!r.white && <Progress percent={pct(r.rows, coloured)} showInfo={false} size="small" strokeColor={FAMILY[r.family]?.hex} style={{ margin: 0, width: 80 }} />}
+                  {!r.white && <Progress percent={pct(r.rows, coloured)} showInfo={false} size="small" strokeColor={`#${r.rgb}`} trailColor="rgba(140,140,140,0.15)" style={{ margin: 0, width: 80 }} />}
                 </div>
               </Tooltip>
             ),
           },
         ]}
-        expandable={{
-          rowExpandable: (r) => r.shades?.length > 1,
-          expandedRowRender: (r) => (
-            <div className="pt-shades" aria-label={`Shades of ${r.family}`}>
-              {r.shades.map((s) => (
-                <div key={s.rgb} className="pt-shade">
-                  <Swatch rgb={s.rgb} small />
-                  <span style={{ width: 62 }}>{shadeName(s.rgb)}</span>
-                  <code>#{s.rgb}</code>
-                  <span style={{ flex: 1 }} />
-                  <Text>{n(s.rows)} rows</Text>
-                </div>
-              ))}
-            </div>
-          ),
-        }}
       />
     </Card>
   );
 }
 
 /** The conditional-highlighting pane for one group: a chart across the units, then a card each. */
-export function HighlightingPanel({ units, legend, families, seasonId, queryKey, accent, dark, matrix, readOnly = false, masterlistNames = {} }) {
-  const [editing, setEditing] = useState(false);
+export function HighlightingPanel({ units, families, seasonId, queryKey, accent, dark, matrix, readOnly = false, masterlistNames = {} }) {
   const shown = useMemo(() => units.filter((u) => u.rows > 0), [units]);
+  // The newly issued lists' chart reads every tracked unit, whichever group is
+  // picked above: the Monitoring Plan's provinces, then the healthcare lists
+  // (Healthcare Industries, Chemical permits, TSD / TRC, Importers) — the
+  // permits of healthcare firms are counted there, apart from the provinces.
+  const listUnits = matrix?.length ? matrix : units;
   // The chart reads one newly issued list's kind at a time (a province's DP
   // list done is not mixed with its untouched ECC or PTO lists): per province,
   // its permits by the colour the masterlist holder gave them (the workshop's
   // meanings), and the ones not yet highlighted. Until one is picked: the kind
   // furthest along in its highlighting.
-  const listKinds = useMemo(() => kindsShown(() => true).filter((k) => units.some((u) => u.issuedByKind?.[k]?.issued)), [units]);
+  const listKinds = useMemo(() => kindsShown(() => true).filter((k) => listUnits.some((u) => u.issuedByKind?.[k]?.issued)), [listUnits]);
   const [chartPicked, setChartPicked] = useState(null);
-  const coloredOf = (k) => units.reduce((a, u) => a + (u.issuedByKind?.[k]?.colored || 0), 0);
+  const coloredOf = (k) => listUnits.reduce((a, u) => a + (u.issuedByKind?.[k]?.colored || 0), 0);
   const chartKind = listKinds.includes(chartPicked) ? chartPicked : [...listKinds].sort((a, b) => coloredOf(b) - coloredOf(a))[0] || null;
+  // The universe the chart reads: every permit (each province as its sheet
+  // counts it), or the Monitoring Plan's firms, or the healthcare / TSD / TRC
+  // firms only — those on the province sheets and those the lists keep apart.
+  const [scope, setScope] = useState("all");
+  const hasHealthcare = listUnits.some((u) => u.issuedByKind?.[chartKind]?.scopes?.healthcare?.issued);
+  const chartScope = hasHealthcare ? scope : "all";
   const issuedUnits = useMemo(
     () =>
-      units
-        .map((u) => ({ unit: u.unit, x: u.issuedByKind?.[chartKind] }))
+      listUnits
+        .map((u) => ({ unit: u.unit, x: u.issuedByKind?.[chartKind] && inScope(u.issuedByKind[chartKind], chartScope) }))
         .filter(({ x }) => x?.issued > 0)
         .map(({ unit, x }) => ({
           unit,
@@ -568,9 +613,11 @@ export function HighlightingPanel({ units, legend, families, seasonId, queryKey,
           notModified: Math.max(0, x.issued - (x.colored || 0)),
           colours: Object.entries(x.families || {}).map(([family, f]) => ({ family, rows: f.rows })),
         })),
-    [units, chartKind]
+    [listUnits, chartKind, chartScope]
   );
-  const issuedFamilies = [...MASTERLIST.map((m) => m.family), ...families.filter((f) => !MASTERLIST_FAMILY[f])];
+  const issuedTotal = issuedUnits.reduce((a, u) => a + u.base, 0);
+  const issuedLeft = issuedUnits.reduce((a, u) => a + u.notModified, 0);
+  const issuedFamilies = useMemo(() => [...MASTERLIST.map((m) => m.family), ...families.filter((f) => !MASTERLIST_FAMILY[f])], [families]);
   // The workshop's colours by their meaning; the others by the Developer's name, when named.
   const issuedPalette = useMemo(
     () => ({ ...Object.fromEntries(Object.entries(masterlistNames).map(([f, label]) => [f, { label, hex: FAMILY[f]?.hex }])), ...MASTERLIST_FAMILY }),
@@ -578,14 +625,20 @@ export function HighlightingPanel({ units, legend, families, seasonId, queryKey,
   );
   return (
     <div className="pt-pane">
-      <Card
-        size="small"
-        className="pt-card"
+      <FoldCard
+        id="hl-issued-chart"
         title={
           <Space size={6}>
             <BgColorsOutlined />
             Highlighted rows by colour{chartKind ? ` · newly issued ${KIND_LABEL[chartKind] || chartKind}` : ""}
           </Space>
+        }
+        summary={
+          issuedTotal > 0 && (
+            <Text type="secondary" className="pt-fold-summary">
+              {pct(issuedTotal - issuedLeft, issuedTotal)}% highlighted · {n(issuedTotal - issuedLeft)} / {n(issuedTotal)}
+            </Text>
+          )
         }
         extra={
           listKinds.length > 1 ? (
@@ -596,41 +649,65 @@ export function HighlightingPanel({ units, legend, families, seasonId, queryKey,
         }
       >
         <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          One kind of permit&rsquo;s list, per province, by the colour the masterlist holder gave each permit — green: permit found; pink: renewed permit; yellow: new permit; red: firm not in the universe. No colour comes first: not yet highlighted.
+          One kind of permit&rsquo;s list, per province as its sheet counts it — then the healthcare firms a list keeps apart (its Healthcare sheet, TSD, TP/TRC) — by the colour the masterlist holder gave each permit: green, permit found; pink, renewed permit; yellow, new permit; red, firm not in the universe. No colour comes first: not yet highlighted. Each bar ends with its permits and the share highlighted.
         </Text>
+        {hasHealthcare && (
+          <div className="pt-mlist-show">
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Universe:
+            </Text>
+            <Segmented
+              size="small"
+              value={chartScope}
+              onChange={setScope}
+              options={SCOPES.map((s) => ({ value: s.key, label: s.hint ? <Tooltip title={s.hint}>{s.label}</Tooltip> : s.label }))}
+            />
+          </div>
+        )}
         <FamilyChart units={issuedUnits} families={issuedFamilies} dark={dark} palette={issuedPalette} noun="permits" />
-      </Card>
-      <Card
-        size="small"
-        className="pt-card"
+      </FoldCard>
+      <FoldCard
+        id="hl-raw"
         title={
           <Space size={6}>
             <BgColorsOutlined />
             RAW data files: rows highlighted as updated
           </Space>
         }
+        summary={
+          shown.length > 0 && (
+            <Text type="secondary" className="pt-fold-summary">
+              {shown.length} {shown.length === 1 ? "list" : "lists"}
+            </Text>
+          )
+        }
         extra={
-          !readOnly && (
-            <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(true)} disabled={!seasonId}>
-              Edit legend
-            </Button>
+          shown.length > 1 && (
+            <Space size={6}>
+              <Button size="small" onClick={() => setFoldAll("hl-raw", true)}>
+                Expand all
+              </Button>
+              <Button size="small" onClick={() => setFoldAll("hl-raw", false)}>
+                Collapse all
+              </Button>
+            </Space>
           )
         }
       >
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          Per province, the main sheet&rsquo;s baseline firms by the colour they were given in the RAW file. Light and dark shades count as one colour; open a row to see its shades.
+        <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 10 }}>
+          Per province, the main sheet&rsquo;s baseline firms by the colour they were given in the RAW file — each colour exactly as Excel shows it, read again whenever the file is saved.
+          {!readOnly && seasonId ? " Name what a colour means with its pencil, for the province or for every province." : ""} Click a card&rsquo;s name to fold it.
         </Text>
-      </Card>
-      {shown.length ? (
-        <div className="pt-hl-grid">
-          {shown.map((u) => (
-            <HighlightCard key={u.unit} u={u} accent={accent} />
-          ))}
-        </div>
-      ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing read in this group yet." />
-      )}
-      {!readOnly && <LegendModal open={editing} onClose={() => setEditing(false)} seasonId={seasonId} matrix={matrix} legend={legend} families={families} queryKey={queryKey} />}
+        {shown.length ? (
+          <div className="pt-hl-grid">
+            {shown.map((u) => (
+              <HighlightCard key={u.unit} u={u} accent={accent} seasonId={seasonId} queryKey={queryKey} readOnly={readOnly} />
+            ))}
+          </div>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing read in this group yet." />
+        )}
+      </FoldCard>
     </div>
   );
 }

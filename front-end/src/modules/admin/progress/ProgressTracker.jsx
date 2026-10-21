@@ -473,6 +473,11 @@ const ProgressTracker = () => {
                 <Tag>Reference</Tag>
               </Tooltip>
             )}
+            {f.copyOf && (
+              <Tooltip title={`Nine in ten of its permits or more are on ${f.copyOf.replace(/\.xls[xm]?$/i, "")}: a working copy, shown, not counted again.`}>
+                <Tag color="orange">Copy — not counted</Tag>
+              </Tooltip>
+            )}
             {editingIds.has(f.id) && (
               <Tag color="processing" className="pt-editing-tag">
                 <span className="pt-editing-live" />
@@ -507,7 +512,7 @@ const ProgressTracker = () => {
       render: (_, f) => {
         const t = f.current?.counts?.rows || 0;
         const done = f.current?.inRaw || 0;
-        return t && !f.reference ? (
+        return t && !f.reference && !f.copyOf ? (
           <Space size={8} style={{ width: "100%" }}>
             <Progress percent={pct(done, t)} size="small" style={{ width: 130, margin: 0 }} strokeColor={ACCENT} />
             <Text type="secondary" style={{ fontSize: 12 }}>

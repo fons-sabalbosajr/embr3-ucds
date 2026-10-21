@@ -35,6 +35,23 @@ import "./recordslist.css";
 // padding and the application footer.
 const TABLE_RESERVE = 180;
 
+// The columns fitted to the width the table really has (the window less the
+// sidebar, measured), widest first. Project Details takes what is left, never
+// less than DETAILS_MIN. Where a column no longer fits it folds into another
+// cell rather than vanishing: the project type under the project details, the
+// register link under the FSN, the upload date and uploader into the details.
+// `from`: the narrowest table width the layout is used at.
+const LAYOUTS = [
+  { from: 1360, widths: { serialNo: 130, permit: 190, projectType: 240, ucdsRef: 140, uploadedAt: 150, actions: 88 } },
+  { from: 1180, widths: { serialNo: 120, permit: 170, projectType: 190, ucdsRef: 130, uploadedAt: 130, actions: 80 } },
+  { from: 960, widths: { serialNo: 120, permit: 170, ucdsRef: 130, uploadedAt: 130, actions: 80 } },
+  { from: 760, widths: { serialNo: 120, permit: 160, uploadedAt: 120, actions: 80 } },
+  { from: 0, widths: { serialNo: 110, permit: 150, actions: 72 } },
+];
+const DETAILS_MIN = 220;
+// The expand arrow of a record with attachments.
+const EXPAND_COLUMN = 48;
+
 const LINK_OPTIONS = [
   { value: "", label: "Any register status" },
   { value: "linked", label: "Linked to the register" },
@@ -82,8 +99,15 @@ const RecordsList = () => {
   const [openSerial, setOpenSerial] = useState(null);
   // The row being edited in the form.
   const [editing, setEditing] = useState(null);
-  const [fitRef, fitHeight] = useFitHeight(TABLE_RESERVE);
+  const [fitRef, fitHeight, fitWidth] = useFitHeight(TABLE_RESERVE);
   const screen = useScreen();
+  // Before the first measure: the window's width, near enough.
+  const tableWidth = fitWidth || (typeof window !== "undefined" ? window.innerWidth : 1366);
+  const layout = LAYOUTS.find((l) => tableWidth >= l.from) || LAYOUTS[LAYOUTS.length - 1];
+  const widths = layout.widths;
+  const shown = (key) => key in widths;
+  // Narrower than the columns need: the table scrolls sideways instead of crushing them.
+  const needed = Object.values(widths).reduce((a, w) => a + w, 0) + DETAILS_MIN + EXPAND_COLUMN;
 
   useEffect(() => {
     if (searchParams.get("new") === "1") setCreating(true);
@@ -116,18 +140,28 @@ const RecordsList = () => {
   // and Quarrying Projects — Sand and gravel extraction".
   const projectType = (p) => [p?.type, p?.otherType].filter((v) => v && v !== "n/a").join(" — ");
 
-  const columns = [
+  // The register link: its own column when there is room, else under the FSN.
+  const registerTag = (row) =>
+    row.ucdsRef?.sortKey ? (
+      <Tooltip title={row.ucdsRef.nameSnapshot || ""}>
+        <Tag icon={<LinkOutlined />} color="green" style={{ marginInlineEnd: 0, width: "fit-content" }}>
+          {row.ucdsRef.sortKey}
+        </Tag>
+      </Tooltip>
+    ) : null;
+
+  const allColumns = [
     // The FSN is the document's number in the library — its own column.
     {
       title: "FSN",
       dataIndex: "serialNo",
       key: "serialNo",
-      width: 130,
       sorter: true,
       render: (serial, row) => (
-        <Space direction="vertical" size={0}>
-          <Typography.Text style={{ fontFamily: "monospace" }}>{serial}</Typography.Text>
-          <Space size={4}>
+        <Space direction="vertical" size={2}>
+          <Typography.Text style={{ fontFamily: "monospace", overflowWrap: "anywhere" }}>{serial}</Typography.Text>
+          {!shown("ucdsRef") && registerTag(row)}
+          <Space size={4} wrap>
             {row.isAttachment && (
               <Tooltip title="An additional document filed against an existing record">
                 <Tag style={{ marginInlineEnd: 0 }}>att</Tag>
@@ -151,13 +185,12 @@ const RecordsList = () => {
     {
       title: "Permit / Ref. No.",
       key: "permit",
-      width: 180,
       render: (_, row) => (
         <Space direction="vertical" size={0}>
           <a
             href={`/e-universe/erms/records/${encodeURIComponent(row.serialNo)}`}
             onClick={(e) => { e.preventDefault(); setOpenSerial(row.serialNo); }}
-            style={{ fontWeight: 600 }}
+            style={{ fontWeight: 600, overflowWrap: "anywhere" }}
           >
             {row.permit?.number || "—"}
           </a>
@@ -169,8 +202,9 @@ const RecordsList = () => {
     },
     // One column for what the record is about: the project, whose it is,
     // and where — the three things that used to be spread over four. No
-    // width: it takes whatever the window has left, and wraps rather than
-    // cutting a long title off.
+    // width: it takes whatever the table has left, and wraps rather than
+    // cutting a long title off. On a narrower table it also carries the
+    // project type and the upload, when their columns have folded away.
     {
       title: "Project Details",
       dataIndex: "projectTitle",
@@ -183,14 +217,19 @@ const RecordsList = () => {
           <Typography.Text type="secondary">
             {address(row.location) || "—"}
           </Typography.Text>
+          {!shown("projectType") && projectType(row.project) && <Typography.Text type="secondary">{projectType(row.project)}</Typography.Text>}
+          {!shown("uploadedAt") && row.document?.uploadedAt && (
+            <Typography.Text type="secondary">
+              Uploaded {new Date(row.document.uploadedAt).toLocaleDateString()}
+              {row.document?.uploadedBy ? ` · ${row.document.uploadedBy}` : ""}
+            </Typography.Text>
+          )}
         </div>
       ),
     },
     {
       title: "Project Type",
       key: "projectType",
-      width: 300,
-      responsive: ["lg"],
       render: (_, row) => (
         <Typography.Text type={projectType(row.project) ? undefined : "secondary"} style={{ whiteSpace: "normal", wordBreak: "break-word" }}>
           {projectType(row.project) || "—"}
@@ -200,30 +239,17 @@ const RecordsList = () => {
     {
       title: "Register",
       key: "ucdsRef",
-      width: 200,
-      responsive: ["md"],
-      render: (_, row) =>
-        row.ucdsRef?.sortKey ? (
-          <Tooltip title={row.ucdsRef.nameSnapshot || ""}>
-            <Tag icon={<LinkOutlined />} color="green">
-              {row.ucdsRef.sortKey}
-            </Tag>
-          </Tooltip>
-        ) : (
-          <Typography.Text type="secondary">—</Typography.Text>
-        ),
+      render: (_, row) => registerTag(row) || <Typography.Text type="secondary">—</Typography.Text>,
     },
     {
       title: "Uploaded",
       dataIndex: ["document", "uploadedAt"],
       key: "uploadedAt",
-      width: 200,
       sorter: true,
-      responsive: ["sm"],
       render: (d, row) => (
         <Space direction="vertical" size={0}>
           <span>{d ? new Date(d).toLocaleDateString() : "—"}</span>
-          <Typography.Text type="secondary">
+          <Typography.Text type="secondary" style={{ overflowWrap: "anywhere" }}>
             {row.document?.uploadedBy || ""}
           </Typography.Text>
         </Space>
@@ -232,7 +258,6 @@ const RecordsList = () => {
     {
       title: "Action",
       key: "actions",
-      width: 150,
       align: "center",
       render: (_, row) => (
         <Space size={4}>
@@ -248,6 +273,10 @@ const RecordsList = () => {
       ),
     },
   ];
+  // The layout's columns at its widths; Project Details (no width) takes the rest.
+  const columns = allColumns
+    .filter((c) => c.key === "projectTitle" || shown(c.key))
+    .map((c) => (c.key === "projectTitle" ? c : { ...c, width: widths[c.key] }));
 
   const onTableChange = (pagination, _filters, sorter) => {
     const field = Array.isArray(sorter?.field) ? sorter.field.join(".") : sorter?.field;
@@ -374,11 +403,11 @@ const RecordsList = () => {
           />
         )}
 
-        {/* Fitted to the window: the columns share its width (fixed layout,
-            Project Details taking what is left), and the rows scroll under a
-            header that stays put, ending above the pagination. Narrower than
-            1000px the table scrolls sideways rather than crushing columns —
-            a 1366px laptop with the sidebar open still fits without it. */}
+        {/* Fitted to the space the table has (LAYOUTS): the columns share its
+            width (fixed layout, Project Details taking what is left), and the
+            rows scroll under a header that stays put, ending above the
+            pagination. Only when even the narrowest layout does not fit does
+            the table scroll sideways rather than crush its columns. */}
         <div ref={fitRef}>
         <Table
           rowKey="serialNo"
@@ -423,9 +452,8 @@ const RecordsList = () => {
               />
             ),
           }}
-          // On a phone the page scrolls, not a box inside it; the table keeps
-          // the columns that fit (the rest drop out at md/lg, above).
-          scroll={screen.phone ? { x: 600 } : { x: 1000, y: fitHeight }}
+          // On a phone the page scrolls, not a box inside it.
+          scroll={{ x: tableWidth < needed ? needed : undefined, y: screen.phone ? undefined : fitHeight }}
           pagination={{
             current: data?.page || 1,
             pageSize: data?.pageSize || 25,

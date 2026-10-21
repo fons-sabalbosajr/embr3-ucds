@@ -384,6 +384,92 @@ body[data-theme="dark"] .pt-public-head {
 .pt-hl-card .ant-card-body {
   padding: 12px 14px;
 }
+
+/* The newly issued list's table in See more (IssuedKindDetail.jsx): every
+   value wraps inside its column — titles, names, sheet and permit codes, tags. */
+.pt-wrap-table .ant-table-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+}
+.pt-wrap-text {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+.pt-wrap-table .ant-typography code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.pt-wrap-table .ant-tag {
+  white-space: normal;
+  height: auto;
+  line-height: 1.35;
+  padding-block: 1px;
+}
+
+/* The RAW files' colours (ProvinceMatrix.jsx HighlightCard): the fill's hex, its name, its pencil. */
+.pt-hex {
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  opacity: 0.85;
+}
+.pt-colour-name {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The Highlighting tab's folding cards (Fold.jsx): the title is the toggle. */
+.pt-fold-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.pt-fold-head:focus-visible {
+  outline: 2px solid #2f7ecb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.pt-fold-chevron {
+  font-size: 11px;
+  opacity: 0.65;
+  transition: transform 0.2s ease;
+}
+.pt-fold-chevron.is-open {
+  transform: rotate(90deg);
+}
+.pt-fold.is-folded {
+  height: auto;
+}
+.pt-fold.is-folded > .ant-card-head {
+  border-bottom: 0;
+}
+.pt-fold-summary {
+  font-size: 12px;
+  font-weight: 400;
+}
+/* A folded permit tile: its rows hidden, the percentage and bar kept. */
+.pt-summary.is-folded .pt-summary-rows {
+  display: none;
+}
+.pt-summary .pt-fold-head {
+  font-size: 12.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pt-fold-chevron {
+    transition: none;
+  }
+}
 .pt-hl-progress {
   display: flex;
   align-items: center;
@@ -1113,12 +1199,32 @@ body {
   --ts-head: #e9f2ec;
   --ts-line: #d6dcd8;
   --ts-sub: #f7f9f8;
+  /* The healthcare lists' column and rows, apart from the Monitoring Plan. */
+  --ts-hc: #f3effb;
+  --ts-hc-ink: #5b3fa6;
 }
 body[data-theme="dark"] {
   --ts-green: #3fa36b;
   --ts-head: #1d2a22;
   --ts-line: #34403a;
   --ts-sub: #1a1f1c;
+  --ts-hc: #241f30;
+  --ts-hc-ink: #b7a6ee;
+}
+.ts-table .ts-hc,
+.ts-num.ts-hc,
+.ts-table tr.ts-hc-row td {
+  background: var(--ts-hc);
+}
+.ts-table thead th.ts-hc {
+  color: var(--ts-hc-ink);
+  border-left: 2px solid var(--ts-line);
+}
+.ts-table td.ts-hc {
+  border-left: 2px solid var(--ts-line);
+}
+.ts-table tr.ts-hc-row .ts-desc {
+  color: var(--ts-hc-ink);
 }
 .ts {
   display: flex;

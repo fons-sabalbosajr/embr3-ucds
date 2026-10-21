@@ -86,15 +86,15 @@ function notesFor({ matrix = [], summary, stale, legend = {} }) {
     });
   }
 
-  // Colours in use with no meaning in the legend.
+  // Colours of the RAW files in use without a name (each fill as Excel shows it).
   const unnamed = [];
-  for (const u of matrix) for (const c of u.colours || []) if (!legend[u.unit]?.[c.family] && c.rows >= 5) unnamed.push({ u, c });
+  for (const u of matrix) for (const f of u.fills || []) if (!f.label && !legend[u.unit]?.[f.family] && f.rows >= 5) unnamed.push({ u, f });
   if (unnamed.length) {
-    unnamed.sort((a, b) => b.c.rows - a.c.rows);
-    const { u, c } = unnamed[0];
+    unnamed.sort((a, b) => b.f.rows - a.f.rows);
+    const { u, f } = unnamed[0];
     notes.push({
       tone: 'info',
-      text: `${unnamed.length} colour${unnamed.length === 1 ? ' is' : 's are'} used without a meaning in the legend, the largest ${c.family} on ${fmt(c.rows)} rows in ${label(u.unit)}. Name it under Edit legend.`,
+      text: `${unnamed.length} colour${unnamed.length === 1 ? ' is' : 's are'} used in the RAW files without a name, the largest #${f.rgb} on ${fmt(f.rows)} rows in ${label(u.unit)}. Name it with the pencil on the Highlighting tab.`,
       ask: 'What does each highlight colour mean, and which colours have no meaning yet?',
     });
   }
@@ -146,7 +146,7 @@ function figuresLines(o) {
     'Per province or list (firms = baseline + ERMS + ECC Online; highlighted = baseline firms coloured as updated):',
   ];
   for (const u of o.matrix || []) {
-    const colours = (u.colours || []).map((c) => `${c.family}${c.label ? ` "${c.label}"` : ''} ${fmt(c.rows)}`).join(', ');
+    const colours = (u.fills || []).map((f) => `#${f.rgb} (${f.family})${f.label ? ` "${f.label}"` : ''} ${fmt(f.rows)}`).join(', ');
     const permits = [...KINDS, ...EXTRA_KINDS].filter(([k]) => u.permits?.[k])
       .map(([k, name]) => `${name} ${fmt(u.permits[k])} (+${fmt(u.addedPermitsByKind?.erms?.[k])} ERMS, +${fmt(u.addedPermitsByKind?.ecconline?.[k])} ECC Online)`)
       .join(', ');

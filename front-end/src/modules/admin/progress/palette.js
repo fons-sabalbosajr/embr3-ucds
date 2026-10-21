@@ -57,12 +57,14 @@ export const MASTERLIST = [
   { family: "pink", label: "Renewed permit", hex: "#ff66cc", text: "#c41d7f", hint: "The firm is in the universe and was issued a renewed permit — its permit data updated in the RAW data." },
   { family: "yellow", label: "New permit", hex: "#ffff33", text: "#ad8b00", hint: "The firm is in the universe with no permit encoded — the newly issued permit added to the RAW data." },
   { family: "red", label: "Firm not in the universe", hex: "#c00000", text: "#c00000", hint: "The firm is not yet in the universe — for verification with the facilitator, then endorsed." },
+  // Red's next step: once the firm is added to the RAW data its row turns orange — orange rises as red falls.
+  { family: "orange", label: "Firm added in the universe RAW", hex: "#ed7d31", text: "#c55a11", hint: "Was red (not in the universe); the firm has since been added to the RAW data with its permit — so the permit must be in it. Orange rises as red falls." },
 ];
 export const MASTERLIST_FAMILY = Object.fromEntries(MASTERLIST.map((m) => [m.family, m]));
 // A healthcare / TSD / TRC firm on a newly issued list: Yes in the list's
 // "Healthcare / TSD / TRC Firm" column (blank: not). A mark beside the
 // colour, not a colour — the row is coloured by the workshop's legend like any other.
-export const HEALTHCARE = { label: "Healthcare / TSD / TRC firms", hint: "Yes in the list's “Healthcare / TSD / TRC Firm” column. Their rows are coloured by the same legend as every other permit, and counted in the colours above." };
+export const HEALTHCARE = { label: "Healthcare / TSD / TRC firms", hint: "Yes in the list's “Healthcare / TSD / TRC Firm” column or on its Healthcare sheet, a TSD / TRC permit, or a firm already on the healthcare RAW lists. On a province sheet they stay in that province's count (as the sheet counts them) and are shown apart; their rows are coloured by the same legend and counted in the colours above." };
 /**
  * A colour on a newly issued list: as the workshop names it; else as the
  * Developer named it (`names`, the season's masterlistNames); else the
@@ -74,13 +76,14 @@ export const isOtherColour = (family) => !MASTERLIST_FAMILY[family];
 /** The swatch of a colour on a newly issued list: the workshop's, or the colour family's. */
 export const masterlistHex = (family) => MASTERLIST_FAMILY[family]?.hex || FAMILY[family]?.hex || "#bfbfbf";
 
-// The universe a newly issued permit belongs to, as its list marks it in the
-// "Healthcare / TSD / TRC Firm" column: Healthcare / TSD / TRC (Yes), or the
-// province's Monitoring Plan (blank).
+// The universe a newly issued permit belongs to (the server's
+// healthcareUnitOf): Healthcare / TSD / TRC — marked on its list, a TSD / TRC
+// permit, or a firm of the healthcare RAW lists — or the province's
+// Monitoring Plan. A breakdown: the province's count (its sheet's) holds both.
 export const SCOPES = [
-  { key: "all", label: "All permits" },
-  { key: "plan", label: "Monitoring Plan", hint: "Permits whose “Healthcare / TSD / TRC Firm” column is blank" },
-  { key: "healthcare", label: "Healthcare / TSD / TRC", hint: "Permits with Yes in the list's “Healthcare / TSD / TRC Firm” column" },
+  { key: "all", label: "All Firms/Industries", hint: "Every permit on the province's sheet: Monitoring Plan + Healthcare / TSD / TRC firms (AURORA (44) is 44)" },
+  { key: "plan", label: "Monitoring Plan", hint: "Permits of the provinces' Monitoring Plan firms" },
+  { key: "healthcare", label: "Healthcare / TSD / TRC", hint: "Marked on the list (Healthcare column or sheet), TSD / TRC permits, and firms already on the healthcare RAW lists" },
 ];
 const EMPTY_SCOPE = { issued: 0, inRaw: 0, colored: 0, coloredInRaw: 0, families: {} };
 /** A level's figures (a kind's, a province's) within a universe: its own for "all". */
@@ -92,8 +95,8 @@ export const PERMIT_STATUS = {
   unmarked: { label: "In the RAW data, not highlighted", color: "blue", hint: "Already in the RAW data, but its row on the list has no colour yet." },
   ok: { label: "Matches", color: "green", hint: "The colour and the RAW data agree." },
   greenButNew: { label: "Green, but written in this season", color: "gold", hint: "Green means already in the records, yet the permit was not in the RAW data at the baseline: pink or yellow was meant." },
-  notEncoded: { label: "Highlighted, not in the RAW data", color: "red", hint: "Green, pink or yellow says it is in the RAW data, but it is not." },
-  redInRaw: { label: "Red, but in the RAW data", color: "red", hint: "Red says the firm is not in the universe, but the permit is already in the RAW data." },
+  notEncoded: { label: "Highlighted, not in the RAW data", color: "red", hint: "Green, pink, yellow or orange says it is in the RAW data, but it is not." },
+  redInRaw: { label: "Red, but in the RAW data — turn it orange", color: "red", hint: "Red says the firm is not in the universe, but the permit is already in the RAW data: the firm was added — its row should be orange (firm added in the universe RAW)." },
   otherColour: { label: "Colour not in the legend", color: "purple", hint: "A colour the workshop does not use." },
 };
 
@@ -136,7 +139,11 @@ export const permitSplit = (u, k) => {
 export const REMAINING = { label: "To encode", light: "#d9d9d9", dark: "#434343" };
 
 export const n = (v) => (Number(v) || 0).toLocaleString();
-export const pct = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : 0);
+/**
+ * A share, to one decimal. Rounded down, so it reads 100% only when every
+ * one is done: 2,778 of 2,779 is 99.9%, not 100%.
+ */
+export const pct = (a, b) => (b ? Math.floor((a / b) * 1000 + 1e-9) / 10 : 0);
 export const signed = (v) => (v > 0 ? `+${n(v)}` : v < 0 ? `−${n(-v)}` : "0");
 export const unitLabel = (u) => String(u || "").replace(/_/g, " ");
 export const sum = (o) => Object.values(o || {}).reduce((a, v) => a + (Number(v) || 0), 0);

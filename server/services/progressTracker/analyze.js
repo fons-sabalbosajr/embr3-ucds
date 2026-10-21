@@ -194,6 +194,9 @@ const MASTERLIST_LEGEND = {
   pink: { label: 'Renewed permit', meaning: "The firm is in the universe and was issued a renewed permit: its permit data updated.", inRaw: true },
   yellow: { label: 'New permit', meaning: 'The firm is in the universe with no permit encoded: the newly issued permit added.', inRaw: true },
   red: { label: 'Firm not in the universe', meaning: 'The firm is not yet in the universe: for verification with the facilitator.', inRaw: false },
+  // Red's next step: the firm added to the RAW data, its row turned orange.
+  // Orange rises as red falls; its permit must then be in the RAW data.
+  orange: { label: 'Firm added in the universe RAW', meaning: 'Was red (not in the universe); the firm has since been added to the RAW data with its permit.', inRaw: true },
 };
 
 /**
@@ -218,13 +221,73 @@ function permitStatus(family, inRaw, inRawAtBaseline) {
   return 'ok';
 }
 
-/** The fill a cell carries, if any, as an RGB string. */
+// The workbook being read's theme colours (lt1, dk1, lt2, dk2, accent1–6,
+// hlink, folHlink — Excel's palette order), for a fill picked from the theme
+// ("White, Background 1, Darker 15%"), which the file keeps as a theme number
+// and a tint, not an RGB. Set by analyzeRaw / analyzePermits for the workbook
+// they read (one at a time in a thread).
+let THEME = [];
+const themeOf = (wb) => (wb?.Themes?.themeElements?.clrScheme || []).map((c) => String(c?.rgb || '').slice(-6).toUpperCase());
+
+/** An RGB lightened (tint > 0) or darkened (tint < 0) as Excel does: on its HSL lightness. */
+function tinted(rgb, tint) {
+  if (!tint) return rgb;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(rgb.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = d === 0 ? 0 : max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = ((h * 60) + 360) % 360;
+  l = tint < 0 ? l * (1 + tint) : l * (1 - tint) + tint;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r1, g1, b1].map((v) => Math.round(Math.min(1, Math.max(0, v + m)) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+/** A colour as the file writes it — RGB, or a theme colour with its tint — as an RGB string. */
+function colourRgb(col) {
+  if (!col) return null;
+  if (col.rgb) return String(col.rgb).slice(-6).toUpperCase();
+  if (col.theme !== undefined && THEME[col.theme]) return tinted(THEME[col.theme], Number(col.tint) || 0);
+  return null;
+}
+
+// A row of a newly issued list is highlighted when one fill covers this share
+// of its table's columns or more (two cells at least): the masterlist holder
+// colours the row. A single shaded cell is formatting — the HWG ID list shades
+// its whole HW GR No. column "White, Darker 5%" on every sheet — not a row
+// coloured as looked up.
+const ROW_FILL_SHARE = 0.25;
+
+/** The colour a list's row was given (the fill on most of its cells), or null — see ROW_FILL_SHARE. */
+function rowFillOf(ws, r, range) {
+  const counts = {};
+  let best = null;
+  let most = 0;
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const f = fillOf(ws[XLSX.utils.encode_cell({ r, c })]);
+    if (!f) continue;
+    counts[f] = (counts[f] || 0) + 1;
+    if (counts[f] > most) {
+      best = f;
+      most = counts[f];
+    }
+  }
+  const width = range.e.c - range.s.c + 1;
+  return best && most >= 2 && most >= width * ROW_FILL_SHARE ? best : null;
+}
+
+/** The fill a cell carries, if any, as an RGB string — as Excel shows it, theme colours too. */
 function fillOf(c) {
   const s = c?.s;
   if (!s || !s.patternType || s.patternType === 'none') return null;
-  const rgb = s.fgColor?.rgb || s.bgColor?.rgb;
-  if (!rgb || /^(FFFFFF|FFFFFFFF)$/i.test(rgb)) return null;
-  return rgb.slice(-6).toUpperCase();
+  const rgb = colourRgb(s.fgColor) || colourRgb(s.bgColor);
+  if (!rgb || rgb === 'FFFFFF') return null;
+  return rgb;
 }
 
 // The ECP monitoring list (2026_ECP_RAW): a numbered list per semester, its
@@ -403,7 +466,7 @@ function readRawSheet(ws, name, ctx = {}) {
       }
     }
     // No marker (cleared, or never coloured): the log, by title and proponent.
-    source ||= matchLog({ key, title: values.title, name: values.name });
+    source ||= matchLog({ key, title: values.title, name: values.name, ecc: values.ecc_cnc });
     if (!main) {
       unit[out.category] += 1;
       if (out.category === 'review') {
@@ -543,17 +606,67 @@ function mergeUnits(list) {
   return out;
 }
 
-/** The province a workbook is about: the one a sheet is named after (BULACAN, NUEVA_ECIJA). */
+/**
+ * The province a workbook is about: the one a sheet is named after (BULACAN,
+ * NUEVA_ECIJA) — else a main sheet naming one province among other words
+ * ("Done | BULACAN"; not a review or set-aside sheet).
+ */
 function provinceSheetOf(names) {
   for (const name of names) {
     const p = provinceOf(name.trim());
     if (PROVINCE_NAMES.has(p)) return { sheet: name, province: p };
   }
+  for (const name of names) {
+    const p = CATEGORY(name) === 'main' ? sheetProvinceOf(name) : null;
+    if (p) return { sheet: name, province: p };
+  }
   return null;
 }
 
+/**
+ * The sheets that are a RAW workbook's universe, as analyzeRaw counts them:
+ * in a province's workbook its province sheet; in the 2027 lists every list
+ * sheet — never an additions log (Source and Serial_No columns), a review
+ * sheet or one set aside. For loading a year's register from the workbooks
+ * (scripts/migrate-ucds/import-year-register.js), so it holds what the
+ * tracker counts as firms.
+ */
+function mainSheetsOf(wb) {
+  const names = wb.SheetNames.filter((n) => !LOOKUP_SHEETS.test(n));
+  const isLog = (name) => {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: false, range: 0 }).slice(0, 12);
+    return grid.some((r) => r.some((c) => squeeze(c) === 'source') && r.some((c) => squeeze(c).startsWith('serial_no')));
+  };
+  const own = provinceSheetOf(names);
+  return names.filter((n) => CATEGORY(n) === 'main' && (own ? n === own.sheet : !isLog(n)));
+}
+
 /** A RAW universe workbook. */
-function analyzeRaw(wb) {
+/** The workbook's standard classifications: its Industry_Classification (else ProjectType) sheet's first column. */
+function classificationsOf(wb) {
+  const name = wb.SheetNames.find((n) => /^industry_classification$/i.test(n.trim())) || wb.SheetNames.find((n) => /^projecttype$/i.test(n.trim()));
+  if (!name) return [];
+  const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: false });
+  return [...new Set(grid.slice(1).map((r) => String(r[0] ?? '').trim()).filter((v) => v && !/^column\d*$/i.test(v)))].slice(0, 2000);
+}
+
+/**
+ * A workbook without an additions log — the 2027 lists (Healthcare, Chemical
+ * permits, TSD / TRC, Importers): its additions are the firms whose serial
+ * was not on the list at the season's baseline (`baseSerials`), split by
+ * source as the provinces' logs split theirs — an online ECC or CNC
+ * (ECC-OL-…, CNC-OL-…) came from ECC Online, any other from the ERMS export.
+ * Without a baseline (the season's first look) every firm is the baseline.
+ */
+const ONLINE_PERMIT = /\b(ECC|CNC)-OL-/i;
+function baselineMatcher(baseSerials) {
+  if (!Array.isArray(baseSerials)) return () => null;
+  const base = new Set(baseSerials);
+  return ({ key, ecc }) => (base.has(key) ? null : ONLINE_PERMIT.test(String(ecc || '')) ? 'ecconline' : 'erms');
+}
+
+function analyzeRaw(wb, { baseSerials = null } = {}) {
+  THEME = themeOf(wb);
   const names = wb.SheetNames.filter((n) => !LOOKUP_SHEETS.test(n));
   // The additions log first: the main sheet is read against it.
   const logs = [];
@@ -561,7 +674,8 @@ function analyzeRaw(wb) {
     const log = readAdditionsLog(wb.Sheets[name], name);
     if (log) logs.push(log);
   }
-  const matchLog = logMatcher(logs);
+  // No log: the additions are the firms new since the season's baseline.
+  const matchLog = logs.length ? logMatcher(logs) : baselineMatcher(baseSerials);
   const markers = Object.assign({}, ...logs.map((l) => l.markers));
   const own = provinceSheetOf(names);
 
@@ -624,6 +738,8 @@ function analyzeRaw(wb) {
     // The main sheets' firms, for the Developer's table and map: kept in the
     // server's memory only, never stored.
     records: main.flatMap((s) => s.records),
+    // The standard industry classifications (memory only): the PSIC basis.
+    classifications: classificationsOf(wb),
     // The coloured rows' fills, by serial: stored with the baseline (to tell
     // a row coloured since), and the rows the validation check reads (memory).
     highlights: Object.assign({}, ...main.map((s) => s.highlights)),
@@ -652,6 +768,14 @@ const YES = /^(y|yes|oo|true|1|x|✓|✔)$/i;
 // doubtful — worth a second look.
 const HEALTHCARE_PSIC = /hospital|clinic|health|medical|nursing|dental|laborator|pharma|drug|veterinar|hazardous|treatment and disposal|waste (treatment|collection)|collection of (hazardous|waste)|transport.*waste|funeral|mortuar|crematori/i;
 const PSIC_HEADER = /psic|industry ?classification/i;
+// A sheet of a newly issued list that holds the healthcare / TSD / TRC firms
+// apart from the provinces (the HWG ID list's "Healthcare").
+const HEALTHCARE_SHEET = /health|tsd|trc|transporter/i;
+// Sanitary landfills on the newly issued lists: a row whose firm, project,
+// type or PSIC description names one (not its address). Counted as the
+// province sheet counts them, and shown apart ("of which sanitary landfills").
+const LANDFILL = /land\s*-?\s*fill/i;
+const NOT_WHAT_IT_IS = /address|location|remark|note|barangay|street|assigned/i;
 // What a permit is for, and where: for the lists' See more (the Developer's only).
 const TITLE_HEADER = /^(project ?(name|title)|establishment( ?name)?|name of (the )?(project|establishment|facility))$/i;
 const CITY_HEADER = /^(municipality|city)( ?\/ ?(city|municipality))?$/i;
@@ -684,6 +808,7 @@ function permitKind(key, header = '') {
 
 /** A newly issued permits workbook. */
 function analyzePermits(wb) {
+  THEME = themeOf(wb);
   const keys = new Map(); // key -> province
   const keyKind = {};
   const keyType = {}; // key -> 'new' | 'renewal'
@@ -704,6 +829,8 @@ function analyzePermits(wb) {
   // The project or establishment, and the city or municipality, as the list writes them.
   const keyTitle = {};
   const keyCity = {};
+  // The sanitary landfills' permits, left out of every count.
+  const landfillKeys = new Set();
   const sheets = [];
   // Every row with a permit number, as its own entry: what the tiles count
   // (chosen below, countedEntries).
@@ -724,29 +851,41 @@ function analyzePermits(wb) {
     const psicCol = header.findIndex((h) => PSIC_HEADER.test(h));
     const titleCol = header.findIndex((h) => TITLE_HEADER.test(h));
     const cityCol = header.findIndex((h) => CITY_HEADER.test(h));
-    // A province's own worksheet ("AURORA (44)", "NUEVA  ECIJA"), or a summary (CONSOLIDATED, GENERAL, Sheet1…).
-    const sheetProvince = provinceCell(name.replace(/\(.*?\)/g, ''));
+    // A province's own worksheet ("AURORA (44)", "NUEVA  ECIJA", "Done |
+    // BATAAN (292)" once the Planning Unit marks it done), the healthcare
+    // firms' own ("Healthcare"), or a summary (CONSOLIDATED, GENERAL, Sheet1…).
+    const sheetProvince = sheetProvinceOf(name);
+    const sheetHealthcare = !sheetProvince && HEALTHCARE_SHEET.test(name);
+    // The columns that say what the firm is, for the landfill check.
+    const whatCols = header.map((h, j) => (h && !NOT_WHAT_IT_IS.test(h) && j !== col ? j : -1)).filter((j) => j >= 0);
     const entries = [];
     let rows = 0;
     let colored = 0;
+    let landfills = 0;
     for (let i = at + 1; i < grid.length; i++) {
       const r = grid[i];
       const v = r[col];
       if (blank(v)) continue;
       const k = permitKey(v);
       if (!/\d/.test(k)) continue;
+      const landfill = whatCols.some((j) => LANDFILL.test(String(r[j] ?? '')));
+      if (landfill) {
+        landfills += 1;
+        landfillKeys.add(k);
+      }
       rows += 1;
       const sheetRow = i + range.s.r;
-      let fill = null;
-      for (let c = range.s.c; c <= range.e.c && !fill; c++) fill = fillOf(ws[XLSX.utils.encode_cell({ r: sheetRow, c })]);
+      const fill = rowFillOf(ws, sheetRow, range);
       if (fill) colored += 1;
       if (fill && !highlights[k]) {
         highlights[k] = fill;
         keyAt[k] = { sheet: name, row: sheetRow + 1 };
       }
       keyAt[k] ||= { sheet: name, row: sheetRow + 1 };
-      if (hcols.length) keyReviewed[k] = true;
-      if (hcols.some((j) => YES.test(String(r[j] ?? '').trim()))) keyHealthcare[k] = true;
+      // Marked Yes in the column, or listed on the healthcare firms' own sheet.
+      const marked = sheetHealthcare || hcols.some((j) => YES.test(String(r[j] ?? '').trim()));
+      if (hcols.length || sheetHealthcare) keyReviewed[k] = true;
+      if (marked) keyHealthcare[k] = true;
       if (psicCol >= 0 && !blank(r[psicCol])) keyPsic[k] ||= String(r[psicCol]).trim().slice(0, 120);
       if (titleCol >= 0 && !blank(r[titleCol])) keyTitle[k] ||= String(r[titleCol]).trim().slice(0, 160);
       if (cityCol >= 0 && !blank(r[cityCol])) keyCity[k] ||= String(r[cityCol]).trim().slice(0, 60);
@@ -768,9 +907,13 @@ function analyzePermits(wb) {
         sheet: name,
         row: sheetRow + 1,
         fill,
-        province: rowProvince || sheetProvince || null,
-        healthcare: hcols.some((j) => YES.test(String(r[j] ?? '').trim())),
-        reviewed: hcols.length > 0,
+        // A province sheet's rows are that province's, whatever their own
+        // Province cell says: the masterlist counts them as the sheet does.
+        province: sheetProvince || rowProvince || null,
+        onProvinceSheet: Boolean(sheetProvince),
+        landfill,
+        healthcare: marked,
+        reviewed: hcols.length > 0 || sheetHealthcare,
         firm: label,
         title: text(titleCol)?.slice(0, 160) || null,
         psic: text(psicCol)?.slice(0, 120) || null,
@@ -778,11 +921,11 @@ function analyzePermits(wb) {
         type: tcol >= 0 ? typeOf(r[tcol]) : null,
       });
     }
-    sheets.push({ name, rows, colored, column: grid[at][col], healthcareMark: hcols.length ? 'column' : null, province: sheetProvince || null });
-    sheetRows.push({ name, province: sheetProvince || null, entries });
+    sheets.push({ name, rows, colored, landfills, column: grid[at][col], healthcareMark: hcols.length ? 'column' : sheetHealthcare ? 'sheet' : null, province: sheetProvince || null });
+    sheetRows.push({ name, province: sheetProvince || null, healthcare: sheetHealthcare, entries });
   }
   // Each entry's kind, from its permit number.
-  const entries = countedEntries(sheetRows, { highlights, keyAt, keyProvince: Object.fromEntries(keys), keyHealthcare, keyReviewed, keyLabel, keyTitle, keyPsic, keyCity, keyType }).map((e) => ({ ...e, kind: keyKind[e.k] || 'other' }));
+  const entries = countedEntries(sheetRows, { highlights, keyAt, keyProvince: Object.fromEntries(keys), landfillKeys, keyHealthcare, keyReviewed, keyLabel, keyTitle, keyPsic, keyCity, keyType }).map((e) => ({ ...e, kind: keyKind[e.k] || 'other' }));
   const provinces = {};
   const byKind = {};
   const coloredByKind = {};
@@ -800,6 +943,8 @@ function analyzePermits(wb) {
     rows: entries.length,
     // Distinct permit numbers on the list, for reference.
     permits: keys.size,
+    // Of the rows counted, the sanitary landfills' (counted, shown apart).
+    landfills: entries.filter((e) => e.landfill).length,
     colored: entries.filter((e) => e.fill).length,
     coloredByKind,
     rowColors,
@@ -828,6 +973,16 @@ function analyzePermits(wb) {
   };
 }
 
+// A province's name inside a sheet's name, however the sheet is labelled
+// around it: "AURORA (44)", "NUEVA  ECIJA", "Done | BATAAN (292)".
+const PROVINCE_IN_NAME = Object.values(PROVINCE_CODE).map((p) => [p, new RegExp(`(^|[^A-Z])${p.toUpperCase().replace('_', '[\\s_]*')}([^A-Z]|$)`)]);
+/** The province a sheet is named after — one province named in it, whatever else it says — or null. */
+function sheetProvinceOf(name) {
+  const s = String(name ?? '').toUpperCase().replace(/\(.*?\)/g, ' ');
+  const hits = PROVINCE_IN_NAME.filter(([, re]) => re.test(s)).map(([p]) => p);
+  return hits.length === 1 ? hits[0] : null;
+}
+
 /** A province as a list writes it ("NUEVA ECIJA", "Nueva  Ecija") — the tracker's name for it, or null. */
 function provinceCell(v) {
   const s = String(v ?? '').trim().replace(/\s+/g, '_');
@@ -837,19 +992,24 @@ function provinceCell(v) {
 }
 
 /**
- * The rows a newly issued list is counted by — as its worksheets count them:
- *   province worksheets (AURORA (44), BATAAN (292)…) holding at least as many
- *     rows as any summary sheet (CONSOLIDATED, Sheet1…): every row on them,
- *     the summary not counted again — a number on two rows is two entries;
+ * The rows a newly issued list is counted by — as its worksheets count them
+ * (the WWDP list's way, and every list's alike):
+ *   province worksheets (AURORA (44), BATAAN (292)…), with the healthcare
+ *     firms' own sheet when the list keeps them apart (the HWG ID list's
+ *     "Healthcare"), holding at least as many rows as any summary sheet
+ *     (CONSOLIDATED, GENERAL, Sheet1…): every row on them, the summary — and
+ *     any sheet beside it (OCTOBER 2026) — not counted; a number on two rows
+ *     is two entries;
  *   one worksheet only: its rows;
  *   otherwise (the province sheets hold fewer rows than a summary — part of
  *     the list is only on it): each permit number once, as found anywhere.
  */
 function countedEntries(sheetRows, by) {
   const provinceSheets = sheetRows.filter((s) => s.province);
-  const provinceRows = provinceSheets.reduce((a, s) => a + s.entries.length, 0);
-  const largestOther = Math.max(0, ...sheetRows.filter((s) => !s.province).map((s) => s.entries.length));
-  if (provinceSheets.length && provinceRows >= largestOther) return provinceSheets.flatMap((s) => s.entries);
+  const covered = sheetRows.filter((s) => s.province || s.healthcare);
+  const coveredRows = covered.reduce((a, s) => a + s.entries.length, 0);
+  const largestOther = Math.max(0, ...sheetRows.filter((s) => !covered.includes(s)).map((s) => s.entries.length));
+  if (provinceSheets.length && coveredRows >= largestOther) return covered.flatMap((s) => s.entries);
   if (sheetRows.length === 1) return sheetRows[0].entries;
   // Each number once: coloured if any of its rows is, where that row is.
   return [...new Set(sheetRows.flatMap((s) => s.entries.map((e) => e.k)))].map((k) => ({
@@ -858,6 +1018,8 @@ function countedEntries(sheetRows, by) {
     row: by.keyAt[k]?.row || null,
     fill: by.highlights[k] || null,
     province: by.keyProvince[k] || null,
+    onProvinceSheet: false,
+    landfill: by.landfillKeys.has(k),
     healthcare: Boolean(by.keyHealthcare[k]),
     reviewed: Boolean(by.keyReviewed[k]),
     firm: by.keyLabel[k] || null,
@@ -870,6 +1032,177 @@ function countedEntries(sheetRows, by) {
 
 // A name shorter than this ("Store", "Farm") says too little to name one firm.
 const MIN_NAME = 8;
+
+// --- the PSIC basis: a list's PSIC Code against the RAW data's classification ---
+//
+// The RAW data classifies each firm by the standard industry classification
+// (its Industry Classification column — Clinic, Hospital, Dental Clinic,
+// Animal Production…, the ProjectType sheet's categories with their PSIC
+// codes). A classification is a healthcare one when the healthcare
+// establishments' RAW lists (Healthcare Industries, TSD / TRC) are where it
+// is mostly used. A newly issued list's PSIC Code ("Hospitals, clinics,
+// nursing homes…", "Animal production") is matched to the classification it
+// names, and is healthcare when that classification is.
+
+// The establishments' lists the "Healthcare / TSD / TRC Firm" mark is about
+// (not Chemical permits or Importers: those firms are not health establishments).
+const HC_CLASS_UNITS = new Set(['Healthcare Industries', 'TSD / TRC']);
+// The standard list's healthcare classifications by name: the health
+// establishments (Hospital, Clinic, Medical Clinic, Dental Clinic, Diagnostic
+// Center, Dialysis Center, Laboratory, Medical Laboratory, Nursing Home, Blood
+// Service Facility, Ultrasound Center) and the treatment and disposal of
+// hazardous waste (TSD). Others count too when the healthcare lists' firms
+// mostly carry them (Maternity Clinic…).
+const HC_CLASS_NAME = /hospital|clinic|medical|dental|diagnostic|dialysis|laborator|nursing home|blood service|ultrasound|maternity|treatment and disposal of hazardous/i;
+// A classification is a healthcare one when at least this many of its RAW
+// firms, and at least half of them, are on those lists.
+const HC_CLASS_MIN = 2;
+const HC_CLASS_SHARE = 0.5;
+const PSIC_STOP = new Set(['and', 'of', 'the', 'other', 'for', 'in', 'with', 'including', 'or', 'to', 'on', 'its', 'their', 'such', 'as', 'activities', 'activity', 'services', 'service', 'facilities', 'facility', 'not', 'elsewhere', 'classified', 'related', 'nec']);
+/** A classification's or a description's significant words, singular: "Hospitals, clinics…" -> hospital, clinic, … ("non-hazardous" is one word). */
+const psicWords = (v) => [
+  ...new Set(
+    String(v ?? '')
+      .toLowerCase()
+      .replace(/\bnon[\s-]+/g, 'non')
+      .replace(/[^a-z]+/g, ' ')
+      .split(' ')
+      .filter((w) => w.length > 1 && !PSIC_STOP.has(w))
+      .map((w) => (w.endsWith('ies') ? `${w.slice(0, -3)}y` : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+  ),
+];
+
+/**
+ * The RAW data's standard classifications (each workbook's
+ * Industry_Classification sheet: Academy … Animal Production … Clinic …
+ * Water Treatment), and which are healthcare ones — by where the RAW firms
+ * classified so are: a classification no RAW firm carries is not judged.
+ * `records`: analyzeRaw's main-sheet firms ({ unit, industry }) of every RAW
+ * file; `vocabList`: the workbooks' classification lists (analyzeRaw's
+ * `classifications`; without any, the firms' own classifications).
+ * Returns classify(psic) -> { label, healthcare } for the classification a
+ * PSIC Code names (`healthcare` null: not judged), or null when it names none:
+ *   the same words; else the most specific classification whose words are
+ *   all in the description ("Hospital" in "Hospitals, clinics, nursing
+ *   homes…"); else, for a description of two words or more, the closest
+ *   whose words hold all of its ("Treatment and disposal of hazardous" in
+ *   "Treatment and disposal of hazardous waste").
+ */
+function psicClassifier(recordsList, vocabList = []) {
+  const keyOf = (words) => [...words].sort().join(' ');
+  const classes = new Map(); // words key -> { label, words, rows, hc }
+  const vocab = vocabList.flat().filter(Boolean);
+  for (const label of vocab.length ? vocab : recordsList.flat().map((r) => r?.industry).filter(Boolean)) {
+    const words = psicWords(label);
+    if (words.length && !classes.has(keyOf(words))) classes.set(keyOf(words), { label: String(label).trim(), words, rows: 0, hc: 0 });
+  }
+  for (const records of recordsList) {
+    for (const r of records || []) {
+      const c = r.industry && classes.get(keyOf(psicWords(r.industry)));
+      if (!c) continue;
+      c.rows += 1;
+      if (HC_CLASS_UNITS.has(r.unit)) c.hc += 1;
+    }
+  }
+  const list = [...classes.values()].map((c) => ({
+    ...c,
+    // By its name; else by where its RAW firms are (none: not judged).
+    healthcare: HC_CLASS_NAME.test(c.label) && !/non[\s-]*hazardous/i.test(c.label) ? true : c.rows ? c.hc >= HC_CLASS_MIN && c.hc >= c.rows * HC_CLASS_SHARE : null,
+  }));
+  const seen = new Map();
+  const classify = (psic) => {
+    const key = String(psic ?? '').trim().toLowerCase();
+    if (!key) return null;
+    if (seen.has(key)) return seen.get(key);
+    const d = new Set(psicWords(psic));
+    let hit = null;
+    if (d.size) {
+      const exact = list.find((c) => c.words.length === d.size && c.words.every((w) => d.has(w)));
+      const better = (a, b, wantLong) => !b || (wantLong ? a.words.length > b.words.length : a.words.length < b.words.length) || (a.words.length === b.words.length && a.rows > b.rows);
+      // A description may name several ("Hospitals, clinics, nursing homes…"):
+      // a healthcare one among them decides; else a judged one; else any.
+      const rank = (c) => (c.healthcare === true ? 2 : c.healthcare === false ? 1 : 0);
+      let within = null;
+      let around = null;
+      if (!exact) {
+        for (const c of list) {
+          if (c.words.every((w) => d.has(w))) {
+            if (!within || rank(c) > rank(within) || (rank(c) === rank(within) && better(c, within, true))) within = c;
+          } else if (d.size >= 2 && [...d].every((w) => c.words.includes(w)) && better(c, around, false)) around = c;
+        }
+      }
+      const c = exact || within || around;
+      hit = c ? { label: c.label, healthcare: c.healthcare } : null;
+    }
+    seen.set(key, hit);
+    return hit;
+  };
+  // The basis, to show: the classifications counted as healthcare ones.
+  classify.healthcareClasses = list.filter((c) => c.healthcare).map((c) => c.label).sort((a, b) => a.localeCompare(b));
+  return classify;
+}
+
+/**
+ * The healthcare universe as the RAW data holds it (the Healthcare
+ * Industries, Chemical permits, TSD / TRC and Importers lists): their permit
+ * numbers and their firms' project titles, each with its list; and the PSIC
+ * basis (psicClassifier). `checks`, `records` and `classifications`:
+ * analyzeRaw's, of every RAW file.
+ */
+function healthcareIndex(checksList, recordsList = [], vocabList = []) {
+  const byKey = new Map();
+  const byName = new Map();
+  for (const checks of checksList) {
+    for (const c of checks || []) {
+      if (groupOfUnit(c.unit) !== 'healthcare') continue;
+      for (const k of c.keys || []) if (!byKey.has(k)) byKey.set(k, c.unit);
+      const nk = textKey(c.title);
+      if (nk.length >= MIN_NAME && !byName.has(nk)) byName.set(nk, c.unit);
+    }
+  }
+  return { byKey, byName, classify: psicClassifier(recordsList, vocabList) };
+}
+
+// The kinds of permit that are a healthcare list's of themselves.
+const KIND_UNIT = { tsd: 'TSD / TRC', trc: 'TSD / TRC', chemical: 'Chemical permits', importer: 'Importers' };
+
+/**
+ * The healthcare list a newly issued permit is counted under — apart from the
+ * Monitoring Plan's provinces — or null when it is the Monitoring Plan's:
+ *   a TSD, TP/TRC, chemical or importer permit: its own list;
+ *   its number already on a healthcare RAW list, or its establishment named
+ *     there: that list;
+ *   Yes in the list's "Healthcare / TSD / TRC Firm" column, or on the list's
+ *     Healthcare sheet: Healthcare Industries.
+ * Its PSIC Code is the basis whenever it names a RAW classification
+ * (psicClassifier): a non-healthcare one ("Animal production") makes it not
+ * healthcare whatever the mark or the name says; a healthcare one
+ * ("Hospitals, clinics…") makes it healthcare unmarked.
+ * `e`: a counted entry (countedEntries) with its kind; `names`: the list's
+ * names for the permit (keyNames).
+ */
+function healthcareUnitOf(e, index, names = []) {
+  if (KIND_UNIT[e.kind]) return KIND_UNIT[e.kind];
+  const byPsic = index?.classify?.(e.psic) || null;
+  if (byPsic?.healthcare === false) return null;
+  const atKey = index?.byKey.get(e.k);
+  if (atKey) return atKey;
+  for (const nk of [textKey(e.title), ...names]) if (nk.length >= MIN_NAME && index?.byName.has(nk)) return index.byName.get(nk);
+  if (e.healthcare || byPsic?.healthcare) return 'Healthcare Industries';
+  return null;
+}
+
+/**
+ * Marked a healthcare / TSD / TRC firm on its list (Yes, or its Healthcare
+ * sheet), yet its PSIC Code names a RAW classification that is not a
+ * healthcare one — the mark to check. Returns that classification's label,
+ * or null.
+ */
+function notHealthcareByPsic(e, index) {
+  if (!e.healthcare || KIND_UNIT[e.kind]) return null;
+  const byPsic = index?.classify?.(e.psic) || null;
+  return byPsic?.healthcare === false ? byPsic.label : null;
+}
 // The fill the tracker's Office Script gives the rows of the encoded permits
 // (front-end officeScript.js ENCODED_FILL).
 const ENCODED_FILL = '9DD9F3';
@@ -989,6 +1322,52 @@ function unencodedHighlights(lists, inRaw) {
   return out;
 }
 
+/**
+ * The unit a newly issued permit counts under in the masterlist — as the
+ * list's own sheets count it:
+ *   on a province's sheet: that province — every row of it, the healthcare
+ *     firms marked in its column and the sanitary landfills alike (the
+ *     healthcare firms are a breakdown within it: healthcareUnitOf);
+ *   a healthcare / TSD / TRC firm the list keeps apart (its Healthcare sheet,
+ *     the TSD and TP/TRC lists): its healthcare list;
+ *   else: its Province cell.
+ */
+function masterlistUnitOf(e, index, names = []) {
+  if (e.onProvinceSheet && e.province) return e.province;
+  if (e.healthcare || KIND_UNIT[e.kind]) return healthcareUnitOf(e, index, names) || 'Healthcare Industries';
+  return e.province || '(none)';
+}
+
+// A list whose permits are this share or more on a larger list is a copy of it.
+const COPY_SHARE = 0.9;
+
+/**
+ * The newly issued lists that copy another — a working copy of a list's rows
+ * set aside for someone to check ("RED HIGHLIGHTED - STEPHEN"), whose permits
+ * would otherwise be counted twice. `lists`: [{ id, name, keys }] (the
+ * reference extracts left out). A list is a copy when nine in ten of its
+ * permit numbers or more are on a larger list (more numbers; the same number
+ * and more rows; else the first by id). Returns { [copy id]: the list's name }.
+ */
+function copiesOf(lists) {
+  const sets = lists.map((l) => ({ ...l, set: new Set(l.keys || []) }));
+  const larger = (a, b) => b.set.size > a.set.size || (b.set.size === a.set.size && ((b.rows || 0) > (a.rows || 0) || ((b.rows || 0) === (a.rows || 0) && String(b.id) < String(a.id))));
+  const out = {};
+  for (const a of sets) {
+    if (!a.set.size) continue;
+    for (const b of sets) {
+      if (a === b || !larger(a, b)) continue;
+      let shared = 0;
+      for (const k of a.set) if (b.set.has(k)) shared += 1;
+      if (shared / a.set.size >= COPY_SHARE) {
+        out[a.id] = b.name;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 // One save that colours this many rows or more…
 const BULK_MIN_ROWS = 25;
 // …faster than this many a minute…
@@ -1011,12 +1390,51 @@ function bulkHighlight(before, now, minutes) {
   return { rows: coloured.length, unchanged, minutes: Math.round(mins), serials: coloured.slice(0, 20) };
 }
 
-/** A workbook's bytes, read as the tracked kind. */
-function analyze(buffer, kind) {
-  // With their fills, both kinds: the RAW rows coloured as updated, the
-  // permits coloured on the newly issued lists as written in.
-  const wb = XLSX.read(buffer, { type: 'buffer', cellStyles: true, cellDates: true });
-  return kind === 'raw' ? analyzeRaw(wb) : analyzePermits(wb);
+// A table ends where this many empty rows follow it: whatever lies past such
+// a gap is a stray value, not the table's.
+const GAP_ROWS = 500;
+
+/**
+ * A sheet's range cut to its table. Excel keeps the range down to a stray
+ * value far below it — the PAMPANGA sheet reads A1:CD306963 for 6,000 firms,
+ * the Central Office's extract A1:L1045656 for 765 rows — and every row of
+ * the range would be built (25 million cells: 37 s). The range ends at the
+ * last row before a gap of GAP_ROWS empty rows, and at the last column with a
+ * value in those rows. Returns the rows cut off, if any.
+ */
+function trimRange(ws) {
+  if (!ws?.['!ref']) return 0;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const rowCols = new Map(); // row -> its last column with a value
+  for (const key of Object.keys(ws)) {
+    if (key[0] === '!') continue;
+    const v = ws[key]?.v;
+    if (v === undefined || v === null || v === '') continue;
+    const { r, c } = XLSX.utils.decode_cell(key);
+    if (c > (rowCols.get(r) ?? -1)) rowCols.set(r, c);
+  }
+  if (!rowCols.size) return 0;
+  const rows = [...rowCols.keys()].sort((a, b) => a - b);
+  let end = rows[0];
+  let lastCol = rowCols.get(end);
+  for (let i = 1; i < rows.length && rows[i] - end <= GAP_ROWS; i++) {
+    end = rows[i];
+    lastCol = Math.max(lastCol, rowCols.get(end));
+  }
+  const cut = range.e.r - end;
+  if (cut <= 0 && lastCol >= range.e.c) return 0;
+  ws['!ref'] = XLSX.utils.encode_range({ s: range.s, e: { r: Math.max(range.s.r, end), c: Math.min(range.e.c, Math.max(range.s.c, lastCol)) } });
+  return Math.max(0, cut);
 }
 
-module.exports = { ANALYSIS_VERSION, ENCODED_FILL, MASTERLIST_LEGEND, colourFamily, permitStatus, healthcarePsic, analyze, analyzeRaw, analyzePermits, permitKey, permitKeys, permitKind, eccYear, fillOf, mergeUnits, addInto, unitOf, groupOfUnit, sourceOf, unvalidatedHighlights, unencodedHighlights, bulkHighlight };
+/** A workbook's bytes, read as the tracked kind. */
+function analyze(buffer, kind, { reference = false, baseSerials = null } = {}) {
+  // With their fills, both kinds: the RAW rows coloured as updated, the
+  // permits coloured on the newly issued lists as written in. A reference
+  // extract (the Central Office's) is not coloured in: read without them.
+  const wb = XLSX.read(buffer, { type: 'buffer', cellStyles: !reference, cellDates: true });
+  for (const name of wb.SheetNames) trimRange(wb.Sheets[name]);
+  return kind === 'raw' ? analyzeRaw(wb, { baseSerials }) : analyzePermits(wb);
+}
+
+module.exports = { ANALYSIS_VERSION, ENCODED_FILL, trimRange, mainSheetsOf, MASTERLIST_LEGEND, colourFamily, permitStatus, healthcarePsic, healthcareIndex, healthcareUnitOf, notHealthcareByPsic, psicClassifier, masterlistUnitOf, copiesOf, analyze, analyzeRaw, analyzePermits, permitKey, permitKeys, permitKind, eccYear, fillOf, mergeUnits, addInto, unitOf, groupOfUnit, sourceOf, unvalidatedHighlights, unencodedHighlights, bulkHighlight };
