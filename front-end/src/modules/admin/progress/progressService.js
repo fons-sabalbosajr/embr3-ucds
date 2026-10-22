@@ -30,6 +30,8 @@ export const getPublicPoints = async (token, unit) => (await axios.get(`${public
 export const getPublicFirm = async (token, serial) => (await axios.get(`${publicBase(token)}/firms/${encodeURIComponent(serial)}`, { withCredentials: false })).data.firm;
 // The first look at a season reads every file (about a minute); later ones only what changed.
 export const checkNow = async () => (await client.post("/refresh", null, { timeout: 5 * 60 * 1000 })).data;
+/** The newly issued lists alone, matched against the RAW data as last read: seconds, not minutes. */
+export const checkLists = async () => (await client.post("/refresh", null, { params: { only: "lists" }, timeout: 5 * 60 * 1000 })).data;
 
 // ---------------------------------------------------------------------------
 // The last figures a screen saw, kept in the browser so it paints at once and

@@ -204,10 +204,11 @@ router.get('/api/public/progress/:token/firms/:serial', publicLimit, async (req,
   }
 });
 
-// "Check now": one look at the folders, within the season.
+// "Check now": one look at the folders, within the season. `?only=lists`: the
+// newly issued lists' folders alone (the Highlighting tab's Refresh).
 router.post('/api/admin/progress-tracker/refresh', admin, async (req, res, next) => {
   try {
-    const result = await tracker.refresh();
+    const result = await tracker.refresh({ listsOnly: req.query.only === 'lists' });
     res.json({ ...result, ...(await tracker.overview(null)) });
   } catch (err) {
     fail(res, err, next);

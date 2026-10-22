@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Button, Card, Col, Empty, Input, Modal, Progress, Row, Segmented, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "../../../shared/feedback";
-import { saveMasterlistNames } from "./progressService";
-import { EditOutlined, EyeInvisibleOutlined, EyeOutlined, FileDoneOutlined, RightOutlined } from "@ant-design/icons";
+import { checkLists, saveMasterlistNames } from "./progressService";
+import { EditOutlined, EyeInvisibleOutlined, EyeOutlined, FileDoneOutlined, ReloadOutlined, RightOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import IssuedKindDetail from "./IssuedKindDetail";
@@ -332,6 +332,19 @@ export default function IssuedHighlighting({ byKind = {}, kinds = [], units = []
     }, {})
   );
   const canName = admin && seasonId && queryKey;
+  // Refresh: the newly issued lists read again now, and matched against the
+  // RAW data as last read — quicker than Check now, which reads every file.
+  const queryClient = useQueryClient();
+  const refresh = useMutation({
+    mutationFn: checkLists,
+    onSuccess: (res) => {
+      queryClient.setQueryData(queryKey, res);
+      queryClient.invalidateQueries({ queryKey: ["admin", "progress-tracker", "issued"] });
+      const what = res.listsOnly ? "newly issued list" : "file";
+      message.success(res.changed ? `${res.changed} ${what}${res.changed === 1 ? "" : "s"} changed since the last look.` : "The highlighting is up to date.");
+    },
+    onError: (e) => message.error(e?.response?.data?.message || "The lists could not be read again."),
+  });
   const [hidden, setHidden] = useState(readHidden);
   const toggle = (k) => {
     const next = hidden.includes(k) ? hidden.filter((x) => x !== k) : [...hidden, k];
@@ -448,6 +461,13 @@ export default function IssuedHighlighting({ byKind = {}, kinds = [], units = []
       }
       extra={
         <Space size={6}>
+          {admin && queryKey && (
+            <Tooltip title={watching ? "Read the newly issued lists again now, without waiting for the next look or reading the RAW files" : "The season is not running: the files are not being read."}>
+              <Button size="small" icon={<ReloadOutlined />} loading={refresh.isPending} disabled={!watching} onClick={() => refresh.mutate()}>
+                Refresh
+              </Button>
+            </Tooltip>
+          )}
           {shown.length > 1 && (
             <>
               <Button size="small" onClick={() => setFoldAll("hl-kinds", true)}>

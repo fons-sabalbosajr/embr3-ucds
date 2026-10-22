@@ -283,8 +283,13 @@ function compareRaw(baseFp, nowFp) {
   return { added, removed, modified, bySection, addedSerials, modifiedSerials };
 }
 
-/** One look at every source of the season; returns how many files changed. */
-async function poll(season) {
+/**
+ * One look at every source of the season; returns how many files changed.
+ * `listsOnly`: the newly issued lists' folders only (the Highlighting tab's
+ * Refresh) — the RAW files are left as last read, so the lists' colours are
+ * matched against the RAW data in memory in seconds, not after every RAW file.
+ */
+async function poll(season, { listsOnly = false } = {}) {
   const seasonId = String(season._id);
   const started = Date.now();
   const preSeason = isPreSeason(season);
@@ -296,14 +301,15 @@ async function poll(season) {
   let changed = 0;
   const errors = [];
   const seen = new Set();
+  const sources = listsOnly ? season.sources.filter((s) => s.kind === 'permits') : season.sources;
 
   // The folders listed together (a few REST calls each).
-  const listings = await Promise.all(season.sources.map((s) => sharepoint.list(s.link).then((listing) => ({ listing }), (err) => ({ err }))));
+  const listings = await Promise.all(sources.map((s) => sharepoint.list(s.link).then((listing) => ({ listing }), (err) => ({ err }))));
   // When, from the look's start, each stage was done (ms): kept with the look, to see where the time goes.
   const stages = { listed: Date.now() - started };
   // The files saved since the last look, of every source…
   const jobs = [];
-  for (const [s, source] of season.sources.entries()) {
+  for (const [s, source] of sources.entries()) {
     const { listing, err: listErr } = listings[s];
     if (listErr) {
       errors.push(`${source.label}: ${listErr.message}`);
@@ -325,7 +331,8 @@ async function poll(season) {
   // …and, the lists read, the permits matched against the RAW data held in
   // memory and the screens told at once. Not on the first look since the
   // server started: the RAW files are not all in memory yet.
-  const matchEarly = listsLeft > 0 && countedSince.has(seasonId) && !firstLook;
+  // (A lists-only look matches once, at its end.)
+  const matchEarly = listsLeft > 0 && countedSince.has(seasonId) && !firstLook && !listsOnly;
   // Downloaded and read a few at a time, in worker threads (analyzePool.js):
   // the server goes on answering meanwhile. Each is recorded as soon as it is
   // read — one at a time, in the order they finish — and a RAW file's firms
@@ -517,9 +524,12 @@ async function poll(season) {
     }
   }
 
-  // Files no longer in the folders.
+  // Files no longer in the folders (of the folders looked at).
   if (!errors.length) {
-    await files.updateMany({ season: seasonId, _id: { $nin: [...seen] }, missing: false }, { $set: { missing: true, missingSince: new Date() } });
+    await files.updateMany(
+      { season: seasonId, _id: { $nin: [...seen] }, missing: false, ...(listsOnly ? { source: { $in: sources.map((s) => s.key) } } : {}) },
+      { $set: { missing: true, missingSince: new Date() } }
+    );
   }
 
   // The newly issued permits already written into the RAW files, and the
@@ -542,8 +552,11 @@ async function poll(season) {
   if (events.length) await db().collection(EVENTS).insertMany(events);
   const warnings = events.filter((e) => e.kind === 'warning');
   if (warnings.length) warnDevelopers(warnings);
-  const set = { lastPoll: { at: new Date(), ms: Date.now() - started, changed, errors: errors.slice(0, 10), stages } };
-  if (firstLook && !errors.length) set.baselineAt = new Date();
+  // A lists-only look is not a look at every file: "checked" stays the last full one's.
+  const set = listsOnly
+    ? { lastListsLook: { at: new Date(), ms: Date.now() - started, changed, errors: errors.slice(0, 10), stages } }
+    : { lastPoll: { at: new Date(), ms: Date.now() - started, changed, errors: errors.slice(0, 10), stages } };
+  if (firstLook && !errors.length && !listsOnly) set.baselineAt = new Date();
   await db().collection(SEASONS).updateOne({ _id: season._id }, { $set: set });
   // Told again only for what the validation and the activity added.
   if (recount && events.length) broadcast(seasonId);
@@ -940,14 +953,20 @@ function start(socketServer) {
   schedule(10 * 1000);
 }
 
-/** Look now, for the "Check now" button; within the season only. */
-async function refresh() {
+/**
+ * Look now, for the "Check now" button; within the season only. `listsOnly`:
+ * the newly issued lists alone (the Highlighting tab's Refresh) — a full look
+ * instead while the RAW data is not yet in memory (the season's first look, or
+ * the first since the server started), as the lists have nothing to match then.
+ */
+async function refresh({ listsOnly = false } = {}) {
   const season = await currentSeason();
   if (!season) throw Object.assign(new Error('There is no open season to check.'), { status: 409 });
   if (!isWatched(season)) throw Object.assign(new Error('The season has ended: files are no longer checked.'), { status: 409 });
   if (running) await running;
   if (!(await takeLease(season))) throw Object.assign(new Error('Another server is checking the files right now.'), { status: 409 });
-  return poll(season);
+  const partial = listsOnly && season.baselineAt && !isPreSeason(season) && countedSince.has(String(season._id));
+  return { ...(await poll(season, { listsOnly: Boolean(partial) })), listsOnly: Boolean(partial) };
 }
 
 // --- reading ---------------------------------------------------------------------
