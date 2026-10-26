@@ -31,6 +31,14 @@ dotenv.config({ path: path.join(here, '..', '.env') });
 // read before AUTOMATION_AGENT_ENABLED (services/vera/provider.js).
 process.env.VERA_ENABLED = 'false';
 
+// No real email from the suite: .env holds the office's SMTP account, and the
+// request-access and approval tests address throwaway @test.local mailboxes —
+// every run sent real mail that bounced back into that inbox. Unconfigured,
+// services/mailer skips each send and reports it not sent, which is what the
+// approval tests expect (the Developer is then shown the password).
+process.env.EMAIL_USER = '';
+process.env.EMAIL_PASS = '';
+
 // HRPMS (services/hrpmsDirectory.js) is another system's production data:
 // the suite never reaches it, and the portal falls back to the test
 // database and then its built-in list.

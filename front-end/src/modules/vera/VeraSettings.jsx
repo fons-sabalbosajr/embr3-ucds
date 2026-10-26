@@ -42,6 +42,7 @@ import VeraRegisterLinks from "./VeraRegisterLinks";
 import VeraSerials from "./VeraSerials";
 import VeraProjectTypes from "./VeraProjectTypes";
 import VeraScanText from "./VeraScanText";
+import VeraRefNumbers from "./VeraRefNumbers";
 import { useQuery } from "@tanstack/react-query";
 import VeraLogs from "./VeraLogs";
 import { VeraFlame } from "./VeraMark";
@@ -551,7 +552,7 @@ export default function VeraSettings() {
         // The bell links to ?tab=corrections or ?tab=links; until that tab
         // exists (the Developer check is still answering), Configuration shows.
         activeKey={
-          ((tab === "corrections" || tab === "serials" || tab === "project-types" || tab === "scan-text") && pendingCorrections === undefined) || (tab === "links" && pendingLinks === undefined) ? "configuration" : tab
+          ((tab === "corrections" || tab === "serials" || tab === "project-types" || tab === "ref-numbers" || tab === "scan-text") && pendingCorrections === undefined) || (tab === "links" && pendingLinks === undefined) ? "configuration" : tab
         }
         onChange={setTab}
         items={[
@@ -572,6 +573,10 @@ export default function VeraSettings() {
           // Each record's project type, read against its document.
           ...(pendingCorrections !== undefined
             ? [{ key: "project-types", label: <span><FileSearchOutlined /> Project types</span>, children: <VeraProjectTypes /> }]
+            : []),
+          // Each record's Ref. No., read against the number printed on its scan.
+          ...(pendingCorrections !== undefined
+            ? [{ key: "ref-numbers", label: <span><NumberOutlined /> Ref. numbers</span>, children: <VeraRefNumbers /> }]
             : []),
           // Reading scans' text so the libraries can search inside them.
           ...(pendingCorrections !== undefined

@@ -306,56 +306,93 @@ function passwordChanged({ name, when = new Date() }) {
   return { subject: `Your ${PRODUCT} password was changed`, text, html };
 }
 
-/** To the administrator: someone has asked for an account. */
-function registrationReceived({ name, division, position, email, reviewUrl }) {
+/** To the Developers: someone has asked for an account. */
+function registrationReceived({ name, division, position, email, access, reviewUrl }) {
   const html = layout({
     heading: 'New access request',
-    preheader: `${name} (${division}) has requested an ${PRODUCT} account.`,
+    preheader: `${name} (${division}) has requested ${access ? `${access} access` : `an ${PRODUCT} account`}.`,
     body: `
-      ${p(`A request for an ${PRODUCT} account is waiting for review.`)}
+      ${p(`A request for an ${PRODUCT} account is waiting for a Developer's approval.`)}
       ${details([
         ['Name', name],
         ['Division / Section', division],
         ['Position', position],
         ['Email', email],
+        ['Requested access', access],
       ])}
       ${p(
-        'Approve it under <strong>Admin &rsaquo; User Accounts &rsaquo; Signed Up Users</strong>. Approving creates the account and sends the person their credentials.',
+        'Review it under <strong>Admin &rsaquo; User Accounts &rsaquo; Account Requests</strong>. Approving creates the account with the access you choose and emails the person their sign-in details; declining emails them your reason.',
         { size: 14 }
       )}
-      ${reviewUrl ? button({ href: reviewUrl, label: 'Open User Accounts' }) : ''}`,
+      ${reviewUrl ? button({ href: reviewUrl, label: 'Review the request' }) : ''}`,
     note: 'Only approve people you can verify are EMB Region III personnel. The request was submitted from the public site and has not been checked.',
   });
 
   const text = textBody([
     `${PRODUCT} — new access request`,
     '',
-    `A request for an ${PRODUCT} account is waiting for review.`,
+    `A request for an ${PRODUCT} account is waiting for a Developer's approval.`,
     '',
     `Name:               ${name}`,
     `Division / Section: ${division}`,
     `Position:           ${position}`,
     `Email:              ${email}`,
+    ...(access ? [`Requested access:   ${access}`] : []),
     '',
-    'Approve it under Admin > User Accounts > Signed Up Users.',
+    'Review it under Admin > User Accounts > Account Requests.',
     ...(reviewUrl ? ['', reviewUrl] : []),
   ]);
 
   return { subject: `Access request from ${name}`, text, html };
 }
 
+/** To the applicant: the request was declined, and why. */
+function registrationRejected({ name, reason }) {
+  const who = String(name || '').trim();
+  const why = String(reason || '').trim();
+
+  const html = layout({
+    heading: 'Your access request was not approved',
+    preheader: `Your ${PRODUCT} access request was reviewed and not approved.`,
+    body: `
+      ${p(`Hello${who ? ` ${escape(who)}` : ''},`)}
+      ${p(`Your request for an ${PRODUCT} account was reviewed and was not approved.`)}
+      ${why ? callout({ label: 'Reason given', value: why }) : ''}
+      ${p(
+        'If you think this is a mistake, or your circumstances have changed, speak to your division and submit a new request from the sign-in page.',
+        { size: 14 }
+      )}`,
+    note: 'No account was created and nothing further will be sent about this request.',
+  });
+
+  const text = textBody([
+    `${PRODUCT} — your access request was not approved`,
+    '',
+    `Hello${who ? ` ${who}` : ''},`,
+    '',
+    `Your request for an ${PRODUCT} account was reviewed and was not approved.`,
+    ...(why ? ['', `Reason given: ${why}`] : []),
+    '',
+    'If you think this is a mistake, speak to your division and submit a new',
+    'request from the sign-in page.',
+  ]);
+
+  return { subject: `Your ${PRODUCT} access request`, text, html };
+}
+
 /** To the applicant: we have it, here is what happens next. */
-function registrationAcknowledged({ name }) {
+function registrationAcknowledged({ name, access }) {
   const who = String(name || '').trim();
 
   const html = layout({
     heading: 'We received your request',
-    preheader: `Your ${PRODUCT} access request has been sent to the administrator for approval.`,
+    preheader: `Your ${PRODUCT} access request has been sent to the Developer for approval.`,
     body: `
       ${p(`Hello${who ? ` ${escape(who)}` : ''},`)}
       ${p(
-        `Your request for an ${PRODUCT} account has been recorded and sent to the system administrator for approval.`
+        `Your request for an ${PRODUCT} account has been recorded and sent to the system Developer for approval.`
       )}
+      ${access ? details([['Access requested', access]]) : ''}
       ${p(
         'Once it is approved you will receive a second email at this address with your username and a temporary password. There is nothing you need to do in the meantime.',
         { size: 14 }
@@ -369,7 +406,8 @@ function registrationAcknowledged({ name }) {
     `Hello${who ? ` ${who}` : ''},`,
     '',
     `Your request for an ${PRODUCT} account has been recorded and sent to the`,
-    'system administrator for approval.',
+    'system Developer for approval.',
+    ...(access ? ['', `Access requested: ${access}`] : []),
     '',
     'Once it is approved you will receive a second email at this address with',
     'your username and a temporary password.',
@@ -379,7 +417,7 @@ function registrationAcknowledged({ name }) {
 }
 
 /** To the new user: the account exists, here is how to get in. */
-function accountApproved({ name, username, password, loginUrl }) {
+function accountApproved({ name, username, password, access, loginUrl }) {
   const who = String(name || '').trim();
 
   const html = layout({
@@ -389,6 +427,7 @@ function accountApproved({ name, username, password, loginUrl }) {
       ${p(`Hello${who ? ` ${escape(who)}` : ''},`)}
       ${p(`Your request was approved and an ${PRODUCT} account has been created for you.`)}
       ${details([
+        ['Access', access],
         ['Username', username, { mono: true }],
         ['Temporary password', password, { mono: true }],
       ])}
@@ -407,6 +446,7 @@ function accountApproved({ name, username, password, loginUrl }) {
     '',
     `Your request was approved and an ${PRODUCT} account has been created for you.`,
     '',
+    ...(access ? [`Access:             ${access}`] : []),
     `Username:           ${username}`,
     `Temporary password: ${password}`,
     '',
@@ -464,6 +504,7 @@ module.exports = {
   passwordChanged,
   registrationReceived,
   registrationAcknowledged,
+  registrationRejected,
   accountApproved,
   nasVerificationCode,
   layout,

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Form, Input, Button } from "antd";
+import { Form, Input, Button, Radio, Select } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { modal } from "./shared/feedback";
@@ -29,6 +29,8 @@ const Register = () => {
           division: values.division.trim(),
           position: values.position.trim(),
           email: values.email.trim(),
+          system: values.system,
+          ermsUnit: values.system === "erms" ? values.ermsUnit : undefined,
         },
         { withCredentials: true }
       );
@@ -37,8 +39,8 @@ const Register = () => {
         modal.success({
           title: "Request submitted",
           content:
-            "Your access request has been sent to the system administrator. " +
-            "You will receive your account details by email once it is approved.",
+            "Your access request has been sent to the Developer for approval. " +
+            "You will receive your sign-in details by email once it is approved.",
           okText: "Back to sign in",
           onOk: () => navigate(ROUTES.login),
         });
@@ -59,7 +61,7 @@ const Register = () => {
     <AuthShell
       width={460}
       title="Request access"
-      intro="Accounts are issued to EMB Region III personnel. Tell us who you are and the administrator will set one up."
+      intro="Accounts are issued to EMB Region III personnel. Tell us who you are and which system you need; the Developer approves each request."
       footer={
         <>
           Already have an account? <Link to={ROUTES.login}>Sign in</Link>
@@ -91,6 +93,36 @@ const Register = () => {
           rules={[{ required: true, whitespace: true, message: "Enter your position." }]}
         >
           <Input size="large" placeholder="e.g. Environmental Management Specialist II" autoComplete="organization-title" />
+        </Form.Item>
+
+        <Form.Item
+          name="system"
+          label="System you need"
+          extra="The Developer approves the request and sets up the access."
+          rules={[{ required: true, message: "Choose the system you need." }]}
+        >
+          <Radio.Group optionType="button" buttonStyle="solid" style={{ display: "flex" }}>
+            <Radio.Button value="ucds" style={{ flex: 1, textAlign: "center" }}>UCDS — Planning</Radio.Button>
+            <Radio.Button value="erms" style={{ flex: 1, textAlign: "center" }}>ERMS — Records</Radio.Button>
+          </Radio.Group>
+        </Form.Item>
+
+        <Form.Item noStyle shouldUpdate={(a, b) => a.system !== b.system}>
+          {({ getFieldValue }) =>
+            getFieldValue("system") === "erms" ? (
+              <Form.Item name="ermsUnit" label="ERMS unit" rules={[{ required: true, message: "Choose the unit you work in." }]}>
+                <Select
+                  size="large"
+                  placeholder="Choose your unit"
+                  options={[
+                    { value: "records", label: "Records Unit" },
+                    { value: "legal", label: "Legal Services Unit" },
+                    { value: "laboratory", label: "Laboratory Unit" },
+                  ]}
+                />
+              </Form.Item>
+            ) : null
+          }
         </Form.Item>
 
         <Form.Item

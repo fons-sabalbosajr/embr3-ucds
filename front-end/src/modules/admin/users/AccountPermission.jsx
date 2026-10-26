@@ -294,7 +294,6 @@ const AccountPermission = ({ onClose, onPermissionsUpdate, userData }) => {
           <p className="user-email-details">{userData.email}</p>
           <p className="user-permission-details">
             <Tag color={type.color}>{type.label}</Tag>
-            {account?.isDemo && <Tag color="gold">demo</Tag>}
           </p>
         </div>
       </div>

@@ -475,6 +475,32 @@ router.patch(
   validate(updateSchema),
   ctrl.updateRecord
 );
+// Off "Needs review" by hand: the values left have been looked at and stand.
+router.post(
+  '/api/erms/records/:serialNo/reviewed',
+  ermsWrite,
+  validate(serialParam, 'params'),
+  validate(z.object({ note: optional(500) })),
+  ctrl.markReviewed
+);
+
+// VERA reads the Ref. No. printed on the scan and compares it with the one
+// encoded (services/vera/refNoCheck). Seen by whoever reads the record;
+// checked (one AI model call), applied, undone or kept by whoever may edit it.
+router.get('/api/erms/records/:serialNo/ref-check', ermsAccess, validate(serialParam, 'params'), ctrl.getRefCheck);
+router.post(
+  '/api/erms/records/:serialNo/ref-check',
+  ermsWrite,
+  validate(serialParam, 'params'),
+  validate(z.object({ force: z.boolean().optional() })),
+  ctrl.runRefCheck
+);
+router.post(
+  '/api/erms/records/:serialNo/ref-check/:action',
+  ermsWrite,
+  validate(serialParam.extend({ action: z.enum(['apply', 'undo', 'keep']) }), 'params'),
+  ctrl.settleRefCheck
+);
 
 // Documents on the records share. Addressed by record, never by path: the
 // stored path is looked up server-side, so there is no caller input that could

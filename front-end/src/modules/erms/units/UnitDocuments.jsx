@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Card, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
-import { CloudUploadOutlined, EditOutlined, EyeOutlined, FileExclamationOutlined, PaperClipOutlined } from "@ant-design/icons";
+import { CloudUploadOutlined, EditOutlined, EyeOutlined, FileExclamationOutlined, FilePdfOutlined, PaperClipOutlined } from "@ant-design/icons";
+import { DocumentViewer } from "../../../shared/components/DocumentPanel";
 import { useParams, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { describeApiError, exportUnitDocuments, fetchUnitDocuments } from "../api/ermsService";
@@ -54,6 +55,8 @@ const UnitDocuments = () => {
   const [openSerial, setOpenSerial] = useState(searchParams.get("open") || null);
   // The row being edited in the form.
   const [editing, setEditing] = useState(null);
+  // The row whose scan is open in the viewer.
+  const [viewingDoc, setViewingDoc] = useState(null);
   const [fitRef, fitHeight] = useFitHeight(TABLE_RESERVE);
   const screen = useScreen();
 
@@ -77,6 +80,15 @@ const UnitDocuments = () => {
 
   // What a document is known by besides its serial: a Legal docket, a COC.
   const primaryKey = unit === "legal" ? "docketNo" : unit === "laboratory" ? "cocNo" : null;
+
+  // The scan, straight from the row (as on the Records library). The viewer
+  // asks the server first: only this unit's own staff and the Developer read
+  // it here; anyone else is pointed to the Document Portal.
+  const docButton = (row) => (
+    <Tooltip title={row.document?.fileName ? "View document" : "No scan filed for this document"}>
+      <Button size="small" icon={<FilePdfOutlined />} disabled={!row.document?.fileName} onClick={() => setViewingDoc(row)} aria-label="View document" />
+    </Tooltip>
+  );
 
   const columns = [
     // The serial is the document's number in the library — its own column.
@@ -191,13 +203,14 @@ const UnitDocuments = () => {
     {
       title: "Action",
       key: "actions",
-      width: 110,
+      width: 118,
       align: "center",
       render: (_, row) => (
         <Space size={4}>
-          <Tooltip title="View">
-            <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(row.serialNo)} aria-label="View" />
+          <Tooltip title="View document details">
+            <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(row.serialNo)} aria-label="View document details" />
           </Tooltip>
+          {docButton(row)}
           {unitConfig?.canFile && (
             <Tooltip title="Edit">
               <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} aria-label="Edit" />
@@ -333,12 +346,15 @@ const UnitDocuments = () => {
                       { key: "when", width: 110, responsive: ["sm"], render: (_, a) => formatValue({ type: "date" }, a.document?.uploadedAt || a.createdAt) },
                       {
                         key: "view",
-                        width: 56,
+                        width: 80,
                         align: "center",
                         render: (_, a) => (
-                          <Tooltip title="View">
-                            <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(a.serialNo)} aria-label="View" />
-                          </Tooltip>
+                          <Space size={4}>
+                            <Tooltip title="View document details">
+                              <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(a.serialNo)} aria-label="View document details" />
+                            </Tooltip>
+                            {docButton(a)}
+                          </Space>
                         ),
                       },
                     ]}
@@ -368,6 +384,14 @@ const UnitDocuments = () => {
           if (searchParams.get("upload")) setSearchParams({});
           if (saved) setOpenSerial(saved.serialNo);
         }}
+      />
+
+      <DocumentViewer
+        open={Boolean(viewingDoc)}
+        onClose={() => setViewingDoc(null)}
+        serialNo={viewingDoc?.serialNo}
+        unit={unit}
+        fileName={viewingDoc?.document?.fileName}
       />
 
       {/* Edit from the row, without opening the document first. */}

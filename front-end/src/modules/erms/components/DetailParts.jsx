@@ -15,8 +15,12 @@ const { Text } = Typography;
 
 const text = (v) => (v === null || v === undefined ? "" : String(v));
 
-/** A label and its value as text, wrapped — read, not edited. */
-export const Field = ({ label, value, span, mono, warning, path }) => {
+/**
+ * A label and its value as text, wrapped — read, not edited.
+ * `copy`: a button after the value that copies it, or copies `copy` itself
+ * when it is a string (a Ref No without the date shown beside it).
+ */
+export const Field = ({ label, value, span, mono, warning, path, copy }) => {
   const { token } = antdTheme.useToken();
   const shown = text(value).trim();
   return (
@@ -46,6 +50,15 @@ export const Field = ({ label, value, span, mono, warning, path }) => {
           }}
         >
           {shown || "—"}
+          {copy && shown && (
+            <Text
+              copyable={{
+                text: typeof copy === "string" ? copy : shown,
+                tooltips: [`Copy ${label}`, "Copied"],
+              }}
+              style={{ marginInlineStart: 4 }}
+            />
+          )}
         </div>
       )}
     </div>

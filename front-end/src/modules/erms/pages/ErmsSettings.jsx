@@ -17,10 +17,12 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import {
   AuditOutlined,
+  CheckCircleOutlined,
   CopyOutlined,
   DesktopOutlined,
   EditOutlined,
@@ -47,11 +49,13 @@ import {
   fetchUnitLookups,
   fetchUnitSettings,
   fetchUnits,
+  markRecordReviewed,
   resetUnitSettings,
   saveUnitLookup,
   saveUnitSettings,
 } from "../api/ermsService";
 import RecordFormModal from "../components/RecordFormModal";
+import { useRecordsLive } from "../useRecordsLive";
 import LookupListEditor from "../components/LookupListEditor";
 import { unitTheme } from "../units/unitTheme";
 import UnitDocumentDetail from "../units/UnitDocumentDetail";
@@ -93,21 +97,60 @@ const Rule = ({ name, label, help, valuePropName = "checked", children }) => (
 /** Records whose values could not be interpreted — with the form to fix them. */
 const NeedsReview = () => {
   const [editing, setEditing] = useState(null);
+  const queryClient = useQueryClient();
+  // A record put right anywhere — here, on its page, by a colleague — leaves the list at once.
+  useRecordsLive();
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["erms", "records", { flagged: true, page: 1, pageSize: 50 }],
     queryFn: () => fetchRecords({ flagged: true, page: 1, pageSize: 50, sortBy: "document.uploadedAt", sortDir: -1 }),
   });
+  const review = useMutation({
+    mutationFn: (serialNo) => markRecordReviewed({ serialNo }),
+    onSuccess: (_, serialNo) => {
+      message.success(`${serialNo} is off "Needs review".`);
+      queryClient.invalidateQueries({ queryKey: ["erms"] });
+    },
+    onError: (e) => message.error(describeApiError(e, "The record could not be marked reviewed.")),
+  });
   const columns = [
     { title: "FSN", dataIndex: "serialNo", key: "serialNo", width: 140, render: (s) => <Text style={{ fontFamily: "monospace" }}>{s}</Text> },
-    { title: "Permit", dataIndex: ["permit", "number"], key: "permit", width: 200, render: (v) => v || "—" },
+    { title: "Permit", dataIndex: ["permit", "number"], key: "permit", width: 180, render: (v) => v || "—" },
     { title: "Proponent", dataIndex: "proponentName", key: "proponent", ellipsis: true },
-    { title: "Province", dataIndex: ["location", "province"], key: "province", width: 120, render: (p) => PROVINCE_LABEL[p] || p || "—" },
-    { title: "", key: "fix", width: 80, render: (_, r) => <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(r)}>Fix</Button> },
+    { title: "Province", dataIndex: ["location", "province"], key: "province", width: 110, render: (p) => PROVINCE_LABEL[p] || p || "—" },
+    {
+      title: "To check",
+      key: "issues",
+      width: 200,
+      render: (_, r) => (
+        <Space size={[4, 4]} wrap>
+          {(r.dataQuality?.issues || []).map((i, idx) => (
+            <Tooltip key={idx} title={[i.problem, i.value ? `“${i.value}”` : null].filter(Boolean).join(": ")}>
+              <Tag color="warning" style={{ marginInlineEnd: 0 }}>{String(i.field || "value").replace(/_/g, " ")}</Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: "",
+      key: "fix",
+      width: 170,
+      render: (_, r) => (
+        <Space size={4}>
+          <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(r)}>Fix</Button>
+          <Tooltip title="What is left is correct as it stands">
+            <Button size="small" icon={<CheckCircleOutlined />} loading={review.isPending && review.variables === r.serialNo} onClick={() => review.mutate(r.serialNo)}>
+              Reviewed
+            </Button>
+          </Tooltip>
+        </Space>
+      ),
+    },
   ];
   return (
     <Card size="small" title={<Space><ToolOutlined />Records that need review{data ? <Text type="secondary">{new Intl.NumberFormat().format(data.total)}</Text> : null}</Space>} extra={<Button size="small" icon={<ReloadOutlined />} onClick={() => refetch()} />}>
       <Paragraph type="secondary" style={{ fontSize: 12 }}>
-        A value that could not be interpreted during migration — usually a date. The original text is kept on the record; open it, enter the value properly, and the flag clears.
+        A value that could not be interpreted during migration — usually a date. The original text is kept on the record; enter the value properly (or file the missing scan) and the flag clears at once. If what is left is correct as it stands, mark it reviewed.
         {data?.total > 50 ? " Showing the first 50; the rest are in the library under “Needs review”." : ""}
       </Paragraph>
       <Table size="small" rowKey="serialNo" loading={isLoading} columns={columns} dataSource={data?.items || []} pagination={{ defaultPageSize: 10, hideOnSinglePage: true }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing needs review" /> }} />

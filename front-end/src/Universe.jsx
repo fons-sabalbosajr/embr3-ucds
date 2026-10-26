@@ -326,7 +326,6 @@ const Universe = () => {
   // large and stays on demand).
   // ---------------------------------------------------------------------------
   const ermsUnitsKey = (erms.units || []).join(",");
-  const isManager = ["developer", "admin"].includes(String(userRole || "").toLowerCase());
   const isDeveloperAccount = String(userRole || "").toLowerCase() === "developer";
   const fetchActionItems = useCallback(async () => {
     if (!auth) return;
@@ -342,8 +341,9 @@ const Universe = () => {
       seesRecords ? count(fetchRecords({ flagged: true, page: 1, pageSize: 1 }), (r) => r?.total || 0) : 0,
       hasErms && units.includes("legal") ? count(fetchUnitDocuments("legal", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
       hasErms && units.includes("laboratory") ? count(fetchUnitDocuments("laboratory", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
-      isManager
-        ? count(fetch(`${backendUrl}/api/sign-up`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])), (rows) => (Array.isArray(rows) ? rows.length : 0))
+      // Account requests waiting for approval: the Developer's to decide.
+      isDeveloperAccount
+        ? count(fetch(`${backendUrl}/api/sign-up?status=pending`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])), (rows) => (Array.isArray(rows) ? rows.length : 0))
         : 0,
       // VERA's data corrections waiting for review: the Developer's.
       isDeveloperAccount ? count(getCorrectionsPending(), (n) => Number(n) || 0) : 0,
@@ -399,7 +399,7 @@ const Universe = () => {
       items.push({ type: "vera-links", group: "Admin", tone: "info", count: links, href: "/e-universe/admin/vera?tab=links", title: `VERA can link ${links} ${links === 1 ? "record" : "records"} to the central register`, description: "Records whose reference number did not find their establishment. Review and link them in VERA Assistant." });
     }
     setErmsNotifications(items);
-  }, [auth, hasErms, ermsUnitsKey, isManager, isDeveloperAccount]);
+  }, [auth, hasErms, ermsUnitsKey, isDeveloperAccount]);
 
   useEffect(() => {
     if (!auth) return undefined;

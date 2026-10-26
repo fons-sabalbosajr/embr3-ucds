@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import app from '../app.js';
 import db from '../config/db.js';
 import erms from '../modules/erms/index.js';
+import refNoCheck from '../services/vera/refNoCheck.js';
 
 const { connectToMongo, collections, getDb } = db;
 
@@ -91,6 +92,7 @@ afterAll(async () => {
   if (created.serials.length) {
     await collections.ermsRecords.deleteMany({ serialNo: { $in: created.serials } });
     await getDb().collection('erms-tracking').deleteMany({ recordSerialNo: { $in: created.serials } });
+    await getDb().collection('vera-refno-checks').deleteMany({ serialNo: { $in: created.serials } });
   }
   await getDb().collection('erms-archive-boxes').deleteMany({ code: { $in: created.boxes } });
   await getDb().collection('app-logs').deleteMany({ username: { $in: USERNAMES } });
@@ -283,6 +285,142 @@ suite('ERMS writes', () => {
       expect(res.body.record.permit.dateApprovedRaw).toBeNull();
       expect(new Date(res.body.record.permit.dateApproved).getFullYear()).toBe(2021);
       expect(res.body.record.dataQuality.clean).toBe(true);
+    });
+
+    it('takes a record off "Needs review" once any flagged value is put right, and the dashboard count follows', async () => {
+      // Flagged for an unrecognised permit type and a scan to locate: neither
+      // cleared before, whatever was fixed.
+      await collections.ermsRecords.updateOne(
+        { serialNo },
+        {
+          $set: {
+            'permit.type': 'other',
+            dataQuality: {
+              clean: false,
+              issues: [
+                { field: 'Permit_Type', problem: 'unrecognised', value: 'CNC?' },
+                { field: 'File_Path', problem: 'not drive-qualified or UNC', value: 'scan.pdf' },
+              ],
+            },
+          },
+        }
+      );
+      const agent = await signIn(WRITER);
+      const before = (await agent.get('/api/erms/dashboard')).body.flagged;
+
+      // The permit type put right: that issue goes, the scan one stays.
+      const first = await agent.patch(`/api/erms/records/${serialNo}`).send({ permit: { type: 'cnc' } });
+      expect(first.status).toBe(200);
+      expect(first.body.record.dataQuality.clean).toBe(false);
+      expect(first.body.record.dataQuality.issues.map((i) => i.field)).toEqual(['File_Path']);
+      expect(first.body.record.dataQuality.resolved.map((i) => i.field)).toEqual(['Permit_Type']);
+
+      // What is left marked reviewed by hand: off the list, and the count drops at once.
+      const reviewed = await agent.post(`/api/erms/records/${serialNo}/reviewed`).send({});
+      expect(reviewed.status).toBe(200);
+      expect(reviewed.body.record.dataQuality).toMatchObject({ clean: true, issues: [] });
+      expect(reviewed.body.record.dataQuality.reviewed.issues.map((i) => i.field)).toEqual(['File_Path']);
+      const after = (await agent.get('/api/erms/dashboard')).body.flagged;
+      expect(after).toBe(before - 1);
+      const list = await agent.get('/api/erms/records').query({ flagged: true, search: serialNo });
+      expect(list.body.items.some((r) => r.serialNo === serialNo)).toBe(false);
+    });
+
+    it('refuses "mark reviewed" to someone who cannot write records', async () => {
+      const agent = await signIn(READER);
+      expect((await agent.post(`/api/erms/records/${serialNo}/reviewed`).send({})).status).toBe(403);
+    });
+  });
+
+  // VERA's reading of the Ref. No. on the scan (services/vera/refNoCheck).
+  // There is no AI model or share in a test, so her reading is written as
+  // the check would store it; what is tested is the comparison and what
+  // applying, undoing and keeping do to the record.
+  describe('Ref. No. against the scan', () => {
+    const checks = () => getDb().collection('vera-refno-checks');
+    const reading = (over) => ({ refNo: null, label: null, others: [], documentKind: 'ECC', confidence: 'high', ...over });
+    let serialNo;
+    let encoded;
+
+    beforeAll(async () => {
+      const agent = await signIn(WRITER);
+      const res = await agent.post('/api/erms/records').send(newRecord());
+      serialNo = res.body.record.serialNo;
+      encoded = res.body.record.permit.number;
+      created.serials.push(serialNo);
+    });
+
+    it('treats spacing, punctuation and zero padding as the same number', () => {
+      expect(refNoCheck.sameNumber('ECC-OL-R03-2017-370', 'ECC OL R03 2017 0370')).toBe(true);
+      expect(refNoCheck.sameNumber('III-9705-053-116A', 'III 9705-053-116A')).toBe(true);
+      expect(refNoCheck.sameNumber('III-9705-053-116A', 'III-9705-053-117A')).toBe(false);
+    });
+
+    it('reads a match, a different number, and no number', () => {
+      const record = { permit: { number: 'ECC-R03-1907-0215', refs: [{ number: 'ECC-R03-2001-0010' }] } };
+      expect(refNoCheck.verdictOf(record, reading({ refNo: 'ECC R03 1907 0215' })).status).toBe('match');
+      // One of the record's other Ref. Nos. is a match too.
+      expect(refNoCheck.verdictOf(record, reading({ refNo: 'ECC-R03-2001-0010' })).status).toBe('match');
+      expect(refNoCheck.verdictOf(record, reading({ refNo: 'ECC-R03-1907-0251' }))).toMatchObject({ status: 'differs', proposed: 'ECC-R03-1907-0251' });
+      expect(refNoCheck.verdictOf(record, reading({ refNo: 'ECC-R03-1907-0251', others: ['ECC-R03-1907-0215'] })).encodedMentioned).toBe(true);
+      expect(refNoCheck.verdictOf({ permit: {} }, reading({ refNo: 'CNC-R03-2020-0001' })).status).toBe('missing');
+      expect(refNoCheck.verdictOf(record, reading({ refNo: null })).status).toBe('unreadable');
+      expect(refNoCheck.verdictOf(record, null).status).toBe('failed');
+    });
+
+    it("ignores a model's non-answer", () => {
+      expect(refNoCheck.parseReading('{"refNo": "illegible", "confidence": "high"}').refNo).toBeNull();
+      expect(refNoCheck.parseReading('Here it is: {"refNo": "ECC-R03-1907-0215", "confidence": "medium"}')).toMatchObject({ refNo: 'ECC-R03-1907-0215', confidence: 'medium' });
+      expect(refNoCheck.parseReading('no json')).toBeNull();
+    });
+
+    it("puts the scan's number on the record, and undoes it", async () => {
+      const onScan = `${encoded}-SCAN`;
+      await checks().updateOne({ serialNo }, { $set: { serialNo, encoded, onScan, proposed: onScan, status: 'differs', checkedAt: new Date() } }, { upsert: true });
+      const agent = await signIn(WRITER);
+      expect((await agent.get(`/api/erms/records/${serialNo}/ref-check`)).body.check).toMatchObject({ status: 'differs', proposed: onScan });
+
+      const applied = await agent.post(`/api/erms/records/${serialNo}/ref-check/apply`).send();
+      expect(applied.status).toBe(200);
+      expect(applied.body.record.permit.number).toBe(onScan);
+      expect(applied.body.check).toMatchObject({ status: 'applied', previous: encoded, appliedBy: WRITER });
+      const trail = await getDb().collection('app-logs').findOne({ documentId: serialNo, actionLabel: { $regex: 'corrected from the scan' } });
+      expect(trail.changes.permit).toEqual({ from: { number: encoded }, to: { number: onScan } });
+
+      const undone = await agent.post(`/api/erms/records/${serialNo}/ref-check/undo`).send();
+      expect(undone.status).toBe(200);
+      expect(undone.body.record.permit.number).toBe(encoded);
+      expect(undone.body.check.status).toBe('differs');
+    });
+
+    it('keeps the encoded number when told to', async () => {
+      const agent = await signIn(WRITER);
+      const kept = await agent.post(`/api/erms/records/${serialNo}/ref-check/keep`).send();
+      expect(kept.status).toBe(200);
+      expect(kept.body.check).toMatchObject({ status: 'kept', dismissedBy: WRITER });
+      expect((await collections.ermsRecords.findOne({ serialNo })).permit.number).toBe(encoded);
+    });
+
+    it('refuses to apply a number changed since VERA read the scan, or one already on another record', async () => {
+      const agent = await signIn(WRITER);
+      await checks().updateOne({ serialNo }, { $set: { encoded: 'SOMETHING-ELSE-0001', status: 'differs' } });
+      const stale = await agent.post(`/api/erms/records/${serialNo}/ref-check/apply`).send();
+      expect(stale.status).toBe(409);
+      expect(stale.body.message).toMatch(/changed/);
+
+      const other = await agent.post('/api/erms/records').send(newRecord());
+      created.serials.push(other.body.record.serialNo);
+      await checks().updateOne({ serialNo }, { $set: { encoded, proposed: other.body.record.permit.number, status: 'differs' } });
+      const clash = await agent.post(`/api/erms/records/${serialNo}/ref-check/apply`).send();
+      expect(clash.status).toBe(409);
+      expect(clash.body.message).toMatch(other.body.record.serialNo);
+      expect((await collections.ermsRecords.findOne({ serialNo })).permit.number).toBe(encoded);
+    });
+
+    it('refuses a check or an apply to someone who cannot write records', async () => {
+      const agent = await signIn(READER);
+      expect((await agent.post(`/api/erms/records/${serialNo}/ref-check`).send({})).status).toBe(403);
+      expect((await agent.post(`/api/erms/records/${serialNo}/ref-check/apply`).send()).status).toBe(403);
     });
   });
 

@@ -17,6 +17,7 @@ import { DonutChart, MagnitudeBars, YearColumns } from "../components/charts";
 import ChartCard, { MonthStackCard } from "../components/ChartCard";
 import { AttentionTile, StatTile } from "../components/dashboardTiles";
 import UnitHeader from "../components/UnitHeader";
+import QuickSearch from "../components/QuickSearch";
 import { useTheme } from "../../../theme/ThemeProvider";
 import { useUnits } from "./useUnits";
 import { formatValue, unitTheme } from "./unitTheme";
@@ -91,6 +92,7 @@ const UnitDashboard = () => {
         title={unitConfig?.label || theme.label}
         actions={
           <>
+            {unitConfig && <QuickSearch unit={unit} />}
             {unitConfig?.canFile && (
               <Link to={`${documentsUrl}?upload=1`}>
                 <Button type="primary" icon={<CloudUploadOutlined />}>Upload document</Button>

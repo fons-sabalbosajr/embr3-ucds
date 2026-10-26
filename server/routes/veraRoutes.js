@@ -59,6 +59,12 @@ router.post('/api/vera/project-types/scan', developer, ctrl.projectTypesScan);
 router.post('/api/vera/project-types/apply', developer, ctrl.projectTypesApply);
 router.post('/api/vera/project-types/:serialNo/:action(undo|dismiss)', developer, ctrl.projectTypesSettle);
 
+// VERA's check of each record's Ref. No. against its scan: the report and the
+// next few read. One record is checked, applied or kept from its own page
+// (/api/erms/records/:serialNo/ref-check), under the record's access rules.
+router.get('/api/vera/ref-numbers', developer, ctrl.refNumbersReport);
+router.post('/api/vera/ref-numbers/scan', developer, ctrl.refNumbersScan);
+
 // VERA's report on records not linked to the central register, and applying
 // or undoing the links she proposes.
 router.get('/api/vera/register-links', developer, ctrl.linksReport);

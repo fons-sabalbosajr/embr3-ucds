@@ -1,811 +1,397 @@
-import { useState, useEffect } from "react";
-import {
-  Avatar,
-  Table,
-  Input,
-  Button,
-  Select,
-  Popover,
-  List,
-  Tag,
-  Modal, Tabs
-} from "antd";
-import {
-  SearchOutlined,
-  DownloadOutlined,
-  EllipsisOutlined,
-  UserOutlined,
-  EditOutlined,
-  KeyOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Badge, Button, Card, Empty, Input, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, Typography, theme as antdTheme } from "antd";
+import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, KeyOutlined, ReloadOutlined, TeamOutlined, UserAddOutlined } from "@ant-design/icons";
 import axios from "axios";
 import UserProfileModal from "./UserAccountModal";
-import SignAccountModal from "./SignAccountModal";
-import Swal from "sweetalert2";
-import AvatarWithName from "../../../components/AvatarwithName";
 import AccountPermission from "./AccountPermission";
+import { ApproveRequestModal, RejectRequestModal } from "./ApproveRequestModal";
+import AvatarWithName from "../../../components/AvatarwithName";
+import PageHeader from "../../../shared/components/PageHeader";
 import { accountType, accountTypeLabel } from "../../../shared/accountTypes";
 import { fetchCurrentUser } from "../../../api/universeService";
-import "./useraccount.css";
-import { API_BASE_URL } from "../../../config/api";
+import { getSocket, initializeSocket } from "../../../api/socketService";
+import { message } from "../../../shared/feedback";
 import visibleInterval from "../../../shared/visibleInterval";
+import { API_BASE_URL } from "../../../config/api";
+import "./useraccount.css";
 
-const { Option } = Select;
-const { TabPane } = Tabs;
+const { Text } = Typography;
 
-const UserAccounts = ({ theme = "dark" }) => {
-  const [userData, setUserData] = useState([]);
-  // Whether the signed-in person may delete accounts. The server enforces it
-  // again; this only decides whether to draw the button.
-  const [isDeveloper, setIsDeveloper] = useState(false);
+// ---------------------------------------------------------------------------
+// User Accounts: the accounts, and the requests for new ones.
+//
+// An account exists only once a Developer has approved a request (the
+// public Request Access page records it; services/accountRequests on the
+// server makes the account and sends the email). Approving, declining and
+// deleting are the Developer's; the server refuses them to anyone else, and
+// this screen does not offer them.
+//
+// The lists refresh every 30 seconds while the tab is in view, and at once
+// when a request arrives or is decided (the "accounts:requests" notice).
+// ---------------------------------------------------------------------------
+
+const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
+const errorOf = (e, fallback) => e?.response?.data?.error || e?.response?.data?.message || fallback;
+const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
+
+/** "active now", "active 5 min ago", "offline" — from the login-status row. */
+function presenceOf(status) {
+  if (!status) return "offline";
+  if (status.isLoggedIn) return "online";
+  const ms = Date.now() - new Date(status.logoutTime || 0).getTime();
+  if (!status.logoutTime || ms > 12 * 3600 * 1000) return "offline";
+  const mins = Math.floor(ms / 60000);
+  return mins < 60 ? `active ${mins} min ago` : `active ${Math.floor(mins / 60)} hr ago`;
+}
+
+const REQUEST_STATUS = {
+  pending: { color: "orange", label: "Waiting" },
+  approving: { color: "blue", label: "Being approved" },
+  approved: { color: "green", label: "Approved" },
+  rejected: { color: "red", label: "Declined" },
+};
+
+/** The accounts as a CSV file: who, what type, which unit, what status. */
+function exportCsv(rows) {
+  const head = ["Name", "Username", "Email", "Division", "Position", "Type", "ERMS unit", "Years", "Status"];
+  const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = rows.map((u) =>
+    [u.name, u.username, u.email, u.division, u.designation, accountTypeLabel(u.permission), u.ermsUnit || "", (u.assignedYears || []).join(" "), u.presence].map(cell).join(",")
+  );
+  // The byte-order mark makes Excel read the file as UTF-8 (ñ in names).
+  const blob = new Blob(["﻿", [head.map(cell).join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `E-Universe accounts ${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+const UserAccounts = () => {
+  const { token } = antdTheme.useToken();
+  const [me, setMe] = useState(null);
+  const isDeveloper = me?.role === "developer";
+
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [usersError, setUsersError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  const [requests, setRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [requestView, setRequestView] = useState("pending");
+
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [editingAccess, setEditingAccess] = useState(null);
   const [deleting, setDeleting] = useState(null); // { user, typed }
+  const [approving, setApproving] = useState(null);
+  const [declining, setDeclining] = useState(null);
+  // Opens on the requests when some are waiting (the bell links here), once.
+  const [tab, setTab] = useState("accounts");
+  const [tabChosen, setTabChosen] = useState(false);
+
   useEffect(() => {
-    fetchCurrentUser().then((me) => setIsDeveloper(me?.role === "developer")).catch(() => {});
+    fetchCurrentUser().then(setMe).catch(() => setMe(null));
   }, []);
+
+  useEffect(() => {
+    if (tabChosen || !requests.length) return;
+    setTabChosen(true);
+    if (requests.some((r) => r.status === "pending")) setTab("requests");
+  }, [requests, tabChosen]);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const [list, statuses] = await Promise.all([api.get("/api/users").then((r) => r.data), api.get("/api/login-status").then((r) => r.data).catch(() => [])]);
+      const byName = new Map((Array.isArray(statuses) ? statuses : []).map((s) => [s.username, s]));
+      const rows = (Array.isArray(list) ? list : []).map((u) => ({ ...u, presence: presenceOf(byName.get(u.username)) }));
+      // Online first, then by name.
+      rows.sort((a, b) => (b.presence === "online") - (a.presence === "online") || String(a.name || "").localeCompare(String(b.name || "")));
+      setUsers(rows);
+      setUsersError(null);
+    } catch (e) {
+      setUsersError(errorOf(e, "The accounts could not be loaded."));
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
+  const loadRequests = useCallback(async () => {
+    if (!isDeveloper) return;
+    setLoadingRequests(true);
+    try {
+      const { data } = await api.get("/api/sign-up");
+      setRequests(Array.isArray(data) ? data : []);
+    } catch (e) {
+      message.error(errorOf(e, "The account requests could not be loaded."));
+    } finally {
+      setLoadingRequests(false);
+    }
+  }, [isDeveloper]);
+
+  useEffect(() => {
+    loadUsers();
+    return visibleInterval(loadUsers, 30000);
+  }, [loadUsers]);
+
+  useEffect(() => {
+    loadRequests();
+    return visibleInterval(loadRequests, 30000);
+  }, [loadRequests]);
+
+  // A request arriving, or decided by another Developer, shows at once.
+  useEffect(() => {
+    if (!isDeveloper) return undefined;
+    const socket = getSocket() || initializeSocket();
+    const refresh = () => {
+      loadRequests();
+      loadUsers();
+    };
+    socket.on("accounts:requests", refresh);
+    return () => socket.off("accounts:requests", refresh);
+  }, [isDeveloper, loadRequests, loadUsers]);
+
+  const types = useMemo(() => [...new Set(users.map((u) => u.permission).filter(Boolean))], [users]);
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users.filter(
+      (u) =>
+        (typeFilter === "all" || u.permission === typeFilter) &&
+        (!q || [u.name, u.username, u.email, u.division, u.designation].some((v) => String(v || "").toLowerCase().includes(q)))
+    );
+  }, [users, search, typeFilter]);
+
+  const pending = requests.filter((r) => r.status === "pending");
+  const requestRows = requestView === "all" ? requests : requests.filter((r) => (requestView === "pending" ? ["pending", "approving"].includes(r.status) : r.status === requestView));
 
   const deleteAccount = async () => {
     const target = deleting?.user;
     if (!target) return;
     try {
-      const res = await axios.delete(`${API_BASE_URL}/api/users/${target._id}`, { withCredentials: true });
-      const gone = res.data?.removed || {};
+      const { data } = await api.delete(`/api/users/${target._id}`);
       setDeleting(null);
-      Swal.fire({
-        icon: "success",
-        title: `${target.username} deleted`,
-        text: `Signed out of ${gone.sessions || 0} session(s). The activity trail keeps the name for the audit record.`,
-      });
-      fetchUserData();
-    } catch (err) {
-      Swal.fire({ icon: "error", title: "Could not delete", text: err.response?.data?.error || "Please try again." });
+      message.success(`${target.username} deleted; signed out of ${data?.removed?.sessions || 0} session(s). The activity trail keeps the name for the audit record.`);
+      loadUsers();
+    } catch (e) {
+      message.error(errorOf(e, "The account could not be deleted."));
     }
   };
-  const [filteredUserData, setFilteredUserData] = useState([]);
-  const [signUpUsers, setSignUpUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingSignUp, setLoadingSignUp] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [popoverVisible, setPopoverVisible] = useState(null);
-  const [permissions, setPermissions] = useState([]);
-  const [selectedPermission, setSelectedPermission] = useState("all");
-  const [selectedSignUpUser, setSelectedSignUpUser] = useState(null);
-  const [isSignUpModalVisible, setIsSignUpModalVisible] = useState(false);
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-  });
-  const [tableLoading, setTableLoading] = useState(false);
-  const [isModalAccessVisible, setModalAccessVisible] = useState(false);
-  const [selectedAccessUser, setSelectedAccessUser] = useState(null);
-  const [isAccountPermissionVisible, setAccountPermissionVisible] =
-    useState(false);
-  // 30 s while the tab is visible. It was 1 s for both lists: two queries a
-  // second for as long as the screen stayed open.
-  const [refreshInterval] = useState(30000);
-  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
-  const [isEditAccessModalOpen, setEditAccessModalOpen] = useState(false);
 
-  const fetchLoginStatuses = async () => {
+  const removeRequest = async (r) => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/login-status`
-      );
-      return response.data; // Assuming this returns an array of login status objects
-    } catch (error) {
-      console.error("Error fetching login statuses:", error);
-      return []; // Return an empty array in case of error
+      await api.delete(`/api/remove-user/${r._id}`);
+      message.success(`The request from ${r.name} was removed.`);
+      loadRequests();
+    } catch (e) {
+      message.error(errorOf(e, "The request could not be removed."));
     }
   };
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [usersResponse, loginStatuses] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/users`, {
-          params: { page: pagination.current, pageSize: pagination.pageSize },
-        }),
-        fetchLoginStatuses(), // Fetch login statuses separately
-      ]);
-
-      const users = usersResponse.data;
-
-      const combinedData = users.map((user) => {
-        const status = loginStatuses.find(
-          (status) => status.username === user.username
-        ); // Match based on username
-        if (status) {
-          if (status.isLoggedIn) {
-            return { ...user, status: "online" };
-          } else {
-            return {
-              ...user,
-              status: getOfflineStatus(status.logoutTime), // Call the function to get the offline status
-            };
-          }
-        }
-        return { ...user, status: "offline" }; // Default to 'offline' if no status found
-      });
-
-      // Sort the combinedData array: online users first, then offline users
-      combinedData.sort((a, b) => {
-        if (a.status === "online" && b.status !== "online") {
-          return -1; // a comes before b
-        }
-        if (a.status !== "online" && b.status === "online") {
-          return 1; // b comes before a
-        }
-        return 0; // Keep the order for users with the same status
-      });
-
-      setUserData(combinedData);
-      setFilteredUserData(combinedData);
-      setPagination((prev) => ({ ...prev, total: combinedData.length }));
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUserData = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/users`, {
-        params: {
-          page: pagination.current,
-          pageSize: pagination.pageSize,
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-      return [];
-    }
-  };
-
-  const fetchSignUpUsers = async () => {
-    try {
-      // Double quotes rather than backticks: this asked for the literal path
-      // " ${API_BASE_URL}/api/sign-up" against the SPA's own origin, which the
-      // history fallback answers with index.html and a 200. response.data was
-      // therefore an HTML string, and <Table dataSource> threw
-      // "rawData.some is not a function", taking the whole page down.
-      const response = await axios.get(`${API_BASE_URL}/api/sign-up`, {
-        params: {
-          page: pagination.current,
-          pageSize: pagination.pageSize,
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching sign-up users:", error);
-      return [];
-    }
-  };
-
-  const fetchLoginStatus = async () => {
-    try {
-      // Same mistake as fetchSignUpUsers above.
-      const response = await axios.get(`${API_BASE_URL}/api/online_users`);
-      const allStatuses = response.data.onlineUsers;
-
-      // Extract the latest status for each user based on the name
-      const latestStatuses = allStatuses.reduce((acc, status) => {
-        if (
-          !acc[status.name] ||
-          new Date(status.loginTime) > new Date(acc[status.name].loginTime)
-        ) {
-          acc[status.name] = status;
-        }
-        return acc;
-      }, {});
-
-      return latestStatuses;
-    } catch (error) {
-      console.error("Error fetching login status:", error);
-      return {};
-    }
-  };
-
-  const getOfflineStatus = (logoutTime) => {
-    const logoutDate = new Date(logoutTime);
-    const currentDate = new Date();
-    const diffMs = currentDate - logoutDate;
-    const diffHrs = diffMs / (1000 * 60 * 60);
-
-    if (diffHrs < 12) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      const diffHours = Math.floor(diffHrs);
-      if (diffMins < 60) {
-        return `active ${diffMins} min ago`;
-      } else {
-        return `active ${diffHours} hr ago`;
-      }
-    } else {
-      return "offline";
-    }
-  };
-
-  const handleReload = async () => {
-    try {
-      setTableLoading(true);
-      await fetchSignUpUsers();
-    } catch (error) {
-      console.error("Error reloading data:", error);
-    } finally {
-      setTableLoading(false);
-    }
-  };
-
-  const handleRemoveUser = async (record) => {
-    const result = await Swal.fire({
-      title: "Are you sure?",
-      text: `Do you want to remove user ${record.name}?`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, remove it!",
-      cancelButtonText: "No, cancel",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const response = await axios.delete(
-          `${API_BASE_URL}/api/remove-user/${record._id}`
-        );
-
-        if (response.data.message === "User removed successfully") {
-          Swal.fire("Removed!", "The user has been removed.", "success");
-
-          //fetchSignUpUsers();
-          handleReload();
-        } else {
-          Swal.fire("Error!", "Failed to remove the user.", "error");
-        }
-      } catch (error) {
-        console.error("Error removing user:", error);
-        Swal.fire("Error!", "Failed to remove the user.", "error");
-      }
-    }
-  };
-
-  const handleModalClose = () => {
-    handleClose();
-  };
-
-  const handlePaginationChange = (pagination) => {
-    setPagination(pagination);
-  };
-
-  const handlePermissionChange = (value) => {
-    setSelectedPermission(value); // Set selected permission
-  };
-
-  const filterAndSetData = (permission, searchValue = "") => {
-    const filteredData = userData.filter(
-      (user) =>
-        (permission === "all" || user.permission === permission) &&
-        (user.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchValue.toLowerCase()) ||
-          (user.designation &&
-            user.designation.toLowerCase().includes(searchValue.toLowerCase())))
-    );
-    setFilteredUserData(filteredData);
-  };
-
-  const handleSearch = (value) => {
-    console.log("Search:", value);
-    filterAndSetData(selectedPermission, value); // Filter data based on selected permission and search value
-  };
-
-  const handleViewSignUpUser = (record) => {
-    setSelectedSignUpUser(record); // Set the selected user
-    setIsSignUpModalVisible(true); // Open the modal
-  };
-
-  const handleSignUpModalCancel = () => {
-    setIsSignUpModalVisible(false); // Close the modal
-    setSelectedSignUpUser(null); // Clear selected user
-  };
-
-  const handleExport = () => {
-    console.log("Exporting...");
-  };
-
-  const handleEdit = (record) => {
-    setSelectedUser(record);
-    setEditProfileModalOpen(true);
-  };
-
-  const handleEditAccess = (user) => {
-    setSelectedAccessUser(user);
-    setModalAccessVisible(true);
-  };
-
-  const handleModalCancel = () => {
-    setSelectedUser(null);
-    setIsModalVisible(false); // Hide the modal
-  };
-
-  const rowClassName = (record) => {
-    if (record.status === "approved") {
-      return "disabled-row";
-    }
-    return "";
-  };
-
-  const handleClose = () => {
-    setModalAccessVisible(false);
-    setSelectedAccessUser(null);
-  };
-
-  const handlePermissionsUpdate = (updatedPermissions) => {
-    // You can save the permissions to server here if needed
-    //console.log("Updated Permissions:", updatedPermissions);
-    handleClose();
-  };
-
-  useEffect(() => {
-    fetchData();
-    return visibleInterval(fetchData, refreshInterval);
-  }, [pagination.current, pagination.pageSize, refreshInterval]);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    const uniquePermissions = new Set();
-    userData.forEach((user) => {
-      if (user.permission) {
-        uniquePermissions.add(user.permission);
-      }
-    });
-    setPermissions(Array.from(uniquePermissions));
-  }, [userData]);
-
-  useEffect(() => {
-    return visibleInterval(async () => {
-      const data = await fetchSignUpUsers();
-      setSignUpUsers(data);
-    }, refreshInterval);
-  }, [refreshInterval, pagination.current, pagination.pageSize]);
-
-  useEffect(() => {
-    fetchSignUpUsers().then((data) => setSignUpUsers(data));
-  }, []);
-
-  useEffect(() => {
-    fetchSignUpUsers();
-  }, [pagination.current, pagination.pageSize]);
-
-  useEffect(() => {
-    const uniquePermissions = new Set();
-    userData.forEach((user) => {
-      if (user.permission) {
-        uniquePermissions.add(user.permission);
-      }
-    });
-    setPermissions(Array.from(uniquePermissions));
-  }, [userData]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setLoadingSignUp(true);
-      try {
-        const [users, loginStatuses, signUpUsersData] = await Promise.all([
-          fetchUserData(),
-          fetchLoginStatus(),
-          fetchSignUpUsers(),
-        ]);
-
-        const combinedData = users.map((user) => {
-          const status = loginStatuses[user.name];
-          if (status && status.isLoggedIn) {
-            return { ...user, status: "online" };
-          } else if (status) {
-            return { ...user, status: getOfflineStatus(status.logoutTime) };
-          } else {
-            return { ...user, status: "offline" }; // Default to 'offline' if no status found
-          }
-        });
-
-        const sortedData = combinedData.sort((a, b) => {
-          if (a.status === "online" && b.status !== "online") {
-            return -1;
-          }
-          if (a.status !== "online" && b.status === "online") {
-            return 1;
-          }
-          return 0;
-        });
-
-        setUserData(sortedData);
-        setSignUpUsers(signUpUsersData);
-        setPagination((prev) => ({
-          ...prev,
-          total: sortedData.length,
-        }));
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-      setLoading(false);
-      setLoadingSignUp(false);
-    };
-
-    fetchData();
-  }, [pagination.current, pagination.pageSize]);
-
-  const columns = [
-    {
-      title: <span className="table-header">Name</span>,
-      dataIndex: "name",
-      key: "avatarName",
-      render: (name, record) => {
-        const isOnline = record.status === "online";
-
-        return (
-          <div className="user-name-cell">
-            <AvatarWithName userHandle={record.username} />
-            <div className="user-fullname-wrapper">
-              <div className="user-fullname">{name}</div>
-              <span
-                className={`user-last-active ${
-                  record.status === "online" ? "active-now" : "active-ago"
-                }`}
-              >
-                {record.status === "online" ? "active now" : record.status}
-              </span>
-            </div>
-          </div>
-        );
-      },
-      align: "center",
-      width: 250,
-    },
-    {
-      title: <span className="table-header">Email</span>,
-      dataIndex: "email",
-      key: "email",
-      render: (email) => <span className="user-email">{email}</span>,
-      align: "center",
-      ellipsis: true,
-      width: 250,
-    },
-    {
-      title: <span className="table-header">Position</span>,
-      dataIndex: "division",
-      key: "division",
-      render: (division) => <span className="user-position">{division}</span>,
-      align: "center",
-      ellipsis: true,
-      width: 180,
-    },
-    {
-      title: "Type",
-      dataIndex: "permission",
-      key: "permission",
-      render: (permission) => {
-        const t = accountType(permission);
-        return <Tag color={t.color} style={{ marginRight: 0 }}>{t.label}</Tag>;
-      },
-      align: "center",
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status) => {
-        let bgColor = "";
-        let textColor = "#fff";
-        switch (status) {
-          case "online":
-            bgColor = "#5CB338";
-            break;
-          case "offline":
-            bgColor = "#973131";
-            break;
-          default:
-            bgColor = "#393E46";
-        }
-        return (
-          <span
-            style={{
-              backgroundColor: bgColor,
-              color: textColor,
-              padding: "2px 6px",
-              borderRadius: "3px",
-              display: "inline-block",
-              fontSize: 10,
-              minWidth: "60px",
-              textAlign: "center",
-              fontWeight: 500,
-            }}
-          >
-            {status}
-          </span>
-        );
-      },
-      align: "center",
-    },
-    {
-      title: <span className="table-header">Action</span>,
-      dataIndex: "action",
-      key: "action",
-      render: (_, record) => (
-        <div className="action-buttons">
-          <Button
-            icon={<EditOutlined />}
-            size="small"
-            title="Edit Profile"
-            onClick={() => handleEdit(record)}
-            type="primary"
-          />
-          <Button
-            icon={<KeyOutlined />}
-            size="small"
-            type="primary"
-            title="Edit Access"
-            onClick={() => handleEditAccess(record)}
-            className="seagreen-btn"
-          />
-          {isDeveloper && (
-            <Button
-              icon={<DeleteOutlined />}
-              size="small"
-              danger
-              title="Delete account"
-              onClick={() => setDeleting({ user: record, typed: "" })}
-            />
-          )}
-        </div>
-      ),
-      align: "center",
-      width: 150,
-    },
-  ];
-
-  const columnsSignup = [
+  const userColumns = [
     {
       title: "Name",
       dataIndex: "name",
       key: "name",
-      ellipsis: true,
-      align: "left",
-      width: 200,
-      render: (name, record) => (
-        <div
-          style={{ display: "flex", alignItems: "center", maxWidth: "100%" }}
-        >
-          {record.avatar ? (
-            <Avatar src={record.avatar} />
-          ) : (
-            <Avatar
-              icon={<UserOutlined />}
-              style={{ backgroundColor: "#87d068" }}
-            >
-              {name.charAt(0).toUpperCase()}{" "}
-              {/* Fallback to first letter, capitalized */}
-            </Avatar>
-          )}
-          <span
-            style={{
-              marginLeft: "8px",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {name}
-          </span>
+      width: 260,
+      render: (name, u) => (
+        <div className="user-name-cell">
+          <AvatarWithName userHandle={u.username} />
+          <div className="user-fullname-wrapper">
+            <div className="user-fullname">{name}</div>
+            <span className={`user-last-active ${u.presence === "online" ? "active-now" : "active-ago"}`}>{u.presence === "online" ? "active now" : u.presence}</span>
+          </div>
         </div>
       ),
     },
+    { title: "Username", dataIndex: "username", key: "username", width: 150, render: (v) => <Text code>{v}</Text> },
+    { title: "Email", dataIndex: "email", key: "email", ellipsis: true },
+    { title: "Division", dataIndex: "division", key: "division", ellipsis: true, responsive: ["lg"] },
     {
-      title: "Division",
-      dataIndex: "division",
-      key: "division",
-      ellipsis: true,
-      align: "left",
-    },
-    {
-      title: "Position",
-      dataIndex: "position",
-      key: "position",
-      ellipsis: true,
-      align: "left",
-    },
-    {
-      title: "Email",
-      dataIndex: "email",
-      key: "email",
-      ellipsis: true,
-      align: "left",
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status, record) => {
-        const handleChangeStatus = async (value) => {
-          if (value === status) return; // No change
-
-          const result = await Swal.fire({
-            title: "Confirm Status Change",
-            text: `Are you sure you want to change status to '${value}'?`,
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonText: "Yes",
-            cancelButtonText: "No",
-          });
-
-          if (result.isConfirmed) {
-            try {
-              const response = await axios.put(
-                ` ${API_BASE_URL}/api/status/${record._id}`,
-                { status: value }
-              );
-              if (
-                response.data.message ===
-                "Status updated successfully in sign-up collection"
-              ) {
-                Swal.fire({
-                  icon: "success",
-                  title: "Success!",
-                  text: "Status updated successfully.",
-                });
-              } else {
-                Swal.fire({
-                  icon: "error",
-                  title: "Error!",
-                  text: "Failed to update status.",
-                });
-              }
-            } catch (error) {
-              console.error("Error updating status:", error);
-              Swal.fire({
-                icon: "error",
-                title: "Error!",
-                text: "Failed to update status. Please try again later.",
-              });
-            }
-          }
-        };
-
+      title: "Type",
+      dataIndex: "permission",
+      key: "permission",
+      width: 190,
+      render: (permission, u) => {
+        const t = accountType(permission);
         return (
-          <Select placeholder="Status"
-            defaultValue={status}
-            style={{ width: 120 }}
-            onChange={handleChangeStatus}
-          >
-            <Option value="pending">
-              <Tag color="orange">Pending</Tag>
-            </Option>
-            <Option value="approved">
-              <Tag color="green">Approved</Tag>
-            </Option>
-            <Option value="rejected">
-              <Tag color="red">Rejected</Tag>
-            </Option>
-          </Select>
+          <Space size={4} wrap>
+            <Tag color={t.color} style={{ marginInlineEnd: 0 }}>{t.label}</Tag>
+            {permission === "records" && <Tag style={{ marginInlineEnd: 0 }}>{{ records: "Records", legal: "Legal", laboratory: "Laboratory" }[u.ermsUnit || "records"]}</Tag>}
+          </Space>
         );
       },
-      align: "left",
     },
     {
       title: "Action",
-      dataIndex: "action",
       key: "action",
-      align: "left",
-      render: (_, record) => (
-        <Popover
-          content={
-            <List>
-              <List.Item>
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={() => handleViewSignUpUser(record)} // Open modal on click
-                >
-                  Approve
-                </Button>
-              </List.Item>
-              <List.Item>
-                <Button type="text" size="small">
-                  Disapprove
-                </Button>
-              </List.Item>
-              <List.Item>
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  onClick={() => handleRemoveUser(record)} // Assuming this function exists
-                >
-                  Remove
-                </Button>
-              </List.Item>
-            </List>
-          }
-          placement="rightTop"
-        >
-          <Button icon={<EllipsisOutlined />} />
-        </Popover>
+      width: 120,
+      align: "center",
+      render: (_, u) => (
+        <Space size={4}>
+          <Tooltip title="Edit profile">
+            <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => setEditingProfile(u)} aria-label="Edit profile" />
+          </Tooltip>
+          <Tooltip title="Edit access">
+            <Button size="small" icon={<KeyOutlined />} onClick={() => setEditingAccess(u)} aria-label="Edit access" />
+          </Tooltip>
+          {isDeveloper && String(u._id) !== String(me?.user?.userId) && (
+            <Tooltip title="Delete account">
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => setDeleting({ user: u, typed: "" })} aria-label="Delete account" />
+            </Tooltip>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  const requestColumns = [
+    {
+      title: "Name",
+      key: "name",
+      render: (_, r) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{r.name}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{[r.position, r.division].filter(Boolean).join(" · ")}</Text>
+        </Space>
+      ),
+    },
+    { title: "Email", dataIndex: "email", key: "email", ellipsis: true },
+    { title: "Requested access", dataIndex: "accessLabel", key: "access", width: 230, render: (v) => v || <Text type="secondary">Not stated</Text> },
+    { title: "Requested", dataIndex: "requestedAt", key: "requestedAt", width: 170, responsive: ["md"], render: when },
+    {
+      title: "Status",
+      key: "status",
+      width: 200,
+      render: (_, r) => {
+        const s = REQUEST_STATUS[r.status] || { color: "default", label: r.status };
+        return (
+          <Space direction="vertical" size={0}>
+            <Tag color={s.color} style={{ marginInlineEnd: 0, width: "fit-content" }}>{s.label}</Tag>
+            {r.decidedBy && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                by {r.decidedBy}, {when(r.decidedAt)}
+                {r.username ? ` · ${r.username}` : ""}
+              </Text>
+            )}
+            {r.reason && <Text type="secondary" style={{ fontSize: 12 }}>“{r.reason}”</Text>}
+          </Space>
+        );
+      },
+    },
+    {
+      title: "Action",
+      key: "action",
+      width: 220,
+      align: "center",
+      render: (_, r) => (
+        <Space size={4} wrap>
+          {r.status === "pending" && (
+            <>
+              <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => setApproving(r)}>Approve</Button>
+              <Button size="small" danger icon={<CloseOutlined />} onClick={() => setDeclining(r)}>Decline</Button>
+            </>
+          )}
+          {r.status !== "pending" && r.status !== "approving" && (
+            <Popconfirm title="Remove this request from the list?" description="The account, if one was made, is not affected." okText="Remove" okButtonProps={{ danger: true }} onConfirm={() => removeRequest(r)}>
+              <Button size="small" icon={<DeleteOutlined />}>Remove</Button>
+            </Popconfirm>
+          )}
+        </Space>
       ),
     },
   ];
 
   return (
-    <div className="accounts-container">
-      <div className="card">
-        <h2 className="account-title">User Accounts</h2>
-        <div
-          className="filter-options"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "0.1rem 0", // Reduced vertical padding
-            marginBottom: "0.2rem", // Reduced margin for spacing between elements
-            flexWrap: "wrap", // responsive fallback
-          }}
-        >
-          {/* Grouped Search + Select */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "1rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <Input.Search
-              placeholder="Search Users"
-              allowClear
-              prefix={<SearchOutlined />}
-              size="middle"
-              onSearch={handleSearch}
-              style={{ width: 250 }}
-            />
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <PageHeader
+        accent={token.colorPrimary}
+        icon={<TeamOutlined />}
+        title="User Accounts"
+        description="Every E-Universe account, and the requests for new ones. Accounts are made only by approving a request."
+        actions={
+          <>
+            <Button icon={<ReloadOutlined />} onClick={() => { loadUsers(); loadRequests(); }}>Refresh</Button>
+            <Button icon={<DownloadOutlined />} onClick={() => exportCsv(shown)} disabled={!shown.length}>Export</Button>
+          </>
+        }
+      />
 
-            <Select placeholder="Filter by role"
-              defaultValue="all"
-              style={{ width: 180 }}
-              onChange={handlePermissionChange}
-            >
-              <Option value="all">All types</Option>
-              {permissions.map((permission) => (
-                <Option key={permission} value={permission}>
-                  {accountTypeLabel(permission)}
-                </Option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Export Button */}
-          <Button
-            type="default"
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-          >
-            Export
-          </Button>
-        </div>
-
-        <Table
-          columns={columns}
-          dataSource={userData}
-          pagination={{
-            ...pagination,
-            showSizeChanger: true,
-            pageSizeOptions: ["10", "50", "100"],
-            size: "small", // smaller pagination UI
-          }}
-          onChange={handlePaginationChange}
-          className={theme === "light" ? "light-theme-table" : ""}
-        />
-      </div>
+      <Tabs
+        activeKey={tab}
+        onChange={setTab}
+        items={[
+          {
+            key: "accounts",
+            label: (
+              <Space size={6}>
+                <TeamOutlined />
+                Accounts <Badge count={users.length} color="#8c8c8c" overflowCount={999} />
+              </Space>
+            ),
+            children: (
+              <Card size="small">
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Space wrap size={8}>
+                    <Input.Search allowClear placeholder="Name, username, email or division" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 320, maxWidth: "100%" }} />
+                    <Select value={typeFilter} onChange={setTypeFilter} style={{ width: 200 }} options={[{ value: "all", label: "All types" }, ...types.map((t) => ({ value: t, label: accountTypeLabel(t) }))]} />
+                    <Text type="secondary">{shown.length === users.length ? `${users.length} accounts` : `${shown.length} of ${users.length} accounts`}</Text>
+                  </Space>
+                  {usersError && <Alert type="error" showIcon message={usersError} />}
+                  <Table
+                    rowKey="_id"
+                    size="small"
+                    bordered
+                    loading={loadingUsers}
+                    columns={userColumns}
+                    dataSource={shown}
+                    scroll={{ x: 900 }}
+                    pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 50, 100], showTotal: (t, r) => `${r[0]}–${r[1]} of ${t}` }}
+                  />
+                </Space>
+              </Card>
+            ),
+          },
+          {
+            key: "requests",
+            label: (
+              <Space size={6}>
+                <UserAddOutlined />
+                Account Requests <Badge count={pending.length} />
+              </Space>
+            ),
+            children: isDeveloper ? (
+              <Card size="small">
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Segmented
+                    value={requestView}
+                    onChange={setRequestView}
+                    options={[
+                      { value: "pending", label: `Waiting (${pending.length})` },
+                      { value: "approved", label: "Approved" },
+                      { value: "rejected", label: "Declined" },
+                      { value: "all", label: "All" },
+                    ]}
+                  />
+                  <Table
+                    rowKey="_id"
+                    size="small"
+                    bordered
+                    loading={loadingRequests}
+                    columns={requestColumns}
+                    dataSource={requestRows}
+                    scroll={{ x: 900 }}
+                    pagination={{ defaultPageSize: 10, hideOnSinglePage: true }}
+                    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={requestView === "pending" ? "No requests waiting" : "Nothing here"} /> }}
+                  />
+                </Space>
+              </Card>
+            ) : (
+              <Alert type="info" showIcon message="Account requests are approved by the Developer." description="Requests from the Request Access page are reviewed and approved by a Developer, who sets the system and access the account gets." />
+            ),
+          },
+        ]}
+      />
 
       <Modal
         open={Boolean(deleting)}
@@ -814,13 +400,12 @@ const UserAccounts = ({ theme = "dark" }) => {
         onOk={deleteAccount}
         okText="Delete account"
         okButtonProps={{ danger: true, disabled: deleting?.typed !== deleting?.user?.username }}
-        destroyOnClose
+        destroyOnHidden
       >
         {deleting && (
-          <div style={{ display: "grid", gap: 12 }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <div>
-              The account, its sign-in sessions, its sign-up request, its storage PIN and its photo are
-              removed. Entries it wrote in the activity trail are kept under its name, for the audit
+              The account, its sign-in sessions, its sign-up request, its storage PIN and its photo are removed. Entries it wrote in the activity trail are kept under its name, for the audit
               record. This cannot be undone.
             </div>
             <div>
@@ -833,86 +418,55 @@ const UserAccounts = ({ theme = "dark" }) => {
               onPressEnter={() => deleting.typed === deleting.user.username && deleteAccount()}
               placeholder={deleting.user.username}
             />
-          </div>
+          </Space>
         )}
       </Modal>
 
-      <Modal
-        title="Account Details"
-        open={isEditProfileModalOpen}
-        onCancel={() => setEditProfileModalOpen(false)}
-        footer={null}
-        destroyOnClose
-        width={800}
-      >
-        <UserProfileModal
-          user={selectedUser}
-          onClose={() => setEditProfileModalOpen(false)}
-        />
+      <Modal title="Account Details" open={Boolean(editingProfile)} onCancel={() => { setEditingProfile(null); loadUsers(); }} footer={null} destroyOnHidden width={800}>
+        {editingProfile && <UserProfileModal user={editingProfile} onClose={() => { setEditingProfile(null); loadUsers(); }} />}
       </Modal>
 
-      <Modal
-        title="User Permission"
-        open={isModalAccessVisible}
-        footer={null}
-        closable={true}
-        onCancel={handleClose}
-        width={800}
-      >
-        {selectedAccessUser && (
+      <Modal title="User Permission" open={Boolean(editingAccess)} footer={null} onCancel={() => { setEditingAccess(null); loadUsers(); }} width={800} destroyOnHidden>
+        {editingAccess && (
           <AccountPermission
-            visible={isModalAccessVisible}
-            onClose={handleModalClose}
-            onPermissionsUpdate={handlePermissionsUpdate}
+            visible
+            onClose={() => { setEditingAccess(null); loadUsers(); }}
+            onPermissionsUpdate={() => { setEditingAccess(null); loadUsers(); }}
             userData={{
-              name: selectedAccessUser.name,
-              email: selectedAccessUser.email,
-              division: selectedAccessUser.division,
-              permission: selectedAccessUser.permission,
-              _id: selectedAccessUser._id,
-              nasContainers: selectedAccessUser.nasContainers,
-              username: selectedAccessUser.username,
-              avatar: selectedAccessUser.avatar,
-              status: selectedAccessUser.status, // if your AvatarWithName expects status
-            }}            
+              name: editingAccess.name,
+              email: editingAccess.email,
+              division: editingAccess.division,
+              permission: editingAccess.permission,
+              _id: editingAccess._id,
+              nasContainers: editingAccess.nasContainers,
+              username: editingAccess.username,
+              avatar: editingAccess.avatar,
+              status: editingAccess.presence,
+            }}
           />
         )}
       </Modal>
 
-      <div className="card">
-        <h2 className="account-title">Signed Up Users</h2>
-        <div className="filter-options">
-          <div className="filter-input">
-            <Input
-              placeholder="Search Users"
-              allowClear
-              prefix={<SearchOutlined />}
-              size="medium"
-              onSearch={handleSearch}
-              className="search-filter"
-            />
-          </div>
-        </div>
-        {/* Its own paging: this used to share the accounts table's handler,
-            so turning a page here moved the accounts list too. */}
-        <Table
-          columns={columnsSignup}
-          dataSource={signUpUsers}
-          pagination={{
-            defaultPageSize: 10,
-            showSizeChanger: true,
-            pageSizeOptions: ["10", "50", "100"],
-          }}
-          loading={loadingSignUp}
-          rowClassName={rowClassName}
-        />
-        <SignAccountModal
-          user={selectedSignUpUser}
-          visible={isSignUpModalVisible}
-          onCancel={handleSignUpModalCancel}
-        />
-      </div>
-    </div>
+      <ApproveRequestModal
+        request={approving}
+        open={Boolean(approving)}
+        onClose={(created) => {
+          setApproving(null);
+          if (created) {
+            loadRequests();
+            loadUsers();
+          }
+        }}
+      />
+      <RejectRequestModal
+        request={declining}
+        open={Boolean(declining)}
+        onClose={(declined) => {
+          setDeclining(null);
+          if (declined) loadRequests();
+        }}
+      />
+    </Space>
   );
 };
 

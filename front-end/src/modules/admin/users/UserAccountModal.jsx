@@ -252,7 +252,6 @@ const UserAccountModal = ({ user, onClose, onSaved }) => {
           <Space size={6} wrap>
             <Text type="secondary">@{current.username}</Text>
             <Tag color={type.color}>{type.label}</Tag>
-            {current.isDemo && <Tag color="gold">demo</Tag>}
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {current.division}

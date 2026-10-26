@@ -111,15 +111,133 @@ const FileScan = ({ serialNo, missing, onFiled }) => {
   );
 };
 
+/** What the server says about a document: ready (with its info), approval, or unavailable. */
+const readFileInfo = (serialNo, unit, domain) =>
+  fetch(fileBase(serialNo, unit, domain), { credentials: "include" })
+    .then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) return { status: "ready", info: data };
+      if (data.code === "APPROVAL_REQUIRED") return { status: "approval" };
+      return { status: "unavailable", code: data.code, message: data.message };
+    })
+    .catch(() => ({ status: "unavailable", code: navigator.onLine === false ? "NETWORK" : "NAS_UNREACHABLE" }));
+
 /**
- * @param refNo  the document's reference number (a record's ECC Ref No), shown at the right of the viewer's title bar
+ * The viewer window on its own, opened straight from a list row or a search
+ * result — no record page first. Given `info` (DocumentPanel has it) it shows
+ * the document at once; without, it asks the server, which decides as it
+ * does everywhere: the unit's own staff and the Developer read it here,
+ * inside their province scope; anyone else is pointed to the Document Portal.
+ * View only, the page limit and watermark applied; the Developer alone may
+ * copy text and take screenshots.
+ *
+ * @param refNo  the document's reference number (a record's ECC Ref No), shown at the right of the title bar
  */
+export const DocumentViewer = ({ open, onClose, serialNo, unit, domain = "erms", refNo, fileName, info: given = null }) => {
+  const [state, setState] = useState(given ? { status: "ready", info: given } : { status: "loading" });
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: fetchCurrentUser, staleTime: 5 * 60 * 1000, retry: false });
+  const canCopy = me?.role === "developer";
+
+  useEffect(() => {
+    if (given) {
+      setState({ status: "ready", info: given });
+      return undefined;
+    }
+    if (!open || !serialNo) return undefined;
+    let cancelled = false;
+    setState({ status: "loading" });
+    readFileInfo(serialNo, unit, domain).then((s) => !cancelled && setState(s));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, serialNo, unit, domain, given]);
+
+  const info = state.info;
+  let body;
+  if (state.status === "loading") {
+    body = (
+      <Space style={{ padding: 16 }}>
+        <Spin size="small" />
+        <Text type="secondary">Looking for the scanned document…</Text>
+      </Space>
+    );
+  } else if (state.status === "approval") {
+    body = <ApprovalPanel serialNo={serialNo} fileName={fileName} />;
+  } else if (state.status === "unavailable") {
+    const { type, message: description } = explainFileProblem(state.code, state.message);
+    body = <Alert type={type} showIcon icon={<FileUnknownOutlined />} message={fileName || "Document unavailable"} description={description} />;
+  } else if (!info.previewable) {
+    body = (
+      <Alert
+        type="info"
+        showIcon
+        icon={<FileUnknownOutlined />}
+        message={info.fileName}
+        description="This file type is not viewable here, and documents are not downloadable. Ask the Records Unit to see it on their screen."
+      />
+    );
+  } else if (info.contentType === "application/pdf") {
+    // Every scan through a view-only viewer: no download, no print, no
+    // right-click save. A PDF is drawn by the application's own viewer (the
+    // browser's carries download and print buttons); an image is shown
+    // without its context menu. Anything else the browser can show goes in
+    // a frame without its toolbar.
+    body = (
+      <PdfViewer
+        src={`${fileBase(serialNo, unit, domain)}/preview`}
+        height="100%"
+        watermark={info.viewing?.watermark || null}
+        blurWithheld={info.viewing?.blurWithheldPages !== false}
+        // The rest of a page-limited document is the administrators' to open.
+        owner="the system administrator"
+        // No page limit for this viewer, and a large scan: read by ranges,
+        // the first page up as soon as its bytes are in. A small one is
+        // quicker in one request.
+        ranged={!(info.viewing?.pageLimit > 0) && info.size > 3 * 1024 * 1024}
+        selectable={canCopy}
+        screenshot={canCopy}
+        name={info.fileName}
+      />
+    );
+  } else if (String(info.contentType || "").startsWith("image/")) {
+    body = <ViewOnlyImage src={previewUrl(serialNo, unit, domain, false)} alt={info.fileName} />;
+  } else {
+    body = <iframe title={info.fileName} src={previewUrl(serialNo, unit, domain, true)} style={{ width: "100%", height: "100%", minHeight: 400, border: "none" }} />;
+  }
+
+  // A window, not a dialog: moved aside, minimised or resized, so the scan
+  // can be read next to the record's details. No mask — what is behind it
+  // stays usable.
+  return (
+    <FloatingModal
+      open={open}
+      onCancel={onClose}
+      floating
+      width={1100}
+      height="86vh"
+      bodyStyle={{ display: "flex", flexDirection: "column" }}
+      title={
+        <Space size={6}>
+          <Text strong ellipsis style={{ maxWidth: 520 }}>{info?.fileName || fileName || serialNo}</Text>
+          {state.status === "ready" && <Tag>{canCopy ? "copy allowed" : "view only"}</Tag>}
+        </Space>
+      }
+      extra={
+        refNo ? (
+          <Tooltip title="ECC Ref No">
+            <Tag color="blue" style={{ marginInlineEnd: 0, fontFamily: "monospace" }}>{refNo}</Tag>
+          </Tooltip>
+        ) : null
+      }
+    >
+      {open && body}
+    </FloatingModal>
+  );
+};
+
 const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms", refNo }) => {
   const [state, setState] = useState({ status: "loading" });
   const [preview, setPreview] = useState(false);
-  // The Developer may select and copy a scan's text; everyone else views only.
-  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: fetchCurrentUser, staleTime: 5 * 60 * 1000, retry: false });
-  const canCopy = me?.role === "developer";
 
   // `quiet`: a re-check in the background keeps what is on screen until the
   // answer is in. It used to reset to "loading" first, which unmounted the
@@ -127,17 +245,11 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms", ref
   const load = useCallback((quiet = false) => {
     let cancelled = false;
     if (!quiet) setState({ status: "loading" });
-    fetch(fileBase(serialNo, unit, domain), { credentials: "include" })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.ok) setState({ status: "ready", info: data });
-        else if (data.code === "APPROVAL_REQUIRED") setState({ status: "approval" });
-        else setState({ status: "unavailable", code: data.code, message: data.message });
-      })
-      .catch(() => {
-        if (!cancelled) setState((s) => (quiet && s.status === "ready" ? s : { status: "unavailable", code: navigator.onLine === false ? "NETWORK" : "NAS_UNREACHABLE" }));
-      });
+    readFileInfo(serialNo, unit, domain).then((next) => {
+      if (cancelled) return;
+      // A quiet re-check that could not reach the server keeps what is on screen.
+      setState((s) => (quiet && s.status === "ready" && next.status === "unavailable" && ["NETWORK", "NAS_UNREACHABLE"].includes(next.code) ? s : next));
+    });
     return () => {
       cancelled = true;
     };
@@ -191,8 +303,6 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms", ref
   }
 
   const { info } = state;
-  // The rest of a page-limited document is the administrators' to open.
-  const owner = "the system administrator";
 
   return (
     <>
@@ -215,58 +325,7 @@ const DocumentPanel = ({ serialNo, fileName, unit, canFile, domain = "erms", ref
         </Paragraph>
       )}
 
-      {/* A window, not a dialog: moved aside, minimised or resized, so the
-          scan can be read next to the record's details. No mask — the
-          details behind it stay usable. */}
-      <FloatingModal
-        open={preview}
-        onCancel={() => setPreview(false)}
-        floating
-        width={1100}
-        height="86vh"
-        bodyStyle={{ display: "flex", flexDirection: "column" }}
-        title={
-          <Space size={6}>
-            <Text strong ellipsis style={{ maxWidth: 520 }}>{info.fileName}</Text>
-            <Tag>{canCopy ? "copy allowed" : "view only"}</Tag>
-          </Space>
-        }
-        extra={
-          refNo ? (
-            <Tooltip title="ECC Ref No">
-              <Tag color="blue" style={{ marginInlineEnd: 0, fontFamily: "monospace" }}>{refNo}</Tag>
-            </Tooltip>
-          ) : null
-        }
-      >
-        {/* Every scan through a view-only viewer: no download, no print,
-            no right-click save. A PDF is drawn by the application's own
-            viewer (the browser's carries download and print buttons); an
-            image is shown without its context menu. Anything else the
-            browser can show goes in a frame without its toolbar. */}
-        {info.contentType === "application/pdf" ? (
-          <PdfViewer
-            src={`${fileBase(serialNo, unit, domain)}/preview`}
-            height="100%"
-            watermark={info.viewing?.watermark || null}
-            blurWithheld={info.viewing?.blurWithheldPages !== false}
-            owner={owner}
-            // No page limit for this viewer, and a large scan: read by
-            // ranges, the first page up as soon as its bytes are in. A small
-            // one is quicker in one request.
-            ranged={!(info.viewing?.pageLimit > 0) && info.size > 3 * 1024 * 1024}
-            selectable={canCopy}
-          />
-        ) : String(info.contentType || "").startsWith("image/") ? (
-          <ViewOnlyImage src={previewUrl(serialNo, unit, domain, false)} alt={info.fileName} />
-        ) : (
-          <iframe
-            title={info.fileName}
-            src={previewUrl(serialNo, unit, domain, true)}
-            style={{ width: "100%", height: "100%", minHeight: 400, border: "none" }}
-          />
-        )}
-      </FloatingModal>
+      <DocumentViewer open={preview} onClose={() => setPreview(false)} serialNo={serialNo} unit={unit} domain={domain} refNo={refNo} info={info} />
     </>
   );
 };

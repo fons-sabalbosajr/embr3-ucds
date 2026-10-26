@@ -52,6 +52,10 @@ const VERA_ACTIONS = Object.freeze({
   'vera:serials:fix': 'Serial counters fixed',
   'vera:project-types:scan': 'Project type check',
   'vera:scan-text': 'Scan text read',
+  'vera:ref-check': 'Ref. No. checked against the scan',
+  'vera:ref-check:apply': 'Ref. No. corrected from the scan',
+  'vera:ref-check:undo': 'Ref. No. correction undone',
+  'vera:ref-check:keep': 'Encoded Ref. No. kept',
   'vera:project-types:settings': 'Project type check settings',
   'vera:project-types:apply': 'Project types corrected',
   'vera:project-types:undo': 'Project type correction undone',
@@ -853,6 +857,31 @@ async function scanTextNext(req, res, next) {
   }
 }
 
+// ── Ref. Nos. against the scan (services/vera/refNoCheck) ─────────────────
+// The report and the next few read here (the Developer's); one record is
+// checked, applied or kept from its own page (modules/erms recordController),
+// under the record's own access rules.
+const refNoCheck = require('../services/vera/refNoCheck');
+
+async function refNumbersReport(req, res, next) {
+  try {
+    return res.json({ operational: provider.isOperational(await loadConfig()), ...(await refNoCheck.report()) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function refNumbersScan(req, res, next) {
+  try {
+    const result = await refNoCheck.checkNext(await loadConfig(), Number(req.body?.limit) || 20, principalOf(req)?.username || null);
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:ref-check', { batch: true, ...result.totals, left: result.left });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 /** For the bell: how many proposals wait. */
 async function correctionsPending(req, res, next) {
   try {
@@ -995,6 +1024,11 @@ module.exports = {
   ucdsCheckAutoFix,
   scanTextOne,
   scanTextNext,
+  refNumbersReport,
+  refNumbersScan,
+  // For the record page's Ref. No. check (modules/erms recordController).
+  loadConfig,
+  log,
   projectTypesReport,
   projectTypesSettings,
   projectTypesScan,

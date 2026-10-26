@@ -334,19 +334,36 @@ async function updateProfile(req, res) {
   }
 }
 
-// PUT /api/status/:id — update sign-up request status
-async function updateSignupStatus(req, res) {
+// ---- Account requests (services/accountRequests) -----------------------------
+// A request is decided by approving it (which makes the account) or declining
+// it (which tells the person why) — never by flipping its status by hand: the
+// old status dropdown could mark a request "approved" with no account behind it.
+
+const sendAppError = (res, error, fallback) => {
+  if (error?.name === 'AppError') return res.status(error.status).json({ error: error.message, code: error.code });
+  console.error(fallback, error);
+  return res.status(500).json({ error: 'Internal Server Error' });
+};
+
+// POST /api/sign-up/:id/approve — make the account; Developer only.
+async function approveSignUp(req, res) {
   try {
-    await connectToMongo();
-    const { id } = req.params;
-    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
-    const { status } = req.body;
-    const updateResult = await collections.signUp.updateOne({ _id: new ObjectId(id) }, { $set: { status } });
-    if (updateResult.matchedCount === 0) return res.status(404).json({ error: 'User not found in sign-up collection' });
-    return res.json({ message: 'Status updated successfully in sign-up collection' });
+    const result = await require('../services/accountRequests').approve(req.params.id, req.body || {}, principalOf(req));
+    require('../services/notifier').broadcast('accounts:requests', { at: new Date().toISOString() });
+    return res.status(201).json({ message: 'Account created', ...result });
   } catch (error) {
-    console.error('Error updating status:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    return sendAppError(res, error, 'Error approving sign-up:');
+  }
+}
+
+// POST /api/sign-up/:id/reject — decline, with the reason the person is sent; Developer only.
+async function rejectSignUp(req, res) {
+  try {
+    const result = await require('../services/accountRequests').reject(req.params.id, req.body || {}, principalOf(req));
+    require('../services/notifier').broadcast('accounts:requests', { at: new Date().toISOString() });
+    return res.json({ message: 'Request declined', ...result });
+  } catch (error) {
+    return sendAppError(res, error, 'Error declining sign-up:');
   }
 }
 
@@ -415,7 +432,7 @@ async function setMyTheme(req, res) {
 }
 void THEME_ACCENTS;
 
-module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, updateSignupStatus, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme };
+module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, approveSignUp, rejectSignUp, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme };
  
 // ---- Additional Users GET endpoints migrated from server.js ----
 async function getUsers(req, res) {
@@ -457,10 +474,11 @@ async function getLoginStatus(req, res) {
   }
 }
 
+// GET /api/sign-up[?status=pending] — the requests, newest first, each with a free username to suggest.
 async function getSignUps(req, res) {
   try {
-    await connectToMongo();
-    const users = await collections.signUp.find().toArray();
+    const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : undefined;
+    const users = await require('../services/accountRequests').list({ status });
     return res.json(users);
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -484,11 +502,9 @@ async function getUserAvatar(req, res) {
   }
 }
 
+// From the system's random source, not Math.random: it is someone's password.
 function generatePassword(req, res) {
-  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let password = '';
-  for (let i = 0; i < 8; i++) password += charset[Math.floor(Math.random() * charset.length)];
-  return res.json({ password });
+  return res.json({ password: require('../services/accountRequests').temporaryPassword() });
 }
 
 module.exports.getUsers = getUsers;
@@ -572,7 +588,19 @@ async function updateUserPermissionsByEmail(req, res) {
 
 async function updateProvincePermissionsByEmail(req, res) {
   const { email } = req.params;
-  const provincePermissions = req.body || {};
+  // Only the seven province keys, each none / view / readWrite. This wrote
+  // the whole body into the account, so any field — `permission` among them
+  // — could be set through it.
+  const { PROVINCE_KEYS } = require('../services/provinces');
+  const LEVELS = { none: 'none', view: 'view', readwrite: 'readWrite', true: 'readWrite', false: 'none' };
+  const provincePermissions = {};
+  for (const [key, value] of Object.entries(req.body || {})) {
+    if (!PROVINCE_KEYS.includes(key)) return res.status(400).json({ error: `Unknown province: ${key}` });
+    const level = LEVELS[String(value).toLowerCase()];
+    if (!level) return res.status(400).json({ error: `${key} must be none, view or readWrite.` });
+    provincePermissions[key] = level;
+  }
+  if (!Object.keys(provincePermissions).length) return res.status(400).json({ error: 'Nothing to update.' });
   try {
     await connectToMongo();
     const user = await collections.users.findOne({ email });
@@ -589,6 +617,7 @@ async function updateProvincePermissionsByEmail(req, res) {
 async function removeSignUpUser(req, res) {
   const { id } = req.params;
   const { ObjectId } = require('../config/db');
+  if (!ObjectId.isValid(id)) return res.status(400).send({ message: 'Invalid request id' });
   try {
     await connectToMongo();
     const result = await collections.signUp.deleteOne({ _id: new ObjectId(id) });

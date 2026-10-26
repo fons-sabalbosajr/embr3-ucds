@@ -65,6 +65,11 @@ export const runProjectTypeCheck = async () => (await client.post("/project-type
 export const applyProjectTypes = async ({ serialNos, all }) => (await client.post("/project-types/apply", all ? { all: true } : { serialNos })).data;
 export const settleProjectType = async ({ serialNo, action }) => (await client.post(`/project-types/${encodeURIComponent(serialNo)}/${action}`)).data;
 
+// VERA's check of each record's Ref. No. against its scan: the report and the
+// next few read. Applying or keeping goes through the record's own endpoint.
+export const getRefNumberCheck = async () => (await client.get("/ref-numbers")).data;
+export const runRefNumberCheck = async (limit) => (await client.post("/ref-numbers/scan", { limit }, { timeout: 30 * 60 * 1000 })).data;
+
 // VERA's register links (the Developer's): records in the Document Library not
 // linked to the central register, and the links she proposes for them.
 export const getRegisterLinks = async () => (await client.get("/register-links")).data;

@@ -15,7 +15,9 @@ const {
   ermsUnitsOf,
   isErmsEndUser,
   ERMS_UNIT_LABELS,
+  ERMS_UNIT_VALUES,
 } = require('../services/authorization');
+const accountRequests = require('../services/accountRequests');
 const storageAccess = require('../services/storageAccess');
 const signInHistory = require('../services/signInHistory');
 const presence = require('../services/presence');
@@ -68,10 +70,20 @@ async function register(req, res) {
   const division = cleanField(req.body?.division, 120);
   const position = cleanField(req.body?.position, 120);
   const email = cleanField(req.body?.email, 160).toLowerCase();
+  // Which system the person needs — UCDS or ERMS, and for ERMS the unit. The
+  // Developer decides the account from it, and may still choose otherwise.
+  const system = cleanField(req.body?.system, 10).toLowerCase();
+  const ermsUnit = system === 'erms' ? cleanField(req.body?.ermsUnit, 20).toLowerCase() : null;
   if (!name || !division || !position || !email) {
     return res.status(400).json({ error: 'Name, division/section, position, and email are required' });
   }
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if (system && !Object.keys(accountRequests.SYSTEMS).includes(system)) {
+    return res.status(400).json({ error: 'Choose UCDS or ERMS.' });
+  }
+  if (system === 'erms' && !ERMS_UNIT_VALUES.includes(ermsUnit)) {
+    return res.status(400).json({ error: 'Choose the ERMS unit you work in.' });
+  }
   try {
     const { collections } = await connectToMongo();
     // One request per address, and none for an address that already has an
@@ -90,6 +102,8 @@ async function register(req, res) {
       division,
       position,
       email,
+      system: system || null,
+      ermsUnit,
       status: 'pending',
       requestedAt: new Date(),
       requestedFrom: req.ip || null,
@@ -97,21 +111,20 @@ async function register(req, res) {
 
     // The request is recorded whether or not the mail goes out: an SMTP
     // problem should not turn away a registrant, and the request is still
-    // visible under Sign-up Requests. Both sends run together and neither is
-    // awaited before answering.
+    // visible under Account Requests. The sends run together and none is
+    // awaited before answering. Every Developer is told: approving is theirs.
     const origin = mailer.publicOrigin();
-    const notifyAdmin = mailer.send({
-      to: mailer.adminAddress(),
-      ...templates.registrationReceived({
-        name,
-        division,
-        position,
-        email,
-        reviewUrl: `${origin}/e-universe/admin/users`,
-      }),
-    });
-    const acknowledge = mailer.send({ to: email, ...templates.registrationAcknowledged({ name }) });
-    Promise.all([notifyAdmin, acknowledge]).catch(() => {});
+    const access = system ? accountRequests.describeAccess({ system, ermsUnit }) : null;
+    const notifyDevelopers = accountRequests.developerAddresses().then((to) =>
+      mailer.send({
+        to,
+        ...templates.registrationReceived({ name, division, position, email, access, reviewUrl: `${origin}/e-universe/admin/users` }),
+      })
+    );
+    const acknowledge = mailer.send({ to: email, ...templates.registrationAcknowledged({ name, access }) });
+    Promise.all([notifyDevelopers, acknowledge]).catch(() => {});
+    // The Developers' bell counts the requests waiting.
+    require('../services/notifier').broadcast('accounts:requests', { at: new Date().toISOString() });
 
     return res.status(201).json({ status: 'User registration submitted for approval', userId: result.insertedId });
   } catch (error) {

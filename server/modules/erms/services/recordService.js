@@ -68,6 +68,7 @@ const LIST_PROJECTION = {
   'ucdsRef.sortKey': 1,
   'ucdsRef.nameSnapshot': 1,
   'dataQuality.clean': 1,
+  'dataQuality.issues': 1,
 };
 
 /**
@@ -744,17 +745,87 @@ async function updateRecord(serialNo, changes, { username, writableProvinces }) 
     );
   }
 
-  // A record whose flagged values have all been resolved is clean again.
-  if (set.permit && !set.permit.dateApprovedRaw && !set.permit.dateAmendedRaw) {
-    const remaining = (before.dataQuality?.issues || []).filter(
-      (i) => !['Date_Approved', 'Date_Amended'].includes(i.field)
-    );
-    set.dataQuality = { clean: remaining.length === 0, issues: remaining };
-  }
-
   await collection().updateOne({ serialNo }, { $set: set });
-  const after = await collection().findOne({ serialNo });
+  // A flagged value put right — a date entered, a province chosen, the scan
+  // filed — takes its issue off "Needs review" in the same write.
+  const after = await settleDataQuality(await collection().findOne({ serialNo }), username);
   return { before, after };
+}
+
+// ---------------------------------------------------------------------------
+// "Needs review": the values the migration could not interpret.
+//
+// Each issue is read against the record as it is now, so it clears the
+// moment its value is put right, whatever screen put it right — the edit
+// form, a scan filed or moved here, a VERA correction. It used to clear only
+// for the two dates, and only from the edit form: a province or a scan put
+// right left the record on the list. An issue no value can settle (a permit
+// type that really is "Other") is cleared by marking the record reviewed.
+// ---------------------------------------------------------------------------
+
+const STILL_OPEN = {
+  Date_Approved: (r) => Boolean(r.permit?.dateApprovedRaw) && !r.permit?.dateApproved,
+  Date_Amended: (r) => Boolean(r.permit?.dateAmendedRaw) && !r.permit?.dateAmended,
+  Permit_Type: (r) => !r.permit?.type || r.permit.type === 'other',
+  Province: (r) => !r.location?.province,
+  Serial_No: (r) => !r.serialNo,
+  File_Path: (r) => !r.document?.sharePath,
+  Date_Uploaded: (r) => !r.document?.uploadedAt,
+};
+
+/** The issues on a record that its values have not yet put right. */
+function openIssues(record) {
+  return (record?.dataQuality?.issues || []).filter((i) => (STILL_OPEN[i.field] ? STILL_OPEN[i.field](record) : true));
+}
+
+/** Write a record's issues down to the ones still open; returns the record as it now is. */
+async function settleDataQuality(record, username = null) {
+  if (!record || record.dataQuality?.clean !== false) return record;
+  const issues = record.dataQuality.issues || [];
+  const remaining = openIssues(record);
+  if (remaining.length && remaining.length === issues.length) return record;
+  const dataQuality = {
+    ...record.dataQuality,
+    clean: remaining.length === 0,
+    issues: remaining,
+    resolved: [...(record.dataQuality.resolved || []), ...issues.filter((i) => !remaining.includes(i)).map((i) => ({ ...i, at: new Date(), by: username }))],
+  };
+  await collection().updateOne({ _id: record._id }, { $set: { dataQuality } });
+  return { ...record, dataQuality };
+}
+
+/** Settle every flagged record matching `filter` (after a bulk write such as a VERA correction). */
+async function recheckDataQuality(filter = {}, username = null) {
+  await connectToMongo();
+  const flagged = await collection().find({ ...filter, 'dataQuality.clean': false }).toArray();
+  let cleared = 0;
+  for (const r of flagged) {
+    const after = await settleDataQuality(r, username);
+    if (after.dataQuality.issues.length < (r.dataQuality.issues || []).length) cleared += 1;
+  }
+  return cleared;
+}
+
+/**
+ * Take a record off "Needs review" by hand: someone has looked at what is
+ * left and it stands as it is. The issues are kept under `reviewed`, with
+ * who and when, so the decision can be read back.
+ */
+async function markReviewed(serialNo, { username, writableProvinces, note = null }) {
+  await connectToMongo();
+  const before = await collection().findOne({ serialNo });
+  if (!before) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+  assertWritable(before.location?.province, writableProvinces);
+  if (before.dataQuality?.clean !== false) return { before, after: before };
+  const now = new Date();
+  const dataQuality = {
+    ...before.dataQuality,
+    clean: true,
+    issues: [],
+    reviewed: { at: now, by: username, note: note || null, issues: before.dataQuality.issues || [] },
+  };
+  await collection().updateOne({ serialNo }, { $set: { dataQuality, updatedAt: now, updatedBy: username } });
+  return { before, after: { ...before, dataQuality, updatedAt: now, updatedBy: username } };
 }
 
 // ---------------------------------------------------------------------------
@@ -813,11 +884,25 @@ async function forFirm({ sortKey = null, permitNumbers = [] } = {}, limit = 50) 
   return { total, records };
 }
 
-// A write changes the dashboard's counts: clear them, so the person who just
-// filed sees their record counted rather than waiting out the cache.
+/**
+ * The records changed: the dashboard's counts are cleared, so the person who
+ * just filed sees their record counted rather than waiting out the cache, and
+ * every open ERMS screen is told to ask again — "Needs review" on a colleague's
+ * dashboard drops the moment a record is put right. The notice carries no
+ * data; each screen asks the API with its own session and scope.
+ */
+function recordsChanged() {
+  shortCache.invalidate('erms:records:');
+  try {
+    require('../../../services/notifier').broadcast('erms:records', { at: new Date().toISOString() });
+  } catch {
+    /* no sockets (a script, a test): the next load is fresh anyway */
+  }
+}
+
 const clearingDashboard = (fn) => async (...args) => {
   const result = await fn(...args);
-  shortCache.invalidate(DASHBOARD_CACHE);
+  recordsChanged();
   return result;
 };
 
@@ -854,6 +939,8 @@ async function moveDocument(fromSerial, toSerial, { username }) {
     { _id: from._id },
     { $set: { ...Object.fromEntries(DOCUMENT_FIELDS.map((k) => [`document.${k}`, null])), 'document.movedTo': toSerial, 'document.movedAt': now, 'document.movedBy': username, updatedAt: now, updatedBy: username } }
   );
+  // The record that now holds the scan may have been flagged for lacking one.
+  await settleDataQuality(await collection().findOne({ _id: to._id }), username);
   return { from: fromSerial, to: toSerial, fileName: from.document?.fileName || null };
 }
 
@@ -930,6 +1017,10 @@ module.exports = {
   parentFor,
   createRecord: clearingDashboard(createRecord),
   updateRecord: clearingDashboard(updateRecord),
+  markReviewed: clearingDashboard(markReviewed),
+  recheckDataQuality: clearingDashboard(recheckDataQuality),
+  openIssues,
+  recordsChanged,
   resolveUcdsRef,
   // cross-domain read API
   countForFirm,

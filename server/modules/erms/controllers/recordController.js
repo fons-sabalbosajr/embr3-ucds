@@ -10,7 +10,7 @@ const audit = require('../../../shared/services/audit');
 const { principalOf } = require('../../../middleware/auth');
 const { canAccessAllYears, isDeveloper, DOMAINS } = require('../../../services/authorization');
 const { userProvinceKeys, userWritableProvinceKeys } = require('../../../services/provinces');
-const { notFoundError } = require('../../../shared/middleware/errorHandler');
+const { forbidden, notFoundError } = require('../../../shared/middleware/errorHandler');
 const nas = require('../../../services/nasStorage');
 const storageAccess = require('../../../services/storageAccess');
 const { recordFileEvent } = require('../../../services/nasAudit');
@@ -725,6 +725,92 @@ async function nextSerial(req, res, next) {
   }
 }
 
+/** Take a record off "Needs review": what is left has been looked at and stands. */
+async function markReviewed(req, res, next) {
+  try {
+    const { before, after } = await recordService.markReviewed(req.params.serialNo, { ...actor(req), note: req.body?.note || null });
+    if (before.dataQuality?.clean === false) {
+      await audit.record(req, {
+        domain: DOMAINS.ERMS,
+        action: 'Review Record',
+        collection: recordService.RECORDS,
+        documentId: after.serialNo,
+        label: `Marked record ${after.serialNo} as reviewed`,
+        changes: { dataQuality: { from: before.dataQuality.issues || [], to: [] } },
+      });
+    }
+    res.json({ record: withoutInternalPaths(after, principalOf(req)) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// --- the Ref. No. against the scan (services/vera/refNoCheck) ---------------
+//
+// Seen by whoever may read the record; read, applied or kept by whoever may
+// edit it — the same province scope as the edit form, since applying is an
+// edit of the record's Ref. No. Reading the scan is one AI model call.
+
+const refNoCheck = require('../../../services/vera/refNoCheck');
+
+/** The record within the caller's read scope (404 otherwise); with `write`, refused outside the write scope too. */
+async function recordInScope(req, { write = false } = {}) {
+  const record = await recordService.getRecord(req.params.serialNo, readScope(req));
+  if (!record) throw notFoundError('Record not found.', 'RECORD_NOT_FOUND');
+  const writable = writeScope(req);
+  if (write && Array.isArray(writable) && !writable.includes(record.location?.province)) {
+    throw forbidden(`You do not have write access to records in ${record.location?.province || 'that province'}.`, 'PROVINCE_FORBIDDEN');
+  }
+  return record;
+}
+
+async function getRefCheck(req, res, next) {
+  try {
+    await recordInScope(req);
+    res.json({ check: await refNoCheck.forRecord(req.params.serialNo) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function runRefCheck(req, res, next) {
+  try {
+    await recordInScope(req, { write: true });
+    const vera = require('../../../controllers/veraController');
+    const result = await refNoCheck.checkOne(await vera.loadConfig(), req.params.serialNo, actor(req).username, { force: req.body?.force === true });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    if (!result.cached) await vera.log(req, 'vera:ref-check', { serialNo: req.params.serialNo, status: result.check.status });
+    res.json({ check: result.check });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function settleRefCheck(req, res, next) {
+  try {
+    await recordInScope(req, { write: true });
+    const action = req.params.action;
+    const serialNo = req.params.serialNo;
+    const result = action === 'apply' ? await refNoCheck.apply(serialNo, actor(req)) : await refNoCheck.settle(serialNo, action, actor(req));
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    if (result.after) {
+      await audit.record(req, {
+        domain: DOMAINS.ERMS,
+        action: 'Update Record',
+        collection: recordService.RECORDS,
+        documentId: serialNo,
+        label: action === 'undo' ? `Ref. No. on ${serialNo} put back (VERA check undone)` : `Ref. No. on ${serialNo} corrected from the scan (VERA)`,
+        // The shape audit.diff gives an edit of the permit, so the history reads it alike.
+        changes: { permit: { from: { number: result.from || null }, to: { number: result.to || null } } },
+      });
+    }
+    await require('../../../controllers/veraController').log(req, `vera:ref-check:${action}`, { serialNo, from: result.from, to: result.to });
+    res.json({ check: await refNoCheck.forRecord(serialNo), record: result.after ? withoutInternalPaths(result.after, principalOf(req)) : undefined });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function dashboard(req, res, next) {
   try {
     res.json(await recordService.dashboardStats(readScope(req)));
@@ -979,6 +1065,10 @@ module.exports = {
   viewRecordFile,
   uploadRecord,
   attachRecordFile,
+  markReviewed,
+  getRefCheck,
+  runRefCheck,
+  settleRefCheck,
   nextSerial,
   getLookups,
   duplicateCheck,

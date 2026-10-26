@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Progress, Space, Tooltip, Typography, theme as antdTheme } from "antd";
-import { CheckCircleOutlined, ClockCircleOutlined, ColumnWidthOutlined, LockOutlined, SendOutlined, ZoomInOutlined, ZoomOutOutlined } from "@ant-design/icons";
+import { Alert, Button, Dropdown, Progress, Space, Tooltip, Typography, theme as antdTheme } from "antd";
+import { CameraOutlined, CheckCircleOutlined, ClockCircleOutlined, ColumnWidthOutlined, CopyOutlined, DownloadOutlined, LockOutlined, SendOutlined, ZoomInOutlined, ZoomOutOutlined } from "@ant-design/icons";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useViewOnly } from "./viewOnly";
+import { message } from "../feedback";
 import { HEADER, getSessionToken } from "../sessionToken";
 import "./pdftext.css";
 
@@ -51,6 +52,34 @@ const DEFAULT_ZOOM = 0.5;
 const MAX_DPR = 1.5;
 // How far beyond the visible area pages are drawn ahead of the scroll.
 const LOOKAHEAD = "1200px 0px";
+// A screenshot is drawn afresh at this scale (PDF points to pixels, about
+// 180 dpi), whatever the zoom: sharp enough to read a scan's small print.
+const SHOT_SCALE = 2.5;
+const canCopyImages = () => typeof window !== "undefined" && window.isSecureContext && Boolean(navigator.clipboard?.write) && typeof ClipboardItem !== "undefined";
+
+/** Draw one page at `scale` (PDF points to canvas pixels), the watermark over it. */
+async function paintPage(page, scale, watermark) {
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  const ctx = canvas.getContext("2d");
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  if (watermark) {
+    // Diagonal, repeated, faint: readable on a photograph, not in the way.
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = "#1f2937";
+    ctx.font = `${Math.round(viewport.width / 22)}px sans-serif`;
+    ctx.translate(viewport.width / 2, viewport.height / 2);
+    ctx.rotate(-Math.PI / 6);
+    const step = viewport.height / 3;
+    const textWidth = ctx.measureText(watermark).width;
+    for (let y = -viewport.height; y <= viewport.height; y += step) ctx.fillText(watermark, -textWidth / 2, y);
+    ctx.restore();
+  }
+  return canvas;
+}
 
 /** How to ask for the rest, and where that request stands. */
 const RequestFull = ({ request, owner, compact = false, onPaper = false }) => {
@@ -144,8 +173,11 @@ async function readWithProgress(res, onProgress) {
  *                      a large scan took about ten seconds to open the other way
  * @param selectable    the pages' text can be selected and copied (the Developer's): a text layer
  *                      over each page, and the right-click menu left alone
+ * @param screenshot    a screenshot tool for the page in view — saved as a PNG or copied to the
+ *                      clipboard (the Developer's only; everyone else views only)
+ * @param name          the document's file name, which a screenshot's file name starts from
  */
-const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, request = null, owner = "the unit that keeps it", ranged = false, selectable = false }) => {
+const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, request = null, owner = "the unit that keeps it", ranged = false, selectable = false, screenshot = false, name = "document" }) => {
   const containerRef = useRef(null);
   const viewOnly = useViewOnly();
   const { token } = antdTheme.useToken();
@@ -302,28 +334,10 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
         const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
         const base = page.getViewport({ scale: 1 });
         const width = pageWidth;
-        const viewport = page.getViewport({ scale: (width / base.width) * dpr });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
+        const canvas = await paintPage(page, (width / base.width) * dpr, watermark);
         canvas.style.width = `${width}px`;
-        canvas.style.height = `${Math.round(viewport.height / dpr)}px`;
+        canvas.style.height = `${Math.round((base.height * width) / base.width)}px`;
         canvas.setAttribute("draggable", "false");
-        const ctx = canvas.getContext("2d");
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        if (watermark) {
-          // Diagonal, repeated, faint: readable on a photograph, not in the way.
-          ctx.save();
-          ctx.globalAlpha = 0.16;
-          ctx.fillStyle = "#1f2937";
-          ctx.font = `${Math.round(viewport.width / 22)}px sans-serif`;
-          ctx.translate(viewport.width / 2, viewport.height / 2);
-          ctx.rotate(-Math.PI / 6);
-          const step = viewport.height / 3;
-          const textWidth = ctx.measureText(watermark).width;
-          for (let y = -viewport.height; y <= viewport.height; y += step) ctx.fillText(watermark, -textWidth / 2, y);
-          ctx.restore();
-        }
         // Selectable: the page's text, invisible, laid exactly over the
         // drawn page, so it can be selected and copied. A scan with no text
         // in it simply has nothing to select.
@@ -390,6 +404,52 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
     else if (!canvas && el.firstChild) el.replaceChildren();
   };
 
+  // 3. The Developer's screenshot: the page most in view, drawn afresh at a
+  // fixed resolution (not the zoom's), saved as a PNG or put on the clipboard.
+  const [shooting, setShooting] = useState(false);
+  const pageInView = () => {
+    const box = containerRef.current?.getBoundingClientRect();
+    let best = 1;
+    let most = -Infinity;
+    containerRef.current?.querySelectorAll("[data-page]").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const seen = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
+      if (seen > most) {
+        most = seen;
+        best = Number(el.dataset.page);
+      }
+    });
+    return best;
+  };
+  const takeScreenshot = async (how) => {
+    if (!doc || shooting) return;
+    const n = pageInView();
+    setShooting(true);
+    try {
+      const page = await doc.getPage(n);
+      const canvas = await paintPage(page, SHOT_SCALE, watermark);
+      const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("The page could not be turned into an image."))), "image/png")
+      );
+      if (how === "copy") {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        message.success(`Page ${n} copied to the clipboard.`);
+      } else {
+        const base = String(name || "document").replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|]+/g, "_");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${base} - page ${n}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        message.success(`Page ${n} saved as a PNG.`);
+      }
+    } catch (err) {
+      message.error(err?.message || "The screenshot could not be taken.");
+    } finally {
+      setShooting(false);
+    }
+  };
+
   const shownCount = withheld.shown || doc?.numPages || 0;
   const withheldCount = withheld.total && withheld.shown ? Math.max(0, withheld.total - withheld.shown) : 0;
   const busy = phase.stage === "download";
@@ -410,6 +470,23 @@ const PdfViewer = ({ src, watermark, height = "78vh", blurWithheld = true, reque
           <Tooltip title="Fit to width">
             <Button size="small" icon={<ColumnWidthOutlined />} disabled={zoom === 1} onClick={() => setZoom(1)} aria-label="Fit to width" />
           </Tooltip>
+          {screenshot && (
+            <Dropdown
+              trigger={["click"]}
+              disabled={!doc || shooting}
+              menu={{
+                items: [
+                  { key: "save", icon: <DownloadOutlined />, label: "Save page in view as PNG" },
+                  { key: "copy", icon: <CopyOutlined />, label: "Copy page in view to clipboard", disabled: !canCopyImages() },
+                ],
+                onClick: ({ key }) => takeScreenshot(key),
+              }}
+            >
+              <Button size="small" icon={<CameraOutlined />} loading={shooting} disabled={!doc} title="Developer only" style={{ marginInlineStart: 8 }}>
+                Screenshot
+              </Button>
+            </Dropdown>
+          )}
         </Space>
         <Space size={10}>
           {withheld.total ? (

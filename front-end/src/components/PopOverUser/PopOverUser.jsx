@@ -60,7 +60,6 @@ const UserPopover = ({ name, userHandle, handleLogout, userData, division, role,
           <Text type="secondary" className="eu-account-handle">@{userHandle}</Text>
           <Space size={4} wrap>
             <Tag color={type.color} style={{ marginInlineEnd: 0 }}>{type.label}</Tag>
-            {userData?.isDemo && <Tag color="gold" style={{ marginInlineEnd: 0 }}>demo</Tag>}
           </Space>
           {division && <Text type="secondary" className="eu-account-division">{division}</Text>}
         </div>

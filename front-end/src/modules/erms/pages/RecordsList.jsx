@@ -11,7 +11,9 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { CloudUploadOutlined, EditOutlined, EyeOutlined, LinkOutlined, PaperClipOutlined, WarningOutlined } from "@ant-design/icons";
+import { CloudUploadOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, LinkOutlined, PaperClipOutlined, WarningOutlined } from "@ant-design/icons";
+import { DocumentViewer } from "../../../shared/components/DocumentPanel";
+import { useRecordsLive } from "../useRecordsLive";
 import UnitHeader from "../components/UnitHeader";
 import { useSearchParams } from "react-router-dom";
 import RecordDetail from "./RecordDetail";
@@ -42,11 +44,11 @@ const TABLE_RESERVE = 180;
 // register link under the FSN, the upload date and uploader into the details.
 // `from`: the narrowest table width the layout is used at.
 const LAYOUTS = [
-  { from: 1360, widths: { serialNo: 130, permit: 190, projectType: 240, ucdsRef: 140, uploadedAt: 150, actions: 88 } },
-  { from: 1180, widths: { serialNo: 120, permit: 170, projectType: 190, ucdsRef: 130, uploadedAt: 130, actions: 80 } },
-  { from: 960, widths: { serialNo: 120, permit: 170, ucdsRef: 130, uploadedAt: 130, actions: 80 } },
-  { from: 760, widths: { serialNo: 120, permit: 160, uploadedAt: 120, actions: 80 } },
-  { from: 0, widths: { serialNo: 110, permit: 150, actions: 72 } },
+  { from: 1360, widths: { serialNo: 130, permit: 190, projectType: 240, ucdsRef: 140, uploadedAt: 150, actions: 118 } },
+  { from: 1180, widths: { serialNo: 120, permit: 170, projectType: 190, ucdsRef: 130, uploadedAt: 130, actions: 110 } },
+  { from: 960, widths: { serialNo: 120, permit: 170, ucdsRef: 130, uploadedAt: 130, actions: 110 } },
+  { from: 760, widths: { serialNo: 120, permit: 160, uploadedAt: 120, actions: 110 } },
+  { from: 0, widths: { serialNo: 110, permit: 150, actions: 104 } },
 ];
 const DETAILS_MIN = 220;
 // The expand arrow of a record with attachments.
@@ -99,6 +101,10 @@ const RecordsList = () => {
   const [openSerial, setOpenSerial] = useState(null);
   // The row being edited in the form.
   const [editing, setEditing] = useState(null);
+  // The row whose scan is open in the viewer.
+  const [viewingDoc, setViewingDoc] = useState(null);
+  // A colleague's edit, or a record put right elsewhere, shows here at once.
+  useRecordsLive();
   const [fitRef, fitHeight, fitWidth] = useFitHeight(TABLE_RESERVE);
   const screen = useScreen();
   // Before the first measure: the window's width, near enough.
@@ -140,6 +146,21 @@ const RecordsList = () => {
   // and Quarrying Projects — Sand and gravel extraction".
   const projectType = (p) => [p?.type, p?.otherType].filter((v) => v && v !== "n/a").join(" — ");
 
+  // The scan, straight from the row. The viewer asks the server first, which
+  // decides as everywhere: the Records Unit and the Developer read it here,
+  // within their provinces; anyone else is pointed to the Document Portal.
+  const docButton = (row) => (
+    <Tooltip title={row.document?.fileName ? "View document" : "No scan filed for this record"}>
+      <Button
+        size="small"
+        icon={<FilePdfOutlined />}
+        disabled={!row.document?.fileName}
+        onClick={() => setViewingDoc(row)}
+        aria-label="View document"
+      />
+    </Tooltip>
+  );
+
   // The register link: its own column when there is room, else under the FSN.
   const registerTag = (row) =>
     row.ucdsRef?.sortKey ? (
@@ -153,7 +174,7 @@ const RecordsList = () => {
   const allColumns = [
     // The FSN is the document's number in the library — its own column.
     {
-      title: "FSN",
+      title: "Serial No.",
       dataIndex: "serialNo",
       key: "serialNo",
       sorter: true,
@@ -261,9 +282,10 @@ const RecordsList = () => {
       align: "center",
       render: (_, row) => (
         <Space size={4}>
-          <Tooltip title="View">
-            <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(row.serialNo)} aria-label="View" />
+          <Tooltip title="View record">
+            <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(row.serialNo)} aria-label="View record" />
           </Tooltip>
+          {docButton(row)}
           {canWrite(row) && (
             <Tooltip title="Edit">
               <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} aria-label="Edit" />
@@ -447,7 +469,17 @@ const RecordsList = () => {
                   },
                   { key: "file", render: (_, a) => <Typography.Text style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{a.document?.fileName || a.projectTitle || "no file"}</Typography.Text> },
                   { key: "when", width: 200, responsive: ["sm"], render: (_, a) => (a.document?.uploadedAt ? new Date(a.document.uploadedAt).toLocaleDateString() : "—") },
-                  { key: "view", width: 60, align: "center", render: (_, a) => <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(a.serialNo)} aria-label="View" /> },
+                  {
+                    key: "view",
+                    width: 80,
+                    align: "center",
+                    render: (_, a) => (
+                      <Space size={4}>
+                        <Button size="small" icon={<EyeOutlined />} onClick={() => setOpenSerial(a.serialNo)} aria-label="View record" />
+                        {docButton(a)}
+                      </Space>
+                    ),
+                  },
                 ]}
               />
             ),
@@ -484,6 +516,14 @@ const RecordsList = () => {
         record={editing}
         writableProvinces={options?.writableProvinces}
         onClose={() => setEditing(null)}
+      />
+
+      <DocumentViewer
+        open={Boolean(viewingDoc)}
+        onClose={() => setViewingDoc(null)}
+        serialNo={viewingDoc?.serialNo}
+        fileName={viewingDoc?.document?.fileName}
+        refNo={viewingDoc?.permit?.number}
       />
 
       {/* A window: moved, minimised or resized, so it can sit beside the

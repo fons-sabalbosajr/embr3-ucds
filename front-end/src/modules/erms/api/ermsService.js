@@ -56,6 +56,19 @@ export const createRecord = async (payload) => (await client.post("/records", pa
 export const updateRecord = async ({ serialNo, ...changes }) =>
   (await client.patch(`/records/${encodeURIComponent(serialNo)}`, changes)).data.record;
 
+/** Take a record off "Needs review": what is left has been looked at and stands. */
+export const markRecordReviewed = async ({ serialNo, note }) =>
+  (await client.post(`/records/${encodeURIComponent(serialNo)}/reviewed`, pruned({ note }))).data.record;
+
+// VERA's reading of the Ref. No. printed on the scan, against the one encoded.
+export const fetchRefCheck = async (serialNo) => (await client.get(`/records/${encodeURIComponent(serialNo)}/ref-check`)).data.check;
+// One AI model call reading the scan: allow the time.
+export const runRefCheck = async ({ serialNo, force }) =>
+  (await client.post(`/records/${encodeURIComponent(serialNo)}/ref-check`, force ? { force: true } : {}, { timeout: 3 * 60 * 1000 })).data.check;
+/** action: "apply" (the scan's number onto the record), "undo", or "keep" (the encoded one stands). */
+export const settleRefCheck = async ({ serialNo, action }) =>
+  (await client.post(`/records/${encodeURIComponent(serialNo)}/ref-check/${action}`)).data;
+
 // --- the UCDS register ------------------------------------------------------
 // Read-only. ERMS never writes to the establishment register: a records clerk
 // who finds a firm missing raises it with Planning.

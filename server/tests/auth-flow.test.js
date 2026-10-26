@@ -21,7 +21,17 @@ const { connectToMongo, collections } = db;
 const PASSWORD = 'AuthFlowPw!x9';
 const DEV = '__test_flow_dev';
 const ENC = '__test_flow_enc';
+const ADM = '__test_flow_adm';
 const REQ_EMAIL = '__test_flow_request@test.local';
+const ERMS_EMAIL = '__test_flow_erms@test.local';
+const UCDS_EMAIL = '__test_flow_ucds@test.local';
+// Made by approving requests, and removed afterwards.
+const NEW_USER = 'tflow.new';
+const UCDS_USER = 'tflow.ucds';
+// An existing account whose username an approval may not reuse.
+const TAKEN = 'tflow.taken';
+const EMAILS = [REQ_EMAIL, ERMS_EMAIL, UCDS_EMAIL, 'sys1@test.local', `${ENC}@test.local`];
+const USERS = [DEV, ENC, ADM, NEW_USER, UCDS_USER, TAKEN];
 
 async function signIn(username) {
   const agent = request.agent(app);
@@ -35,19 +45,21 @@ let encoder;
 beforeAll(async () => {
   await connectToMongo();
   const hash = await bcrypt.hash(PASSWORD, 4);
-  await collections.users.deleteMany({ username: { $in: [DEV, ENC] } });
-  await collections.signUp.deleteMany({ email: { $in: [REQ_EMAIL, `${ENC}@test.local`] } });
+  await collections.users.deleteMany({ $or: [{ username: { $in: USERS } }, { email: { $in: EMAILS } }] });
+  await collections.signUp.deleteMany({ email: { $in: EMAILS } });
   await collections.users.insertMany([
     { username: DEV, name: DEV, email: `${DEV}@test.local`, division: 'TEST', status: 'offline', permission: 'developer', assignedYears: [], password: hash },
     { username: ENC, name: ENC, email: `${ENC}@test.local`, division: 'TEST', status: 'offline', permission: 'viewer', assignedYears: [2025], bataan: 'view', password: hash },
+    { username: ADM, name: ADM, email: `${ADM}@test.local`, division: 'TEST', status: 'offline', permission: 'admin', assignedYears: [], password: hash },
+    { username: TAKEN, name: TAKEN, email: `${TAKEN}@test.local`, division: 'TEST', status: 'offline', permission: 'viewer', assignedYears: [], password: hash },
   ]);
   encoder = await collections.users.findOne({ username: ENC });
 });
 
 afterAll(async () => {
-  await collections.users.deleteMany({ username: { $in: [DEV, ENC] } });
-  await collections.loginStatus.deleteMany({ username: { $in: [DEV, ENC] } });
-  await collections.signUp.deleteMany({ email: { $in: [REQ_EMAIL, `${ENC}@test.local`] } });
+  await collections.users.deleteMany({ $or: [{ username: { $in: USERS } }, { email: { $in: [ERMS_EMAIL, UCDS_EMAIL] } }] });
+  await collections.loginStatus.deleteMany({ username: { $in: USERS } });
+  await collections.signUp.deleteMany({ email: { $in: EMAILS } });
 });
 
 describe('request access', () => {
@@ -73,6 +85,14 @@ describe('request access', () => {
     expect(await collections.signUp.countDocuments({ email: `${ENC}@test.local` })).toBe(0);
   });
 
+  it('records the system asked for, and refuses an unknown one or an ERMS request without a unit', async () => {
+    expect((await request(app).post('/register').send({ name: 'A', division: 'B', position: 'C', email: 'sys1@test.local', system: 'payroll' })).status).toBe(400);
+    expect((await request(app).post('/register').send({ name: 'A', division: 'B', position: 'C', email: 'sys1@test.local', system: 'erms' })).status).toBe(400);
+    const ok = await request(app).post('/register').send({ name: 'Lab Person', division: 'ORD-LAB', position: 'Analyst', email: ERMS_EMAIL, system: 'erms', ermsUnit: 'laboratory' });
+    expect(ok.status).toBe(201);
+    expect(await collections.signUp.findOne({ email: ERMS_EMAIL })).toMatchObject({ system: 'erms', ermsUnit: 'laboratory', status: 'pending' });
+  });
+
   it('keeps the request queue and account creation to account managers', async () => {
     const { agent: enc } = await signIn(ENC);
     expect((await enc.get('/api/sign-up')).status).toBe(403);
@@ -83,6 +103,76 @@ describe('request access', () => {
     const list = await dev.get('/api/sign-up');
     expect(list.status).toBe(200);
     expect(list.body.some((r) => r.email === REQ_EMAIL)).toBe(true);
+  });
+});
+
+describe('a Developer decides each request', () => {
+  it('lets only the Developer approve; the account is made with the access chosen and can sign in', async () => {
+    const req = await collections.signUp.findOne({ email: ERMS_EMAIL });
+    const body = { username: NEW_USER, permission: 'records', ermsUnit: 'laboratory', provinces: ['bataan', 'pampanga'] };
+
+    // An Encoder cannot, and neither can a legacy Administrator.
+    const { agent: enc } = await signIn(ENC);
+    expect((await enc.post(`/api/sign-up/${req._id}/approve`).send(body)).status).toBe(403);
+    const { agent: adm } = await signIn(ADM);
+    expect((await adm.post(`/api/sign-up/${req._id}/approve`).send(body)).status).toBe(403);
+    expect((await adm.get('/api/sign-up')).status).toBe(403);
+
+    const { agent: dev } = await signIn(DEV);
+    // The list suggests a free username for a waiting request.
+    const waiting = await dev.get('/api/sign-up').query({ status: 'pending' });
+    expect(waiting.body.find((r) => r.email === ERMS_EMAIL).suggestedUsername).toBe('lperson');
+    expect(waiting.body.every((r) => r.status === 'pending')).toBe(true);
+
+    // Missing the unit for an ERMS account: refused, nothing made.
+    expect((await dev.post(`/api/sign-up/${req._id}/approve`).send({ ...body, ermsUnit: 'payroll' })).status).toBe(400);
+    // A username already in use: refused with a free one to try.
+    const clash = await dev.post(`/api/sign-up/${req._id}/approve`).send({ ...body, username: TAKEN.toUpperCase() });
+    expect(clash.status).toBe(409);
+    expect(await collections.signUp.findOne({ _id: req._id })).toMatchObject({ status: 'pending' });
+
+    const res = await dev.post(`/api/sign-up/${req._id}/approve`).send(body);
+    expect(res.status).toBe(201);
+    // Mail is not configured in the tests, so the Developer is shown the password to pass on.
+    expect(res.body.emailSent).toBe(false);
+    expect(res.body.temporaryPassword).toMatch(/^.{14}$/);
+    expect(res.body.user.password).toBeUndefined();
+
+    const account = await collections.users.findOne({ username: NEW_USER });
+    expect(account).toMatchObject({ permission: 'records', ermsUnit: 'laboratory', nasContainers: ['laboratory'], bataan: 'readWrite', pampanga: 'readWrite', aurora: 'none' });
+    expect(await collections.signUp.findOne({ _id: req._id })).toMatchObject({ status: 'approved', decidedBy: DEV, username: NEW_USER });
+
+    // A second approval of the same request is refused.
+    expect((await dev.post(`/api/sign-up/${req._id}/approve`).send({ ...body, username: `${NEW_USER}2` })).status).toBe(409);
+
+    // The new person signs in with the temporary password and lands in ERMS, their unit.
+    const signin = await request.agent(app).post('/login').send({ username: ERMS_EMAIL, password: res.body.temporaryPassword });
+    expect(signin.status).toBe(200);
+    expect(signin.body).toMatchObject({ role: 'records', ermsUnit: 'laboratory', domains: ['erms'] });
+  });
+
+  it('declines a request with a reason, once', async () => {
+    const req = await collections.signUp.findOne({ email: REQ_EMAIL });
+    const { agent: dev } = await signIn(DEV);
+    const res = await dev.post(`/api/sign-up/${req._id}/reject`).send({ reason: 'Not <b>EMB</b> personnel' });
+    expect(res.status).toBe(200);
+    expect(await collections.signUp.findOne({ _id: req._id })).toMatchObject({ status: 'rejected', reason: 'Not EMB personnel', decidedBy: DEV });
+    expect((await dev.post(`/api/sign-up/${req._id}/reject`).send({})).status).toBe(409);
+    expect((await dev.post(`/api/sign-up/${req._id}/approve`).send({ username: 'x123', permission: 'viewer', assignedYears: [], provinces: ['bataan'] })).status).toBe(409);
+    expect(await collections.users.countDocuments({ email: REQ_EMAIL })).toBe(0);
+  });
+
+  it('asks a UCDS account for its year containers and provinces', async () => {
+    await collections.signUp.deleteMany({ email: UCDS_EMAIL });
+    const { insertedId } = await collections.signUp.insertOne({ name: 'Ucds Person', division: 'PISMU', position: 'Encoder', email: UCDS_EMAIL, system: 'ucds', status: 'pending', requestedAt: new Date() });
+    const { agent: dev } = await signIn(DEV);
+    const years = await dev.get('/api/years');
+    const year = years.body.years[0].year;
+    expect((await dev.post(`/api/sign-up/${insertedId}/approve`).send({ username: UCDS_USER, permission: 'viewer', provinces: ['bataan'] })).status).toBe(400);
+    expect((await dev.post(`/api/sign-up/${insertedId}/approve`).send({ username: UCDS_USER, permission: 'viewer', assignedYears: [year] })).status).toBe(400);
+    const ok = await dev.post(`/api/sign-up/${insertedId}/approve`).send({ username: UCDS_USER, permission: 'viewer', assignedYears: [year], provinces: ['bataan'] });
+    expect(ok.status).toBe(201);
+    expect(await collections.users.findOne({ username: UCDS_USER })).toMatchObject({ permission: 'viewer', assignedYears: [year], bataan: 'readWrite', canManageData: true, nasContainers: [] });
   });
 });
 

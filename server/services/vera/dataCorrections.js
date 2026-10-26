@@ -355,7 +355,12 @@ async function apply(runId, ids, user) {
 
   const left = run.proposals.filter((p) => !p.applied).length;
   await collection().updateOne({ _id: run._id }, { $set: { proposals: run.proposals, status: left ? 'partly-applied' : 'applied' } });
-  if (changed) require('../../shared/services/shortCache').invalidate('erms:records:');
+  if (changed) {
+    // A corrected value can be the one a record was flagged for; recheck
+    // those records (this also clears the dashboard and tells open screens).
+    const touched = wanted.flatMap((p) => hitsOf.get(`${p.field}\u0000${p.from}`) || []);
+    await require('../../modules/erms/services/recordService').recheckDataQuality({ _id: { $in: touched } }, `VERA (approved by ${who})`);
+  }
   return { ok: true, applied: wanted.length, changed };
 }
 
@@ -369,7 +374,7 @@ async function undo(runId, id, user) {
   const res = await records().updateMany(filter, { $set: { [p.field]: p.from, updatedAt: new Date(), updatedBy: `VERA undo (by ${user?.username || 'unknown'})` } });
   Object.assign(p, { applied: false, appliedAt: null, appliedBy: null, changed: 0, appliedIds: null });
   await collection().updateOne({ _id: run._id }, { $set: { proposals: run.proposals, status: run.proposals.some((x) => x.applied) ? 'partly-applied' : 'proposed' } });
-  require('../../shared/services/shortCache').invalidate('erms:records:');
+  require('../../modules/erms/services/recordService').recordsChanged();
   return { ok: true, restored: res.modifiedCount };
 }
 

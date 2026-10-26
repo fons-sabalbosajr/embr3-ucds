@@ -16,6 +16,7 @@ import {
 } from "antd";
 import { useState } from "react";
 import {
+  CheckCircleOutlined,
   EditOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
@@ -27,14 +28,16 @@ import {
   SwapOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PERMIT_TYPE_COLOR,
   PROVINCE_LABEL,
   describeApiError,
   fetchFilterOptions,
   fetchRecord,
+  markRecordReviewed,
 } from "../api/ermsService";
+import { message } from "../../../shared/feedback";
 import TrackingPanel from "../components/TrackingPanel";
 import RecordFormModal from "../components/RecordFormModal";
 import BoxAssignment from "../components/BoxAssignment";
@@ -43,6 +46,7 @@ import DocumentPanel from "../../../shared/components/DocumentPanel";
 import MoveFileModal from "../components/MoveFileModal";
 import PrintLabel from "../components/PrintLabel";
 import ScanTextPanel from "../components/ScanTextPanel";
+import RefNoCheckPanel from "../components/RefNoCheckPanel";
 import { fetchCurrentUser } from "../../../api/universeService";
 import { DetailHeader, Field, Grid } from "../components/DetailParts";
 
@@ -88,6 +92,17 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
     queryKey: ["erms", "record", serialNo],
     queryFn: () => fetchRecord(serialNo),
     retry: false,
+  });
+
+  // Off "Needs review" by hand; the dashboard's count and the lists follow at once.
+  const queryClient = useQueryClient();
+  const review = useMutation({
+    mutationFn: () => markRecordReviewed({ serialNo }),
+    onSuccess: () => {
+      message.success(`${serialNo} is off "Needs review".`);
+      queryClient.invalidateQueries({ queryKey: ["erms"] });
+    },
+    onError: (e) => message.error(describeApiError(e, "The record could not be marked reviewed.")),
   });
 
   const { data: options } = useQuery({
@@ -146,19 +161,24 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
             <Field label="Proponent" value={record.proponentName} span />
             <Field label="Project title" value={record.projectTitle} span />
             <Field label="Permit type" value={permit?.label || permit?.type} />
-            <Field label="Permit / Ref. No." value={permit?.number} mono />
+            <Field label="Permit / Ref. No." value={permit?.number} mono copy />
             <Field label="Process" value={permit?.processSource} />
             <Field label="Serial (FSN)" value={record.serialNo} mono />
             <Field label="Date approved" value={date(permit?.dateApproved)} warning={permit?.dateApprovedRaw} />
             <Field label="Date amended" value={date(permit?.dateAmended)} warning={permit?.dateAmendedRaw} />
             {/* The record's other ECC Ref Nos — an amendment's, a re-issue's — each with its date approved. */}
             {(permit?.refs || []).map((r, i) => (
-              <Field key={`ref${i}`} label={r.label ? `Other Ref. No. (${r.label})` : "Other Ref. No."} value={[r.number, r.dateApproved ? `approved ${date(r.dateApproved)}` : null].filter(Boolean).join(" · ")} mono span />
+              <Field key={`ref${i}`} label={r.label ? `Other Ref. No. (${r.label})` : "Other Ref. No."} value={[r.number, r.dateApproved ? `approved ${date(r.dateApproved)}` : null].filter(Boolean).join(" · ")} mono span copy={r.number || false} />
             ))}
             <Field label="Project type" value={project?.type} span />
             <Field label="Specific project type" value={project?.otherType} span />
             <Field label="Remarks" value={record.remarks} span />
           </Grid>
+          {/* The encoded Ref. No. against the one printed on the scan. An
+              attachment carries its record's number, so it is checked there. */}
+          {!record.isAttachment && (doc?.fileName || doc?.sharePath) && (
+            <RefNoCheckPanel serialNo={record.serialNo} canWrite={canWrite} onOpenRecord={embedded && onOpenRecord ? onOpenRecord : null} />
+          )}
           {record.isAttachment && record.parentSerialNo && (
             <Alert
               type="info"
@@ -347,6 +367,15 @@ const RecordDetail = ({ serialNo: serialProp, embedded = false, onOpenRecord }) 
           type="warning"
           showIcon
           message="This record has a value that could not be interpreted"
+          action={
+            canWrite ? (
+              <Tooltip title="Put the value right with Edit and the flag clears by itself. If what is left is correct as it stands, mark it reviewed.">
+                <Button size="small" icon={<CheckCircleOutlined />} loading={review.isPending} onClick={() => review.mutate()}>
+                  Mark as reviewed
+                </Button>
+              </Tooltip>
+            ) : null
+          }
           description={
             <ul style={{ margin: 0, paddingInlineStart: 18 }}>
               {dataQuality.issues.map((i, idx) => (

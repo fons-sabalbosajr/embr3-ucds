@@ -32,6 +32,8 @@ import { DonutChart, MagnitudeBars, YearColumns } from "../components/charts";
 import ChartCard, { MonthStackCard } from "../components/ChartCard";
 import { AttentionTile, StatTile } from "../components/dashboardTiles";
 import UnitHeader from "../components/UnitHeader";
+import QuickSearch from "../components/QuickSearch";
+import { useRecordsLive } from "../useRecordsLive";
 import { unitTheme } from "../units/unitTheme";
 import { settingsPath } from "../settingsPath";
 import { useTheme } from "../../../theme/ThemeProvider";
@@ -81,6 +83,9 @@ const ErmsDashboard = () => {
   // The Records Unit's own: a Developer, who decides for every unit, sees
   // Legal's and the Laboratory's on their dashboards.
   const inbox = useQuery({ queryKey: ["portal", "desk", "records"], queryFn: () => fetchDesk({ source: "records" }), refetchInterval: 30000, retry: false });
+  // "Needs review" and the other counts follow every record write at once,
+  // whoever made it (see useRecordsLive).
+  useRecordsLive();
 
   if (stats.error) {
     return (
@@ -143,6 +148,7 @@ const ErmsDashboard = () => {
         unit="records"
         actions={
           <>
+            <QuickSearch unit="records" />
             <Link to="/e-universe/erms/records?new=1">
               <Button type="primary" icon={<CloudUploadOutlined />}>Upload record</Button>
             </Link>
