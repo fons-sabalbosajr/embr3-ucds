@@ -196,7 +196,9 @@ async function resolveRecordFile(req, res) {
 
   // Who may open it: the Records Unit. Everyone else is pointed to the
   // Document Portal, and the refusal is in the audit trail like any other.
-  const permission = await accessRequests.viewPermission(principalOf(req), record.serialNo);
+  // From an establishment's record (the UCDS routes set req.viaEstablishment),
+  // the Planning Unit and the PEMUs open it too.
+  const permission = await accessRequests.viewPermission(principalOf(req), record.serialNo, { establishment: req.viaEstablishment === true });
   if (!permission.allowed) {
     await recordFileEvent(req, {
       operation: 'document-read',
@@ -216,8 +218,11 @@ async function resolveRecordFile(req, res) {
   }
 
   // The container must be designated to the account (storage Access tab).
-  const granted = await storageAccess.grantedContainers(principalOf(req));
-  if (!granted.some((c) => c.key === containerKey)) {
+  // Opened from an establishment's record, the records container itself is
+  // the grant: the Planning Unit and the PEMUs hold no storage designation.
+  const viaRecord = permission.reason === 'establishment' && containerKey === String(nas.RECORDS_KEY).toLowerCase();
+  const granted = viaRecord ? [] : await storageAccess.grantedContainers(principalOf(req));
+  if (!viaRecord && !granted.some((c) => c.key === containerKey)) {
     await recordFileEvent(req, {
       operation: 'document-read',
       serialNo: record.serialNo,

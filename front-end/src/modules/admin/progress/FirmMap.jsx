@@ -6,6 +6,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getPublicFirm, getPublicPoints, getVizFirm, getVizPoints } from "./progressService";
 import { KIND_LABEL, n, unitLabel } from "./palette";
+import { BUILD_MAP_KEY, REGION_III, basemapFor } from "../../../shared/mapBasemap";
 
 const { Text } = Typography;
 
@@ -20,29 +21,8 @@ const { Text } = Typography;
 // the firm — fetched then, so the map's own data stays small.
 // ---------------------------------------------------------------------------
 
-const REGION_III = [15.35, 120.75];
-// The basemap. With a MapTiler key — sent by the server from its .env
-// (MAPTILER_KEY), or set in the front end's own .env (VITE_MAPTILER_KEY) —
-// MapTiler's maps, whose dashboard counts the use and limits the key to our
-// website. Without one: CARTO's free OpenStreetMap tiles (no account).
-const BUILD_KEY = import.meta.env.VITE_MAPTILER_KEY;
-const OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-const basemapFor = (key) =>
-  key
-    ? {
-        light: `https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=${encodeURIComponent(key)}`,
-        dark: `https://api.maptiler.com/maps/dataviz-dark/256/{z}/{x}/{y}.png?key=${encodeURIComponent(key)}`,
-        attribution: `<a href="https://www.maptiler.com/copyright/">&copy; MapTiler</a> ${OSM}`,
-        subdomains: "abc",
-        retina: false,
-      }
-    : {
-        light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        attribution: `${OSM} &copy; <a href="https://carto.com/attributions">CARTO</a>`,
-        subdomains: "abcd",
-        retina: true,
-      };
+// The basemap (MapTiler with a key, CARTO without): shared/mapBasemap.
+const BUILD_KEY = BUILD_MAP_KEY;
 const PERMITS = ["ecc", "pto", "wwdp", "haz", "chemical", "tsd", "trc", "pco"];
 
 /** The floating card: the firm behind a dot (on the public link, what and where only). */

@@ -21,6 +21,9 @@ const { Text, Paragraph } = Typography;
 // ---------------------------------------------------------------------------
 
 const errorText = (e, fallback) => e?.response?.data?.message || fallback;
+// The permit findings (services/vera/permitAnalysis on the server).
+const SEVERITY_COLOR = { high: "red", medium: "gold", low: "default" };
+const SEVERITY_LABEL = { high: "Serious", medium: "To watch", low: "Entry" };
 const KEY = ["vera", "ucds-check"];
 
 const VeraUcdsCheck = ({ year }) => {
@@ -143,10 +146,26 @@ const VeraUcdsCheck = ({ year }) => {
   ];
 
   const reviewColumns = [
-    { title: "Serial", dataIndex: "sort_key", width: 200, render: (v) => <Text code>{v}</Text> },
-    { title: "Firm", dataIndex: "title" },
-    { title: "Province", dataIndex: "province", width: 120 },
-    { title: "What VERA saw", dataIndex: "detail", render: (v) => <Text style={{ whiteSpace: "pre-wrap" }}>{v}</Text> },
+    { title: "Serial", dataIndex: "sort_key", width: 130, render: (v) => <Text code>{v}</Text> },
+    { title: "Firm", dataIndex: "title", width: "22%" },
+    { title: "Province", dataIndex: "province", width: 110 },
+    {
+      title: "What VERA saw",
+      dataIndex: "detail",
+      render: (v, x) => (
+        <Space direction="vertical" size={2}>
+          <Space size={4} wrap>
+            {x.severity && <Tag color={SEVERITY_COLOR[x.severity]}>{SEVERITY_LABEL[x.severity]}</Tag>}
+            <Text style={{ whiteSpace: "pre-wrap" }}>{v}</Text>
+          </Space>
+          {x.law && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Law: {x.law}
+            </Text>
+          )}
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -292,9 +311,17 @@ const VeraUcdsCheck = ({ year }) => {
                 <Space direction="vertical" style={{ width: "100%" }}>
                   <Paragraph type="secondary" style={{ margin: 0 }}>
                     {r.hint}
-                    {r.count > r.samples.length ? ` The first ${r.samples.length} of ${r.count} are listed.` : ""}
+                    {r.count > r.samples.length ? ` The ${r.samples.length} most serious of ${r.count} are listed.` : ""}
                   </Paragraph>
-                  <Table size="small" rowKey={(x, i) => `${x.sort_key}-${i}`} columns={reviewColumns} dataSource={r.samples} pagination={{ pageSize: 10 }} scroll={{ x: 760 }} />
+                  {r.law && (
+                    <Text style={{ fontSize: 12 }}>
+                      <Text strong style={{ fontSize: 12 }}>
+                        The law behind these:
+                      </Text>{" "}
+                      {r.law} — the enacted text, in VERA&rsquo;s law library. Open a firm&rsquo;s Clearances and Permits tab to read each section.
+                    </Text>
+                  )}
+                  <Table size="small" rowKey={(x, i) => `${x.sort_key}-${i}`} columns={reviewColumns} dataSource={r.samples} pagination={{ pageSize: 10 }} tableLayout="fixed" />
                 </Space>
               ),
             }))}

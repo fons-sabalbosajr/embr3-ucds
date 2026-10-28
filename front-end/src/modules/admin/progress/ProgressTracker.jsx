@@ -100,7 +100,7 @@ function SeasonModal({ open, season, defaults, onClose }) {
           </Col>
         </Row>
         <Form.Item name="pollSeconds" label="Look at the files every" extra="Seconds between looks (15 or more). Only files saved since are read again.">
-          <InputNumber min={15} max={3600} step={15} addonAfter="seconds" />
+          <InputNumber min={15} max={3600} step={15} suffix="seconds" />
         </Form.Item>
         <Text strong>SharePoint / OneDrive links</Text>
         <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 8 }}>

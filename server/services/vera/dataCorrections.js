@@ -152,7 +152,8 @@ async function spellingByModel(field, canonical, cfg) {
     'Never reword, reorder, expand abbreviations, change capitalisation style, merge different types, or translate. ' +
     'If nothing is misspelled, return []. Output the JSON array and nothing else.';
   const prompt = `LIST:\n${list.map((v) => `- ${v}`).join('\n')}`;
-  const out = await provider.complete(cfg, { system, prompt, maxTokens: 2048 });
+  // A spelling pass, checked afterwards to be small edits: the light model's work.
+  const out = await provider.complete(cfg, { system, prompt, maxTokens: 2048, tier: 'light' });
   const text = String(out?.text || '');
   const json = text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
   let pairs = [];
@@ -226,7 +227,7 @@ async function scan({ cfg, by }) {
           notes.push(`Project type spelling checked by VERA's model (${r.model || 'model'})${r.rejected ? `; ${r.rejected} suggestion(s) refused as more than a spelling fix` : ''}.`);
         } catch (err) {
           spelling = spellingByRule(field, first.canonical);
-          notes.push(`The AI model could not be reached (${err.code || err.message}); near-identical spellings were paired by rule instead.`);
+          notes.push(`The AI model could not be used — ${err.message} Near-identical spellings were paired by rule instead.`);
         }
       } else {
         spelling = spellingByRule(field, first.canonical);

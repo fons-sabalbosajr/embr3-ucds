@@ -10,6 +10,12 @@ export const addRows = async (id, rows) => (await client.post(`/${id}/rows`, { r
 export const updateRow = async (id, rowId, values) => (await client.patch(`/${id}/rows/${rowId}`, { values })).data.row;
 export const deleteRows = async (id, ids) => (await client.post(`/${id}/rows/delete`, { ids })).data;
 
+// VERA builds the table from the register (server services/vera/tableBuilder.js).
+export const getBuilderCatalog = async (id) => (await client.get(`/${id}/vera/catalog`)).data;
+export const draftWithVera = async (id, request) => (await client.post(`/${id}/vera/draft`, { request }, { timeout: 3 * 60 * 1000 })).data;
+export const previewBuild = async (id, spec) => (await client.post(`/${id}/vera/preview`, { spec }, { timeout: 3 * 60 * 1000 })).data;
+export const buildTable = async (id, { spec, refresh }) => (await client.post(`/${id}/vera/build`, refresh ? { refresh: true } : { spec }, { timeout: 5 * 60 * 1000 })).data;
+
 /** The table as shown, as an Excel file the browser saves. */
 export const exportTable = async (id, { headers, rows, totals }) => {
   const res = await client.post(`/${id}/export.xlsx`, { headers, rows, totals }, { responseType: "blob", timeout: 5 * 60 * 1000 });

@@ -34,6 +34,168 @@
   --v-font: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* The tables on the VERA Assistant tabs fit the card: no sideways scroll.
+   Columns share the width (tableLayout="fixed" on each table) and long
+   text — names, titles, serials, permit numbers — wraps inside its cell. */
+.vera-settings .ant-table-wrapper .ant-table-thead > tr > th,
+.vera-settings .ant-table-wrapper .ant-table-tbody > tr > td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.vera-settings .ant-table-wrapper .ant-table-tbody > tr > td .ant-typography,
+.vera-settings .ant-table-wrapper .ant-table-tbody > tr > td .ant-tag {
+  white-space: normal;
+  max-width: 100%;
+}
+
+/* The Models tab's summary tiles (VeraModels StatTile): one size for all —
+   the same height whatever the value, a line of note under every one — an
+   icon in a tinted disc that moves gently, and the value in tabular figures. */
+.vera-models .vm-tiles > .ant-col {
+  display: flex;
+}
+.vera-models .vm-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.vera-models .vm-tile .ant-card-body {
+  padding: 12px 14px !important;
+  height: 100%;
+}
+.vera-models .vm-tile__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+}
+.vera-models .vm-tile__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  font-size: 20px;
+  color: var(--vm-tone);
+  background: color-mix(in srgb, var(--vm-tone) 14%, transparent);
+}
+.vera-models .vm-tile__text {
+  min-width: 0;
+  flex: 1;
+}
+.vera-models .vm-tile__title {
+  font-size: 12px;
+  color: var(--v-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vera-models .vm-tile__value {
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--v-ink);
+}
+.vera-models .vm-tile__suffix {
+  font-size: 14px;
+  margin-left: 2px;
+  color: var(--v-muted);
+}
+.vera-models .vm-tile__note {
+  font-size: 11.5px;
+  color: var(--v-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vera-models .vm-tone-blue { --vm-tone: #2a78d6; }
+.vera-models .vm-tone-green { --vm-tone: #1baf7a; }
+.vera-models .vm-tone-gold { --vm-tone: #c98500; }
+.vera-models .vm-tone-cyan { --vm-tone: #13a8a8; }
+.vera-models .vm-tone-purple { --vm-tone: #7a5af0; }
+.vera-models .vm-tone-orange { --vm-tone: #eb6834; }
+
+@keyframes vm-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--vm-tone) 35%, transparent); }
+  50% { transform: scale(1.06); box-shadow: 0 0 0 7px color-mix(in srgb, var(--vm-tone) 0%, transparent); }
+}
+@keyframes vm-beat {
+  0%, 60%, 100% { transform: scale(1); }
+  20% { transform: scale(1.14); }
+  40% { transform: scale(0.96); }
+}
+@keyframes vm-flicker {
+  0%, 100% { opacity: 1; transform: translateY(0); }
+  45% { opacity: 0.55; transform: translateY(-1px); }
+  55% { opacity: 1; }
+}
+@keyframes vm-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes vm-turn {
+  0%, 40% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(180deg); }
+}
+.vera-models .vm-anim-pulse { animation: vm-pulse 2.6s ease-in-out infinite; }
+.vera-models .vm-anim-beat { animation: vm-beat 2.4s ease-in-out infinite; }
+.vera-models .vm-anim-flicker { animation: vm-flicker 1.9s ease-in-out infinite; }
+.vera-models .vm-anim-bob { animation: vm-bob 2.2s ease-in-out infinite; }
+.vera-models .vm-anim-turn { animation: vm-turn 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .vera-models [class*="vm-anim-"] { animation: none; }
+}
+
+/* An allowance bar in the table: its name and what is left over a thin bar. */
+.vera-settings .vera-models-table .vm-allow__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--v-muted);
+  line-height: 1.3;
+}
+.vera-settings .vera-models-table .vm-allow .ant-progress {
+  margin: 0;
+  line-height: 1;
+}
+.vera-settings .vm-details .ant-descriptions-item-label {
+  white-space: nowrap;
+}
+
+/* The Models tab's table (VeraModels): wrapped at words, never inside a
+   model name ("gemini-3.1-flash-lite") or a number; cells top-aligned so
+   the two-line cells read across; the quota bar fills its cell. */
+.vera-settings .vera-models-table .ant-table-thead > tr > th,
+.vera-settings .vera-models-table .ant-table-tbody > tr > td {
+  overflow-wrap: break-word;
+  word-break: normal;
+  vertical-align: top;
+}
+.vera-settings .vera-models-table .ant-table-thead > tr > th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vera-settings .vera-models-table .ant-space-vertical {
+  width: 100%;
+  min-width: 0;
+}
+.vera-settings .vera-models-table .ant-progress {
+  margin: 0;
+  width: 100%;
+}
+.vera-settings .vera-models-table .ant-progress-line .ant-progress-text {
+  white-space: nowrap;
+}
+
 .vera-root[data-theme="dark"],
 .vera-settings[data-theme="dark"] {
   --v-bg: color-mix(in srgb, var(--v-app-accent) 10%, #0f1115);
@@ -257,7 +419,26 @@
     bottom: 88px;
   }
 }
+/* An answer typing itself out (VeraChat TypedAnswer): a caret after its last line. */
+.vera-typing {
+  cursor: pointer;
+}
+.vera-typing .vera-answer > p:last-child::after,
+.vera-typing .vera-answer > ol:last-child > li:last-child::after,
+.vera-typing .vera-answer > ul:last-child > li:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--v-accent);
+  animation: vera-caret 0.9s steps(1) infinite;
+}
 @media (prefers-reduced-motion: reduce) {
+  .vera-typing .vera-answer > p:last-child::after,
+  .vera-typing .vera-answer > ol:last-child > li:last-child::after,
+  .vera-typing .vera-answer > ul:last-child > li:last-child::after,
   .vera-intro,
   .vera-intro__caret,
   .vera-intro__mark,

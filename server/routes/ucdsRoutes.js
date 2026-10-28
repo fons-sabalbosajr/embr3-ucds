@@ -87,6 +87,13 @@ router.get('/api/ucds/dashboard-stats', heavy, dashboardStats);
   const { provinceScoped } = require('../services/provinces');
   const { registerOf } = require('../services/yearScope');
   const scoped = (req) => provinceScoped(registerOf(req), req);
+  // Which register and which provinces: the reports are shared between
+  // requests with the same scope, never across scopes.
+  const scopeKey = (req) => {
+    const list = req.provinceFilter?.province?.$in;
+    const provinces = !req.provinceFilter ? 'all' : Array.isArray(list) ? list.map(String).sort().join('|') : JSON.stringify(req.provinceFilter);
+    return `${req.yearContainer?.register || 'shared'}:${provinces}`;
+  };
   router.post('/api/ucds/erms-anchor', ucdsAccess, async (req, res, next) => {
     try {
       const keys = (Array.isArray(req.body?.sortKeys) ? req.body.sortKeys : []).map(String).slice(0, 8000);
@@ -131,14 +138,14 @@ router.get('/api/ucds/dashboard-stats', heavy, dashboardStats);
   });
   router.get('/api/ucds/reports/not-in-erms', heavy, async (req, res, next) => {
     try {
-      res.json({ rows: await reports.notInErms(scoped(req), { province: req.query.province ? String(req.query.province).slice(0, 40) : null }) });
+      res.json({ rows: await reports.notInErms(scoped(req), { province: req.query.province ? String(req.query.province).slice(0, 40) : null, cacheKey: scopeKey(req) }) });
     } catch (e) {
       next(e);
     }
   });
   router.get('/api/ucds/reports/accomplishment', heavy, async (req, res, next) => {
     try {
-      res.json({ provinces: await reports.accomplishment(scoped(req)) });
+      res.json({ provinces: await reports.accomplishment(scoped(req), { cacheKey: scopeKey(req) }) });
     } catch (e) {
       next(e);
     }

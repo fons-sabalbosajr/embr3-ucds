@@ -25,6 +25,7 @@ router.get('/api/vera/config', admin, ctrl.getConfig);
 router.put('/api/vera/config', admin, ctrl.updateConfig);
 router.post('/api/vera/test', admin, ctrl.testConnection);
 router.get('/api/vera/usage', admin, ctrl.getUsage);
+router.get('/api/vera/models', admin, ctrl.getModels);
 router.get('/api/vera/logs', admin, ctrl.getLogs);
 
 // ── Data corrections: the Developer's ────────────────────────────────────────
@@ -83,5 +84,12 @@ router.post('/api/vera/ucds-check/scan', ucdsMaintainer, ctrl.ucdsCheckScan);
 router.post('/api/vera/ucds-check/auto-fix', ucdsMaintainer, ctrl.ucdsCheckAutoFix);
 router.post('/api/vera/ucds-check/:id/apply', ucdsMaintainer, ctrl.ucdsCheckApply);
 router.post('/api/vera/ucds-check/:id/undo', ucdsMaintainer, ctrl.ucdsCheckUndo);
+// For the bell: what VERA repaired this week, what waits, and her permit findings.
+router.get('/api/vera/repairs', ucdsMaintainer, ctrl.repairsSummary);
+
+// One record's clearances and permits against the laws, for its Clearances and
+// Permits tab: computed from the record the viewer already holds, so anyone
+// on the register may ask.
+router.post('/api/vera/permit-analysis', [authenticateSession, requireDomain(DOMAINS.UCDS)], ctrl.analyzePermits);
 
 module.exports = router;

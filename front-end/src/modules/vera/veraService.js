@@ -5,8 +5,10 @@ import { API_BASE } from "../../config/api";
 // VERA API client.
 //
 // The browser never talks to a model vendor — every call goes to this server,
-// which holds the key in its environment. Nothing here sends a record: only
+// which holds the key in its environment. The chat never sends a record: only
 // the typed question, the recent conversation, and the NAME of the screen.
+// The permit analysis sends one record's permit fields to this server, which
+// works the findings out by rule — no model sees them.
 // ---------------------------------------------------------------------------
 
 const client = axios.create({ baseURL: `${API_BASE}/vera`, withCredentials: true });
@@ -33,6 +35,8 @@ export const updateVeraConfig = async (config) => (await client.put("/config", c
 /** A low-token round trip proving the server's key and model work. */
 export const testVeraConnection = async () => (await client.post("/test")).data;
 export const getVeraUsage = async () => (await client.get("/usage")).data;
+/** Each model VERA may use: status, rest, today's and 14 days' use (the Models tab). */
+export const getVeraModels = async () => (await client.get("/models")).data.data;
 /** Metadata only — no question or answer is ever stored, so none can be listed. */
 export const getVeraLogs = async (params) => (await client.get("/logs", { params })).data;
 
@@ -145,3 +149,9 @@ export const applyUcdsFixes = async ({ reportId, ids, all }) =>
   (await client.post(`/ucds-check/${reportId}/apply`, all ? { all: true } : { ids }, { timeout: 5 * 60 * 1000 })).data;
 export const undoUcdsFix = async ({ reportId, proposalId }) => (await client.post(`/ucds-check/${reportId}/undo`, { proposalId })).data;
 export const autoFixUcds = async () => (await client.post("/ucds-check/auto-fix", null, { timeout: 5 * 60 * 1000 })).data;
+
+/** For the bell: what VERA repaired in the active year's register this week, what waits, her permit findings. */
+export const getVeraRepairs = async () => (await client.get("/repairs")).data;
+
+/** One register record's clearances and permits against the laws (its Clearances and Permits tab). */
+export const analyzePermits = async (record) => (await client.post("/permit-analysis", { record })).data;

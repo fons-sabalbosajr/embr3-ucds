@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { Form, Input, Button } from "antd";
+import { Form, Input, Button, Checkbox } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginUser } from "./api/authService";
 import { ROUTES } from "./config/routes";
 import { API_BASE_URL } from "./config/api";
 import AuthShell, { AuthError } from "./components/AuthShell";
-import { setSessionToken } from "./shared/sessionToken";
+import { setSessionToken, getRememberedUsername, setRememberedUsername } from "./shared/sessionToken";
 import { refreshPushRegistration } from "./shared/notifications/devicePush";
 import { useYear } from "./context/YearContext";
 
@@ -23,16 +23,24 @@ const Login = () => {
   // concerns opened after signing in. Only an application path is followed.
   const presetUsername = location.state?.username || query.get("user") || "";
   const next = /^\/e-universe(\/|$)/.test(query.get("next") || "") && !/\/\//.test(query.get("next")) ? query.get("next") : null;
+  // The account last signed in here with "Remember me", filled in for the next time.
+  const rememberedUsername = getRememberedUsername();
+  const initialUsername = presetUsername || rememberedUsername;
 
-  const handleSubmit = async ({ username, password }) => {
+  const handleSubmit = async ({ username, password, remember }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const responseData = await loginUser(username.trim(), password);
+      const responseData = await loginUser(username.trim(), password, remember === true);
       if (responseData.status === "success") {
         // This tab is now this account, whatever the browser's other tabs do
         // (see shared/sessionToken). Set before the check below so it is sent.
-        setSessionToken(responseData.sessionToken || null);
+        // Remembered, new tabs and a reopened browser start as it too.
+        setSessionToken(responseData.sessionToken || null, {
+          remember: remember === true,
+          until: responseData.sessionExpiresAt,
+        });
+        setRememberedUsername(remember === true ? username.trim() : "");
         // A device that takes notices now takes this account's.
         refreshPushRegistration();
         const check = await fetch(`${API_BASE_URL}/auth-check`, { credentials: "include" }).catch(() => null);
@@ -57,8 +65,10 @@ const Login = () => {
         setError("Sign-in failed. Check your username and password.");
       }
     } catch (err) {
-      console.error("Error during login:", err);
-      // authService throws the response body, which carries `error`.
+      // authService throws the response body, which carries `error`. A
+      // refused password is an answer, shown on the form; only a failure to
+      // reach the server or an unexpected one is worth the console.
+      if (!err?.error) console.error("Error during login:", err);
       setError(err?.error || err?.message || "Invalid username or password. Please try again.");
     } finally {
       setIsLoading(false);
@@ -81,7 +91,7 @@ const Login = () => {
         layout="vertical"
         onFinish={handleSubmit}
         requiredMark={false}
-        initialValues={{ username: presetUsername }}
+        initialValues={{ username: initialUsername, remember: Boolean(rememberedUsername) }}
       >
         <Form.Item
           name="username"
@@ -93,7 +103,7 @@ const Login = () => {
             prefix={<UserOutlined />}
             placeholder="Username or email address"
             autoComplete="username"
-            autoFocus={!presetUsername}
+            autoFocus={!initialUsername}
           />
         </Form.Item>
 
@@ -107,8 +117,16 @@ const Login = () => {
             prefix={<LockOutlined />}
             placeholder="Password"
             autoComplete="current-password"
-            autoFocus={Boolean(presetUsername)}
+            autoFocus={Boolean(initialUsername)}
           />
+        </Form.Item>
+
+        <Form.Item
+          name="remember"
+          valuePropName="checked"
+          // extra="Stay signed in on this browser for 14 days. Leave unticked on a shared computer."
+        >
+          <Checkbox>Remember me</Checkbox>
         </Form.Item>
 
         <Form.Item>

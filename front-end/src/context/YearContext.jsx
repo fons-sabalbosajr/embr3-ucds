@@ -5,6 +5,7 @@ import {
   selectYearContainer,
   clearYearContainer,
 } from "../api/yearService";
+import { clearSessionToken } from "../shared/sessionToken";
 
 // The active year lives in the server session. This context mirrors it for the
 // UI only — it is never the source of truth, and it is never sent as a query
@@ -69,7 +70,10 @@ export const YearProvider = ({ children }) => {
       return data;
     } catch (e) {
       if (e?.response?.status === 401) {
-        // Not signed in — ProtectedRoute handles the redirect.
+        // Not signed in — ProtectedRoute handles the redirect. A token this
+        // tab still holds (a remembered one included) names a session that
+        // has ended, so it is dropped rather than tried again in every tab.
+        clearSessionToken();
         setYears([]);
         setActiveYear(null);
       } else {

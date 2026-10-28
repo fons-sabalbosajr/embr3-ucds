@@ -143,7 +143,8 @@
 }
 
 /* The record window's layout (ProvinceModal.jsx): the tab bar at the top and
-   the actions at the foot stay put; only the tab's content scrolls between. */
+   the actions at the foot stay put; the tab's content is fitted to the space
+   between them (tabpanes/FitToHeight), which scrolls only as a last resort. */
 .ucds-record {
   display: flex;
   flex-direction: column;
@@ -157,9 +158,12 @@
 }
 .ucds-record > .ucds-record-tabs > .ant-tabs-content-holder {
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-x: hidden;
   scrollbar-width: thin;
+}
+.ucds-record .ucds-fit {
+  transform-origin: top left;
 }
 .ucds-record > .ucds-record-tabs > .ant-tabs-content-holder > .ant-tabs-content,
 .ucds-record > .ucds-record-tabs > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {

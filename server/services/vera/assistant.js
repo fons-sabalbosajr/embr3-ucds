@@ -22,10 +22,17 @@
 
 const K = require('./knowledge');
 const provider = require('./provider');
+const cache = require('./semanticCache');
+const guardrails = require('./guardrails');
+const laws = require('./lawRetrieval');
+const permitAnalysis = require('./permitAnalysis');
 
 const MAX_INPUT_CHARS = 1000;
 const MAX_OUTPUT_CHARS = 4000;
-const MAX_HISTORY_TURNS = Number(process.env.VERA_MAX_HISTORY) || 8;
+// The earlier turns only resolve "it" and "that": the last six, and VERA's own
+// long answers cut short — they were most of what a follow-up cost.
+const MAX_HISTORY_TURNS = Number(process.env.VERA_MAX_HISTORY) || 6;
+const HISTORY_CHARS = { user: 400, assistant: 400 };
 
 // ── Sanitization ─────────────────────────────────────────────────────────────
 
@@ -51,7 +58,10 @@ function sanitizeHistory(history) {
   return history
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .slice(-MAX_HISTORY_TURNS)
-    .map((m) => ({ role: m.role, content: sanitizeInput(m.content).slice(0, 600) }));
+    .map((m) => {
+      const s = sanitizeInput(m.content);
+      return { role: m.role, content: s.length > HISTORY_CHARS[m.role] ? `${s.slice(0, HISTORY_CHARS[m.role])}…` : s };
+    });
 }
 
 // ── Who is asking ────────────────────────────────────────────────────────────
@@ -390,7 +400,7 @@ function pageLabel(page, labels) {
   return labels[key] || '';
 }
 
-function buildSystemPrompt({ page, hits, ctx, figures }) {
+function buildSystemPrompt({ page, hits, ctx, figures, law = [] }) {
   const label = pageLabel(page, ctx.pageLabels);
   const kbText = hits.map(({ entry }) => `- [${entry.category}] ${entry.question}\n  ${entry.answer}`).join('\n');
 
@@ -509,6 +519,18 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
         'If nothing was found, say so plainly and suggest a shorter name, the serial or the reference number. Never invent a record that is not listed, ' +
         'and never describe what a document says beyond the lines given. If the search is unrelated to the question (a "where is the button" question), ignore it.'
       : '- You CANNOT see any record, establishment, permit or document. Never state or imply what one contains; explain what things mean and where to look.',
+    figures?.permits
+      ? '- PERMIT FILE: the LIVE FIGURES include the PERMIT FILE of the establishment(s) asked about, and FINDINGS worked out by rule from the register. ' +
+        'Lead with the verdict (how many serious findings), then each finding as given, most serious first: the permit, its number and dates, the NOV recommendation, ' +
+        'and the law it rests on, cited from the LAW TEXT (R.A. No. 9275, Sec. 14). Never add a finding, a permit, a date or a requirement that is not listed. ' +
+        'A transition period in the LAW TEXT ("within twelve months after the effectivity of the implementing rules") ran out long ago: never present it as a deadline now. ' +
+        'Copy every permit number and date EXACTLY as the PERMIT FILE writes it; never work out an expiry, a validity period or a deadline yourself, and do not ' +
+        're-list the permits in a table — the record already shows them; name only those with findings, plus one line for those in order. ' +
+        'Where a finding\'s note says the permit comes from implementing rules (a DAO) not in the LAW TEXT, say so rather than quoting them. A finding marked as a ' +
+        'register entry to correct is a data slip, not a violation — say which. Close with what to do next (the firm renews or applies; the register is corrected in ' +
+        'the province\'s Monitoring Plan: open the establishment, its Clearances and Permits tab, then Edit; a violation goes to the Legal Services Unit) and say the ' +
+        'analysis is from the register as of the time given: the firm\'s own documents and the last inspection settle it.'
+      : '',
     figures
       ? '- FIGURES: the LIVE FIGURES below are counts this user is entitled to see, computed just now. Quote them exactly, add or compare them when asked ' +
         '(totals, shares, which is largest), and say they are "as of" the time given. Never estimate, round away or invent a number that is not there; ' +
@@ -529,9 +551,12 @@ function buildSystemPrompt({ page, hits, ctx, figures }) {
     label ? `\nThe user is on the "${label}" screen — tailor the guidance to it when relevant.` : '',
     '',
     figures ? `\nLIVE FIGURES (as of ${figures.asOf}):\n${figures.text}` : '',
+    law.length ? `\n${laws.RULES}` : '',
     '',
     'KNOWLEDGE:',
-    kbText || `(no article matched — rely on the scope rules and direct the user to the right screen or to ${ctx.support})`,
+    kbText || (law.length ? '(no help article matched — the question is answered from the LAW TEXT below)' : `(no article matched — rely on the scope rules and direct the user to the right screen or to ${ctx.support})`),
+    // The enacted text of the laws that bear on the question (lawRetrieval).
+    law.length ? `\nLAW TEXT (the enacted text, verbatim):\n${laws.promptBlock(law)}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -572,8 +597,18 @@ function fallbackAnswer(message, hits, ctx, figures) {
   return ctx.cannotVerify;
 }
 
+// Staff paste a password too ("my password is …, why won't it work"). Narrower
+// than the public check: "the PSIC code is 2511" is ordinary register talk.
+const STAFF_CREDENTIAL_PASTE_RE = /\b(?:my\s+)?(?:password|passwd|otp)\s*(?:is|=|:)\s*\S{4,}/i;
+const STAFF_CREDENTIAL_REPLY =
+  "Please don't type a password here — I never need one, and this message was stopped before it reached the AI model. " +
+  'If that was your real password, change it soon. For a sign-in problem, tell me what the screen says instead.';
+
 /** The deterministic guards, in order. Returns a reply, or null to carry on. */
 function guardReply(msg, ctx) {
+  // Before anything else, for every role: a request to drop the rules.
+  if (guardrails.looksLikeInjection(msg)) return guardrails.INJECTION_REPLY;
+  if (ctx.realm !== 'public' && STAFF_CREDENTIAL_PASTE_RE.test(msg)) return STAFF_CREDENTIAL_REPLY;
   if (ctx.realm === 'public') {
     if (looksLikePastedCredential(msg)) return K.PUBLIC_CREDENTIAL_REPLY;
     // The Document Portal answers its own totals — what can be requested there
@@ -589,7 +624,7 @@ function guardReply(msg, ctx) {
 
 /**
  * Answer one message.
- * @returns {Promise<{answer, source: "model"|"fallback"|"guard", usedModel, hitIds, inputTokens?, outputTokens?, model?, provider?}>}
+ * @returns {Promise<{answer, source: "model"|"cache"|"fallback"|"guard", usedModel, hitIds, inputTokens?, outputTokens?, model?, provider?, tier?, guardrail?}>}
  */
 async function answer({ message, history = [], page = '', config = {}, viewer = {}, figures = null, signal } = {}) {
   const ctx = contextFor(viewer, page, config);
@@ -600,8 +635,16 @@ async function answer({ message, history = [], page = '', config = {}, viewer = 
   if (!msg) return guard(ctx.greeting);
   const refused = guardReply(msg, ctx);
   if (refused) return guard(refused);
+  // A count of the register, worked out and written by rule (tableBuilder
+  // countFor): exact, and no model call — no tokens spent on a number.
+  if (ctx.realm !== 'public' && figures?.registerAnswer) return { answer: sanitizeOutput(figures.registerAnswer), source: 'register', usedModel: false, hitIds: [] };
 
   const hits = retrieve(msg, ctx.kb);
+  // The enacted text of the environmental laws that bear on a legal question
+  // (lawRetrieval) — for signed-in staff; the public pages keep their own scope.
+  // A firm's permit file (services/vera/lookup) brings the sections its
+  // findings rest on, first.
+  const law = ctx.realm === 'public' ? [] : laws.merge(laws.sections(figures?.lawRefs || []), laws.find(msg).chunks);
 
   // A short follow-up inside a conversation ("and for Legal?", "why?") carries
   // no scope words of its own. Allowed when a recent user turn was in scope;
@@ -618,37 +661,117 @@ async function answer({ message, history = [], page = '', config = {}, viewer = 
   // A count of the person's own records is in scope by definition. A public
   // visitor gets figures only on the Document Portal: its search and totals.
   const counted = ctx.realm === 'public' && !ctx.portal ? null : figures;
-  if (!counted && !looksInScope(msg, hits, ctx.scopeTerms) && !GREETING_RE.test(msg) && !isFollowUp()) return guard(ctx.outOfScope);
+  // A question the law library answers is in scope: EMB enforces these laws.
+  if (!counted && !law.length && !looksInScope(msg, hits, ctx.scopeTerms) && !GREETING_RE.test(msg) && !isFollowUp()) return guard(ctx.outOfScope);
 
-  const hitIds = hits.map((h) => h.entry.id);
-  if (!provider.isOperational(config)) {
-    return { answer: sanitizeOutput(fallbackAnswer(msg, hits, ctx, counted)), source: 'fallback', usedModel: false, hitIds };
+  // The sections given count as hits: two questions given different sections
+  // get different answers, in the cache as anywhere.
+  const hitIds = [...hits.map((h) => h.entry.id), ...law.map((c) => c.id)];
+  // Without a model, a legal question gets the law itself, verbatim and cited.
+  const library = (extra = {}) => ({
+    answer: sanitizeOutput((!counted && laws.libraryAnswer(law)) || fallbackAnswer(msg, hits, ctx, counted)),
+    source: 'fallback',
+    usedModel: false,
+    hitIds,
+    ...extra,
+  });
+  // RBAC: an administrator may keep a role on the help library (veraPolicy).
+  if (!provider.isOperational(config) || viewer.access?.model === false) return library();
+
+  // The semantic cache: the same question, asked before by someone who may
+  // see the same things, is answered from memory (services/vera/semanticCache).
+  const q = cacheQuery(msg, hist, law.length ? [...hits, ...law] : hits, hitIds, counted, ctx, page, config);
+  if (q?.read) {
+    const found = cache.lookup(q);
+    if (found) return { answer: found.answer, source: 'cache', usedModel: false, cached: true, hitIds };
   }
 
+  // The router: a short help question goes to the light model first, which
+  // costs a fraction and has its own quota; a legal question to the most
+  // accurate model there is; figures and long or technical questions to the
+  // configured one (services/vera/provider routeFor).
+  const tier = law.length ? 'accurate' : lightEnough(msg, hist, hits, counted, ctx) ? 'light' : 'main';
   const resp = await provider.complete(config, {
-    system: buildSystemPrompt({ page, hits, ctx, figures: counted }),
-    prompt: buildUserPrompt({ message: msg, history: hist }),
+    system: buildSystemPrompt({ page, hits, ctx, figures: counted, law }),
+    prompt: buildUserPrompt({ message: msg, history: tier === 'light' ? hist.slice(-4) : hist }),
     signal,
+    tier,
+    // A cited legal answer runs longer than a help answer.
+    ...(law.length ? { maxTokens: Math.max(provider.resolveMaxTokens(config), 1500) } : {}),
+    // Counted as chat on the Models tab (services/vera/modelUsage).
+    feature: viewer.realm === 'public' ? 'public-chat' : 'chat',
   });
-  const text = sanitizeOutput(resp.text);
-  if (!text) return { answer: sanitizeOutput(fallbackAnswer(msg, hits, ctx, counted)), source: 'fallback', usedModel: false, hitIds };
+  const screened = guardrails.screenOutput(sanitizeOutput(resp.text), ctx);
+  const usage = { inputTokens: resp.inputTokens || 0, outputTokens: resp.outputTokens || 0, model: resp.model, provider: resp.provider, tier };
+  // An answer reciting VERA's instructions is withheld whole.
+  if (screened.leaked) return library({ ...usage, guardrail: 'prompt-leak' });
+  let text = screened.text.trim();
+  if (!text) return library(usage);
+  // A legal answer is checked against the sections it was given: a section
+  // or an amount not in them is named in a caution, and the sources follow.
+  let lawCheck = null;
+  if (law.length) {
+    lawCheck = laws.verify(text, law);
+    // A firm's permit file: its dates and numbers, not the model's own.
+    if (counted?.permits) lawCheck.facts = permitAnalysis.verifyFacts(text, `${counted.text}\n${counted.asOf || ''}`);
+    // The footer (written here, not by the model) always shows whole: the
+    // answer is what gets cut to the limit, never the caution or the sources.
+    text = text.slice(0, MAX_OUTPUT_CHARS) + laws.footer(law, lawCheck);
+  }
+  if (q?.write && !screened.redactions && !lawCheck?.unverified.length) cache.remember(q, text);
   return {
     answer: text,
     source: 'model',
     usedModel: true,
     hitIds,
-    inputTokens: resp.inputTokens || 0,
-    outputTokens: resp.outputTokens || 0,
-    model: resp.model,
-    provider: resp.provider,
+    ...usage,
+    ...(law.length ? { lawSections: law.map((c) => c.id), unverified: [...lawCheck.unverified, ...(lawCheck.facts || [])] } : {}),
+    ...(screened.redactions
+      ? { guardrail: 'redacted', redactions: screened.redactions }
+      : lawCheck?.unverified.length
+        ? { guardrail: 'law-unverified' }
+        : lawCheck?.facts?.length
+          ? { guardrail: 'facts-unverified' }
+          : {}),
   };
+}
+
+// A follow-up that leans on the turns before it ("how do I upload it?").
+const LEANS_ON_HISTORY_RE = /\b(it|its|that|this|those|these|they|them|there|he|she|same|above|again|also|instead|more)\b/i;
+
+/**
+ * Whether this question may be answered from the cache, and stored in it.
+ * Never with figures or a record search (live, per person), never without a
+ * help article behind it, and only stored when asked with no conversation.
+ */
+function cacheQuery(msg, hist, hits, hitIds, counted, ctx, page, config) {
+  if (!cache.enabled(config) || counted || !hits.length) return null;
+  const standalone = hist.length === 0;
+  const selfContained = standalone || (msg.length >= 25 && !LEANS_ON_HISTORY_RE.test(msg));
+  if (!selfContained) return null;
+  return {
+    partition: cache.partitionOf(ctx, page, config),
+    stems: expandQuery(msg).stems,
+    negated: cache.NEGATION_RE.test(msg),
+    hitIds,
+    read: true,
+    write: standalone,
+  };
+}
+
+/** A short help question with an article behind it: the light model's. */
+function lightEnough(msg, hist, hits, counted, ctx) {
+  return !counted && ctx.role !== 'developer' && hits.length > 0 && msg.length <= 220 && hist.length <= 4;
 }
 
 /** The help-library answer for the error path. Re-applies every guard: a provider failure is not a way past them. */
 function fallbackFor(message, viewer = {}, page = '', config = {}, figures = null) {
   const ctx = contextFor(viewer, page, config);
   const msg = sanitizeInput(message);
-  return sanitizeOutput(guardReply(msg, ctx) || fallbackAnswer(msg, retrieve(msg, ctx.kb), ctx, ctx.realm === 'public' && !ctx.portal ? null : figures));
+  const counted = ctx.realm === 'public' && !ctx.portal ? null : figures;
+  // A legal question still gets the law, verbatim and cited, when no model answers.
+  const lawAnswer = ctx.realm === 'public' || counted ? null : laws.libraryAnswer(laws.find(msg).chunks);
+  return sanitizeOutput(guardReply(msg, ctx) || lawAnswer || fallbackAnswer(msg, retrieve(msg, ctx.kb), ctx, counted));
 }
 
 module.exports = {

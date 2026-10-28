@@ -272,7 +272,7 @@ export default function VeraLogs() {
         columns={columns}
         dataSource={rows}
         loading={loading}
-        scroll={{ x: 1100 }}
+        tableLayout="fixed"
         pagination={{
           current: pagination.page,
           pageSize: pagination.pageSize,

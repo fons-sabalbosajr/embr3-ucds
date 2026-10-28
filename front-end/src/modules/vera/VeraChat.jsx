@@ -80,6 +80,50 @@ function AnswerText({ children }) {
   );
 }
 
+const prefersReducedMotion = () => {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * A new answer types itself out — about two seconds whatever its length —
+ * with a caret, then stays put. A click shows it whole at once; with reduced
+ * motion it is whole from the start. Never cut inside **bold** or `code`, so
+ * no stray asterisks flash by.
+ */
+function TypedAnswer({ text, onTick, onDone }) {
+  const full = String(text || "");
+  const [n, setN] = useState(() => (prefersReducedMotion() ? full.length : 0));
+  const done = n >= full.length;
+  useEffect(() => {
+    if (done) {
+      onDone?.();
+      return undefined;
+    }
+    const step = Math.max(2, Math.ceil(full.length / 120));
+    const id = setInterval(() => {
+      setN((x) => Math.min(full.length, x + step));
+      onTick?.();
+    }, 16);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done, full]);
+  let shown = full.slice(0, n);
+  if (!done) {
+    if ((shown.match(/\*\*/g) || []).length % 2) shown = shown.slice(0, shown.lastIndexOf("**"));
+    if ((shown.match(/`/g) || []).length % 2) shown = shown.slice(0, shown.lastIndexOf("`"));
+  }
+  return (
+    <div onClick={() => setN(full.length)} className={done ? undefined : "vera-typing"} title={done ? undefined : "Click to show it all"}>
+      {/* The caret is drawn after the last line (vera.css .vera-typing). */}
+      <AnswerText>{shown}</AnswerText>
+    </div>
+  );
+}
+
 export default function VeraChat({ variant = "staff", holdIntro = false }) {
   const isPublic = variant === "public";
   const fetchStatus = isPublic ? getVeraPublicStatus : getVeraStatus;
@@ -196,9 +240,12 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
   // (thinking → checking the library → preparing the steps), listening while
   // a question is being typed, burning at rest. The dot-by-dot hand-off from
   // the orb back to the flame is what an arriving answer looks like.
+  const answering = messages.some((m) => m.typing);
   const flameState = sending
     ? ["thinking", "searching", "working"][thinkStage % 3]
-    : typing && draft.trim()
+    : answering
+      ? "working"
+      : typing && draft.trim()
       ? "listening"
       : "burning";
 
@@ -237,7 +284,7 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
         ...prev,
         res?.success === false
           ? { id: ++msgSeq.current, role: "assistant", content: res.message || `${name} could not answer that right now.`, source: "error", retry: true }
-          : { id: ++msgSeq.current, role: "assistant", content: res.answer, source: res.source, notice: res.notice },
+          : { id: ++msgSeq.current, role: "assistant", content: res.answer, source: res.source, notice: res.notice, typing: true },
       ]);
     } catch (err) {
       setMessages((prev) => [
@@ -415,7 +462,15 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                       ) : (
                         <>
                           {m.source === "error" ? <WarningOutlined style={{ marginRight: 6 }} /> : null}
-                          <AnswerText>{m.content}</AnswerText>
+                          {m.typing ? (
+                            <TypedAnswer
+                              text={m.content}
+                              onTick={scrollToEnd}
+                              onDone={() => setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, typing: false } : x)))}
+                            />
+                          ) : (
+                            <AnswerText>{m.content}</AnswerText>
+                          )}
                           {m.notice ? <div className="vera-notice">{m.notice}</div> : null}
                           {m.retry && !sending ? (
                             <button type="button" className="vera-retry-btn" onClick={retryLast}>
@@ -494,7 +549,7 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                 <span>
                   {isPublic
                     ? `${name} explains how to get into E-Universe. It cannot see or confirm any account — contact the administrator for anything about yours.`
-                    : `${name} explains how E-Universe works and can count and total what your account can see. It cannot open a record, establishment or document, so check the details on the screen itself.`}
+                    : `${name} explains how E-Universe works, counts the register and checks a firm's permits against the law — only what your account can see. Check the details on the screen itself before acting on them.`}
                 </span>
               </div>
             </>

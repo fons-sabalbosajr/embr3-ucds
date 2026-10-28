@@ -50,11 +50,11 @@ const Report = lazy(() => import("./modules/ucds/reports/UcdsReports"));
 const UcdsVeraCheck = lazy(() => import("./modules/ucds/vera/UcdsVeraCheck"));
 const Posting = lazy(() => import("./modules/admin/posting/Posting"));
 import ActivityLog from "./components/ActivityLog/ActivityLog";
-const RegisterSettings = lazy(() => import("./modules/admin/RegisterSettings"));
 const SystemSettings = lazy(() => import("./modules/admin/SystemSettings"));
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
 import NotificationsPopover from "./components/AiNotification/PopOverNotification";
+import HeaderMessages from "./components/HeaderMessages";
 import useRealtimeNotices from "./shared/notifications/useRealtimeNotices";
 import { pausePushForSignOut } from "./shared/notifications/devicePush";
 import UserPopover from "./components/PopOverUser/PopOverUser";
@@ -83,7 +83,8 @@ const UcdsSettings = lazy(() => import("./modules/settings/UcdsSettings"));
 import { settingsPath } from "./modules/erms/settingsPath";
 import { fetchRecords, fetchUnitDashboard, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
 import visibleInterval from "./shared/visibleInterval";
-import { getCorrectionsPending, getRegisterLinksPending } from "./modules/vera/veraService";
+import { getCorrectionsPending, getRegisterLinksPending, getVeraRepairs } from "./modules/vera/veraService";
+import { getSocket, initializeSocket } from "./api/socketService";
 import { fetchChatSummary, fetchDesk as fetchPortalDesk } from "./modules/portal/portalService";
 
 const { Header, Content } = Layout;
@@ -336,7 +337,9 @@ const Universe = () => {
     const count = (promise, pick) => promise.then(pick).catch(() => 0);
     // The Document Portal desk shows each unit its own requests (the Developer every unit's).
     const decidesPortal = hasErms && (units.length > 0 || isDeveloperAccount);
-    const [unread, flagged, legalNoScan, labNoScan, signUps, corrections, links, portalDesk, portalChats] = await Promise.all([
+    // VERA's repairs of the register: for those who may apply them (the Developer, administrators).
+    const maintainsRegister = hasUcds && ["developer", "admin"].includes(String(userRole || "").toLowerCase());
+    const [unread, flagged, legalNoScan, labNoScan, signUps, corrections, links, portalDesk, portalChats, repairs] = await Promise.all([
       hasErms ? count(fetchUnreadMessages(), (n) => Number(n) || 0) : 0,
       seesRecords ? count(fetchRecords({ flagged: true, page: 1, pageSize: 1 }), (r) => r?.total || 0) : 0,
       hasErms && units.includes("legal") ? count(fetchUnitDocuments("legal", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
@@ -353,6 +356,7 @@ const Universe = () => {
       decidesPortal ? fetchPortalDesk().catch(() => null) : null,
       // Messages from people in the room, not read yet.
       decidesPortal ? count(fetchChatSummary(), (chats) => (chats || []).reduce((n, c) => n + (c.unread || 0), 0)) : 0,
+      maintainsRegister ? getVeraRepairs().catch(() => null) : null,
     ]);
     const items = [];
     const portalPending = portalDesk?.pending?.length || 0;
@@ -398,8 +402,27 @@ const Universe = () => {
     if (links > 0) {
       items.push({ type: "vera-links", group: "Admin", tone: "info", count: links, href: "/e-universe/admin/vera?tab=links", title: `VERA can link ${links} ${links === 1 ? "record" : "records"} to the central register`, description: "Records whose reference number did not find their establishment. Review and link them in VERA Assistant." });
     }
+    // The bell's VERA tab: what she repaired in the register this week, what
+    // waits for a person, and her permit findings from the latest check.
+    if (repairs?.checkedAt) {
+      const r = repairs.repaired;
+      if (r?.records > 0) {
+        items.push({
+          type: "vera-repaired", group: "VERA", tone: "success", count: r.records, href: "/e-universe/vera-check",
+          title: `VERA repaired ${r.records} ${r.records === 1 ? "record" : "records"} this week`,
+          description: r.byField.slice(0, 4).map((f) => `${f.label} ${f.records}`).join(" · ") + ". Each can be undone in VERA's check.",
+        });
+      }
+      if (repairs.waiting > 0) {
+        items.push({ type: "vera-waiting", group: "VERA", tone: "info", count: repairs.waiting, href: "/e-universe/vera-check", title: `${repairs.waiting} register ${repairs.waiting === 1 ? "fix waits" : "fixes wait"} for you`, description: "Spellings and permits VERA proposes. Apply them, or let VERA fix the certain ones." });
+      }
+      const PERMIT_REVIEW = { "permit-missing": "vera-permit-missing", expired: "vera-permit-expired", "permit-expiring": "vera-permit-expiring", "permit-noncompliant": "vera-permit-nov" };
+      for (const g of repairs.review.filter((x) => PERMIT_REVIEW[x.key])) {
+        items.push({ type: PERMIT_REVIEW[g.key], group: "VERA", tone: g.key === "permit-expiring" ? "warning" : "danger", count: g.count, href: "/e-universe/vera-check", title: g.label, description: `From VERA's permit check of the ${repairs.register.replace(/^ucds-data-?/, "") || "register"}, checked ${moment(repairs.checkedAt).fromNow()}.` });
+      }
+    }
     setErmsNotifications(items);
-  }, [auth, hasErms, ermsUnitsKey, isDeveloperAccount]);
+  }, [auth, hasErms, hasUcds, userRole, ermsUnitsKey, isDeveloperAccount]);
 
   useEffect(() => {
     if (!auth) return undefined;
@@ -413,6 +436,23 @@ const Universe = () => {
   // A request, message or decision for this account: shown at once, and the
   // bell's counts refreshed rather than waiting for the next poll.
   useRealtimeNotices({ enabled: Boolean(auth), username: userHandle, onNotice: fetchActionItems });
+  // VERA repaired the register (fixes applied, undone, or "Let VERA fix it"):
+  // the bell counts again — repaired records leave "IDs for repair" and
+  // "Duplicates" at once. Settled for a few seconds, as fixes come in batches.
+  useEffect(() => {
+    if (!auth) return undefined;
+    const socket = getSocket() || initializeSocket();
+    let t = null;
+    const onRepaired = () => {
+      clearTimeout(t);
+      t = setTimeout(refreshAll, 3000);
+    };
+    socket?.on("vera:repaired", onRepaired);
+    return () => {
+      clearTimeout(t);
+      socket?.off("vera:repaired", onRepaired);
+    };
+  }, [auth, refreshAll]);
   // Whether the one-off "Toggle Theme" hint has been dismissed for good.
   //
   // This used to store an AES-encrypted "true" and only read it back when the
@@ -558,6 +598,9 @@ const Universe = () => {
                     {/* The year switcher ("2026 DATA") was removed from the
                         header: the year is chosen at sign-in, and Settings ›
                         Universe Central DB still manages the year containers. */}
+
+                    {/* Messages (ERMS accounts), beside the bell. */}
+                    <HeaderMessages domains={domains} />
 
                     <NotificationsPopover
                       theme={theme}
@@ -738,16 +781,6 @@ const Universe = () => {
                     path="activity-log"
                     element={<Navigate to="/e-universe/admin/audit" replace />}
                   />
-                  {/* The register behind Monitoring Plan: configuration, its
-                      activity trail, and duplicate reconciliation. Three
-                      screens about one subject, so one screen with tabs. */}
-                  <Route element={<DomainGuard domain="ucds" user={currentUser} />}>
-                    <Route
-                      path="admin/register"
-                      element={<RegisterSettings theme={theme} />}
-                    />
-                  </Route>
-
                   {/* How the platform behaves: its database, and what it
                       records. */}
                   <Route
@@ -763,12 +796,16 @@ const Universe = () => {
                       a bookmark lands where the screen actually is rather than
                       at the top of a merged page. */}
                   {[
-                    ["register/config", "/e-universe/admin/register?tab=config"],
-                    ["records/config", "/e-universe/admin/register?tab=config"],
-                    ["register/activity", "/e-universe/admin/register?tab=activity"],
-                    ["records/activity", "/e-universe/admin/register?tab=activity"],
-                    ["admin/duplicates", "/e-universe/admin/register?tab=duplicates"],
-                    ["duplicates", "/e-universe/admin/register?tab=duplicates"],
+                    // The Register page (Monitoring Config, Register Activity,
+                    // Duplicate Data) was removed on 28 Oct 2026; its old
+                    // addresses go to the home page rather than 404.
+                    ["admin/register", "/e-universe/home"],
+                    ["register/config", "/e-universe/home"],
+                    ["records/config", "/e-universe/home"],
+                    ["register/activity", "/e-universe/home"],
+                    ["records/activity", "/e-universe/home"],
+                    ["admin/duplicates", "/e-universe/home"],
+                    ["duplicates", "/e-universe/home"],
                     ["admin/developer/database-settings", "/e-universe/admin/system?tab=database"],
                     ["developer/database-settings", "/e-universe/admin/system?tab=database"],
                     ["admin/developer/activity-history", "/e-universe/admin/system?tab=audit"],

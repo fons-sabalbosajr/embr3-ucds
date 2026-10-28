@@ -137,7 +137,7 @@ const VeraProjectTypes = () => {
               dataSource={data.proposals}
               rowSelection={{ selectedRowKeys: selected, onChange: setSelected }}
               pagination={{ pageSize: 15, hideOnSinglePage: true }}
-              scroll={{ x: "max-content" }}
+              tableLayout="fixed"
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data.checked ? "Nothing to correct among the documents read" : "No document read yet"} /> }}
             />
             {data.recent.length > 0 && (
@@ -147,7 +147,7 @@ const VeraProjectTypes = () => {
                 title={() => <Text strong>Applied, set aside and unsure</Text>}
                 pagination={{ pageSize: 10, hideOnSinglePage: true }}
                 dataSource={data.recent}
-                scroll={{ x: "max-content" }}
+                tableLayout="fixed"
                 columns={[
                   { title: "Record", dataIndex: "serialNo", key: "s", width: 130, render: (s) => <Text style={{ fontFamily: "monospace" }}>{s}</Text> },
                   { title: "On file", dataIndex: "current", key: "c" },

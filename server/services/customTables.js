@@ -79,7 +79,45 @@ async function read(year, id) {
   return {
     columns: table.table?.columns || [],
     rows: list.map(({ _id, ...r }) => ({ id: String(_id), ...r })),
+    // Built by VERA from the register (services/vera/tableBuilder.js): how, so it can be refreshed.
+    source: table.table?.source || null,
   };
+}
+
+/**
+ * The table made over from VERA's build: its columns and rows replaced by
+ * those built from the register, and the spec kept for "Refresh from the
+ * register". Rows go in batches, gently on the shared cluster.
+ */
+async function replaceFromBuild(year, id, { columns, rows: built, source }, actor) {
+  const table = await tableOf(year, id);
+  const tableId = String(table._id);
+  const seen = new Set();
+  // A refresh keeps each column's key (and so any width set by hand).
+  const before = new Map((table.table?.columns || []).map((c) => [c.name.toLowerCase(), c]));
+  const next = columns.slice(0, MAX_COLUMNS).map((c) => cleanColumn({ ...c, key: before.get(String(c.name).toLowerCase())?.key, width: before.get(String(c.name).toLowerCase())?.width }, seen));
+  const keyOf = new Map(next.map((c) => [c.name, c.key]));
+  const now = new Date();
+  const who = actor?.username || 'unknown';
+  await rows().deleteMany({ year, tableId });
+  let order = 0;
+  const docs = built.slice(0, MAX_ROWS).map((r) => ({
+    year,
+    tableId,
+    order: (order += 1),
+    values: cleanValues(next, Object.fromEntries(Object.entries(r.values || {}).map(([name, v]) => [keyOf.get(name), v]).filter(([k]) => k))),
+    createdAt: now,
+    createdBy: `VERA (for ${who})`,
+    updatedAt: null,
+    updatedBy: null,
+  }));
+  for (let i = 0; i < docs.length; i += 500) await rows().insertMany(docs.slice(i, i + 500), { ordered: false });
+  await items().updateOne(
+    { _id: table._id },
+    { $set: { 'table.columns': next, 'table.source': { ...source, builtAt: now, builtBy: who }, updatedAt: now, updatedBy: who } }
+  );
+  const rowCount = await countRows(year, tableId);
+  return { columns: next, rowCount };
 }
 
 async function saveColumns(year, id, columns, actor) {
@@ -187,4 +225,4 @@ function workbookOf({ title, headers, rows: grid, totals }) {
   return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), rows: body.length };
 }
 
-module.exports = { ROWS, TYPES, TOTALS, ensureIndexes, read, saveColumns, addRows, updateRow, deleteRows, removeRowsOf, workbookOf };
+module.exports = { ROWS, TYPES, TOTALS, ensureIndexes, read, saveColumns, replaceFromBuild, addRows, updateRow, deleteRows, removeRowsOf, workbookOf };

@@ -16,8 +16,8 @@ const records = require('../erms/controllers/recordController');
 //
 // The register lookups sit on an ERMS screen, so they require the ERMS domain.
 //
-// The documents behind the panel follow the Records Unit's rule: the Records
-// Unit opens them here; anyone else asks in the E-Universe Document Portal
+// The documents behind the panel: the Records Unit, the Planning Unit and the
+// PEMUs open them here; anyone else asks in the E-Universe Document Portal
 // (modules/portal). The two file routes are the ERMS handlers mounted for the
 // UCDS domain — same province scope, same check, same audit trail.
 // ---------------------------------------------------------------------------
@@ -26,8 +26,14 @@ const ucdsAccess = [authenticateSession, requireDomain(DOMAINS.UCDS)];
 const ermsAccess = [authenticateSession, requireDomain(DOMAINS.ERMS)];
 const serialParam = z.object({ serialNo: z.string().trim().min(3).max(60) });
 
-router.get('/api/ucds/records/:serialNo/file', ucdsAccess, requireNasActive, validate(serialParam, 'params'), records.getRecordFileInfo);
-router.get('/api/ucds/records/:serialNo/file/preview', ucdsAccess, requireNasActive, validate(serialParam, 'params'), records.viewRecordFile);
+// Asked from an establishment's record: the Planning Unit and the PEMUs may
+// open it here (accessRequestService.isEstablishmentViewer); never on the ERMS routes.
+const fromEstablishment = (req, _res, next) => {
+  req.viaEstablishment = true;
+  next();
+};
+router.get('/api/ucds/records/:serialNo/file', ucdsAccess, requireNasActive, validate(serialParam, 'params'), fromEstablishment, records.getRecordFileInfo);
+router.get('/api/ucds/records/:serialNo/file/preview', ucdsAccess, requireNasActive, validate(serialParam, 'params'), fromEstablishment, records.viewRecordFile);
 
 router.get(
   '/api/ucds/establishments/:sortKey/records',

@@ -221,7 +221,7 @@ const NasActivationCard = ({ onChanged }) => {
                 value={minutes || null}
                 placeholder="Custom"
                 onChange={(v) => setMinutes(v || 0)}
-                addonAfter="min"
+                suffix="min"
                 style={{ width: 160 }}
               />
             </Space>

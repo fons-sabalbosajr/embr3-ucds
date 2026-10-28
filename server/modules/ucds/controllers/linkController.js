@@ -33,7 +33,10 @@ async function establishmentRecords(req, res, next) {
 
     // Why the list is not there, so the tab can say so instead of going blank.
     if (!erms.isEnabled()) return res.json({ ...UNAVAILABLE, reason: 'off' });
-    if (!hasDomain(user, DOMAINS.ERMS)) return res.json({ ...UNAVAILABLE, reason: 'no-access' });
+    // ERMS accounts, and the Planning Unit and the PEMUs, who open an
+    // establishment's documents from its record (accessRequestService).
+    const { isEstablishmentViewer } = require('../../erms/services/accessRequestService');
+    if (!hasDomain(user, DOMAINS.ERMS) && !isEstablishmentViewer(user)) return res.json({ ...UNAVAILABLE, reason: 'no-access' });
 
     const { sortKey } = req.params;
     // The establishment in the active year's register: from 2027 a year keeps

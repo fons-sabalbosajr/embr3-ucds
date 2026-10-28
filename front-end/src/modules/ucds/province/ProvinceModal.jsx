@@ -14,6 +14,7 @@ import ICIR from "./reports/icir/ICIR";
 import { UCDS_ACCENT } from "../ucdsColors";
 import Drafts from "./reports/drafts/ReportDrafts";
 import EstablishmentRecordsPanel from "../components/EstablishmentRecordsPanel";
+import FitToHeight from "./tabpanes/FitToHeight";
 import {
   fetchRecordDetailsBySortKey,
   checkExistingLogsByEccCnc,
@@ -364,53 +365,61 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                 key: "1",
                 label: "General Information",
                 children: (
-                  <GenInfo
-                    editedRecord={editedRecord}
-                    setEditedRecord={setEditedRecord}
-                    handleChange={handleChange}
-                    isEditing={isEditing}
-                    theme={theme}
-                  />
+                  <FitToHeight>
+                    <GenInfo
+                      editedRecord={editedRecord}
+                      setEditedRecord={setEditedRecord}
+                      handleChange={handleChange}
+                      isEditing={isEditing}
+                      theme={theme}
+                    />
+                  </FitToHeight>
                 ),
               },
               {
                 key: "2",
                 label: "Concerned Unit / Focal Person",
                 children: (
-                  <FocalPerson
-                    editedRecord={editedRecord}
-                    handleChange={handleChange}
-                    isEditing={isEditing}
-                    currentUser={currentUser}
-                    theme={theme}
-                  />
+                  <FitToHeight>
+                    <FocalPerson
+                      editedRecord={editedRecord}
+                      handleChange={handleChange}
+                      isEditing={isEditing}
+                      currentUser={currentUser}
+                      theme={theme}
+                    />
+                  </FitToHeight>
                 ),
               },
               {
                 key: "3",
                 label: "Clearances and Permits",
                 children: (
-                  <Permit
-                    editedRecord={editedRecord}
-                    handleChange={handleChange}
-                    isEditing={isEditing}
-                    onSaveChanges={(updatedRecord, showNotification) => {
-                      setEditedRecord(updatedRecord);
-                      handleSaveChanges(showNotification);
-                    }}
-                  />
+                  <FitToHeight>
+                    <Permit
+                      editedRecord={editedRecord}
+                      handleChange={handleChange}
+                      isEditing={isEditing}
+                      onSaveChanges={(updatedRecord, showNotification) => {
+                        setEditedRecord(updatedRecord);
+                        handleSaveChanges(showNotification);
+                      }}
+                    />
+                  </FitToHeight>
                 ),
               },
               {
                 key: "6",
                 label: "History",
                 children: (
-                  <ProvTransactionLog
-                    editedRecord={editedRecord}
-                    currentUser={currentUser}
-                    theme={theme}
-                    reloadEditedRecord={reloadEditedRecord}
-                  />
+                  <FitToHeight>
+                    <ProvTransactionLog
+                      editedRecord={editedRecord}
+                      currentUser={currentUser}
+                      theme={theme}
+                      reloadEditedRecord={reloadEditedRecord}
+                    />
+                  </FitToHeight>
                 ),
               },
               // Permits, clearances and scanned documents filed against this
@@ -424,16 +433,18 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                 key: "7",
                 label: "Documents",
                 children: (
-                  <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-                    {isEditing && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        Documents are not edited here. Editing this record
-                        changes its Monitoring Plan details only — the filed
-                        documents and where they live are held separately.
-                      </Typography.Text>
-                    )}
-                    <EstablishmentRecordsPanel sortKey={editedRecord.sort_key} />
-                  </Space>
+                  <FitToHeight>
+                    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                      {isEditing && (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          Documents are not edited here. Editing this record
+                          changes its Monitoring Plan details only — the filed
+                          documents and where they live are held separately.
+                        </Typography.Text>
+                      )}
+                      <EstablishmentRecordsPanel sortKey={editedRecord.sort_key} />
+                    </Space>
+                  </FitToHeight>
                 ),
               },
             ]}

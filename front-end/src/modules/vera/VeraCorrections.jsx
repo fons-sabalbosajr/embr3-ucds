@@ -241,7 +241,7 @@ const VeraCorrections = () => {
                 getCheckboxProps: (p) => ({ disabled: p.applied }),
               }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing to correct here." /> }}
-              scroll={{ x: 900 }}
+              tableLayout="fixed"
             />
           </Space>
         )}

@@ -13,7 +13,9 @@ import { copyText } from "../../../shared/copyText";
 import { openVera } from "../../vera/veraService";
 import { FullDate } from "../province/tabpanes/DateInputs";
 import { FUNCTIONS, aggregate, computeRows, display } from "./formula";
-import { addRows, deleteRows, exportTable, readTable, saveColumns, updateRow } from "./customTableService";
+import { addRows, buildTable, deleteRows, exportTable, readTable, saveColumns, updateRow } from "./customTableService";
+import VeraTableBuilder from "./VeraTableBuilder";
+import { VeraFlame } from "../../vera/VeraMark";
 import "./customtable.css";
 
 const { Text } = Typography;
@@ -22,7 +24,9 @@ const { Text } = Typography;
 // A Planning Unit table: design its columns (text, number, date, choice,
 // yes/no, or a formula worked out from the row's other columns), fill its
 // rows in place or paste them from Excel, then search, filter, sort, total
-// and export what is shown. VERA explains any of it ("Ask VERA").
+// and export what is shown. VERA explains any of it ("Ask VERA"), and builds
+// a table from the register from a sentence ("Build with VERA",
+// VeraTableBuilder.jsx) — refreshed from the register later at one click.
 // ---------------------------------------------------------------------------
 
 const TYPE_LABEL = { text: "Text", number: "Number", date: "Date", select: "Choice", checkbox: "Yes / no", formula: "Formula" };
@@ -234,6 +238,7 @@ export default function CustomTable({ id, label }) {
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: key, queryFn: () => readTable(id) });
   const [designing, setDesigning] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const [building, setBuilding] = useState(false);
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState([]);
   const [sort, setSort] = useState({ key: null, order: null });
@@ -285,6 +290,15 @@ export default function CustomTable({ id, label }) {
       message.error(errMsg(e, "The change could not be saved."));
       refetch();
     },
+  });
+  // Built by VERA: filled again from the register with the same spec.
+  const refresh = useMutation({
+    mutationFn: () => buildTable(id, { refresh: true }),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: key });
+      message.success(`Refreshed from the register: ${r.rowCount} row(s).`);
+    },
+    onError: (e) => message.error(errMsg(e, "The table could not be refreshed.")),
   });
   const remove = useMutation({
     mutationFn: (ids) => deleteRows(id, ids),
@@ -417,6 +431,25 @@ export default function CustomTable({ id, label }) {
               <Button size="small" icon={<SettingOutlined />} onClick={() => setDesigning(true)}>
                 Columns
               </Button>
+              <Tooltip title="Describe the table you need: VERA builds it from the register">
+                <Button size="small" icon={<VeraFlame size={14} label="" glow={false} />} onClick={() => setBuilding(true)}>
+                  Build with VERA
+                </Button>
+              </Tooltip>
+              {data.source && (
+                <Popconfirm
+                  title="Refresh from the register?"
+                  description="The rows are filled again with what the register holds now; edits made in this table are replaced."
+                  okText="Refresh"
+                  onConfirm={() => refresh.mutate()}
+                >
+                  <Tooltip title={`Built by VERA${data.source.builtBy ? ` for ${data.source.builtBy}` : ""}${data.source.builtAt ? `, ${new Date(data.source.builtAt).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })}` : ""}`}>
+                    <Button size="small" loading={refresh.isPending}>
+                      Refresh from the register
+                    </Button>
+                  </Tooltip>
+                </Popconfirm>
+              )}
               {selected.length > 0 && (
                 <Popconfirm title={`Delete ${selected.length} row(s)?`} okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => remove.mutate(selected)}>
                   <Button size="small" danger icon={<DeleteOutlined />} loading={remove.isPending}>
@@ -482,9 +515,14 @@ export default function CustomTable({ id, label }) {
           }
         >
           {canEdit ? (
-            <Button type="primary" icon={<SettingOutlined />} onClick={() => setDesigning(true)}>
-              Design the columns
-            </Button>
+            <Space wrap>
+              <Button type="primary" icon={<VeraFlame size={16} label="" glow={false} />} onClick={() => setBuilding(true)}>
+                Build it with VERA from the register
+              </Button>
+              <Button icon={<SettingOutlined />} onClick={() => setDesigning(true)}>
+                Design the columns yourself
+              </Button>
+            </Space>
           ) : (
             <Text type="secondary">An account that may manage the data designs it.</Text>
           )}
@@ -526,6 +564,7 @@ export default function CustomTable({ id, label }) {
         />
       )}
 
+      {canEdit && <VeraTableBuilder open={building} onClose={() => setBuilding(false)} tableId={id} hasRows={computed.rows.length > 0} onBuilt={() => queryClient.invalidateQueries({ queryKey: key })} />}
       <ColumnsDesigner open={designing} onClose={() => setDesigning(false)} columns={columns} rows={data?.rows || []} saving={saveCols.isPending} onSave={(cols) => saveCols.mutate(cols)} />
       <PasteRows
         open={pasting}

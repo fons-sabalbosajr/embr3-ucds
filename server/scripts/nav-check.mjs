@@ -217,11 +217,10 @@ try {
   await dev.getByText('Dark', { exact: true }).first().click().catch(() => {});
   await dev.waitForTimeout(600);
 
-  // The merged screens: three register entries and two system entries became
-  // two tabbed screens. Assert the tabs are actually there, not just that the
-  // route resolves.
+  // The merged screen: two system entries became one tabbed screen. Assert
+  // the tabs are actually there, not just that the route resolves. (The
+  // Register screen was removed on 28 Oct 2026.)
   for (const [label, route, expected] of [
-    ['Register', '/universe/admin/register', ['Monitoring Config', 'Register Activity', 'Duplicate Data']],
     ['System', '/universe/admin/system', ['Database', 'Activity History']],
   ]) {
     await dev.goto(BASE + route, { waitUntil: 'domcontentloaded' });
@@ -243,26 +242,6 @@ try {
       missing.length ? `missing: ${missing.join(', ')}` : ''
     );
   }
-
-  // A deep link to one tab must open that tab, or the redirects from the old
-  // URLs land people at the top of a merged page instead of where they were.
-  await dev.goto(`${BASE}/universe/admin/register?tab=duplicates`, { waitUntil: 'domcontentloaded' });
-  await dev
-    .waitForFunction(
-      () => {
-        const t = document.getElementById('root')?.innerText || '';
-        return /merged automatically|Potential duplicates|not entitled/i.test(t);
-      },
-      null,
-      { timeout: 25000 }
-    )
-    .catch(() => {});
-  const dupText = await dev.evaluate(() => document.getElementById('root')?.innerText || '');
-  check(
-    'a deep link opens the named tab',
-    /Nothing here is merged automatically|Potential duplicates/i.test(dupText),
-    dupText.slice(0, 60).replace(/\s+/g, ' ')
-  );
 
   // Removed routes must not render their old screens.
   for (const [label, route] of [

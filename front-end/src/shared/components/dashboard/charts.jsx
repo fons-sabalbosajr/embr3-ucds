@@ -1,6 +1,7 @@
 import { Empty } from "antd";
 import { Bar, Column, Pie } from "@ant-design/plots";
 import useScreen from "../../useScreen";
+import { CATEGORICAL } from "./palette";
 
 // ---------------------------------------------------------------------------
 // The ERMS dashboards' charts (@ant-design/plots), shared by the Records,
@@ -14,10 +15,7 @@ import useScreen from "../../useScreen";
 // or an axis, and a tooltip; colour never stands alone.
 // ---------------------------------------------------------------------------
 
-const CATEGORICAL = {
-  light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7"],
-  dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9"],
-};
+// The fixed categorical order (./palette, shared with VERA's Models tab).
 
 const fmt = (n) => new Intl.NumberFormat().format(n ?? 0);
 

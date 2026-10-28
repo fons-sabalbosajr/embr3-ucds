@@ -34,6 +34,10 @@ const vera = require('../services/vera/assistant');
 const veraFigures = require('../services/vera/figures');
 const veraLookup = require('../services/vera/lookup');
 const K = require('../services/vera/knowledge');
+const veraPolicy = require('../services/vera/policy');
+const veraCache = require('../services/vera/semanticCache');
+const modelUsage = require('../services/vera/modelUsage');
+const tableBuilder = require('../services/vera/tableBuilder');
 
 const CONFIG_COLLECTION = 'app-config';
 const CONFIG_ID = 'vera-settings';
@@ -67,6 +71,8 @@ const VERA_ACTIONS = Object.freeze({
   'vera:ucds-check:apply': 'Universe Central DB fixes applied',
   'vera:ucds-check:undo': 'Universe Central DB fix undone',
   'vera:ucds-check:auto-fix': 'Universe Central DB fixed by VERA',
+  'vera:table-draft': 'Table drafted by VERA',
+  'vera:table-build': 'Table built by VERA from the register',
 });
 
 async function loadConfig() {
@@ -85,9 +91,18 @@ async function patchConfig(set) {
  * services/vera/figures). Null when the question asks for none, and never
  * fatal: VERA answers without them rather than not at all.
  */
-async function countsFor(req, message, viewer, cfg, page = '') {
+async function countsFor(req, message, viewer, cfg, page = '', history = []) {
   const user = principalOf(req);
   const activeYear = req.session?.activeYear;
+  // "How many WWDP in San Fernando?" — and "how about in 2024?" after it:
+  // counted on the register and answered by rule, exact, no model call
+  // (services/vera/tableBuilder countFor).
+  try {
+    const counted = await registerCountFor(user, message, activeYear, history);
+    if (counted) return { registerAnswer: counted.answer, text: counted.answer, asOf: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }), lookup: true };
+  } catch (err) {
+    console.warn('[VERA] register count unavailable:', err.message);
+  }
   const counting = (async () => {
     if (!veraFigures.wantsFigures(message, page)) return null;
     const ctx = vera.contextFor(viewer, '', cfg);
@@ -108,7 +123,106 @@ async function countsFor(req, message, viewer, cfg, page = '') {
     asOf: figures?.asOf || new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }),
     role: figures?.role,
     lookup: true,
+    // A firm's permit file: the law sections its findings rest on.
+    ...(found.permitFiles ? { permits: found.permitFiles, lawRefs: found.lawRefs } : {}),
   };
+}
+
+/** "2024, 25 and 26", "2024-26": every year a question names, in full. */
+function yearsIn(message) {
+  const s = String(message || '');
+  const out = [];
+  let century = null;
+  for (const m of s.matchAll(/\b(20\d{2}|\d{2})\b/g)) {
+    if (m[1].length === 4) {
+      out.push(Number(m[1]));
+      century = Number(m[1].slice(0, 2)) * 100;
+    } else if (century && /(?:,|\band\b|&|-|\bto\b|\bat\b)\s*$/i.test(s.slice(0, m.index))) {
+      out.push(century + Number(m[1]));
+    }
+  }
+  return [...new Set(out)];
+}
+
+// "How about in 2024?", "and Tarlac?", "paano sa 2025": a follow-up to a count.
+const FOLLOW_UP_RE = /^\s*(?:(?:how|what)\s+about|and|also|paano|eh|sa|in|for|then|same|ganun|yung)\b/i;
+const PROVINCE_NAMES_RE = /\b(aurora|bataan|bulacan|nueva\s+ecija|pampanga|tarlac|zambales)\b/gi;
+
+/** A follow-up read onto the count it follows: its own years and province win, the rest carries over. */
+function followUp(message, earlier) {
+  if (String(message).length > 160 || (!FOLLOW_UP_RE.test(message) && !yearsIn(message).length && !new RegExp(PROVINCE_NAMES_RE.source, 'i').test(message))) return null;
+  let carried = earlier;
+  // Years named again replace the earlier ones (two-digit ones too: "2024, 25 and 26").
+  if (yearsIn(message).length) carried = carried.replace(/\b20\d{2}\b(?:\s*(?:,|and|&|-|to)\s*\d{2}\b)*/gi, ' ');
+  if (new RegExp(PROVINCE_NAMES_RE.source, 'i').test(message)) carried = carried.replace(PROVINCE_NAMES_RE, ' ');
+  return `${message} ${carried}`;
+}
+
+/**
+ * The count question to answer: the message itself, or — for a short
+ * follow-up ("how about in 2024?", then "and Tarlac?") — the count it follows,
+ * carried through the whole chain of follow-ups.
+ */
+function countQuestionOf(message, history) {
+  if (tableBuilder.wantsCount(message)) return message;
+  if (!Array.isArray(history)) return null;
+  // The chat sends the new message as the last turn: the ones before are what it follows.
+  const asked = history.filter((h) => h?.role === 'user' && typeof h.content === 'string').map((h) => h.content);
+  if (asked.length && asked[asked.length - 1].trim() === String(message).trim()) asked.pop();
+  let current = null;
+  for (const t of asked) current = tableBuilder.wantsCount(t) ? t : current ? followUp(t, current) : null;
+  return current ? followUp(message, current) : null;
+}
+
+const listYears = (ys) => (ys.length < 2 ? String(ys[0]) : `${ys.slice(0, -1).join(', ')} and ${ys[ys.length - 1]}`);
+
+/**
+ * A count of the register's establishments, for an account on the Universe
+ * Central DB: in each year the question names that the account may enter
+ * (else the active year), within the account's provinces. Years that keep
+ * one register between them (up to 2026) are counted once and said so.
+ */
+async function registerCountFor(user, message, activeYear, history = []) {
+  if (!user || !domainsOf(user).includes('ucds')) return null;
+  const question = countQuestionOf(message, history);
+  if (!question) return null;
+  const { authorizedYears } = require('../services/authorization');
+  const yearService = require('../services/yearService');
+  const { collections } = require('../config/db');
+  const named = yearsIn(message).length ? yearsIn(message) : yearsIn(question);
+  const years = (named.length ? named : [Number(activeYear) || new Date().getFullYear()]).sort((a, b) => a - b);
+  const may = await authorizedYears(user);
+  const open = years.filter((y) => may.includes(y));
+  const shut = years.filter((y) => !may.includes(y));
+  if (!open.length) return { answer: `There is no ${listYears(shut)} Monitoring Plan your account may open, so I cannot count it. The years you may open: ${listYears(may.sort((a, b) => a - b))}.` };
+
+  // One count per register: the years before 2027 share theirs.
+  const registers = new Map();
+  for (const y of open) {
+    const container = await yearService.getYear(y).catch(() => null);
+    const name = container?.register && /^ucds-data-\d{4}$/.test(container.register) ? container.register : collections.ucds.collectionName;
+    if (!registers.has(name)) registers.set(name, { col: name === collections.ucds.collectionName ? collections.ucds : getDb().collection(name), container, years: [] });
+    registers.get(name).years.push(y);
+  }
+  const counts = [];
+  for (const g of registers.values()) {
+    const r = await tableBuilder.countFor(question, { col: g.col, user, container: g.container, year: listYears(g.years) });
+    if (!r) return null;
+    counts.push({ ...g, ...r });
+  }
+  if (counts.length === 1 && counts[0].years.length === 1 && !shut.length) return counts[0];
+
+  const n = (x) => new Intl.NumberFormat('en-PH').format(x);
+  const lines = ['By year — counted just now from every record you may see:', ''];
+  for (const c of counts) {
+    lines.push(
+      `- **${listYears(c.years)}**: **${n(c.total)}** establishment${c.total === 1 ? '' : 's'}${c.numbers != null && c.numbers !== c.total ? `, ${n(c.numbers)} ${c.kindName} number${c.numbers === 1 ? '' : 's'}` : ''}` +
+        (c.years.length > 1 ? ` — these years share one register (the Monitoring Plan as kept before 2027, with no year on its rows), so the count is the same for each` : '')
+    );
+  }
+  lines.push('', `Conditions: ${counts[0].where}.`);
+  if (shut.length) lines.push('', `Not counted: ${listYears(shut)} — there is no Monitoring Plan for ${shut.length === 1 ? 'that year' : 'those years'} that your account may open.`);
+  return { answer: lines.join('\n'), total: counts.reduce((s, c) => s + c.total, 0) };
 }
 
 /** The public Document Portal: its search and its totals, nothing more (services/vera/lookup). */
@@ -127,7 +241,7 @@ async function portalFiguresFor(message, page) {
 /** Who VERA is talking to: the account's role and domains, from the session. */
 function viewerFor(req, cfg) {
   const user = principalOf(req);
-  if (!user) return { realm: 'staff', role: 'staff', domains: [] };
+  if (!user) return { realm: 'staff', role: 'staff', domains: [], access: { model: false, figures: false } };
   const role = roleOf(user);
   return {
     realm: 'staff',
@@ -135,6 +249,8 @@ function viewerFor(req, cfg) {
     domains: domainsOf(user),
     // Records, Legal Services or Laboratory: the suggestions and articles follow it.
     ermsUnits: ermsUnitsOf(user),
+    // What the administrator lets this account type use (services/vera/policy).
+    access: veraPolicy.accessFor(cfg, role),
   };
 }
 
@@ -159,6 +275,9 @@ async function log(req, action, details) {
       details,
       timestamp: new Date(),
     });
+    // A chat — by the model, the cache or the library — changes the Models
+    // tab's counts: open tabs reload (at most every 5 seconds).
+    if (action === 'vera:chat' || action === 'vera:public-chat') modelUsage.changed();
   } catch (error) {
     console.error('VERA log write failed:', error.message);
   }
@@ -253,7 +372,7 @@ async function chat(req, res) {
   // Kept outside the try so the help-library answer on failure can use them.
   let figures = null;
   try {
-    figures = await countsFor(req, message, viewer, cfg, page);
+    figures = viewer.access?.figures === false ? null : await countsFor(req, message, viewer, cfg, page, history);
     // The model's time starts once the figures are counted: counting on a
     // busy database used to eat into it and time the answer out.
     timer = setTimeout(() => controller.abort(), provider.resolveTimeoutMs(cfg) + 2000);
@@ -268,6 +387,10 @@ async function chat(req, res) {
       chars: message.length,
       inputTokens: result.inputTokens || 0,
       outputTokens: result.outputTokens || 0,
+      // Which model the router chose, and whether a guardrail acted.
+      model: result.model || null,
+      tier: result.tier || null,
+      guardrail: result.guardrail || null,
       durationMs: Date.now() - started,
     });
     if (result.usedModel) {
@@ -305,8 +428,6 @@ async function getConfig(req, res) {
         provider: provider.resolveProvider(cfg),
         model: cfg.model || '',
         maxTokens: cfg.maxTokens ?? null,
-        temperature: cfg.temperature ?? null,
-        requestTimeoutMs: cfg.requestTimeoutMs ?? null,
         perUserDailyLimit: cfg.perUserDailyLimit ?? null,
         dailyLimit: cfg.dailyLimit ?? null,
         showLauncher: cfg.showLauncher !== false,
@@ -320,8 +441,15 @@ async function getConfig(req, res) {
         supportContact: cfg.supportContact || '',
         // Where public visitors asking for counts are sent (blank: the default).
         officeWebsite: cfg.officeWebsite || '',
+        // Cost and safety: the semantic cache, the model router, failover to
+        // the other provider, and what each account type may use.
+        semanticCache: cfg.semanticCache !== false,
+        modelRouting: cfg.modelRouting !== false,
+        crossProviderFallback: cfg.crossProviderFallback !== false,
+        roleAccess: veraPolicy.describe(cfg),
         updatedAt: cfg.updatedAt || null,
       },
+      cache: veraCache.stats(),
       status: provider.safeStatus(cfg),
       providers: Object.values(provider.PROVIDERS).map((p) => ({ value: p.id, label: p.label, envKey: p.envKey, defaultModel: p.defaultModel() })),
     });
@@ -362,10 +490,21 @@ async function updateConfig(req, res) {
       if (b[k] !== undefined) next[k] = String(b[k] || '').trim().slice(0, max);
     };
 
-    ['enabled', 'showLauncher', 'sendPageContext', 'developerMode', 'publicEnabled', 'portalEnabled'].forEach(bool);
+    ['enabled', 'showLauncher', 'sendPageContext', 'developerMode', 'publicEnabled', 'portalEnabled', 'semanticCache', 'modelRouting', 'crossProviderFallback'].forEach(bool);
+    // The form sends the table it shows: [{ role, model, figures }, …].
+    if (b.roleAccess !== undefined) {
+      const rows = Array.isArray(b.roleAccess)
+        ? Object.fromEntries(b.roleAccess.filter((r) => r && r.role).map(({ role, model, figures }) => [role, { model, figures }]))
+        : b.roleAccess;
+      const parsed = veraPolicy.parse(rows);
+      if (parsed.error) errors.push(parsed.error);
+      else next.roleAccess = parsed.value;
+    }
     number('maxTokens', 64, 8192);
-    number('temperature', 0, 1);
-    number('requestTimeoutMs', 5000, 120000);
+    // No longer settings (services/vera/provider resolveTemperature): a value
+    // saved before goes on the next save, so none lingers out of sight.
+    unset.temperature = '';
+    unset.requestTimeoutMs = '';
     number('perUserDailyLimit', 0, 10000);
     number('dailyLimit', 0, 100000);
     text('model', 120);
@@ -378,7 +517,7 @@ async function updateConfig(req, res) {
       else next.officeWebsite = site;
     }
     if (b.provider !== undefined) {
-      if (!provider.PROVIDERS[b.provider]) errors.push('provider must be one of: anthropic, gemini');
+      if (!provider.PROVIDERS[b.provider]) errors.push(`provider must be one of: ${Object.keys(provider.PROVIDERS).join(', ')}`);
       else next.provider = b.provider;
     }
     if (errors.length) return res.status(400).json({ success: false, message: errors[0], errors });
@@ -392,8 +531,10 @@ async function updateConfig(req, res) {
       { upsert: true }
     );
     const cfg = await loadConfig();
+    // Cached answers were written under the old settings.
+    veraCache.clear();
     await log(req, 'vera:settings:updated', {
-      changedKeys: [...Object.keys(next), ...Object.keys(unset)].filter((k) => !['updatedAt', 'updatedBy'].includes(k)),
+      changedKeys: [...Object.keys(next), ...Object.keys(unset)].filter((k) => !['updatedAt', 'updatedBy', 'temperature', 'requestTimeoutMs'].includes(k)),
       enabledBefore: before.enabled !== false,
       enabledAfter: cfg.enabled !== false,
     });
@@ -413,8 +554,14 @@ async function testConnection(req, res) {
       return res.status(400).json({ success: false, code: 'not_configured', message: `No API key found. Set ${envVar} in the server environment and restart the server.` });
     }
     const result = await provider.testConnection(cfg);
+    // Degraded: VERA answers, but not with the chosen model — both recorded.
     await patchConfig(
-      result.ok ? { lastSuccessfulConnectionAt: new Date(), lastError: '' } : { lastError: result.message, lastErrorAt: new Date() }
+      result.ok
+        ? {
+            lastSuccessfulConnectionAt: new Date(),
+            ...(result.degraded ? { lastError: `${result.configuredModel}: ${result.configuredError.message}`, lastErrorAt: new Date() } : { lastError: '' }),
+          }
+        : { lastError: result.message, lastErrorAt: new Date() }
     ).catch(() => {});
     await log(req, 'vera:test', {
       ok: result.ok,
@@ -432,6 +579,10 @@ async function testConnection(req, res) {
       durationMs: result.durationMs,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
+      // The chosen model did not answer; `model` is the one that did.
+      degraded: Boolean(result.degraded),
+      configuredModel: result.configuredModel || null,
+      configuredError: result.configuredError?.message || null,
       // The master switch is separate from whether the key works.
       masterEnabled: provider.ENV.masterEnabled(),
     });
@@ -461,6 +612,7 @@ async function getUsage(req, res) {
               inputTokens: { $sum: '$details.inputTokens' },
               outputTokens: { $sum: '$details.outputTokens' },
               modelAnswers: { $sum: { $cond: ['$details.usedModel', 1, 0] } },
+              cacheAnswers: { $sum: { $cond: [{ $eq: ['$details.source', 'cache'] }, 1, 0] } },
             },
           },
         ])
@@ -474,6 +626,8 @@ async function getUsage(req, res) {
         messagesTotal: total,
         byRole: byRole.reduce((m, r) => ({ ...m, [r._id || 'unknown']: r.count }), {}),
         modelAnswersToday: tokens[0]?.modelAnswers || 0,
+        // Answered from the semantic cache: requests and tokens not spent.
+        cacheAnswersToday: tokens[0]?.cacheAnswers || 0,
         inputTokensToday: tokens[0]?.inputTokens || 0,
         outputTokensToday: tokens[0]?.outputTokens || 0,
         recentFailures: failures.map((f) => ({ at: f.timestamp, by: f.username, code: f.details?.code || '' })),
@@ -482,6 +636,41 @@ async function getUsage(req, res) {
   } catch (error) {
     console.error('vera getUsage error:', error);
     return res.status(500).json({ success: false, message: 'Failed to load assistant usage' });
+  }
+}
+
+// ── GET /api/vera/models ─────────────────────────────────────────────────────
+// The Models tab: each model VERA may use — its place in the route, whether it
+// is answering or resting and until when, its use today and in the provider's
+// quota window, and 14 days of history per model (services/vera/modelUsage).
+async function getModels(req, res) {
+  try {
+    const cfg = await loadConfig();
+    const status = provider.routerStatus(cfg);
+    const roles = Object.fromEntries(status.route.map((c) => [`${c.provider}|${c.model}`, c.role]));
+    const keys = Object.fromEntries(Object.keys(provider.PROVIDERS).map((p) => [p, Boolean(provider.ENV.key(p))]));
+    // What each model is (context window, longest answer) from its provider,
+    // cached there for hours; and what VERA's integration does with it.
+    const ids = status.route.map((c) => `${c.provider}|${c.model}`);
+    const info = Object.fromEntries(await Promise.all(status.route.map(async (c) => [`${c.provider}|${c.model}`, await provider.modelInfo(c.provider, c.model)])));
+    const caps = Object.fromEntries(ids.map((k) => [k, provider.capabilitiesOf(...k.split('|'))]));
+    const data = await modelUsage.report({ route: status.route, roles, keys, days: 14, info, caps });
+    return res.json({
+      success: true,
+      data: {
+        ...data,
+        router: { routing: status.routing, crossProvider: status.crossProvider, lightModel: status.lightModel },
+        masterEnabled: provider.ENV.masterEnabled(),
+        // Providers VERA can use, and which have a key — so the screen can say what adding one would bring.
+        providers: Object.values(provider.PROVIDERS).map((p) => ({ id: p.id, label: p.label, envKey: p.envKey, keyPresent: keys[p.id], defaultModel: p.defaultModel() })),
+        // The environmental laws VERA answers from (services/vera/lawRetrieval).
+        laws: require('../services/vera/lawRetrieval').summary(),
+        cache: veraCache.stats(),
+      },
+    });
+  } catch (error) {
+    console.error('vera getModels error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load the model usage' });
   }
 }
 
@@ -959,6 +1148,52 @@ const registerTarget = (req) => {
   return { col, register: col.collectionName };
 };
 
+// ── The bell: what VERA repaired, and what waits ─────────────────────────────
+const notifier = require('../services/notifier');
+const REPAIRS_DAYS = 7;
+
+/**
+ * VERA changed the register (fixes applied, an undo, "Let VERA fix it"):
+ * every open bell counts again, and the other maintainers are told.
+ */
+function announceRepair(req, register, changed, what) {
+  notifier.broadcast('vera:repaired', { register });
+  if (!changed) return;
+  const by = principalOf(req)?.username || null;
+  notifier.notifyLater(
+    async () =>
+      (await getDb().collection('users').find({ permission: { $in: ['developer', 'admin'] }, username: { $ne: by } }, { projection: { username: 1, domains: 1, permission: 1 } }).toArray())
+        .filter((u) => u.permission === 'developer' || domainsOf(u).includes('ucds'))
+        .map((u) => u.username),
+    { title: 'VERA repaired the register', body: `${what}: ${changed} record(s) in ${register}${by ? `, approved by ${by}` : ''}.`, url: '/e-universe/vera-check', kind: 'vera-repaired', tag: 'vera-repaired' }
+  );
+}
+
+/** GET /api/vera/repairs — for the bell: the latest register check of the active year, summed up. */
+async function repairsSummary(req, res, next) {
+  try {
+    const { register } = registerTarget(req);
+    const run = await getDb().collection(registerCheck.COLLECTION).find({ register }).sort({ startedAt: -1 }).limit(1).next();
+    if (!run) return res.json({ register, checkedAt: null, repaired: null, waiting: 0, review: [] });
+    const since = new Date(Date.now() - REPAIRS_DAYS * 24 * 3600 * 1000);
+    const applied = (run.proposals || []).filter((p) => p.applied && !p.superseded && p.appliedAt && new Date(p.appliedAt) >= since);
+    const byField = new Map();
+    for (const p of applied) {
+      const label = p.field === 'coordinates' ? 'Coordinates' : p.field === 'ecc_cnc' ? 'ECC/CNC (from ERMS)' : registerCheck.FIELDS[p.field]?.label || p.field;
+      byField.set(label, (byField.get(label) || 0) + (p.changed || 0));
+    }
+    return res.json({
+      register,
+      checkedAt: run.finishedAt,
+      repaired: { since, fixes: applied.length, records: applied.reduce((s, p) => s + (p.changed || 0), 0), byField: [...byField].map(([label, records]) => ({ label, records })).sort((a, b) => b.records - a.records) },
+      waiting: (run.proposals || []).filter((p) => !p.applied).length,
+      review: (run.review || []).filter((r) => r.count).map((r) => ({ key: r.key, label: r.label, count: r.count })),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function ucdsCheckReport(req, res, next) {
   try {
     return res.json(await registerCheck.latest(registerTarget(req).register));
@@ -986,6 +1221,7 @@ async function ucdsCheckApply(req, res, next) {
     const result = await registerCheck.apply({ ...target, runId: req.params.id, ids, user: principalOf(req) });
     if (!result.ok) return res.status(result.status).json({ message: result.message });
     await log(req, 'vera:ucds-check:apply', { register: target.register, applied: result.applied, records: result.changed });
+    announceRepair(req, target.register, result.changed, `${result.applied} fix(es) applied`);
     return res.json({ ...result, report: await registerCheck.latest(target.register) });
   } catch (err) {
     return next(err);
@@ -998,6 +1234,7 @@ async function ucdsCheckUndo(req, res, next) {
     const result = await registerCheck.undo({ ...target, runId: req.params.id, id: Number(req.body?.proposalId), user: principalOf(req) });
     if (!result.ok) return res.status(result.status).json({ message: result.message });
     await log(req, 'vera:ucds-check:undo', { register: target.register, proposal: Number(req.body?.proposalId), records: result.restored });
+    announceRepair(req, target.register, 0);
     return res.json({ ...result, report: await registerCheck.latest(target.register) });
   } catch (err) {
     return next(err);
@@ -1010,13 +1247,43 @@ async function ucdsCheckAutoFix(req, res, next) {
     const who = principalOf(req);
     const result = await registerCheck.autoFix({ ...target, cfg: await loadConfig(), by: who?.username || null, user: who });
     await log(req, 'vera:ucds-check:auto-fix', { register: target.register, applied: result.applied, records: result.changed, left: result.left });
+    announceRepair(req, target.register, result.changed, 'Fixed by VERA (certain fixes only)');
     return res.json({ ...result, report: await registerCheck.latest(target.register) });
   } catch (err) {
     return next(err);
   }
 }
 
+// ── POST /api/vera/permit-analysis ───────────────────────────────────────────
+// One record's clearances and permits against the laws, for its Clearances
+// and Permits tab — from the record the screen holds (edits included), so it
+// reads nothing the viewer does not already have (services/vera/permitAnalysis).
+const permitAnalysis = require('../services/vera/permitAnalysis');
+
+function analyzePermits(req, res) {
+  const record = req.body?.record;
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return res.status(400).json({ success: false, message: 'Send the record to analyse.' });
+  const row = Object.fromEntries(permitAnalysis.FIELDS.map((f) => [f, typeof record[f] === 'object' ? null : record[f] ?? null]));
+  const { permits, findings, summary, nov } = permitAnalysis.analyze(row);
+  return res.json({
+    success: true,
+    asOf: new Date().toISOString(),
+    permits,
+    summary,
+    nov,
+    findings: findings.map((f) => ({ ...f, refs: f.refs.map(([law, section]) => `${law}:${section}`), citation: f.refs.length ? permitAnalysis.citation(f.refs) : '' })),
+    law: permitAnalysis.lawTextOf(permitAnalysis.refsOf(findings)),
+  });
+}
+
 module.exports = {
+  analyzePermits,
+  repairsSummary,
+  // For tests: reading the years and the follow-ups of a count question.
+  yearsIn,
+  countQuestionOf,
+  registerCountFor,
+  getModels,
   ucdsCheckReport,
   ucdsCheckScan,
   ucdsCheckApply,

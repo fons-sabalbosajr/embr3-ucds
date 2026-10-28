@@ -3,6 +3,7 @@ import { Table, Button } from "antd";
 import SuggestInput from "../SuggestInput";
 import { isRawLayout, NOV_RECOMMENDATION } from "../registerLayout";
 import { FullDate } from "../DateInputs";
+import VeraPermitCheck from "./VeraPermitCheck";
 import "./permits.css";
 import "../recordform.css";
 
@@ -219,6 +220,7 @@ const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
 
   return (
     <div className={`rf ${isEditing ? "is-editing" : "is-viewing"}`}>
+      <VeraPermitCheck record={editedRecord} />
       <div className="rf-permits">{laws.filter((l) => !l.whenHeld || held(l)).map(permitCard)}</div>
     </div>
   );

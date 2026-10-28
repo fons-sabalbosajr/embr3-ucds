@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { Layout, Menu, Button, Tooltip, Badge, Tag } from "antd";
+import { Layout, Menu, Button, Tooltip, Tag } from "antd";
 import {
-  MessageOutlined,
   DashboardFilled,
   DatabaseFilled,
   LockOutlined,
@@ -44,7 +43,6 @@ import Logo from "./Logo";
 import MenuItemModal from "./MenuItemModal";
 import { useYear } from "../context/YearContext";
 import { API_BASE_URL } from "../config/api";
-import visibleInterval from "../shared/visibleInterval";
 import { useErmsAvailability } from "../shared/ermsAvailability";
 import "./sidemenu.css";
 
@@ -199,33 +197,11 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       needed = ["erms"];
     } else if (path.startsWith("/e-universe/settings/")) {
       needed = ["settings"];
-    } else if (path.startsWith("/e-universe/admin/") || path.startsWith("/e-universe/register/")) {
+    } else if (path.startsWith("/e-universe/admin/")) {
       needed = ["admin"];
     }
     if (needed.length) setOpenKeys((prev) => [...new Set([...prev, ...needed])]);
   }, [location.pathname, activeYear, mainDashboard]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Unread messages in the Action Center, for the badge. Every two minutes,
-  // and only while the tab is in view (see shared/visibleInterval); opening
-  // the Messages page refreshes it at once.
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  useEffect(() => {
-    if (!hasErms) return undefined;
-    let cancelled = false;
-    const load = () =>
-      fetch(`${API_BASE_URL}/api/erms/messages/unread`, { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : { unread: 0 }))
-        .then((body) => {
-          if (!cancelled) setUnreadMessages(Number(body.unread) || 0);
-        })
-        .catch(() => {});
-    load();
-    const stop = visibleInterval(load, 120000);
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [hasErms, location.pathname === "/e-universe/erms/messages"]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hasUcds) return undefined;
@@ -518,7 +494,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
           // The library is the register: every document, by its FSN.
           ["/e-universe/erms/records", "Document Library"],
           // Requests from the public Document Portal (/e-universe/document-portal).
-          ["/e-universe/erms/portal-requests", "Portal Requests"],
+          u === portalUnit && ["/e-universe/erms/portal-requests", "Portal Requests"],
           ["/e-universe/erms/archive", "Archive Boxes"],
           // Uploads per person per day, and the supervisor's check.
           ["/e-universe/erms/upload-tally/records", "Upload Tally"],
@@ -535,8 +511,10 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
           [`/e-universe/erms/${u}/documents`, "Document Library"],
           // Where the unit's paper files sit, as the Records Unit's boxes.
           [`/e-universe/erms/${u}/archive`, "Archive Boxes"],
-          // Portal requests for this unit's documents (the desk shows each unit its own).
-          ["/e-universe/erms/portal-requests", "Portal Requests"],
+          // Portal requests for this unit's documents (the desk shows each unit
+          // its own). One desk, one path: listed under the first unit only,
+          // since a menu key may appear once.
+          u === portalUnit && ["/e-universe/erms/portal-requests", "Portal Requests"],
           // Shared with the Records Unit's, so its path is not under the unit.
           ["/e-universe/erms/upload-tally/" + u, "Upload Tally"],
           // This unit's own settings, separate from the other units'.
@@ -544,6 +522,8 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
         ]
     ).filter(Boolean);
   const ermsUnitsShown = hasErms ? ["records", "legal", "laboratory"].filter((u) => ermsUnits.includes(u)) : [];
+  // The unit whose section lists the shared Portal Requests desk.
+  const portalUnit = ermsUnitsShown.find((u) => !unitClosed(u));
   const flatErms = ermsUnitsShown.length === 1 && !isDeveloper;
   const ermsSections = ermsUnitsShown.flatMap((u) => {
     const key = u === "records" ? "erms" : `erms-${u}`;
@@ -731,18 +711,8 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
         ].filter(Boolean)),
     },
     ...ermsSections,
-    // The Action Center: messages between the people who work in ERMS.
-    hasErms && {
-      key: "/e-universe/erms/messages",
-      icon: <MessageOutlined />,
-      label: (
-        <div className="menu-label-wrapper main">
-          <Link to="/e-universe/erms/messages">
-            Messages <Badge count={unreadMessages} size="small" offset={[4, -2]} />
-          </Link>
-        </div>
-      ),
-    },
+    // Messages (the Action Center) is an icon in the header, beside the bell
+    // (components/HeaderMessages).
     // Anyone with the ERMS domain but no unit yet (a Planning Admin who was
     // given ERMS) still reaches the library; documents are asked for in the
     // Document Portal.
@@ -843,16 +813,6 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
           label: (
             <div className="menu-label-wrapper submenu-item-label">
               <Link to="/e-universe/admin/org-units">Organizational Units</Link>
-            </div>
-          ),
-        },
-        // Monitoring Config, Register Activity and Duplicate Data were three
-        // entries about one thing: the register behind Monitoring Plan.
-        hasUcds && {
-          key: "/e-universe/admin/register",
-          label: (
-            <div className="menu-label-wrapper submenu-item-label">
-              <Link to="/e-universe/admin/register">Register</Link>
             </div>
           ),
         },

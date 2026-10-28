@@ -22,10 +22,22 @@ const pm = require('./permitMatch');
 
 const INDEX_TTL = 10 * 60 * 1000;
 let cached = { at: 0, index: null };
+// A build in progress: callers that arrive meanwhile wait for it rather than
+// each reading the whole Document Library again (3 s on the shared cluster).
+let building = null;
 
 /** The ERMS Document Library as a permit index (main records; attachments share their number). */
 async function ermsIndex() {
   if (cached.index && Date.now() - cached.at < INDEX_TTL) return cached.index;
+  if (!building) {
+    building = buildErmsIndex().finally(() => {
+      building = null;
+    });
+  }
+  return building;
+}
+
+async function buildErmsIndex() {
   const rows = await getDb()
     .collection('erms-records')
     .find({ isAttachment: { $ne: true }, $or: [{ 'permit.number': { $nin: [null, ''] } }, { 'permit.refs.number': { $nin: [null, ''] } }] }, { projection: { serialNo: 1, permit: 1 } })
@@ -164,10 +176,39 @@ async function viewWorkbook(scoped, { serials = [], columns = [], sheet = 'Monit
 
 const provinceLabel = (p) => String(p || 'Unfiled').trim().replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
+// ── The Reports page ─────────────────────────────────────────────────────────
+// Accomplishment and the ERMS validation list both need the whole register
+// with each permit checked against ERMS. On 28 Oct 2026, over the 2027
+// register's 26,199 establishments, that was 2.8 s to read the register,
+// 3.3 s to build the ERMS index (cold) and 0.8 s to match — on every request,
+// for each tab, and again for every province picked. It is now worked out
+// once per scope, kept for a few minutes (cleared by any register edit: the
+// key starts with the controller's REGISTER_CACHE prefix), and both reports
+// are read from it.
+
+const shortCache = require('../../../shared/services/shortCache');
+const REPORTS_TTL = 5 * 60 * 1000;
+const REPORTS_CACHE = 'ucds:register-reports:';
+
+/** Every establishment in scope with its permit's ERMS status, in the register's order. */
+async function anchoredRegister(scoped) {
+  const [docs, index] = await Promise.all([
+    scoped
+      .find({}, { projection: { _id: 0, sort_key: 1, id_no: 1, title: 1, name: 1, ecc_cnc: 1, province: 1, city: 1, date_approved: 1, monitoring_sched: 1, date_monitored: 1 } })
+      .sort({ id_no: 1 })
+      .toArray(),
+    ermsIndex(),
+  ]);
+  return docs.map((d) => ({ ...d, erms: anchorOne(index, d.ecc_cnc).status }));
+}
+
+/** The anchored register for a scope: shared for REPORTS_TTL when `cacheKey` names the scope. */
+const anchoredFor = (scoped, cacheKey) =>
+  cacheKey ? shortCache.cached(`${REPORTS_CACHE}${cacheKey}`, REPORTS_TTL, () => anchoredRegister(scoped)) : anchoredRegister(scoped);
+
 /** Per province: establishments, scheduled, monitored, with a permit, found in ERMS. */
-async function accomplishment(scoped) {
-  const docs = await scoped.find({}, { projection: { province: 1, monitoring_sched: 1, date_monitored: 1, ecc_cnc: 1, title_status: 1 } }).toArray();
-  const index = await ermsIndex();
+async function accomplishment(scoped, { cacheKey } = {}) {
+  const docs = await anchoredFor(scoped, cacheKey);
   const by = new Map();
   for (const d of docs) {
     const p = provinceLabel(d.province);
@@ -176,23 +217,20 @@ async function accomplishment(scoped) {
     r.establishments += 1;
     if (String(d.monitoring_sched || '').trim()) r.scheduled += 1;
     if (String(d.date_monitored || '').trim()) r.monitored += 1;
-    const a = anchorOne(index, d.ecc_cnc);
-    if (a.status !== 'none') r.withPermit += 1;
-    if (a.status === 'found') r.inErms += 1;
-    if (a.status === 'missing') r.notInErms += 1;
+    if (d.erms !== 'none') r.withPermit += 1;
+    if (d.erms === 'found') r.inErms += 1;
+    if (d.erms === 'missing') r.notInErms += 1;
   }
   return [...by.values()].sort((a, b) => b.establishments - a.establishments);
 }
 
 /** Establishments whose permit is not in the ERMS Document Library — the list to validate. */
-async function notInErms(scoped, { province } = {}) {
-  const filter = { ecc_cnc: { $nin: [null, ''] } };
-  if (province) filter.province = provinceRegex(province);
-  const docs = await scoped.find(filter, { projection: { sort_key: 1, title: 1, name: 1, ecc_cnc: 1, province: 1, city: 1, date_approved: 1 } }).sort({ id_no: 1 }).toArray();
-  const index = await ermsIndex();
+async function notInErms(scoped, { province, cacheKey } = {}) {
+  const docs = await anchoredFor(scoped, cacheKey);
+  const inProvince = province ? provinceRegex(province) : null;
   return docs
-    .filter((d) => anchorOne(index, d.ecc_cnc).status === 'missing')
+    .filter((d) => d.erms === 'missing' && (!inProvince || inProvince.test(String(d.province || ''))))
     .map((d) => ({ sort_key: d.sort_key, title: d.title || d.name || '', ecc_cnc: d.ecc_cnc, province: provinceLabel(d.province), city: d.city || '', date_approved: d.date_approved || '' }));
 }
 
-module.exports = { notInErms, ermsIndex, anchorOne, anchor, monitoringPlanWorkbook, viewWorkbook, accomplishment, provinceLabel };
+module.exports = { notInErms, ermsIndex, anchorOne, anchor, monitoringPlanWorkbook, viewWorkbook, accomplishment, provinceLabel, REPORTS_CACHE };

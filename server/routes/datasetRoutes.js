@@ -52,6 +52,12 @@ router.post('/api/ucds/custom-tables/:id/rows', scoped, ctrl.requireTableEdit, l
 router.patch('/api/ucds/custom-tables/:id/rows/:rowId', scoped, ctrl.requireTableEdit, ctrl.updateCustomRow);
 router.post('/api/ucds/custom-tables/:id/rows/delete', scoped, ctrl.requireTableEdit, logActivity, ctrl.deleteCustomRows);
 router.post('/api/ucds/custom-tables/:id/export.xlsx', scoped, expensiveLimiter, ctrl.exportCustomTable);
+// VERA builds a table from the register: the fields, a draft from a sentence
+// (one model call), a preview, and filling the table (services/vera/tableBuilder.js).
+router.get('/api/ucds/custom-tables/:id/vera/catalog', scoped, ctrl.requireTableEdit, ctrl.veraTableCatalog);
+router.post('/api/ucds/custom-tables/:id/vera/draft', scoped, ctrl.requireTableEdit, expensiveLimiter, ctrl.veraTableDraft);
+router.post('/api/ucds/custom-tables/:id/vera/preview', scoped, ctrl.requireTableEdit, ctrl.veraTablePreview);
+router.post('/api/ucds/custom-tables/:id/vera/build', scoped, ctrl.requireTableEdit, expensiveLimiter, logActivity, ctrl.veraTableBuild);
 
 // Reading a whole spreadsheet or streaming a whole dataset is the expensive
 // tier: a few a minute per person, not a few a second.

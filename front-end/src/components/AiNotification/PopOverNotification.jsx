@@ -25,6 +25,10 @@ import {
   UserAddOutlined,
   RobotOutlined,
   FileSearchOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  SafetyCertificateOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
@@ -48,6 +52,13 @@ const ITEM_LOOK = {
   "admin-signup": [UserAddOutlined, "green"],
   "vera-corrections": [RobotOutlined, "purple"],
   "vera-links": [RobotOutlined, "purple"],
+  // VERA's repairs of the register, and her permit findings (the VERA tab).
+  "vera-repaired": [CheckCircleOutlined, "green"],
+  "vera-waiting": [ToolOutlined, "purple"],
+  "vera-permit-missing": [SafetyCertificateOutlined, "red"],
+  "vera-permit-expired": [SafetyCertificateOutlined, "red"],
+  "vera-permit-expiring": [ClockCircleOutlined, "gold"],
+  "vera-permit-nov": [ExclamationCircleOutlined, "volcano"],
   "portal-decide": [FileSearchOutlined, "gold"],
   "portal-chat": [MailOutlined, "blue"],
 };
@@ -662,6 +673,7 @@ const NotificationsPopover = ({
   const registerCount = groupedKeys.length;
   const duplicateCount = processedComputedWarnings.length;
   const ermsCount = ermsNotifications.filter((i) => i.group === "ERMS").length;
+  const veraCount = ermsNotifications.filter((i) => i.group === "VERA").length;
   const label = (text, n) => (
     <span>
       {text}
@@ -673,10 +685,11 @@ const NotificationsPopover = ({
     hasErms && { key: "erms", label: label("ERMS", ermsCount), children: actionGroup("ERMS") },
     hasUcds && { key: "register", label: label("Register", registerCount), children: notificationsContent },
     hasUcds && { key: "duplicates", label: label("Duplicates", duplicateCount), children: warningsContent },
+    veraCount > 0 && { key: "vera", label: label("VERA", veraCount), children: actionGroup("VERA") },
     hasAdmin && { key: "admin", label: label("Admin", ermsNotifications.filter((i) => i.group === "Admin").length), children: actionGroup("Admin") },
   ].filter(Boolean);
   // Open on the first tab with something in it.
-  const firstBusy = tabItems.find((t) => (t.key === "erms" ? ermsCount : t.key === "register" ? registerCount : t.key === "duplicates" ? duplicateCount : t.key === "portal" ? portalCount : 1))?.key;
+  const firstBusy = tabItems.find((t) => (t.key === "erms" ? ermsCount : t.key === "register" ? registerCount : t.key === "duplicates" ? duplicateCount : t.key === "portal" ? portalCount : t.key === "vera" ? veraCount : 1))?.key;
   const activeTab = tabItems.some((t) => t.key === tab) ? tab : firstBusy || tabItems[0]?.key;
   const total = registerCount + duplicateCount + ermsNotifications.length;
   const busy = isLoading || isProcessingNotifications || isProcessingWarnings;

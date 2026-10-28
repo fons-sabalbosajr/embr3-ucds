@@ -16,9 +16,10 @@
 //     record. "Let VERA fix it" applies only what she is certain of.
 //
 //   For review — what needs a person: the same permit on more than one firm,
-//     firms with no title, city or permit, coordinates outside Region III,
-//     permits past their expiry. Listed with the serials to open; VERA does
-//     not change these.
+//     each firm's clearances and permits against the laws (missing, expired,
+//     expiring, an NOV recommended, entries to correct — services/vera/
+//     permitAnalysis.js), firms with no title or city, coordinates outside
+//     Region III. Listed with the serials to open; VERA does not change these.
 //
 // Reports are kept in vera-ucds-checks, one current per register.
 // ---------------------------------------------------------------------------
@@ -28,7 +29,8 @@ const { connectToMongo, getDb } = require('../../../config/db');
 const { sameWording, spellingByRule, spellingByModel, tidy } = require('../../../services/vera/dataCorrections');
 const provider = require('../../../services/vera/provider');
 const { PROVINCES } = require('../../../services/provinces');
-const pm = require('./permitMatch');
+const { ermsPermitFindings } = require('./permitDuplicates');
+const permitAnalysis = require('../../../services/vera/permitAnalysis');
 
 const COLLECTION = 'vera-ucds-checks';
 const checks = () => getDb().collection(COLLECTION);
@@ -184,7 +186,7 @@ async function scan({ col, register, cfg, by }) {
           notes.push(`Industry classifications spell-checked by VERA's model (${r.model || 'model'})${r.rejected ? `; ${r.rejected} suggestion(s) refused as more than a spelling fix` : ''}.`);
         } catch (err) {
           spelling = spellingByRule(field, first.canonical);
-          notes.push(`The AI model could not be reached (${err.code || err.message}); industry classifications were paired by rule instead.`);
+          notes.push(`The AI model could not be used — ${err.message} Industry classifications were paired by rule instead.`);
         }
       } else {
         spelling = spellingByRule(field, first.canonical);
@@ -207,10 +209,12 @@ async function scan({ col, register, cfg, by }) {
   const swapped = [];
   const outside = [];
   const missing = [];
-  const expired = [];
-  const byPermit = new Map();
-  const today = new Date();
-  const cursor = col.find({}, { projection: { sort_key: 1, title: 1, name: 1, city: 1, province: 1, ecc_cnc: 1, lat: 1, long: 1, pto_code: 1, pto_expiration: 1, wwdp_code: 1, wwdp_expiration: 1 } });
+  // Each record's clearances and permits against the laws (permitAnalysis.js).
+  const permits = permitAnalysis.collector();
+  // Every row with a permit, for the shared-permit check against ERMS.
+  const permitRows = [];
+  const projection = Object.fromEntries([...permitAnalysis.FIELDS, 'lat', 'long'].map((f) => [f, 1]));
+  const cursor = col.find({}, { projection });
   let total = 0;
   for await (const d of cursor) {
     total += 1;
@@ -224,35 +228,33 @@ async function scan({ col, register, cfg, by }) {
     const gaps = [];
     if (blank(d.title) && blank(d.name)) gaps.push('title');
     if (blank(d.city)) gaps.push('city');
-    if (blank(d.ecc_cnc)) gaps.push('ECC/CNC');
     if (gaps.length) missing.push({ ...ref, detail: gaps.join(', ') });
-    for (const [code, exp, label] of [['pto_code', 'pto_expiration', 'PTO'], ['wwdp_code', 'wwdp_expiration', 'WWDP']]) {
-      const when = !blank(d[code]) && dateOf(d[exp]);
-      if (when && when < today) expired.push({ ...ref, detail: `${label} ${d[code]} expired ${d[exp]}` });
-    }
-    if (!blank(d.ecc_cnc)) {
-      // The first permit number in the field, compared loosely (hyphens,
-      // spaces, padding), as the ERMS anchor compares them.
-      const first = pm.numbersIn(d.ecc_cnc)[0] || d.ecc_cnc;
-      const key = pm.unpadded(first) || pm.loosen(first);
-      if (key && key.length >= 6) {
-        if (!byPermit.has(key)) byPermit.set(key, []);
-        byPermit.get(key).push({ ...ref, detail: d.ecc_cnc });
-      }
-    }
+    permits.add(d);
+    if (!blank(d.ecc_cnc)) permitRows.push({ _id: d._id, sort_key: d.sort_key, title: d.title || '', name: d.name || '', province: d.province || '', ecc_cnc: d.ecc_cnc });
   }
-  const duplicates = [...byPermit.values()].filter((list) => list.length > 1);
+
+  // The same permit on several firms, settled from the ERMS documents where
+  // they say whose it is (permitDuplicates.js). Never fatal to the check.
+  let shared = { proposals: [], review: [], notes: [] };
+  try {
+    shared = await ermsPermitFindings(permitRows);
+  } catch (err) {
+    notes.push(`The shared permits could not be checked against ERMS (${err.message}).`);
+  }
+  fixes.push(...shared.proposals);
+  notes.push(...shared.notes);
 
   if (swapped.length) {
     fixes.push({ field: COORDS, from: 'latitude ↔ longitude', to: 'swapped back', count: swapped.length, reason: 'Latitude and longitude entered the wrong way round', method: 'rule', confidence: 'certain', targets: swapped.map((s) => s._id), samples: swapped.slice(0, MAX_SAMPLES).map(({ _id, ...s }) => ({ ...s, detail: `${s.lat}, ${s.long}` })) });
   }
 
   const review = [
-    { key: 'duplicate-permits', label: 'The same permit on more than one firm', hint: 'Open each and keep the right firm on the permit; the other may be a duplicate to archive or a typing slip.', count: duplicates.length, samples: duplicates.slice(0, MAX_SAMPLES).map((g) => ({ sort_key: g.map((x) => x.sort_key).join(', '), title: g.map((x) => x.title).filter(Boolean).slice(0, 2).join(' / '), province: g[0].province, detail: g[0].detail })) },
-    { key: 'missing', label: 'Firms missing a title, city or permit', hint: 'Fill these from the permit or the last inspection report.', count: missing.length, samples: missing.slice(0, MAX_SAMPLES) },
+    ...shared.review,
+    ...permits.groups(),
+    { key: 'missing', label: 'Firms missing a title or city', hint: 'Fill these from the permit or the last inspection report.', count: missing.length, samples: missing.slice(0, MAX_SAMPLES) },
     { key: 'outside-region', label: 'Coordinates outside Region III', hint: 'Check the latitude and longitude against the address; a digit is often missing.', count: outside.length, samples: outside.slice(0, MAX_SAMPLES) },
-    { key: 'expired', label: 'Permits past their expiry', hint: 'Due for renewal: confirm with the firm, then update the permit dates.', count: expired.length, samples: expired.slice(0, MAX_SAMPLES) },
   ];
+  notes.push("Clearances and permits checked against PD 1586, RA 8749, RA 9275 and RA 6969 (VERA's law library); each finding names the sections it rests on.");
 
   const proposals = fixes
     .sort((a, b) => (a.field === b.field ? b.count - a.count : a.field.localeCompare(b.field)))
@@ -273,7 +275,7 @@ async function scan({ col, register, cfg, by }) {
   return { _id: insertedId, ...doc };
 }
 
-const labelOf = (field) => (field === COORDS ? 'Coordinates' : FIELDS[field]?.label || field);
+const labelOf = (field) => (field === COORDS ? 'Coordinates' : field === 'ecc_cnc' ? 'ECC/CNC (from ERMS)' : FIELDS[field]?.label || field);
 
 const publicRun = (run) =>
   run && {
@@ -285,7 +287,7 @@ const publicRun = (run) =>
     by: run.by,
     notes: run.notes || [],
     totals: run.totals,
-    proposals: (run.proposals || []).map(({ appliedIds, targets, ...p }) => ({ ...p, fieldLabel: labelOf(p.field) })),
+    proposals: (run.proposals || []).map(({ appliedIds, targets, recordId, ...p }) => ({ ...p, fieldLabel: labelOf(p.field) })),
     review: run.review || [],
   };
 
@@ -309,7 +311,13 @@ async function apply({ col, register, runId, ids, user }) {
   const stamp = { updated_at: now, updated_by: `VERA (approved by ${who})` };
   let changed = 0;
   for (const p of wanted) {
-    if (p.field === COORDS) {
+    if (p.method === 'erms') {
+      // One record's own permit from ERMS (permitDuplicates.js): changed only
+      // while it still holds the shared number it was proposed against.
+      const res = await col.updateOne({ _id: p.recordId, ecc_cnc: p.oldValue }, { $set: { ecc_cnc: p.newValue, ...stamp } });
+      p.changed = res.modifiedCount;
+      p.appliedIds = res.modifiedCount ? [p.recordId] : [];
+    } else if (p.field === COORDS) {
       // Swap each record's own pair, only where it is still the wrong way round.
       let n = 0;
       for (const _id of p.targets || []) {
@@ -354,7 +362,10 @@ async function undo({ col, register, runId, id, user }) {
   if (!p || !p.applied || p.superseded) return { ok: false, status: 404, message: 'Nothing to undo there.' };
   const stamp = { updated_at: new Date(), updated_by: `VERA undo (by ${user?.username || 'unknown'})` };
   let restored = 0;
-  if (p.field === COORDS) {
+  if (p.method === 'erms') {
+    // Back to the number it held, unless someone has changed it since.
+    if ((p.appliedIds || []).length) restored = (await col.updateOne({ _id: p.recordId, ecc_cnc: p.newValue }, { $set: { ecc_cnc: p.oldValue, ...stamp } })).modifiedCount;
+  } else if (p.field === COORDS) {
     for (const _id of p.appliedIds || []) {
       const d = await col.findOne({ _id }, { projection: { lat: 1, long: 1 } });
       if (!d) continue;

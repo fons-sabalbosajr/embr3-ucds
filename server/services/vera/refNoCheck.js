@@ -161,7 +161,7 @@ async function checkOne(cfg, serialNo, by, { force = false } = {}) {
       model = out.model || null;
       if (!reading) failure = 'VERA could not make out an answer from the model.';
     } catch (err) {
-      failure = `The AI model could not be reached (${err.code || err.message}).`;
+      failure = `The AI model could not be used — ${err.message}`;
     }
   }
 

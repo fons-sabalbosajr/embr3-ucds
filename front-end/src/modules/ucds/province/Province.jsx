@@ -41,6 +41,8 @@ import {
   FileExcelOutlined,
   FilePdfOutlined,
   TableOutlined,
+  EnvironmentOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { DataContext } from "./DataContext";
 import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
@@ -49,7 +51,7 @@ import Highlighter from "react-highlight-words";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
-import SectionDetailsModal from "./sectiondetails/SectionDetailsModal";
+import { sectionColor, sectionLabel, splitSections } from "./sectionColors";
 import AddProvinceModal from "./actions/AddProvinceModal";
 import moment from "moment"; // Import moment for date calculations
 import { io } from "socket.io-client";
@@ -60,6 +62,8 @@ import { UcdsHeader } from "../ucdsTheme";
 import FloatingModal from "../../../shared/components/FloatingModal";
 // The spreadsheet view, in its own chunk: loaded when opened.
 const SpreadsheetView = lazy(() => import("./spreadsheet/SpreadsheetView"));
+// An establishment on the map (Industry Details' Map button), with Leaflet: loaded on first use.
+const EstablishmentMap = lazy(() => import("./EstablishmentMap"));
 
 /** A province's key in the account's permissions ("Nueva_Ecija" -> "nuevaEcija"), as the record view reads it. */
 const provincePermissionKey = (name) =>
@@ -106,16 +110,14 @@ const Province = ({ theme, currentUser }) => {
   }, [registerPageSize]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]); // For table row selection
   const displayProvinceName = formatProvinceNameForDisplay(provinceName);
-  const [tags, setTags] = useState([]);
-  const [inputVisible, setInputVisible] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const inputRef = useRef(null);
   const searchInput = useRef(null);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isModalVisibleAdd, setIsModalVisibleAdd] = useState(false);
   const [isModalDuplicateVisible, setIsModalDuplicateVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  // The establishment shown on the map (Industry Details' Map button), or null.
+  const [mapRecord, setMapRecord] = useState(null);
   const [isEditing, setIsEditing] = useState(false); // For ProvinceModal
   const [originalData, setOriginalData] = useState([]);
   // Each establishment's permit against the ERMS Document Library: sort_key →
@@ -172,20 +174,13 @@ const Province = ({ theme, currentUser }) => {
   const [selectedDuplicate, setSelectedDuplicate] = useState(null);
   const [duplicateRecords, setDuplicateRecords] = useState([]);
   const [selectedDuplicateRowKeys, setSelectedDuplicateRowKeys] = useState([]);
-  const [filterDuplicates, setFilterDuplicates] = useState(false);
   const [searchedColumn, setSearchedColumn] = useState("");
   const [searchText, setSearchText] = useState("");
   const [dateRange, setDateRange] = useState(null); // Initialize as null for clarity
-  // Structured filters (industry, municipality, permits, NOV, …). Combined
-  // with the keyword tags and evaluated client-side over the province rows.
+  // Structured filters (industry, municipality, permits, NOV, …), evaluated
+  // client-side over the province rows.
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [filteredData, setFilteredData] = useState(originalData);
-  const [sectionCounts, setSectionCounts] = useState({});
-  const [isDateRangeApplied, setIsDateRangeApplied] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedSection, setSelectedSection] = useState("");
-  const [sectionDetails, setSectionDetails] = useState([]);
-  const [selectedSectionData, setSelectedSectionData] = useState([]); // Combined with sectionDetails logic
   const [progress, setProgress] = useState(0); // Progress state
   const socketRef = useRef(null);
 
@@ -207,112 +202,6 @@ const Province = ({ theme, currentUser }) => {
     if (!originalData || originalData.length === 0) return [];
 
     return originalData.filter((record) => {
-      const searchableFields = [
-        record.id_no,
-        record.sort_key,
-        record.title,
-        record.name,
-        record.address,
-        record.ecc_cnc,
-        record.industry_class,
-        record.remarks_recommendations,
-        record.industry_type,
-        record.industry_subtype,
-        record.psic_code,
-        record.proj_type,
-        record.mbu_area,
-        record.waterbody,
-        record.long,
-        record.lat,
-        record.cong_district,
-        record.street,
-        record.brgy,
-        record.city,
-        record.province,
-        record.emp_no_total,
-        record.wwtftype,
-        record.bod,
-        record.section_incharged,
-        record.handler,
-        record.monitoring_sched,
-        record.iis_no_2024,
-        record.iis_no_2025,
-        record.insp_type,
-        record.report_type,
-        record.date_monitored,
-        record.date_routed,
-        record.date_signed,
-        record.days_dmds,
-        record.days_dsdrs,
-        record.pismu_tracking,
-        record.with_nov,
-        record.pismu_count_month,
-        record.pd1586,
-        record.permit_process,
-        record.date_amend,
-        record.date_approved,
-        record.ra8749,
-        record.pto_code,
-        record.pto_issued,
-        record.pto_expiration,
-        record.ra9275,
-        record.wwdp_code,
-        record.wwdp_issued,
-        record.wwdp_expiration,
-        record.ra6969,
-        record.haz_id,
-        record.haz_issued,
-        record.tsd_required,
-        record.tsd,
-        record.tp_trc_required,
-        record.tsd_ref_no,
-        record.tsd_expiration,
-        record.tp_trc,
-        record.tp_trc_ref_no,
-        record.tp_trc_expiration,
-        record.chemical_permit_required,
-        record.chemical_permit,
-        record.chemical_permit_type,
-        record.chemical_permit_sub_type,
-        record.chem_permit_issued,
-        record.chem_permit_exp,
-        record.pco,
-        record.pco_no,
-        record.pco_name,
-        record.pco_tel_no,
-        record.pco_validity,
-        record.docket_no,
-        record.denr_pab_case_no,
-        record.date_forwarded,
-        record.date_approved_clegal,
-        record.days_dfda,
-        record.service_mode,
-        record.nov_released,
-        record.v_pd1586,
-        record.v_ra9275,
-        record.v_ra8749,
-        record.v_haz,
-        record.v_tchem,
-        record.tc_date_sched,
-        record.tc_date_actual,
-        record.time,
-        record.legal_officer,
-        record.tc_commitment,
-        record.pos_paper,
-        record.penalty,
-        record.amount,
-        record.or_number,
-        record.tc_order_compliance,
-        record.remarks,
-        record.resolution,
-        record.order,
-        record.order_status,
-        record.mbu_priority,
-        record.mbu_survey,
-        record.mbu_survey_request,
-        record.dp_universe,
-        record.color,
-      ].map((field) => (field != null ? String(field) : "").toLowerCase());
 
       // 1. Date Range Filter
       const recordDateSigned = record.date_signed
@@ -333,56 +222,14 @@ const Province = ({ theme, currentUser }) => {
       // 1b. Structured filters, all of which must hold.
       if (!matchesFilters(record, filters)) return false;
 
-      // 2. Keyword Filters (tags and inputValue)
-      // If no active keyword filters after date filter, the record passes
-      if (tags.length === 0 && !inputValue) {
-        return true;
-      }
-
-      let matchesAllTags = true;
-      if (tags.length > 0) {
-        matchesAllTags = tags.every((tag) =>
-          searchableFields.some((field) => field.includes(tag.toLowerCase()))
-        );
-      }
-
-      let matchesInputValueCriteria = true; // True if inputValue is empty
-      if (inputValue) {
-        const lowerInputValue = inputValue.toLowerCase();
-        const generalInputMatch = searchableFields.some((field) =>
-          field.includes(lowerInputValue)
-        );
-        const pismuMatch =
-          (lowerInputValue.includes("received") ||
-            lowerInputValue.includes("pismu") ||
-            lowerInputValue.includes("planning")) &&
-          record.pismu_tracking === "✔";
-        const dateSignedMatch =
-          lowerInputValue === "date signed" && record.date_signed;
-        matchesInputValueCriteria =
-          generalInputMatch || pismuMatch || dateSignedMatch;
-      }
-
-      if (tags.length > 0 && inputValue) {
-        return matchesAllTags && matchesInputValueCriteria;
-      } else if (tags.length > 0) {
-        return matchesAllTags;
-      } else if (inputValue) {
-        return matchesInputValueCriteria;
-      }
-
-      return false; // Fallback, should be covered by above conditions
+      return true;
     });
-  }, [originalData, dateRange, tags, inputValue, filters]);
+  }, [originalData, dateRange, filters]);
 
   useEffect(() => {
-    // This useEffect is responsible for updating filteredData and sectionCounts
+    // This useEffect is responsible for updating filteredData
     // whenever the source data or any primary filter criteria change.
-    const filtered = filterData();
-    setFilteredData(filtered);
-
-    const counts = calculateSectionCounts(filtered);
-    setSectionCounts(counts);
+    setFilteredData(filterData());
   }, [filterData]); // Depends on the memoized filterData function
 
   // A reload with rows already on screen refreshes them in place — a thin
@@ -433,12 +280,6 @@ const Province = ({ theme, currentUser }) => {
       }, 450);
     }
   };
-
-  useEffect(() => {
-    if (inputVisible) {
-      inputRef.current?.focus();
-    }
-  }, [inputVisible]);
 
   const findDuplicateECC = (records) => {
     const eccCount = {};
@@ -500,45 +341,6 @@ const Province = ({ theme, currentUser }) => {
       socket.off("connect", handleConnect);
     };
   }, [currentUser, displayProvinceName]);
-
-  const calculateSectionCounts = (data) => {
-    const counts = {};
-    data.forEach((record) => {
-      const sections = record.section_incharged
-        ? record.section_incharged.split(",").map((s) => s.trim())
-        : ["NoSectionIncharged"];
-      sections.forEach((section) => {
-        counts[section] = counts[section] ? counts[section] + 1 : 1;
-      });
-    });
-    return counts;
-  };
-
-  const handleSectionClick = (section) => {
-    if (isDateRangeApplied) {
-      console.log("Cannot click on section because date range is applied");
-      return; // Prevent further action
-    }
-
-    // Filter data based on the selected section
-    const filteredSectionData = filteredData.filter((item) => {
-      const sections = item.section_incharged
-        ? item.section_incharged.split(",").map((s) => s.trim())
-        : ["NoSectionIncharged"];
-      return sections.includes(section);
-    });
-
-    setSelectedSection(section); // Set the selected section
-    setSelectedSectionData(filteredSectionData); // Set the filtered data for the section
-    setIsModalOpen(true); // Open the modal // This state was `selectedSectionData` before, ensure it's correct
-  };
-
-  const handleCloseSectionModal = () => {
-    setIsModalOpen(false); // Close the modal
-    setSelectedSection(""); // Clear the selected section
-    setSelectedSectionData([]); // Clear the section data
-    setSectionDetails([]); // Clear the section details
-  };
 
   const onRowClick = (record) => {
     const selectedIndex = selectedRowKeys.indexOf(record.sort_key);
@@ -797,13 +599,6 @@ const Province = ({ theme, currentUser }) => {
         record.color,
       ].map((field) => (typeof field === "string" ? field : "").toLowerCase());
 
-      // Check if all tags match cumulatively
-      const isMatchingTags =
-        tags.length === 0 ||
-        tags.every((tag) =>
-          searchableFields.some((field) => field.includes(tag.toLowerCase()))
-        );
-
       // Check if input value matches any record detail cumulatively
       const isMatchingInput = searchableFields.some((field) =>
         field.includes(lowerValue)
@@ -818,10 +613,7 @@ const Province = ({ theme, currentUser }) => {
       const isMatchingDateSigned =
         lowerValue === "date signed" && record.date_signed;
 
-      return (
-        isMatchingTags &&
-        (isMatchingInput || isMatchingPismuTracking || isMatchingDateSigned)
-      );
+      return isMatchingInput || isMatchingPismuTracking || isMatchingDateSigned;
     });
 
     // Update filteredData state
@@ -849,109 +641,6 @@ const Province = ({ theme, currentUser }) => {
       color: dark ? mix(0.55, 255) : mix(0.55, 0),
     };
   };
-
-  const sectionBackgroundColor = (section) => {
-    switch (section) {
-      case "PEMU_Aurora":
-      case "PEMU_AURORA":
-        return "#A4B465";
-
-      case "PEMU_Bataan":
-      case "PEMU_BATAAN":
-        return "#D2D0A0"; // Biege. pero pag namonitor na, transparent
-
-      case "PEMU_Bulacan":
-      case "PEMU_BULACAN":
-        return "#7A73D1"; // Light purple
-
-      case "PEMU_Nueva Ecija":
-      case "PEMU_Nueva_Ecija":
-      case "PEMU_NUEVA ECIJA":
-      case "PEMU_NUEVA_ECIJA":
-        return "#DDA853"; // Yellow
-
-      case "PEMU_Pampanga":
-      case "PEMU_PAMPANGA":
-        return "#DF9755"; // Yellow
-
-      case "PEMU_Tarlac":
-      case "PEMU_TARLAC":
-        return "#39C665"; // Green
-
-      case "PEMU_Zambales":
-      case "PEMU_ZAMBALES":
-        return "#161A30"; // Light lavender
-
-      case "MBU":
-      case "mbu":
-        return "#FF9B3E"; // Light green
-
-      case "TCHWMS":
-      case "tchwms":
-        return "#936DDF";
-
-      case "AWECMES":
-      case "awecmes":
-        return "#626F47";
-
-      case "":
-        return "transparent";
-
-      case "TCHWMS/MBU":
-        return "linear-gradient(to right, #936DDF, #FF9B3E)"; // Dual tone color for TCHWMS/MBU
-
-      default:
-        return "gray"; // Default transparent background
-    }
-  };
-
-  const handleClose = (removedTag) => {
-    setTags((prevTags) => prevTags.filter((tag) => tag !== removedTag));
-  };
-
-  const handleInputChange = (e) => {
-    setInputValue(e.target.value);
-  };
-
-  const handleInputConfirm = () => {
-    if (inputValue) {
-      if (inputValue.toLowerCase() === "duplicate") {
-        setFilterDuplicates(true);
-        setTags([]); // Clear existing tags if "duplicate" is used
-      } else if (!tags.includes(inputValue)) {
-        setTags((prevTags) => [...prevTags, inputValue]);
-        setFilterDuplicates(false); // Reset filter if other keyword is entered
-      }
-    }
-    setInputVisible(false);
-    setInputValue(""); // Clearing inputValue will trigger the main filtering useEffect
-  };
-
-  const tagPlusStyle = {
-    background: "#108ee9",
-    borderStyle: "dashed",
-  };
-
-  const forMap = (tag) => (
-    <span key={tag} style={{ display: "inline-block" }}>
-      <Tag
-        closable
-        onClose={(e) => {
-          e.preventDefault();
-          handleClose(tag);
-        }}
-      >
-        {tag}
-      </Tag>
-    </span>
-  );
-
-  const tagChild = tags.map(forMap);
-
-  const duplicateEccCnc = duplicateRecords.map((record) => record.ecc_cnc);
-  const filteredDuplicateData = filterDuplicates
-    ? paginatedData.filter((record) => duplicateEccCnc.includes(record.ecc_cnc))
-    : paginatedData;
 
   const handleToggleEdit = () => {
     setIsEditing(!isEditing);
@@ -1020,7 +709,7 @@ const Province = ({ theme, currentUser }) => {
           { title: "ID No.", dataKey: "sort_key" },
           { title: "Industry Details", dataKey: "industryDetails" },
           { title: "Industry Classification", dataKey: "industry_class" },
-          { title: "Permits/Clearances", dataKey: "permits_clearances" },
+          { title: "Permits/Clearances", dataKey: "permits_clearances"},
           { title: "Section/Unit Incharged", dataKey: "section_incharged" },
           {
             title: "Remarks/Recommendations",
@@ -1192,49 +881,6 @@ const Province = ({ theme, currentUser }) => {
     setSelectedDuplicateRowKeys([]);
   };
 
-  const normalizeSectionName = (sectionName) => {
-    if (!sectionName) return "No Section Incharged"; // Handle blank or undefined section names
-    return sectionName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]/gi, ""); // Normalize by trimming, converting to lowercase, and removing symbols
-  };
-
-  const mergeSections = (sectionCounts) => {
-    const mergedSections = {};
-
-    Object.entries(sectionCounts).forEach(([section, count]) => {
-      const normalizedSection = normalizeSectionName(section);
-
-      if (normalizedSection) {
-        if (mergedSections[normalizedSection]) {
-          mergedSections[normalizedSection].count += count;
-        } else {
-          mergedSections[normalizedSection] = {
-            count: count,
-            originalName: section, // Store the original section name
-          };
-        }
-      } else {
-        if (mergedSections["No Section Incharged"]) {
-          mergedSections["No Section Incharged"].count += count;
-        } else {
-          mergedSections["No Section Incharged"] = {
-            count: count,
-            originalName: "No Section Incharged",
-          };
-        }
-      }
-    });
-
-    return Object.entries(mergedSections)
-      .sort(([, { count: countA }], [, { count: countB }]) => countB - countA) // Sort descending by count
-      .reduce((sorted, [key, value]) => {
-        sorted[value.originalName] = value.count; // Use the original name as the key
-        return sorted;
-      }, {});
-  };
-
   const showModalAdd = () => {
     setIsModalVisibleAdd(true);
   };
@@ -1257,9 +903,6 @@ const Province = ({ theme, currentUser }) => {
       strValue.includes("application no")
     );
   };
-
-  // Assuming sectionCounts is the original data you provided
-  const mergedSectionCounts = mergeSections(sectionCounts);
 
   const duplicateColumns = [
     {
@@ -1319,20 +962,22 @@ const Province = ({ theme, currentUser }) => {
     },
   ];
 
+  // Widths are shares of the table, not pixels, so the register fits the
+  // card at any screen width (tableLayout="fixed" on the Table, text wraps).
   const columns = [
     {
       title: "ID No.",
       dataIndex: "sort_key",
       key: "sort_key",
       align: "left",
-      width: 92,
+      width: "7%",
       ...getColumnSearchProps("sort_key"),
       // "AU-00002" shows as AU-2; a two-part prefix ("HCCP-NE-00001", the
       // healthcare and chemical universes) keeps both parts.
       render: (text) => {
         if (typeof text !== "string") return text;
         const m = /^(.*)-0*(\d+)$/.exec(text);
-        return <div style={{ whiteSpace: "nowrap" }}>{m ? `${m[1]}-${m[2]}` : text}</div>;
+        return <div>{m ? `${m[1]}-${m[2]}` : text}</div>;
       },
     },
     {
@@ -1346,6 +991,8 @@ const Province = ({ theme, currentUser }) => {
       render: (text, record) => {
         const isDuplicate = duplicates[record.ecc_cnc]; // Check if the current record's `ecc_cnc` is a duplicate
 
+        // The ECC/CNC is in Permits/Clearances beside it; here, where the
+        // establishment is — and a small button to see it on the map.
         return (
           <div>
             <strong>{record.title}</strong>
@@ -1353,29 +1000,42 @@ const Province = ({ theme, currentUser }) => {
             Proponent Name: <i>{record.name}</i>
             <br />
             Address: {record.address}
-            <br />
-            ECC/CNC Ref. No.:{" "}
-            {isDuplicate ? (
-              <a
-                onClick={() => showModalDuplicate(record)} // Open modal on click
-                style={{ color: "red", fontWeight: "bold", cursor: "pointer" }} // Highlight duplicates in red
+            <div className="ucds-details-actions">
+              <Button
+                size="small"
+                type="text"
+                icon={<EnvironmentOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMapRecord(record);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
               >
-                {record.ecc_cnc}
-              </a>
-            ) : (
-              <a
-                href={`https://ecconline.emb.gov.ph/live/Account/Login.aspx/`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {record.ecc_cnc}
-              </a>
-            )}
+                Map
+              </Button>
+              {isDuplicate && (
+                <Tooltip title="Another establishment has the same ECC/CNC — open to compare or delist">
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    icon={<WarningOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      showModalDuplicate(record);
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    Shared ECC
+                  </Button>
+                </Tooltip>
+              )}
+            </div>
           </div>
         );
       },
       align: "left",
-      width: "300px",
+      width: "21%",
     },
     {
       title: "Industry Classification",
@@ -1383,7 +1043,7 @@ const Province = ({ theme, currentUser }) => {
       ...getColumnSearchProps("industry_class"),
       render: (text, record) => <div>{record.industry_class}</div>,
       align: "center",
-      width: 150,
+      width: "10%",
     },
     {
       // Five fixed lines, in the same order on every row — ECC/CNC, PTO,
@@ -1405,7 +1065,8 @@ const Province = ({ theme, currentUser }) => {
         </Tooltip>
       ),
       key: "permits_clearances",
-      width: 250,
+      width: "17%",
+      align: "left",
       render: (text, record) => {
         const expiryOf = (v) => {
           const m = moment(String(v || ""), ["MM/DD/YYYY", "M/D/YYYY", "YYYY-MM-DD", "MMM D, YYYY", "MMMM D, YYYY"], true);
@@ -1483,10 +1144,9 @@ const Province = ({ theme, currentUser }) => {
       key: "section_incharged",
       ...getColumnSearchProps("section_incharged"),
       render: (text, record) => {
-        // Split sections by comma
-        const sections = String(record.section_incharged || "")
-          .split(",")
-          .map((section) => section.trim());
+        // Split sections by comma; a record with none shows no tag.
+        const sections = splitSections(record.section_incharged);
+        if (sections.length === 0) return null;
 
         return (
           <div
@@ -1500,7 +1160,7 @@ const Province = ({ theme, currentUser }) => {
               // The section's own colour as a soft chip: a light tint behind,
               // a firmer edge, and the ink a deep (or, in dark mode, light)
               // shade of the same hue — readable whatever the colour.
-              const backgroundColor = sectionBackgroundColor(section); // the section's colour
+              const backgroundColor = sectionColor(section); // the section's colour
               const darkerBackgroundColor = darkenColor(backgroundColor, -40); // for the tooltip
               const chip = sectionChip(backgroundColor, theme === "dark");
 
@@ -1526,7 +1186,7 @@ const Province = ({ theme, currentUser }) => {
                 >
                   <div className="ucds-section-chip" style={chip}>
                     <i style={{ background: chip.borderColor }} />
-                    {String(section).replace(/_/g, " ")}
+                    {sectionLabel(section)}
                   </div>
                 </Tooltip>
               );
@@ -1535,7 +1195,7 @@ const Province = ({ theme, currentUser }) => {
         );
       },
       align: "center",
-      width: 150,
+      width: "10%",
     },
     {
       title: (
@@ -1548,7 +1208,7 @@ const Province = ({ theme, currentUser }) => {
       // From 2027 the RAW workbooks' Remarks/Recommendations column is `recommendations`.
       render: (text, record) => <div>{isRawLayout(record) ? record.recommendations : record.remarks}</div>,
       align: "center",
-      width: 200,
+      width: "13%",
     },
     {
       title: (
@@ -1557,7 +1217,7 @@ const Province = ({ theme, currentUser }) => {
         </div>
       ),
       key: "monitoringStatus",
-      width: 200,
+      width: "14%",
       align: "left",
       ...getColumnSearchProps("iis_no"),
       render: (text, record) => (
@@ -1721,7 +1381,7 @@ const Province = ({ theme, currentUser }) => {
       title: "Actions",
       key: "actions",
       align: "center",
-      width: 100,
+      width: "8%",
       render: (text, record) => (
         <div>
           <Tooltip title="View Details" style={{ fontSize: "11px" }}>
@@ -1782,6 +1442,27 @@ const Province = ({ theme, currentUser }) => {
         </Suspense>
       )}
 
+      <Modal
+        open={Boolean(mapRecord)}
+        onCancel={() => setMapRecord(null)}
+        footer={null}
+        width={760}
+        destroyOnHidden
+        title={
+          <span>
+            <EnvironmentOutlined style={{ marginRight: 8 }} />
+            <span style={{ fontFamily: "monospace", opacity: 0.75, marginRight: 8 }}>{mapRecord?.sort_key || ""}</span>
+            {mapRecord?.title || mapRecord?.name || ""}
+          </span>
+        }
+      >
+        {mapRecord && (
+          <Suspense fallback={<div style={{ height: 420, display: "grid", placeItems: "center" }}><Spin /></div>}>
+            <EstablishmentMap record={mapRecord} dark={theme === "dark"} />
+          </Suspense>
+        )}
+      </Modal>
+
       <FloatingModal
         open={isModalVisible}
         title={
@@ -1792,11 +1473,12 @@ const Province = ({ theme, currentUser }) => {
         }
         extra={selectedRecord?.ecc_cnc ? <Tag color="green" style={{ marginInlineEnd: 0, fontFamily: "monospace" }}>{selectedRecord.ecc_cnc}</Tag> : null}
         onCancel={handleCloseModal}
-        // One fixed size that does not resize: the tab bar and the buttons at
-        // the foot stay put, only the tab's content scrolls between them.
+        // One fixed size that does not resize, nearly the whole window: the tab
+        // bar and the buttons at the foot stay put, and each tab's content is
+        // fitted to the space between them — no scrolling (ProvinceModal FitToHeight).
         width={1400}
-        height="80vh"
-        maxHeight="86vh"
+        height="calc(100vh - 40px)"
+        maxHeight="calc(100vh - 40px)"
         bodyStyle={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
         resizable={false}
         top={20}
@@ -1916,41 +1598,8 @@ const Province = ({ theme, currentUser }) => {
             >
               <div style={{ display: "flex", alignItems: "center" }}>
                 <h4 className="total-count-label">
-                  Industry Count: {filteredData.length}
+                  Industry Count: <strong>{filteredData.length.toLocaleString("en-US")}</strong>
                 </h4>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "8px",
-                  }}
-                >
-                  {inputVisible ? (
-                    <Input
-                      ref={inputRef}
-                      type="primary"
-                      size="small"
-                      value={inputValue}
-                      className="search-input"
-                      onChange={handleInputChange}
-                      onBlur={handleInputConfirm}
-                      onPressEnter={handleInputConfirm}
-                      placeholder="enter keyword..."
-                    />
-                  ) : (
-                    <Tag
-                      onClick={() => setInputVisible(true)}
-                      style={tagPlusStyle}
-                      color="#108ee9"
-                      className="tag"
-                    >
-                      <PlusOutlined /> Search keyword here...
-                    </Tag>
-                  )}
-                  {tagChild}
-                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center" }}>
@@ -1981,7 +1630,7 @@ const Province = ({ theme, currentUser }) => {
                   size="small"
                   className="custom-pagination"
                 />
-                {!loading && !error && filteredDuplicateData.length > 0 && (
+                {!loading && !error && paginatedData.length > 0 && (
                   <div className="custom-page-size-selector-container">
                     <AntSelect
                       value={pageSize}
@@ -2014,108 +1663,6 @@ const Province = ({ theme, currentUser }) => {
               />
             </div>
           </div>
-
-          <div className="section-result">
-            {loading ? (
-              // Display a spinner or placeholder during loading
-              <div className="loading-placeholder">
-                <div className="loading-spinner"></div>
-                <p className="loading-label">Loading section counts...</p>
-              </div>
-            ) : isDateRangeApplied &&
-              sectionCounts &&
-              Object.keys(sectionCounts).length > 0 ? (
-              <div className="section-breakdown">
-                {Object.entries(mergedSectionCounts).map(([section, count]) => (
-                  <div
-                    key={section}
-                    onClick={() => handleSectionClick(section)}
-                    className={`section-item ${
-                      isDateRangeApplied ? "disabled" : ""
-                    }`}
-                    style={{
-                      backgroundColor:
-                        section === "nosectionincharged"
-                          ? "gray"
-                          : sectionBackgroundColor(section),
-                      color: "white", // Set font color to white
-                      cursor: isDateRangeApplied ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    <span className="section-label">
-                      {section === "nosectionincharged" || section === ""
-                        ? "No Section Incharged"
-                        : section}
-                      :
-                    </span>
-                    <span className="section-count">{count}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="section-breakdown">
-                {Object.entries(mergedSectionCounts).length > 0 ? (
-                  Object.entries(mergedSectionCounts).map(
-                    ([section, count]) => {
-                      const displaySection =
-                        section === "nosectionincharged" || !section
-                          ? "No Section Incharged"
-                          : section;
-
-                      return (
-                        <div
-                          key={section}
-                          onClick={() => handleSectionClick(section)}
-                          className={`section-item ${
-                            isDateRangeApplied ? "disabled" : ""
-                          }`}
-                          style={{
-                            backgroundColor:
-                              section === "NoSectionIncharged"
-                                ? "gray"
-                                : sectionBackgroundColor(section),
-                            color: "white",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <span className="section-label">
-                            {section === "NoSectionIncharged"
-                              ? "No Section Incharged"
-                              : section}
-                            :
-                          </span>
-                          <span className="section-count">{count}</span>
-                        </div>
-                      );
-                    }
-                  )
-                ) : (
-                  <div
-                    className="no-sections-message"
-                    style={{
-                      backgroundColor: "gray",
-                      color: "white",
-                      padding: "10px",
-                      borderRadius: "5px",
-                      textAlign: "center",
-                      fontSize: "10px",
-                    }}
-                  >
-                    Processing...
-                  </div>
-                )}
-              </div>
-            )}
-
-            <SectionDetailsModal
-              visible={isModalOpen}
-              section={selectedSection}
-              count={sectionCounts[selectedSection] || 0} // Pass the count for the selected section
-              data={selectedSectionData} // Pass the filtered data for the section
-              onClose={handleCloseSectionModal}
-              zIndex={1000}
-            />
-          </div>
         </Card>
 
         {refreshing && (
@@ -2141,8 +1688,10 @@ const Province = ({ theme, currentUser }) => {
               selectedRowKeys,
               onChange: setSelectedRowKeys,
             }}
-            scroll={{ x: 1100, y: "calc(100vh - 330px)" }}
-            dataSource={filteredDuplicateData} // Ensure this is set correctly
+            // Fits the card: no sideways scroll, columns share the width.
+            scroll={{ y: "calc(100vh - 330px)" }}
+            tableLayout="fixed"
+            dataSource={paginatedData} // Ensure this is set correctly
             columns={columns}
             rowKey="sort_key"
             size="small"

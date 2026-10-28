@@ -131,7 +131,7 @@ const VeraRefNumbers = () => {
               columns={columns}
               dataSource={data.proposals}
               pagination={{ pageSize: 15, hideOnSinglePage: true }}
-              scroll={{ x: "max-content" }}
+              tableLayout="fixed"
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data.checked ? "Every scan read so far matches its Ref. No." : "No scan read yet"} /> }}
             />
             {data.recent.length > 0 && (
@@ -141,7 +141,7 @@ const VeraRefNumbers = () => {
                 title={() => <Text strong>Applied, kept and unread</Text>}
                 pagination={{ pageSize: 10, hideOnSinglePage: true }}
                 dataSource={data.recent}
-                scroll={{ x: "max-content" }}
+                tableLayout="fixed"
                 columns={[
                   { title: "Record", dataIndex: "serialNo", key: "s", width: 130, render: recordLink },
                   { title: "Encoded", key: "e", render: (_, r) => <Text style={mono}>{(r.status === "applied" ? r.previous : r.encoded) || "—"}</Text> },

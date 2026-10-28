@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Button, DatePicker, Select, Space, Tooltip } from "antd";
+import { Button, DatePicker, Select, Tooltip } from "antd";
 import { ClearOutlined } from "@ant-design/icons";
 
 const { RangePicker } = DatePicker;
@@ -7,12 +7,15 @@ const { RangePicker } = DatePicker;
 // ---------------------------------------------------------------------------
 // Structured filters for the Monitoring Plan register.
 //
-// The keyword tags stay as they are; these narrow by the columns people
-// actually ask about — industry class and type, municipality, which permits a
-// firm holds, whether a NOV was issued, whether Planning has received the
-// report, the inspection type and monitoring schedule — and combine with each
-// other and with the keywords. Everything is evaluated in matchesFilters()
-// against the rows already loaded for the province, so it costs no request.
+// These narrow by the columns people actually ask about — industry class and
+// type, municipality, which permits a firm holds, whether a NOV was issued,
+// whether Planning has received the report, the inspection type and
+// monitoring schedule — and combine with each other. Everything is evaluated
+// in matchesFilters() against the rows already loaded for the province, so it
+// costs no request.
+//
+// One row, always: the controls share the width and shrink (a multiple
+// select collapses its picks into "+N"); Reset keeps its size at the end.
 // ---------------------------------------------------------------------------
 
 export const EMPTY_FILTERS = {
@@ -91,12 +94,14 @@ const MonitoringPlanFilters = ({ rows, value, onChange, showDateRange }) => {
 
   const set = (patch) => onChange({ ...value, ...patch });
   const active = isFilterActive(value);
-  const common = { size: "small", allowClear: true, maxTagCount: "responsive", style: { minWidth: 160 } };
+  // Each control takes an equal share of the row and may shrink to `min`.
+  const grow = (min, share = 1) => ({ flex: `${share} 1 0`, minWidth: min });
+  const common = { size: "small", allowClear: true, maxTagCount: "responsive", popupMatchSelectWidth: false, style: grow(96) };
 
   return (
-    <Space wrap size={[8, 8]} className="mp-filters" align="center">
+    <div className="mp-filters">
       <Select {...common} mode="multiple" placeholder="Industry class" options={options.industryClass} value={value.industryClass} onChange={(v) => set({ industryClass: v })} />
-      <Select {...common} mode="multiple" placeholder="Industry type" options={options.industryType} value={value.industryType} onChange={(v) => set({ industryType: v })} style={{ minWidth: 200 }} />
+      <Select {...common} mode="multiple" placeholder="Industry type" options={options.industryType} value={value.industryType} onChange={(v) => set({ industryType: v })} style={grow(110, 1.3)} />
       <Select {...common} mode="multiple" placeholder="City / municipality" options={options.city} value={value.city} onChange={(v) => set({ city: v })} />
       <Select {...common} mode="multiple" placeholder="Holds permit…" options={PERMIT_FIELDS} value={value.permits} onChange={(v) => set({ permits: v })} />
       <Select
@@ -108,7 +113,7 @@ const MonitoringPlanFilters = ({ rows, value, onChange, showDateRange }) => {
           { value: "yes", label: "With NOV" },
           { value: "no", label: "Without NOV" },
         ]}
-        style={{ minWidth: 130 }}
+        style={grow(80, 0.7)}
       />
       <Select
         {...common}
@@ -119,7 +124,6 @@ const MonitoringPlanFilters = ({ rows, value, onChange, showDateRange }) => {
           { value: "received", label: "Received by Planning" },
           { value: "pending", label: "Not yet received" },
         ]}
-        style={{ minWidth: 170 }}
       />
       {options.inspType.length > 0 && (
         <Select {...common} mode="multiple" placeholder="Inspection type" options={options.inspType} value={value.inspType} onChange={(v) => set({ inspType: v })} />
@@ -129,19 +133,21 @@ const MonitoringPlanFilters = ({ rows, value, onChange, showDateRange }) => {
       )}
       {showDateRange && (
         <RangePicker
+          size="small"
           value={value.dateSigned}
           onChange={(v) => set({ dateSigned: v })}
           format="MM/DD/YYYY"
-          placeholder={["Report signed from", "to"]}
+          placeholder={["Signed from", "to"]}
           allowClear
+          style={grow(180, 1.6)}
         />
       )}
       <Tooltip title="Clear every filter">
-        <Button size="small" icon={<ClearOutlined />} disabled={!active} onClick={() => onChange({ ...EMPTY_FILTERS })}>
+        <Button size="small" icon={<ClearOutlined />} disabled={!active} onClick={() => onChange({ ...EMPTY_FILTERS })} style={{ flex: "none" }}>
           Reset
         </Button>
       </Tooltip>
-    </Space>
+    </div>
   );
 };
 

@@ -124,14 +124,14 @@ const VeraSerials = () => {
                 { title: "Counter", dataIndex: "counter", key: "counter", align: "right", render: (v) => v ?? <Text type="secondary">not started</Text> },
                 { title: "Skipped", dataIndex: "missing", key: "missing", align: "right" },
               ]}
-              scroll={{ x: "max-content" }}
+              tableLayout="fixed"
             />
             <Segmented
               value={unit}
               onChange={setUnit}
               options={[{ value: "all", label: "All units" }, ...units.map((u) => ({ value: u.unit, label: `${u.label} (${u.findings.length})` }))]}
             />
-            <Table size="small" rowKey="id" columns={columns} dataSource={findings} pagination={{ pageSize: 20, hideOnSinglePage: true }} scroll={{ x: "max-content" }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing found" /> }} />
+            <Table size="small" rowKey="id" columns={columns} dataSource={findings} pagination={{ pageSize: 20, hideOnSinglePage: true }} tableLayout="fixed" locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing found" /> }} />
           </Space>
         )}
       </Card>

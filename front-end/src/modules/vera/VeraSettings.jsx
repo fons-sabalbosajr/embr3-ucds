@@ -17,7 +17,6 @@ import {
   Space,
   Tag,
   Descriptions,
-  Statistic,
   Tooltip,
   Tabs,
 } from "antd";
@@ -29,22 +28,22 @@ import {
   ThunderboltOutlined,
   CheckCircleTwoTone,
   CloseCircleTwoTone,
-  WarningOutlined,
   FileSearchOutlined,
   LinkOutlined,
   NumberOutlined,
+  DashboardOutlined,
 } from "@ant-design/icons";
-import dayjs from "dayjs";
 
-import { getVeraConfig, updateVeraConfig, testVeraConnection, getVeraUsage, getCorrectionsPending, getRegisterLinksPending } from "./veraService";
+import { getVeraConfig, updateVeraConfig, testVeraConnection, getCorrectionsPending, getRegisterLinksPending } from "./veraService";
 import VeraCorrections from "./VeraCorrections";
 import VeraRegisterLinks from "./VeraRegisterLinks";
 import VeraSerials from "./VeraSerials";
 import VeraProjectTypes from "./VeraProjectTypes";
 import VeraScanText from "./VeraScanText";
 import VeraRefNumbers from "./VeraRefNumbers";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import VeraLogs from "./VeraLogs";
+import VeraModels from "./VeraModels";
 import { VeraFlame } from "./VeraMark";
 import { BorderBeam } from "border-beam";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -54,15 +53,16 @@ import "./vera.css";
 const { Paragraph, Text } = Typography;
 
 // Models offered in the picker. The Gemini ones were each tried with this
-// server's key; the free tier covers the Flash and Flash-Lite models only, so
-// the Pro models are left out. Any other name can still be typed.
+// server's key on 28 Oct 2026; the free tier covers the Flash and Flash-Lite
+// models only, so the Pro models are left out. Any other name can be typed.
+// (gemini-2.5-flash-lite and 2.0-flash-lite: 404 for this key.)
 const MODEL_CHOICES = {
   gemini: [
-    { value: "gemini-3.8-flash", tag: "Newest · free tier", tagColor: "green" },
+    { value: "gemini-2.5-flash", tag: "Recommended · answered in 0.7 s", tagColor: "green" },
     { value: "gemini-3.5-flash", tag: "Free tier", tagColor: "green" },
-    { value: "gemini-2.5-flash", tag: "Previous", tagColor: "default" },
-    { value: "gemini-flash-latest", tag: "Moves with Google", tagColor: "gold" },
     { value: "gemini-3.1-flash-lite", tag: "Lighter · free tier", tagColor: "blue" },
+    { value: "gemini-3.8-flash", tag: "Often overloaded or slow", tagColor: "orange" },
+    { value: "gemini-flash-latest", tag: "Timed out in tests", tagColor: "orange" },
   ],
   anthropic: [{ value: "claude-opus-5-5" }, { value: "claude-sonnet-5-5" }, { value: "claude-haiku-5-5" }],
 };
@@ -87,12 +87,12 @@ const FLAME_STATES = [
 
 export default function VeraSettings() {
   const [form] = Form.useForm();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState(null);
   const [providers, setProviders] = useState([]);
-  const [usage, setUsage] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [preview, setPreview] = useState("burning");
   const { mode } = useTheme();
@@ -113,12 +113,6 @@ export default function VeraSettings() {
       message.error(err?.response?.data?.message || "Failed to load the assistant settings");
     } finally {
       setLoading(false);
-    }
-    // Usage is extra: a failure must not block the form.
-    try {
-      setUsage((await getVeraUsage()).data || null);
-    } catch {
-      setUsage(null);
     }
   };
 
@@ -152,7 +146,8 @@ export default function VeraSettings() {
     try {
       const res = await testVeraConnection();
       setTestResult({ ok: true, ...res });
-      message.success(`Connected to ${res.model}.`);
+      if (res.degraded) message.warning(`${res.configuredModel} did not answer; VERA is answering with ${res.model}.`);
+      else message.success(`Connected to ${res.model}.`);
       await load();
     } catch (err) {
       const data = err?.response?.data;
@@ -161,6 +156,8 @@ export default function VeraSettings() {
       await load();
     } finally {
       setTesting(false);
+      // The test called the models: the Models tab shows it now, not in 30 s.
+      queryClient.invalidateQueries({ queryKey: ["vera", "models"] });
     }
   };
 
@@ -251,24 +248,13 @@ export default function VeraSettings() {
                   <Space size={4}><CloseCircleTwoTone twoToneColor="#cf1322" /><Text code>{status.keyEnvVar}</Text></Space>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="Effective model">
-                <Text code>{status.model}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Last successful call">
-                {status.lastSuccessfulConnectionAt ? dayjs(status.lastSuccessfulConnectionAt).format("MMM D, YYYY h:mm A") : "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Last error" span={2}>
-                {status.lastError ? (
-                  <Space size={4} align="start">
-                    <WarningOutlined style={{ color: "#d46b08" }} />
-                    <Text type="secondary">
-                      {status.lastError}
-                      {status.lastErrorAt ? ` (${dayjs(status.lastErrorAt).format("MMM D, h:mm A")})` : ""}
-                    </Text>
-                  </Space>
-                ) : (
-                  "—"
-                )}
+              <Descriptions.Item label="Selected model">
+                <Space size={6} wrap>
+                  <Text code>{status.model}</Text>
+                  <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setTab("models")}>
+                    Status and usage of every model
+                  </Button>
+                </Space>
               </Descriptions.Item>
             </Descriptions>
           </>
@@ -277,14 +263,27 @@ export default function VeraSettings() {
         {testResult ? (
           <Alert
             style={{ marginBottom: 16 }}
-            type={testResult.ok ? "success" : "error"}
+            type={testResult.ok ? (testResult.degraded ? "warning" : "success") : "error"}
             showIcon
             closable
             onClose={() => setTestResult(null)}
-            message={testResult.ok ? `The model replied in ${testResult.durationMs} ms` : "Connection test failed"}
+            message={
+              !testResult.ok
+                ? "Connection test failed"
+                : testResult.degraded
+                  ? `${testResult.configuredModel} did not answer — VERA is answering with ${testResult.model}`
+                  : `The model replied in ${testResult.durationMs} ms`
+            }
             description={
               testResult.ok ? (
                 <span>
+                  {testResult.degraded ? (
+                    <>
+                      {testResult.configuredError} Choose a model that answers (for example {testResult.model}) under Model, or leave it — the router
+                      already skips {testResult.configuredModel} while it is failing.
+                      <br />
+                    </>
+                  ) : null}
                   {testResult.provider} · {testResult.model} · reply "{testResult.reply}" · {testResult.inputTokens + testResult.outputTokens} tokens
                   {testResult.masterEnabled === false ? " · the master switch is still off, so chats use the help library" : ""}
                 </span>
@@ -395,14 +394,9 @@ export default function VeraSettings() {
                 />
               </Form.Item>
             </Col>
-            <Col xs={12} md={4}>
-              <Form.Item name="maxTokens" label="Max reply tokens" tooltip="Blank uses the server value.">
+            <Col xs={24} md={8}>
+              <Form.Item name="maxTokens" label="Max reply tokens" tooltip="The longest answer VERA may give. Blank uses the server value.">
                 <InputNumber min={64} max={8192} step={64} style={{ width: "100%" }} placeholder={String(status?.maxTokens ?? "")} />
-              </Form.Item>
-            </Col>
-            <Col xs={12} md={4}>
-              <Form.Item name="temperature" label="Temperature" tooltip="Lower is more consistent. Ignored by models that do not take it.">
-                <InputNumber min={0} max={1} step={0.1} style={{ width: "100%" }} placeholder={String(status?.temperature ?? "")} />
               </Form.Item>
             </Col>
           </Row>
@@ -422,22 +416,17 @@ export default function VeraSettings() {
 
           <Divider orientation="left">Limits &amp; behaviour</Divider>
           <Row gutter={24}>
-            <Col xs={12} md={6}>
+            <Col xs={12} md={8}>
               <Form.Item name="perUserDailyLimit" label="Messages per person / day" tooltip="0 = unlimited. Blank uses the server value.">
                 <InputNumber min={0} max={10000} style={{ width: "100%" }} placeholder={String(status?.perUserDailyLimit ?? "")} />
               </Form.Item>
             </Col>
-            <Col xs={12} md={6}>
+            <Col xs={12} md={8}>
               <Form.Item name="dailyLimit" label="Messages per day, everyone" tooltip="0 = unlimited. A ceiling on the whole office's use. Blank uses the server value.">
                 <InputNumber min={0} max={100000} style={{ width: "100%" }} placeholder={String(status?.dailyLimit ?? "")} />
               </Form.Item>
             </Col>
-            <Col xs={12} md={6}>
-              <Form.Item name="requestTimeoutMs" label="Request timeout" tooltip="Blank uses the server value.">
-                <InputNumber min={5000} max={120000} step={1000} style={{ width: "100%" }} addonAfter="ms" placeholder={String(status?.requestTimeoutMs ?? "")} />
-              </Form.Item>
-            </Col>
-            <Col xs={12} md={6}>
+            <Col xs={24} md={8}>
               <Form.Item name="supportContact" label="Who VERA points people to" tooltip="Used when VERA cannot answer. Blank: the E-Universe administrator (MIS).">
                 <Input allowClear maxLength={160} placeholder="the E-Universe administrator (MIS)" />
               </Form.Item>
@@ -459,60 +448,76 @@ export default function VeraSettings() {
             </Col>
           </Row>
 
+          <Divider orientation="left">Cost &amp; safety</Divider>
+          <Row gutter={24}>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item
+                name="semanticCache"
+                label="Reuse answers to the same question"
+                valuePropName="checked"
+                tooltip="A question close to one already answered — same meaning, same help articles, same kind of account — is answered from memory, with no model request. Never for live figures, record searches or follow-ups. Kept in server memory only."
+              >
+                <Switch checkedChildren="On" unCheckedChildren="Off" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item
+                name="modelRouting"
+                label="Send simple questions to the light model"
+                valuePropName="checked"
+                tooltip={`Short help questions go to ${status?.router?.lightModel || "the provider's light model"} first: a fraction of the tokens, and its own daily quota. Figures and long questions stay on the main model.`}
+              >
+                <Switch checkedChildren="On" unCheckedChildren="Off" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item
+                name="crossProviderFallback"
+                label="Fall back to the other provider"
+                valuePropName="checked"
+                tooltip="When every model of this provider is out of quota or down, use the other provider — only if its API key is also in server/.env."
+              >
+                <Switch checkedChildren="On" unCheckedChildren="Off" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Paragraph type="secondary" style={{ marginBottom: 8 }}>
+            What each account type may use. Off for <Text strong>AI model answers</Text> keeps that role on the help library: nothing they type is sent to a
+            provider. Off for <Text strong>live figures</Text> stops counts and record searches being worked into their answers.
+          </Paragraph>
+          <Form.List name="roleAccess">
+            {(fields) => (
+              <div className="vera-settings__roles">
+                {fields.map((field) => (
+                  <Row key={field.key} gutter={12} align="middle" style={{ marginBottom: 4 }}>
+                    <Form.Item name={[field.name, "role"]} hidden>
+                      <Input />
+                    </Form.Item>
+                    <Col xs={24} sm={8}>
+                      <Text strong>{form.getFieldValue(["roleAccess", field.name, "label"])}</Text>
+                    </Col>
+                    <Col xs={12} sm={8}>
+                      <Form.Item name={[field.name, "model"]} valuePropName="checked" style={{ marginBottom: 0 }}>
+                        <Switch size="small" checkedChildren="AI model" unCheckedChildren="Library only" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8}>
+                      <Form.Item name={[field.name, "figures"]} valuePropName="checked" style={{ marginBottom: 0 }}>
+                        <Switch size="small" checkedChildren="Live figures" unCheckedChildren="No figures" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                ))}
+              </div>
+            )}
+          </Form.List>
+          <div style={{ height: 16 }} />
+
           <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
             Save assistant settings
           </Button>
         </Form>
 
-        {usage ? (
-          <>
-            <Divider orientation="left">Usage today</Divider>
-            <Paragraph type="secondary">Metadata only — no question or answer is ever stored, so none can be reported.</Paragraph>
-            <Row gutter={[12, 12]}>
-              <Col xs={12} sm={8} md={4}>
-                <Card size="small"><Statistic title="Messages today" value={usage.messagesToday} /></Card>
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Card size="small"><Statistic title="Model answers" value={usage.modelAnswersToday} prefix={<ThunderboltOutlined />} /></Card>
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Card size="small"><Statistic title="Input tokens" value={usage.inputTokensToday} /></Card>
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Card size="small"><Statistic title="Output tokens" value={usage.outputTokensToday} /></Card>
-              </Col>
-              <Col xs={24} sm={16} md={8}>
-                <Card size="small">
-                  <Text type="secondary">By role today</Text>
-                  <div style={{ marginTop: 6 }}>
-                    {Object.keys(usage.byRole || {}).length ? (
-                      <Space size={4} wrap>
-                        {Object.entries(usage.byRole).map(([role, n]) => <Tag key={role}>{role}: {n}</Tag>)}
-                      </Space>
-                    ) : (
-                      <Text type="secondary">No messages yet</Text>
-                    )}
-                  </div>
-                </Card>
-              </Col>
-            </Row>
-            {usage.recentFailures?.length ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginTop: 12 }}
-                message={`${usage.recentFailures.length} recent connection test failure(s)`}
-                description={
-                  <div>
-                    {usage.recentFailures.map((f, i) => (
-                      <div key={i}>{dayjs(f.at).format("MMM D, h:mm A")} — {f.code || "error"}{f.by ? ` (${f.by})` : ""}</div>
-                    ))}
-                  </div>
-                }
-              />
-            ) : null}
-          </>
-        ) : null}
       </Card>
     </Spin>
   );
@@ -557,6 +562,8 @@ export default function VeraSettings() {
         onChange={setTab}
         items={[
           { key: "configuration", label: <span><RobotOutlined /> Configuration</span>, children: configuration },
+          // Every model VERA may use: status, rest, quota reset and usage.
+          { key: "models", label: <span><DashboardOutlined /> Models &amp; usage</span>, children: <VeraModels /> },
           { key: "logs", label: <span><FileSearchOutlined /> Activity Log</span>, children: <VeraLogs /> },
           // VERA's report on the Records project types — the Developer's alone,
           // shown when the server says this account may see it.

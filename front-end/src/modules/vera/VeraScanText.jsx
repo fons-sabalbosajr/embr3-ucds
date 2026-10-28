@@ -34,7 +34,7 @@ const VeraScanText = () => {
       <Card size="small" title={<Space><FileSearchOutlined />Read the next scans</Space>}>
         <Space wrap>
           <Select value={unit} onChange={setUnit} style={{ width: 170 }} options={[{ value: "records", label: "Records" }, { value: "legal", label: "Legal Services" }, { value: "laboratory", label: "Laboratory" }]} />
-          <InputNumber min={1} max={50} value={limit} onChange={(v) => setLimit(v || 10)} addonAfter="documents" style={{ width: 170 }} />
+          <InputNumber min={1} max={50} value={limit} onChange={(v) => setLimit(v || 10)} suffix="documents" style={{ width: 170 }} />
           <Button type="primary" loading={run.isPending} onClick={() => run.mutate()}>Read with VERA</Button>
         </Space>
         {last && (

@@ -229,9 +229,13 @@ let warnedTcp = false;
 const udpIsDown = () => udpDownUntil > Date.now();
 const noteUdpOk = () => { udpDownUntil = 0; };
 
+// The TCP fallback is routine on some networks and needs no action, so it is
+// only announced when DNS_DEBUG is set; otherwise the terminal stays clean.
+const dnsDebug = () => /^(1|true|yes)$/i.test(String(process.env.DNS_DEBUG || ''));
+
 function noteTcpFallback(label, code) {
   udpDownUntil = Date.now() + UDP_BACKOFF_MS;
-  if (warnedTcp) return;
+  if (warnedTcp || !dnsDebug()) return;
   warnedTcp = true;
   console.warn(
     `[DNS] ${label} got no UDP answer within ${UDP_TIMEOUT_MS / 1000}s (${code}); resolved over TCP instead.\n` +
@@ -344,7 +348,7 @@ function configureDns() {
     try {
       dns.setServers(PUBLIC_RESOLVERS);
       dns.promises.setServers(PUBLIC_RESOLVERS);
-      console.log(`[DNS] No system resolver readable; using ${PUBLIC_RESOLVERS.join(', ')} (set DNS_SERVERS in .env to choose).`);
+      if (dnsDebug()) console.log(`[DNS] No system resolver readable; using ${PUBLIC_RESOLVERS.join(', ')} (set DNS_SERVERS in .env to choose).`);
     } catch (error) {
       console.warn(`[DNS] No usable system resolver and the public ones could not be set (${error.message}); lookups fall back to TCP.`);
     }

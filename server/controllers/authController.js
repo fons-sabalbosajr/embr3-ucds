@@ -133,6 +133,10 @@ async function register(req, res) {
   }
 }
 
+// Matches the session store's TTL (app.js), so a remembered session is not
+// dropped from the store before its cookie runs out.
+const REMEMBER_ME_MS = 14 * 24 * 60 * 60 * 1000;
+
 async function login(req, res) {
   const login = String(req.body?.username || '').trim();
   const { password } = req.body || {};
@@ -158,6 +162,9 @@ async function login(req, res) {
     // another tab's (tabs share the cookie) and is left as it is.
     beginFreshSession(req);
     req.session.user = buildSessionPayload(user);
+    // "Remember me": the session outlives the browser for REMEMBER_ME_MS
+    // (sliding, like every session); otherwise it keeps the usual 24 hours.
+    if (req.body?.remember === true) req.session.cookie.maxAge = REMEMBER_ME_MS;
     // A fresh sign-in starts at the year container picker — except for the
     // Developer and Administrator, who hold every year, and for ERMS Users,
     // whose work is not year-scoped at all: they land in the current year
@@ -210,6 +217,7 @@ async function login(req, res) {
       theme: user.preferences?.theme || null,
       // This tab's own reference to the session it just opened.
       sessionToken: tokenFor(req),
+      sessionExpiresAt: req.session.cookie.expires ? req.session.cookie.expires.toISOString() : null,
     });
   } catch (error) {
     console.error('Error during login:', error);

@@ -312,6 +312,83 @@ async function exportCustomTable(req, res, next) {
   }
 }
 
+// ── VERA's table builder (services/vera/tableBuilder.js) ─────────────────────
+// The register's fields to build from, VERA's draft of a spec from a
+// sentence, a preview of a spec, and the table filled from it. All on the
+// active year's register, within the person's provinces.
+const tableBuilder = require('../services/vera/tableBuilder');
+const { registerOf } = require('../services/yearScope');
+
+const builderTarget = (req) => ({ col: registerOf(req), user: principalOf(req), container: req.yearContainer });
+
+async function veraTableCatalog(req, res, next) {
+  try {
+    res.json({ fields: await tableBuilder.catalog(registerOf(req)), operators: tableBuilder.OPS, maxRows: tableBuilder.MAX_ROWS });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** A spec checked, and the first rows it gives. */
+async function previewOf(req, input) {
+  const { spec, notes } = tableBuilder.cleanSpec(input);
+  if (!spec.columns.length && !spec.group) return { spec, notes, columns: [], rows: [], total: 0 };
+  const out = await tableBuilder.run(spec, builderTarget(req));
+  return { spec, notes: [...notes, ...out.notes], columns: out.columns, rows: out.rows.slice(0, tableBuilder.PREVIEW), total: out.total, truncated: out.truncated };
+}
+
+async function veraTableDraft(req, res, next) {
+  try {
+    const request = String(req.body?.request || '').trim();
+    if (request.length < 4) return res.status(400).json({ message: 'Describe the table you need, e.g. "every poultry farm in Bulacan with its permits and their expiry".' });
+    const vera = require('./veraController');
+    const veraPolicy = require('../services/vera/policy');
+    const { roleOf } = require('../services/authorization');
+    const cfg = await vera.loadConfig();
+    if (veraPolicy.accessFor(cfg, roleOf(principalOf(req))).model === false) return res.status(403).json({ message: "VERA's AI model is not open to your account type. Build the table with the form instead." });
+    const drafted = await tableBuilder.draft(request, { cfg, col: registerOf(req) });
+    if (!drafted.ok) return res.status(drafted.status).json({ message: drafted.message });
+    const preview = await previewOf(req, drafted.spec);
+    await vera.log(req, 'vera:table-draft', { table: req.params.id, columns: preview.spec.columns.length, rows: preview.total, model: drafted.model || null });
+    return res.json({ ...preview, notes: [...drafted.notes, ...preview.notes] });
+  } catch (error) {
+    // The model router's own words (quota, overloaded…), never the vendor's.
+    if (error?.sanitized) return res.status(503).json({ code: error.code, message: `${error.message} You can still build the table with the form.` });
+    return next(error);
+  }
+}
+
+async function veraTablePreview(req, res, next) {
+  try {
+    res.json(await previewOf(req, req.body?.spec));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Fill the table from a spec (or refresh it from the one it was built with). */
+async function veraTableBuild(req, res, next) {
+  try {
+    const item = await menuItems.get(req.activeYear, req.params.id);
+    if (!item || item.kind !== 'table') return res.status(404).json({ message: 'No such table in this year.' });
+    const input = req.body?.refresh ? item.table?.source?.spec : req.body?.spec;
+    if (!input) return res.status(400).json({ message: req.body?.refresh ? 'This table was not built by VERA, so there is nothing to refresh it from.' : 'Send the spec to build from.' });
+    const { spec, notes } = tableBuilder.cleanSpec(input);
+    if (!spec.columns.length && !spec.group) return res.status(400).json({ message: notes.join(' ') || 'The table needs at least one column.' });
+    const out = await tableBuilder.run(spec, builderTarget(req));
+    const result = await customTables.replaceFromBuild(
+      req.activeYear,
+      req.params.id,
+      { columns: out.columns, rows: out.rows, source: { spec, register: registerOf(req).collectionName, total: out.total, truncated: out.truncated } },
+      principalOf(req)
+    );
+    await require('./veraController').log(req, 'vera:table-build', { table: req.params.id, rows: result.rowCount, of: out.total, refresh: Boolean(req.body?.refresh) });
+    return res.json({ ...result, total: out.total, truncated: out.truncated, notes });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 /** Changing a table: canManageData, and editing not switched off in the settings. */
 async function requireTableEdit(req, res, next) {
   try {
@@ -326,4 +403,5 @@ module.exports = {
   getSettings, putSettings, importForYear, registry, listForActiveYear, describe, rowsPage, createRow, createColumn, updateRow, deleteRow, importDataset, exportCsv,
   listMenuItems, getMenuItem, requireMenuEdit, createMenuItem, updateMenuItem, deleteMenuItem,
   readCustomTable, saveCustomColumns, addCustomRows, updateCustomRow, deleteCustomRows, exportCustomTable, requireTableEdit,
+  veraTableCatalog, veraTableDraft, veraTablePreview, veraTableBuild,
 };

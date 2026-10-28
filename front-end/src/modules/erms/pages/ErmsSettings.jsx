@@ -417,7 +417,7 @@ const ErmsSettings = ({ unit: unitProp }) => {
       children: (
         <Card size="small" title="How much of a document someone outside the unit sees">
           <Form.Item name={["pdfViewing", "previewPageLimit"]} label="Pages shown in the viewer" extra="0 shows every page. With a limit, the document is cut on the server to its first pages — the rest never leave it — and the viewer shows the remaining pages blurred, with a button to ask for the whole document. It applies to the unit's staff and anyone viewing by approval; the Developer and administrators always see every page." style={{ marginBottom: 14 }}>
-            <InputNumber placeholder="0 = every page" min={0} max={500} disabled={!canEdit} addonAfter="pages" />
+            <InputNumber placeholder="0 = every page" min={0} max={500} disabled={!canEdit} suffix="pages" />
           </Form.Item>
           <Rule name={["pdfViewing", "blurWithheldPages"]} label="Show the withheld pages blurred, with a note to ask the unit" help="Off: the document simply ends at the limit."><Switch disabled={!canEdit} /></Rule>
           <Rule name={["pdfViewing", "exemptUnit"]} label="Let the unit's own staff see every page" help="Off (the usual): the limit applies to everyone except the Developer, administrators and anyone given the whole document — the unit's own staff included."><Switch disabled={!canEdit} /></Rule>
@@ -436,7 +436,7 @@ const ErmsSettings = ({ unit: unitProp }) => {
           {/* Sharing from a record is gone; Document Portal requests, decisions and views are always on the trail. */}
           <Divider style={{ margin: "8px 0 14px" }} />
           <Form.Item name={["logHistory", "retentionDays"]} label="Log history reads back" style={{ marginBottom: 14 }}>
-            <InputNumber placeholder="Days" min={7} max={3650} disabled={!canEdit} addonAfter="days" />
+            <InputNumber placeholder="Days" min={7} max={3650} disabled={!canEdit} suffix="days" />
           </Form.Item>
           <Rule name={["logHistory", "showDesktopLog"]} label="Show the desktop system's log on a record's Tracking tab"><Switch disabled={!canEdit} /></Rule>
         </Card>

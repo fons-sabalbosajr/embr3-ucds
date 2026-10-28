@@ -295,7 +295,7 @@ const VeraRegisterLinks = () => {
                 getCheckboxProps: (p) => ({ disabled: p.applied }),
               }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing to link here." /> }}
-              scroll={{ x: 960 }}
+              tableLayout="fixed"
             />
           </Space>
         )}

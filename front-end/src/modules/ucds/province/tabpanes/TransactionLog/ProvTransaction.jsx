@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Empty, Segmented, Skeleton, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Empty, Pagination, Segmented, Skeleton, Space, Tag, Tooltip, Typography } from "antd";
 import { ArrowRightOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, RollbackOutlined, UserOutlined } from "@ant-design/icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -9,6 +9,7 @@ import { message, modal } from "../../../../../shared/feedback";
 import "./provtransaction.css";
 
 const { Text } = Typography;
+const HISTORY_PAGE_SIZE = 6;
 
 // ---------------------------------------------------------------------------
 // The record's History: every change, newest first — who changed what, from
@@ -86,6 +87,9 @@ const fetchPeople = async (usernames) => {
 const ProvTransaction = ({ editedRecord, currentUser, handleReload, reloadEditedRecord }) => {
   const queryClient = useQueryClient();
   const [show, setShow] = useState("changes");
+  // A page of entries at a time: the record window fits its content rather
+  // than scrolling (FitToHeight), and a long History would not fit.
+  const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(null);
   const canManageData = currentUser?.capabilities?.canManageData === true;
   const sortKey = editedRecord?.sort_key || "";
@@ -118,6 +122,9 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload, reloadEdited
     [entries]
   );
   const shown = entries.filter((t) => show === "all" || (show === "views" ? t.actionType === "View" : t.actionType !== "View"));
+  const pages = Math.max(1, Math.ceil(shown.length / HISTORY_PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const pageOfEntries = shown.slice((current - 1) * HISTORY_PAGE_SIZE, current * HISTORY_PAGE_SIZE);
   const lastChange = entries.find((t) => t.actionType !== "View");
   const nameOf = (u) => people[u]?.name || u || "Unknown";
 
@@ -290,7 +297,10 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload, reloadEdited
           <Segmented
             size="small"
             value={show}
-            onChange={setShow}
+            onChange={(v) => {
+              setShow(v);
+              setPage(1);
+            }}
             options={[
               { value: "changes", label: `Changes (${counts.changes})` },
               { value: "views", label: `Views (${counts.views})` },
@@ -320,7 +330,22 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload, reloadEdited
       ) : shown.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={entries.length ? "Nothing of this kind in the History." : "No changes have been recorded for this record yet."} />
       ) : (
-        <ol className="ph-list">{shown.map(entryCard)}</ol>
+        <>
+          <ol className="ph-list">{pageOfEntries.map(entryCard)}</ol>
+          {pages > 1 && (
+            <Pagination
+              size="small"
+              align="center"
+              current={current}
+              pageSize={HISTORY_PAGE_SIZE}
+              total={shown.length}
+              onChange={setPage}
+              showSizeChanger={false}
+              showTotal={(t, [a, b]) => `${a}–${b} of ${t}`}
+              style={{ marginTop: 10 }}
+            />
+          )}
+        </>
       )}
     </div>
   );

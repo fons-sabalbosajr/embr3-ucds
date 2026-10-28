@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import { DownloadOutlined, FileExcelOutlined, FileTextOutlined, ReloadOutlined } from "@ant-design/icons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "../../../shared/components/PageHeader";
 import { message } from "../../../shared/feedback";
 import { downloadMonitoringPlan, fetchAccomplishment, fetchExpiringPermits, fetchNotInErms } from "../ucdsService";
@@ -122,7 +122,11 @@ function AccomplishmentTab() {
 
 function RenewalsTab() {
   const q = useQuery({ queryKey: ["ucds", "expiring", "report"], queryFn: () => fetchExpiringPermits(5000), staleTime: 2 * 60 * 1000 });
-  const rows = (q.data?.data || []).map((r) => ({ ...r, permitList: (r.permits || []).map((p) => `${p.type} ${p.isExpired ? "expired" : "expires"} ${String(p.expiry).slice(0, 10)}`).join("; ") }));
+  // Worked out once per response, not on every render of the table.
+  const rows = useMemo(
+    () => (q.data?.data || []).map((r) => ({ ...r, permitList: (r.permits || []).map((p) => `${p.type} ${p.isExpired ? "expired" : "expires"} ${String(p.expiry).slice(0, 10)}`).join("; ") })),
+    [q.data]
+  );
   const columns = [
     { title: "Serial", dataIndex: "sort_key", width: 120 },
     { title: "Establishment", dataIndex: "title" },
@@ -153,8 +157,13 @@ function RenewalsTab() {
 
 function ErmsValidationTab() {
   const [province, setProvince] = useState("");
-  const q = useQuery({ queryKey: ["ucds", "not-in-erms", province], queryFn: () => fetchNotInErms(province || null), staleTime: 5 * 60 * 1000 });
-  const rows = q.data || [];
+  // The whole list once; choosing a province filters it here, with no request.
+  const q = useQuery({ queryKey: ["ucds", "not-in-erms"], queryFn: () => fetchNotInErms(null), staleTime: 5 * 60 * 1000 });
+  const rows = useMemo(() => {
+    const all = q.data || [];
+    const wanted = province.replace(/_/g, " ").toLowerCase();
+    return wanted ? all.filter((r) => String(r.province || "").toLowerCase() === wanted) : all;
+  }, [q.data, province]);
   const columns = [
     { title: "Serial", dataIndex: "sort_key", width: 120 },
     { title: "Establishment", dataIndex: "title" },
@@ -188,7 +197,15 @@ function ErmsValidationTab() {
   );
 }
 
-const UcdsReports = () => (
+const UcdsReports = () => {
+  // The Accomplishment and ERMS validation tabs read the same server-side
+  // work (the register checked against ERMS). Started in the background while
+  // the first tab is read, so those tabs open without the wait.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    queryClient.prefetchQuery({ queryKey: ["ucds", "accomplishment"], queryFn: fetchAccomplishment, staleTime: 5 * 60 * 1000 });
+  }, [queryClient]);
+  return (
   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
     <PageHeader icon={<FileTextOutlined />} title="Reports" description="The Monitoring Plan as Excel, the accomplishment per province, permits to renew and the ERMS validation list." />
     <Tabs
@@ -200,6 +217,7 @@ const UcdsReports = () => (
       ]}
     />
   </div>
-);
+  );
+};
 
 export default UcdsReports;

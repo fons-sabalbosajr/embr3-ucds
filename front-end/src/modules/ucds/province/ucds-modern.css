@@ -27,24 +27,49 @@
   display: none;
 }
 
-/* The toolbar: the count, keyword search, paging, filters and the section chips. */
+/* The toolbar: the count, paging and filters. */
 .ucds-toolbar .total-count-label {
   font-size: 14px;
   font-weight: 600;
   margin: 0 12px 0 0;
+  /* province.css lifted it 10px (translateY) above the pagination beside it. */
+  transform: none;
+  line-height: 24px;
+  white-space: nowrap;
 }
-.ucds-toolbar .section-result {
-  margin: 6px 0 0;
+.ucds-toolbar .total-count-label strong {
+  font-variant-numeric: tabular-nums;
 }
-.ucds-toolbar .section-breakdown {
+/* Industry Details: the Map (and Shared ECC) buttons under the address. */
+.ucds-table .ucds-details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.ucds-table .ucds-details-actions .ant-btn {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 12px !important;
+}
+/* The toolbar card stands apart from the table under it. */
+.ucds-toolbar.ant-card {
+  margin-bottom: 10px;
+}
+/* The filters and Reset on one line, never wrapping: the controls share the
+   width (MonitoringPlanFilters sets each one's share and minimum). Only a
+   very narrow window scrolls the row sideways rather than breaking it. */
+.mp-filters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 6px;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
-.ucds-toolbar .section-item {
-  margin: 0;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 20px;
+.mp-filters > * {
+  min-width: 0;
 }
 
 /* The table: one type size in every cell (13px), headers a notch smaller
@@ -54,13 +79,30 @@
   font-size: 12.5px !important;
   font-weight: 600;
   text-align: left;
-  white-space: nowrap;
+  /* The columns share the width (Province.jsx), so a long title wraps. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .ucds-table .ant-table-tbody > tr > td {
   font-size: 13px;
   vertical-align: top;
   padding: 5px 8px !important;
   line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Section chips may wrap inside a narrow column rather than spill out. */
+.ucds-table .ucds-section-chip {
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
+}
+/* Permits/Clearances reads left to right, like the rest of the record. */
+.ucds-table td .ucds-pc,
+.ucds-table td .ucds-pc-row {
+  text-align: left;
+  justify-items: start;
 }
 .ucds-table .ant-table-thead > tr > th {
   padding: 6px 8px !important;
@@ -122,8 +164,9 @@ body[data-theme="dark"] .ucds-erms-anchor {
 .ucds-record-actions .ant-btn {
   width: 100%;
 }
+/* Fitted, not scrolled: see tabpanes/FitToHeight. */
 .ucds-record-tabs > .ant-tabs-content-holder {
-  overflow: auto;
+  overflow: hidden;
 }
 .ucds-record-tabs .ant-tabs-tabpane {
   font-size: 13.5px;

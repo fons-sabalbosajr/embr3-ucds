@@ -274,7 +274,7 @@ async function scan({ cfg, by }) {
         const unread = found.filter((f) => f.confidence === 'review').length - toJudge.length;
         if (unread > 0) notes.push(`${unread} more "same proponent" pair(s) were not read by the model this time; they are left for your review.`);
       } catch (err) {
-        notes.push(`The AI model could not be reached (${err.code || err.message}); the "same proponent" links are left for your review.`);
+        notes.push(`The AI model could not be used — ${err.message} The "same proponent" links are left for your review.`);
       }
     } else {
       notes.push('No AI model is switched on: the "same proponent" links are left for your review.');

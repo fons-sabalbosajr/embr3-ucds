@@ -2,13 +2,14 @@
 import axios from "axios";
 import { API_BASE_URL } from "../config/api";
 
-export const loginUser = async (username, password) => {
+export const loginUser = async (username, password, remember = false) => {
   try {
     const response = await axios.post(
         `${API_BASE_URL}/login`,
       {
         username: username,
         password: password,
+        remember: remember === true,
       },
       {
         withCredentials: true,
