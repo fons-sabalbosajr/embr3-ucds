@@ -22,7 +22,9 @@ const VeraScanText = () => {
     mutationFn: () => readNextScans({ unit, limit }),
     onSuccess: (r) => {
       setLast(r);
-      message.success(`VERA read ${r.read} scan(s)${r.failed ? `; ${r.failed} could not be read` : ""}. ${r.left.toLocaleString()} left.`);
+      const summary = `VERA read ${r.read} scan(s)${r.failed ? `; ${r.failed} to try again tomorrow` : ""}${r.unreadable ? `; ${r.unreadable} not a readable PDF` : ""}. ${r.left.toLocaleString()} left.`;
+      if (r.stopped) message.warning(`${summary} She stopped early: ${r.stopped}`);
+      else message.success(summary);
     },
     onError: (e) => message.error(e?.response?.data?.message || "The scans could not be read."),
   });
@@ -38,7 +40,19 @@ const VeraScanText = () => {
           <Button type="primary" loading={run.isPending} onClick={() => run.mutate()}>Read with VERA</Button>
         </Space>
         {last && (
-          <Alert style={{ marginTop: 12 }} type="info" showIcon message={<Text>Read {last.read}{last.failed ? `, ${last.failed} not readable` : ""} — {last.left.toLocaleString()} documents with a scan still to read.</Text>} />
+          <Alert
+            style={{ marginTop: 12 }}
+            type={last.stopped ? "warning" : "info"}
+            showIcon
+            message={
+              <Text>
+                Read {last.read}
+                {last.failed ? `, ${last.failed} the model could not read (tried again after a day)` : ""}
+                {last.unreadable ? `, ${last.unreadable} not a readable PDF` : ""} — {last.left.toLocaleString()} documents with a scan still to read.
+              </Text>
+            }
+            description={last.stopped ? `VERA stopped early: ${last.stopped}` : undefined}
+          />
         )}
       </Card>
     </Space>

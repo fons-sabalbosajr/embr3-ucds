@@ -9,6 +9,10 @@ require("dotenv").config();
 // Must run before any DNS resolution (Mongo SRV lookup, mail, SMB).
 require("./config/dns").configureDns();
 
+// pdf-lib's "Trying to parse invalid object" lines, one per damaged object in
+// a scan, counted into one line a minute (shared/services/pdfWarnings).
+require("./shared/services/pdfWarnings").install();
+
 const MongoStore = require("connect-mongo");
 const { connectToMongo, client, DB_NAME } = require("./config/db");
 

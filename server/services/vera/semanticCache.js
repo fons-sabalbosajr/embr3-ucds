@@ -25,7 +25,19 @@
 //   VERA_CACHE_TTL_MS             how long an answer is kept (default 12 h)
 //   VERA_CACHE_MAX                entries kept (default 500, oldest dropped)
 //   VERA_CACHE_SIMILARITY         0..1, default 0.8
+//
+// Every other model call (29 Oct 2026) — the checks and tools — is kept here
+// too, by provider.complete(): a check run twice no longer pays twice.
+//   - Most are written by VERA from data (a list of values, a record, a
+//     scan's pages): kept by their exact content — system prompt, prompt,
+//     pages, length — since a near list is a different list.
+//   - One carrying words a person typed (the table builder's request) is
+//     matched as a chat question is, by its stems, AND the rest of the call
+//     (the field catalog it is drafted over, the day) must be the same.
+// Same switches, lifetime and size as the chat's; partitioned by tool.
 // ---------------------------------------------------------------------------
+
+const crypto = require('crypto');
 
 const num = (v, fallback) => (v === undefined || v === '' || !Number.isFinite(Number(v)) ? fallback : Number(v));
 const TTL_MS = () => num(process.env.VERA_CACHE_TTL_MS, 12 * 60 * 60 * 1000);
@@ -122,10 +134,34 @@ function remember(q, answer) {
     entries = new Map();
     store.set(q.partition, entries);
   }
-  const id = [...q.stems].sort().join(' ');
+  // The same words over other hits (other articles, another catalog) are another entry.
+  const id = `${[...q.stems].sort().join(' ')}|${q.hitIds.join(',')}`;
   if (!entries.has(id)) size += 1;
   entries.set(id, { stems: q.stems, negated: q.negated, hitIds: q.hitIds.slice(), answer, expires: now + TTL_MS(), uses: 0 });
   prune(now);
+}
+
+const digest = (...parts) => crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
+
+/**
+ * The cache query for a model call that is not the chat (provider.complete).
+ * `semantic`: { question, context } — the words a person typed, and the rest
+ * of the call that must match exactly.
+ */
+function modelQuery(cfg, { feature, tier, system, prompt, documents = [], maxTokens, semantic }) {
+  const pages = documents.map((d) => digest(d.mimeType, d.data));
+  const partition = ['model', feature, tier, cfg?.updatedAt ? new Date(cfg.updatedAt).getTime() : ''].join('|');
+  if (semantic?.question) {
+    // Required here, not above: assistant.js requires this module.
+    const { tokenize } = require('./assistant');
+    return {
+      partition,
+      stems: new Set(tokenize(semantic.question)),
+      negated: NEGATION_RE.test(semantic.question),
+      hitIds: [digest(system, semantic.context ?? '', pages, maxTokens)],
+    };
+  }
+  return { partition, stems: new Set([digest(system, prompt, pages, maxTokens)]), negated: false, hitIds: [] };
 }
 
 function clear() {
@@ -136,4 +172,4 @@ function clear() {
 /** Counts only — never a question or an answer — for the settings screen. */
 const stats = () => ({ entries: size, hits, misses });
 
-module.exports = { enabled, partitionOf, lookup, remember, clear, stats, NEGATION_RE, jaccard };
+module.exports = { enabled, partitionOf, modelQuery, lookup, remember, clear, stats, NEGATION_RE, jaccard };

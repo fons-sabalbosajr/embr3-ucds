@@ -306,18 +306,29 @@ async function bulkUpdateUcds(req, res) {
     // not only see. One that is not refuses the whole request — nothing written.
     const canWrite = writableFilter(req);
 
-    for (const item of updatesArray) {
-      const { changes, sort_key, id_no } = item;
-      if (!changes || Object.keys(changes).length === 0) continue;
+    // Every row's current values in one read, and which of them the account
+    // may change in a second — it was two reads per row, so saving a few
+    // hundred rows from the spreadsheet waited on a few hundred round trips.
+    const items = updatesArray
+      .filter((item) => item?.changes && Object.keys(item.changes).length && (item.sort_key || item.id_no))
+      .map((item) => ({ ...item, filter: item.sort_key ? { sort_key: item.sort_key } : { id_no: item.id_no } }));
+    const sortKeys = items.filter((i) => i.filter.sort_key).map((i) => i.sort_key);
+    const idNos = items.filter((i) => !i.filter.sort_key).map((i) => i.id_no);
+    const wanted = { $or: [{ sort_key: { $in: sortKeys } }, { id_no: { $in: idNos } }] };
+    const bySortKey = new Map();
+    const byIdNo = new Map();
+    // The first match per key, as findOne() gave.
+    for (const d of items.length ? await ucdsFor(req).find(wanted).toArray() : []) {
+      if (d.sort_key != null && !bySortKey.has(d.sort_key)) bySortKey.set(d.sort_key, d);
+      if (d.id_no != null && !byIdNo.has(d.id_no)) byIdNo.set(d.id_no, d);
+    }
+    const writable = canWrite && items.length ? new Set((await registerOf(req).find({ $and: [wanted, canWrite] }, { projection: { _id: 1 } }).toArray()).map((d) => String(d._id))) : null;
 
-      let filter = {};
-      if (sort_key) filter = { sort_key };
-      else if (id_no) filter = { id_no };
-      else continue;
-
-      const oldDoc = await ucdsFor(req).findOne(filter);
+    for (const item of items) {
+      const { changes, filter } = item;
+      const oldDoc = filter.sort_key ? bySortKey.get(filter.sort_key) : byIdNo.get(filter.id_no);
       if (!oldDoc) continue;
-      if (canWrite && !(await registerOf(req).findOne({ $and: [filter, canWrite] }, { projection: { _id: 1 } }))) {
+      if (writable && !writable.has(String(oldDoc._id))) {
         return res.status(403).json({ error: `You may view ${oldDoc.province || 'this province'} but not change it. Ask the administrator for edit access.` });
       }
 
@@ -697,6 +708,23 @@ function capitalizeFirstLetter(input) {
     .join('_');
 }
 
+// The register fields getProvinceData sends, by their names in the database
+// (commitment, resolution and order go out as tc_commitment,
+// resolution_issued and order_issued).
+const PROVINCE_PROJECTION = Object.fromEntries(
+  [
+    'id_no', 'sort_key', 'helper_column', 'helper_count', 'title', 'name', 'address', 'ecc_cnc', 'industry_class', 'remarks',
+    'industry_type', 'industry_subtype', 'psic_code', 'mbu_area', 'waterbody', 'long', 'lat', 'cong_district', 'street', 'brgy',
+    'city', 'province', 'emp_total', 'wwtf_type', 'bod', 'section_incharged', 'handler', 'monitoring_sched', 'iis_no_2024',
+    'iis_no_2025', 'iis_no_2026', 'iis_no_nov', 'protected_area', 'insp_type', 'date_monitored', 'date_routed', 'date_signed',
+    'days_dmds', 'days_drds', 'pismu_tracking', 'title_status', 'with_nov', 'pismu_count_month', 'permit_process', 'date_amended',
+    'date_approved', 'pto_code', 'pto_issued', 'pto_expiration', 'wwdp_code', 'wwdp_issued', 'wwdp_expiration', 'haz_id',
+    'haz_issued', 'pco_no', 'pco_name', 'pco_validity', 'docket_no', 'denr_pab_case_no', 'nov_issued', 'v_pd1586', 'v_ra9275',
+    'v_ra8749', 'v_ra6969_haz', 'v_ra6969_tchem', 'tc_date_actual', 'legal_officer', 'tc_compliance_link', 'pos_paper',
+    'penalty_date', 'amount', 'or_number', 'commitment', 'other_tc_remarks', 'resolution', 'order', 'order_status', 'color',
+  ].map((f) => [f, 1])
+);
+
 async function getProvinceData(req, res) {
   try {
     await connectToMongo();
@@ -726,8 +754,11 @@ async function getProvinceData(req, res) {
     // for each of them. Every write to the register clears it (see
     // clearRegisterChecks), so an edit shows at once.
     const formattedData = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}province:${province.toLowerCase()}:`), 30 * 1000, async () => {
+    // Only the fields the screen is sent (below): a register row loaded from
+    // a RAW workbook carries many more, and every one was read from Atlas
+    // and held in memory for each province, only to be dropped here.
     const provinceData = await ucdsFor(req)
-      .find(healthcare ? healthcareList.healthcareFilter() : healthcareList.provinceFilter(req, new RegExp(`^${province}$`, 'i')))
+      .find(healthcare ? healthcareList.healthcareFilter() : healthcareList.provinceFilter(req, new RegExp(`^${province}$`, 'i')), { projection: PROVINCE_PROJECTION })
       .toArray();
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
     return provinceData.map((doc) => ({
@@ -819,11 +850,27 @@ async function getProvinceData(req, res) {
   }
 }
 
+// The keyword search's text index, made once per register per process — it
+// was asked of Atlas on every extract, an index build check each time.
+const textIndexed = new Map(); // register name -> Promise
+function textIndexOnce(col) {
+  if (!textIndexed.has(col.collectionName)) {
+    textIndexed.set(
+      col.collectionName,
+      col.createIndex({ description: 'text' }).catch((err) => {
+        textIndexed.delete(col.collectionName);
+        throw err;
+      })
+    );
+  }
+  return textIndexed.get(col.collectionName);
+}
+
 async function extractProvinceData(req, res) {
   try {
     await connectToMongo();
     const { province, keyword, startDate, endDate } = req.query;
-    await ucdsFor(req).createIndex({ description: 'text' });
+    await textIndexOnce(registerOf(req));
     const query = {};
     if (keyword) query.$text = { $search: keyword };
     if (startDate && endDate) query.date_approved = { $gte: new Date(startDate), $lte: new Date(endDate) };
@@ -955,7 +1002,8 @@ async function getNextId(req, res) {
     const provincePrefixes = { Aurora: 'AU-', Bataan: 'BA-', Bulacan: 'BU-', Nueva_Ecija: 'NE-', Pampanga: 'PA-', Tarlac: 'TA-', Zambales: 'ZA-' };
     const prefix = provincePrefixes[province];
     if (!prefix) return res.status(400).json({ error: 'Invalid province' });
-    const surveys = await ucdsFor(req).find({ province }).toArray();
+    // The id_no alone: every establishment in the province was read whole for it.
+    const surveys = await ucdsFor(req).find({ province }, { projection: { _id: 0, id_no: 1 } }).toArray();
     const maxIdNo = surveys.reduce((max, survey) => { const match = (survey.id_no || '').toString().match(/\d+$/); const idNo = match ? parseInt(match[0], 10) : 0; return idNo > max ? idNo : max; }, 0);
     const nextIdNo = maxIdNo + 1;
     const formattedId = `${prefix}${nextIdNo}`;
@@ -966,15 +1014,30 @@ async function getNextId(req, res) {
   }
 }
 
+const escapeRx = (s) => String(s ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Search-as-you-type over one register field: each value containing what was
+ * typed, and how many establishments hold it ([{ keyword, count }], the most
+ * held first). Counted by the database: every matching establishment was read
+ * whole and counted here, on every keystroke of everyone typing. What was
+ * typed is matched as written — a "(" made an invalid pattern and a 500.
+ */
+async function valueCounts(req, field, query) {
+  const rows = await ucdsFor(req)
+    .aggregate([
+      { $match: { [field]: new RegExp(escapeRx(query), 'i') } },
+      { $group: { _id: { $toString: `$${field}` }, count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+    ])
+    .toArray();
+  return rows.map((r) => ({ keyword: r._id, count: r.count }));
+}
+
 async function searchName(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ name: regex }).toArray();
-    const nameCounts = results.reduce((acc, item) => { const name = (item.name || '').toString(); acc[name] = (acc[name] || 0) + 1; return acc; }, {});
-    const uniqueNames = Object.keys(nameCounts).map((key) => ({ keyword: key, count: nameCounts[key] }));
-    return res.status(200).json(uniqueNames);
+    return res.status(200).json(await valueCounts(req, 'name', req.query.query));
   } catch (error) {
     console.error('Error searching names:', error);
     return res.status(500).send('Internal Server Error');
@@ -982,14 +1045,9 @@ async function searchName(req, res) {
 }
 
 async function searchTitle(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ title: regex }).toArray();
-    const titleCounts = results.reduce((acc, item) => { const title = (item.title || '').toString(); acc[title] = (acc[title] || 0) + 1; return acc; }, {});
-    const uniqueTitles = Object.keys(titleCounts).map((key) => ({ keyword: key, count: titleCounts[key] }));
-    return res.status(200).json(uniqueTitles);
+    return res.status(200).json(await valueCounts(req, 'title', req.query.query));
   } catch (error) {
     console.error('Error searching titles:', error);
     return res.status(500).send('Internal Server Error');
@@ -997,14 +1055,9 @@ async function searchTitle(req, res) {
 }
 
 async function searchIndustryClass(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ industry_class: regex }).toArray();
-    const counts = results.reduce((acc, item) => { const key = (item.industry_class || '').toString(); acc[key] = (acc[key] || 0) + 1; return acc; }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'industry_class', req.query.query));
   } catch (error) {
     console.error('Error searching industry class:', error);
     return res.status(500).send('Internal Server Error');
@@ -1135,7 +1188,9 @@ async function getUcdsData(req, res) {
     let total;
 
     if (filterExpired === 'true') {
-      const allMatchingRecords = await ucdsFor(req).find(mongoQuery).toArray();
+      // Decided and sorted on four fields; only the page asked for is read
+      // whole (every matching establishment was, to send one page of them).
+      const allMatchingRecords = await ucdsFor(req).find(mongoQuery, { projection: { _id: 1, sort_key: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1 } }).toArray();
       const recordsWithExpiredPermits = allMatchingRecords.filter((record) =>
         isPermitExpired(record.pto_expiration) || isPermitExpired(record.wwdp_expiration) || isPermitExpired(record.pco_validity)
       );
@@ -1153,7 +1208,9 @@ async function getUcdsData(req, res) {
         if (partsA.prefix > partsB.prefix) return 1;
         return partsA.num - partsB.num;
       });
-      surveys = recordsWithExpiredPermits.slice(skip, skip + pageSize);
+      const pageIds = recordsWithExpiredPermits.slice(skip, skip + pageSize).map((r) => r._id);
+      const full = new Map((await ucdsFor(req).find({ _id: { $in: pageIds } }).toArray()).map((d) => [String(d._id), d]));
+      surveys = pageIds.map((id) => full.get(String(id))).filter(Boolean);
     } else {
       total = await ucdsFor(req).countDocuments(mongoQuery);
       const pipeline = [];
@@ -1218,18 +1275,9 @@ async function getAllUcds(req, res) {
 }
 
 async function searchEccCnc(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ ecc_cnc: regex }).toArray();
-    const counts = results.reduce((acc, item) => {
-      const k = (item.ecc_cnc || '').toString();
-      acc[k] = (acc[k] || 0) + 1;
-      return acc;
-    }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'ecc_cnc', req.query.query));
   } catch (error) {
     console.error('Error searching ECC CNCs:', error);
     return res.status(500).send('Internal Server Error');
@@ -1241,8 +1289,9 @@ async function checkDuplicate(req, res) {
   if (!query) return res.status(400).json({ error: 'Query parameter is required' });
   try {
     await connectToMongo();
-    const regex = new RegExp(`^${query}$`, 'i');
-    const duplicateEntry = await ucdsFor(req).findOne({ ecc_cnc: regex });
+    // The number as written: a "." in it matched any character, a "(" threw.
+    const regex = new RegExp(`^${escapeRx(query)}$`, 'i');
+    const duplicateEntry = await ucdsFor(req).findOne({ ecc_cnc: regex }, { projection: { ecc_cnc: 1, name: 1, title: 1, province: 1 } });
     if (duplicateEntry) {
       return res.status(200).json({
         duplicate: true,
@@ -1263,14 +1312,9 @@ async function checkDuplicate(req, res) {
 }
 
 async function searchPtoCode(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ pto_code: regex }).toArray();
-    const counts = results.reduce((acc, item) => { const k = (item.pto_code || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'pto_code', req.query.query));
   } catch (error) {
     console.error('Error searching PTO codes:', error);
     return res.status(500).send('Internal Server Error');
@@ -1278,14 +1322,9 @@ async function searchPtoCode(req, res) {
 }
 
 async function searchWwdpCode(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ wwdp_code: regex }).toArray();
-    const counts = results.reduce((acc, item) => { const k = (item.wwdp_code || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'wwdp_code', req.query.query));
   } catch (error) {
     console.error('Error searching WWDP codes:', error);
     return res.status(500).send('Internal Server Error');
@@ -1293,14 +1332,9 @@ async function searchWwdpCode(req, res) {
 }
 
 async function searchHazId(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ haz_id: regex }).toArray();
-    const counts = results.reduce((acc, item) => { const k = (item.haz_id || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'haz_id', req.query.query));
   } catch (error) {
     console.error('Error searching HAZ IDs:', error);
     return res.status(500).send('Internal Server Error');
@@ -1308,14 +1342,9 @@ async function searchHazId(req, res) {
 }
 
 async function searchPcoNo(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ pco_no: regex }).toArray();
-    const counts = results.reduce((acc, item) => { const k = (item.pco_no || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'pco_no', req.query.query));
   } catch (error) {
     console.error('Error searching PCO numbers:', error);
     return res.status(500).send('Internal Server Error');
@@ -1323,14 +1352,9 @@ async function searchPcoNo(req, res) {
 }
 
 async function searchPcoName(req, res) {
-  const query = req.query.query;
   try {
     await connectToMongo();
-    const regex = new RegExp(query, 'i');
-    const results = await ucdsFor(req).find({ pco_name: regex }).toArray();
-    const counts = results.reduce((acc, item) => { const k = (item.pco_name || '').toString(); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
-    const unique = Object.keys(counts).map((key) => ({ keyword: key, count: counts[key] }));
-    return res.status(200).json(unique);
+    return res.status(200).json(await valueCounts(req, 'pco_name', req.query.query));
   } catch (error) {
     console.error('Error searching PCO names:', error);
     return res.status(500).send('Internal Server Error');

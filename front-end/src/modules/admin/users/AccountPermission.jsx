@@ -4,6 +4,7 @@ import { message } from "../../../shared/feedback";
 import {
   CalendarOutlined,
   DatabaseOutlined,
+  DeleteOutlined,
   ExportOutlined,
   HistoryOutlined,
   SafetyCertificateOutlined,
@@ -13,7 +14,7 @@ import {
 import axios from "axios";
 import AvatarWithName from "../../../components/AvatarwithName";
 import AccountTypePanel from "./AccountTypePanel";
-import { accountType } from "../../../shared/accountTypes";
+import { accountType, holdsCapability } from "../../../shared/accountTypes";
 import "./accountpermission.css";
 import { API_BASE_URL } from "../../../config/api";
 
@@ -56,6 +57,12 @@ const CAPABILITIES = [
     name: "Date range filter",
     description: "Filter the dashboard and register by a date range instead of the current year only.",
     icon: <SearchOutlined />,
+  },
+  {
+    key: "canRemoveMenuItems",
+    name: "Remove year menu tables",
+    description: "Remove folders and tables added to a year container's menu, whoever made them — the Planning Unit's own tables among them. Without it, a person removes only what they made themselves. On for Planning and administrators unless switched off here; the Developer always holds it.",
+    icon: <DeleteOutlined />,
   },
   {
     key: "canViewAdminPanel",
@@ -101,7 +108,7 @@ const AccountPermission = ({ onClose, onPermissionsUpdate, userData }) => {
       setAccount(current);
       setMe(meRes.data);
       setYears((yearsRes.data?.years || []).sort((a, b) => a.year - b.year));
-      const c = Object.fromEntries(CAPABILITIES.map(({ key }) => [key, current[key] === true || current.capabilities?.[key] === true]));
+      const c = Object.fromEntries(CAPABILITIES.map(({ key }) => [key, holdsCapability(current, key)]));
       const p = Object.fromEntries(PROVINCES.map(({ key }) => [key, current[key] === "readWrite" ? "readWrite" : current[key] === "view" ? "view" : "none"]));
       const y = Array.isArray(current.assignedYears) ? current.assignedYears.map(Number) : [];
       setCaps(c);

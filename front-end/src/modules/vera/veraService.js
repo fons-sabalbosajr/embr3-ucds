@@ -16,9 +16,15 @@ const client = axios.create({ baseURL: `${API_BASE}/vera`, withCredentials: true
 /** Launcher state, starters and whether answers are model-phrased. */
 export const getVeraStatus = async () => (await client.get("/status")).data;
 
-/** @param {{message: string, history?: Array<{role, content}>, page?: string}} payload */
-export const askVera = async ({ message, history = [], page = "" }) =>
-  (await client.post("/chat", { message, history, page })).data;
+/**
+ * @param {{message: string, history?: Array<{role, content}>, page?: string, model?: string}} payload
+ * `model`: "provider|model" chosen in the chat; absent for VERA's own choice.
+ */
+export const askVera = async ({ message, history = [], page = "", model }) =>
+  (await client.post("/chat", { message, history, page, ...(model ? { model } : {}) })).data;
+
+/** The models a person may choose in the chat, with how each stands (ready or resting, today's use, reset). */
+export const getVeraChatModels = async () => (await client.get("/chat-models")).data;
 
 // ── The sign-in pages (no session) ───────────────────────────────────────────
 
@@ -78,6 +84,8 @@ export const runRefNumberCheck = async (limit) => (await client.post("/ref-numbe
 // linked to the central register, and the links she proposes for them.
 export const getRegisterLinks = async () => (await client.get("/register-links")).data;
 export const getRegisterLinksPending = async () => (await client.get("/register-links/pending")).data.pending;
+/** What each of VERA's Document Library checks holds waiting: { corrections, links, projectTypes, refNumbers, serials } (the Developer's). */
+export const getVeraFixesPending = async () => (await client.get("/fixes-pending")).data;
 // Reading with the AI model can take a minute or two.
 export const runRegisterLinksCheck = async () => (await client.post("/register-links/scan", null, { timeout: 5 * 60 * 1000 })).data;
 export const applyRegisterLinks = async ({ reportId, ids, all }) =>

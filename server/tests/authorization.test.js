@@ -83,9 +83,17 @@ describe('capabilitiesOf', () => {
   it('always returns a complete object', () => {
     const caps = capabilitiesOf({ permission: 'viewer' });
     expect(Object.keys(caps).sort()).toEqual(
-      ['canAccessRangePicker', 'canGenerateData', 'canManageData', 'canViewAdminPanel', 'canViewDataHistory'].sort()
+      ['canAccessRangePicker', 'canGenerateData', 'canManageData', 'canViewAdminPanel', 'canViewDataHistory', 'canRemoveMenuItems'].sort()
     );
     expect(Object.values(caps).every((v) => v === false)).toBe(true);
+  });
+
+  it('gives Planning and administrators canRemoveMenuItems until it is set on the account', () => {
+    expect(capabilitiesOf({ permission: 'planning' }).canRemoveMenuItems).toBe(true);
+    expect(capabilitiesOf({ permission: 'admin' }).canRemoveMenuItems).toBe(true);
+    expect(capabilitiesOf({ permission: 'viewer', canManageData: true }).canRemoveMenuItems).toBe(false);
+    expect(capabilitiesOf({ permission: 'planning', canRemoveMenuItems: false }).canRemoveMenuItems).toBe(false);
+    expect(capabilitiesOf({ permission: 'viewer', canRemoveMenuItems: true }).canRemoveMenuItems).toBe(true);
   });
 
   it('reads the legacy top-level booleans', () => {

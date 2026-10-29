@@ -83,7 +83,7 @@ const UcdsSettings = lazy(() => import("./modules/settings/UcdsSettings"));
 import { settingsPath } from "./modules/erms/settingsPath";
 import { fetchRecords, fetchUnitDashboard, fetchUnitDocuments, fetchUnreadMessages } from "./modules/erms/api/ermsService";
 import visibleInterval from "./shared/visibleInterval";
-import { getCorrectionsPending, getRegisterLinksPending, getVeraRepairs } from "./modules/vera/veraService";
+import { getVeraFixesPending, getVeraRepairs } from "./modules/vera/veraService";
 import { getSocket, initializeSocket } from "./api/socketService";
 import { fetchChatSummary, fetchDesk as fetchPortalDesk } from "./modules/portal/portalService";
 
@@ -339,7 +339,7 @@ const Universe = () => {
     const decidesPortal = hasErms && (units.length > 0 || isDeveloperAccount);
     // VERA's repairs of the register: for those who may apply them (the Developer, administrators).
     const maintainsRegister = hasUcds && ["developer", "admin"].includes(String(userRole || "").toLowerCase());
-    const [unread, flagged, legalNoScan, labNoScan, signUps, corrections, links, portalDesk, portalChats, repairs] = await Promise.all([
+    const [unread, flagged, legalNoScan, labNoScan, signUps, fixes, portalDesk, portalChats, repairs] = await Promise.all([
       hasErms ? count(fetchUnreadMessages(), (n) => Number(n) || 0) : 0,
       seesRecords ? count(fetchRecords({ flagged: true, page: 1, pageSize: 1 }), (r) => r?.total || 0) : 0,
       hasErms && units.includes("legal") ? count(fetchUnitDocuments("legal", { missingFile: true, pageSize: 1 }), (r) => r?.total || 0) : 0,
@@ -348,10 +348,9 @@ const Universe = () => {
       isDeveloperAccount
         ? count(fetch(`${backendUrl}/api/sign-up?status=pending`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])), (rows) => (Array.isArray(rows) ? rows.length : 0))
         : 0,
-      // VERA's data corrections waiting for review: the Developer's.
-      isDeveloperAccount ? count(getCorrectionsPending(), (n) => Number(n) || 0) : 0,
-      // VERA's proposed links to the central register: the Developer's.
-      isDeveloperAccount ? count(getRegisterLinksPending(), (n) => Number(n) || 0) : 0,
+      // What each of VERA's Document Library checks holds waiting — data
+      // corrections, register links, project types, Ref. Nos., serials: the Developer's.
+      isDeveloperAccount ? getVeraFixesPending().catch(() => null) : null,
       // The Document Portal: requests waiting for this account's unit (refused to anyone who decides none).
       decidesPortal ? fetchPortalDesk().catch(() => null) : null,
       // Messages from people in the room, not read yet.
@@ -396,11 +395,19 @@ const Universe = () => {
     if (signUps > 0) {
       items.push({ type: "admin-signup", group: "Admin", tone: "info", count: signUps, href: "/e-universe/admin/users", title: `${signUps} account ${signUps === 1 ? "request" : "requests"} to review`, description: "People asking for an E-Universe account." });
     }
-    if (corrections > 0) {
-      items.push({ type: "vera-corrections", group: "Admin", tone: "info", count: corrections, href: "/e-universe/admin/vera?tab=corrections", title: `VERA found ${corrections} project type ${corrections === 1 ? "correction" : "corrections"}`, description: "Spellings to unify in the Document Library. Review and apply them in VERA Assistant." });
-    }
-    if (links > 0) {
-      items.push({ type: "vera-links", group: "Admin", tone: "info", count: links, href: "/e-universe/admin/vera?tab=links", title: `VERA can link ${links} ${links === 1 ? "record" : "records"} to the central register`, description: "Records whose reference number did not find their establishment. Review and link them in VERA Assistant." });
+    // VERA's Document Library checks, each to its own tab of VERA Assistant.
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const VERA_FIXES = [
+      ["corrections", "vera-corrections", "info", (n) => `VERA found ${plural(n, "data correction", "data corrections")}`, "Project types, titles, proponents and places written several ways in the Document Library."],
+      ["links", "vera-links", "info", (n) => `VERA can link ${plural(n, "record", "records")} to the central register`, "Records whose reference number did not find their establishment."],
+      ["projectTypes", "vera-project-types", "info", (n) => `${plural(n, "project type", "project types")} to correct from the document`, "VERA read the scan and found another project type than the one on file."],
+      ["refNumbers", "vera-ref-numbers", "warning", (n) => `${plural(n, "Ref. No. differs", "Ref. Nos. differ")} from the scan`, "The number printed on the scan is not the one encoded, or none was encoded."],
+      ["serials", "vera-serials", "danger", (n) => `${plural(n, "serial number problem", "serial number problems")}`, "Duplicated serials, or a counter behind the highest serial on file."],
+    ];
+    const VERA_TAB = { corrections: "corrections", links: "links", projectTypes: "project-types", refNumbers: "ref-numbers", serials: "serials" };
+    for (const [key, type, tone, title, description] of VERA_FIXES) {
+      const n = Number(fixes?.[key]) || 0;
+      if (n > 0) items.push({ type, group: "VERA", tone, count: n, href: `/e-universe/admin/vera?tab=${VERA_TAB[key]}`, title: title(n), description: `${description} Review them in VERA Assistant.` });
     }
     // The bell's VERA tab: what she repaired in the register this week, what
     // waits for a person, and her permit findings from the latest check.
@@ -447,12 +454,23 @@ const Universe = () => {
       clearTimeout(t);
       t = setTimeout(refreshAll, 3000);
     };
+    // One of VERA's Document Library checks changed (a check, an apply, an
+    // undo): only the action items count again — the register's completeness
+    // check is not touched by these.
+    let f = null;
+    const onFixes = () => {
+      clearTimeout(f);
+      f = setTimeout(fetchActionItems, 1500);
+    };
     socket?.on("vera:repaired", onRepaired);
+    socket?.on("vera:fixes", onFixes);
     return () => {
       clearTimeout(t);
+      clearTimeout(f);
       socket?.off("vera:repaired", onRepaired);
+      socket?.off("vera:fixes", onFixes);
     };
-  }, [auth, refreshAll]);
+  }, [auth, refreshAll, fetchActionItems]);
   // Whether the one-off "Toggle Theme" hint has been dismissed for good.
   //
   // This used to store an AES-encrypted "true" and only read it back when the

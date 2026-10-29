@@ -10,7 +10,11 @@
 // Identical requests that arrive while the first is still running share it
 // rather than starting their own. A write that changes the answer calls
 // invalidate() with the key's prefix, so a clerk who has just filed sees the
-// new count at once rather than after the window.
+// new count at once rather than after the window. A read still running when
+// invalidate() is called is handed to whoever waits on it, but not kept: it
+// began before the write, and keeping it put the old values back for the
+// whole window (a province opened while VERA's fixes were being applied
+// showed the register as it was before them).
 //
 // One process, in memory: the application runs as a single Node process. A
 // second process would keep its own copy, which is still correct (each is at
@@ -26,21 +30,24 @@ async function cached(key, ttlMs, compute) {
     if (hit.pending) return hit.pending;
     if (hit.expires > now) return hit.value;
   }
-  const pending = Promise.resolve()
+  const entry = { expires: 0, pending: null };
+  // Still ours: not invalidated, nor replaced by a later read, meanwhile.
+  const current = () => entries.get(key) === entry;
+  entry.pending = Promise.resolve()
     .then(compute)
     .then(
       (value) => {
-        entries.set(key, { expires: Date.now() + ttlMs, value });
+        if (current()) entries.set(key, { expires: Date.now() + ttlMs, value });
         return value;
       },
       (err) => {
         // A failure is not remembered: the next caller tries again.
-        entries.delete(key);
+        if (current()) entries.delete(key);
         throw err;
       }
     );
-  entries.set(key, { expires: 0, pending });
-  return pending;
+  entries.set(key, entry);
+  return entry.pending;
 }
 
 /** Forget every entry whose key starts with `prefix`. */

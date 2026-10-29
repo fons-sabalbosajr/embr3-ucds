@@ -69,7 +69,7 @@ const SuggestInput = ({ id, value, onChange, fetcher, queryKey, onPick, placehol
       popupMatchSelectWidth={textarea ? true : 360}
       style={{ width: "100%" }}
     >
-      {textarea ? <Input.TextArea rows={2} placeholder={placeholder} /> : <Input placeholder={placeholder} allowClear />}
+      {textarea ? <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder={placeholder} /> : <Input placeholder={placeholder} allowClear />}
     </AutoComplete>
   );
 };

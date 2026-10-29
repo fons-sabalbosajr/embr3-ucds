@@ -156,6 +156,8 @@ async function checkOne(cfg, serialNo, by, { force = false } = {}) {
         prompt: 'Read the reference number of the attached document.',
         maxTokens: 300,
         documents: [{ mimeType: 'application/pdf', data: pdf }],
+        // Asked to read it again: a fresh reading, not the remembered one.
+        cache: !force,
       });
       reading = parseReading(out.text);
       model = out.model || null;

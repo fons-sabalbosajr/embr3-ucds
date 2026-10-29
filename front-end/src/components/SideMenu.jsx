@@ -43,6 +43,7 @@ import Logo from "./Logo";
 import MenuItemModal from "./MenuItemModal";
 import { useYear } from "../context/YearContext";
 import { API_BASE_URL } from "../config/api";
+import { message } from "../shared/feedback";
 import { useErmsAvailability } from "../shared/ermsAvailability";
 import "./sidemenu.css";
 
@@ -85,6 +86,9 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
   // tree is built while rendering.
   const [customItems, setCustomItems] = useState({});
   const [canManageMenu, setCanManageMenu] = useState(false);
+  // Who may remove what: everything (Planning, administrators, the Developer —
+  // the canRemoveMenuItems capability), or only what this person made.
+  const [menuRemoval, setMenuRemoval] = useState({ anyone: false, me: null });
   const [menuItemsVersion, setMenuItemsVersion] = useState(0);
   // The add/rename dialog: { year, item?, parent? }.
   const [itemDialog, setItemDialog] = useState(null);
@@ -231,6 +235,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
         for (const y of body.years || []) map[y.year] = y.items || [];
         setCustomItems(map);
         setCanManageMenu(body.canManage === true);
+        setMenuRemoval({ anyone: body.canRemoveAny === true, me: body.me || null });
       })
       .catch(() => {});
     return () => {
@@ -255,10 +260,22 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
     setItemDialog({ year, parent });
   };
 
+  // An item this person may remove: any, with the capability; otherwise one
+  // they made with nothing inside made by someone else (the server holds to it).
+  const mayRemove = (year, item) => {
+    if (menuRemoval.anyone) return true;
+    if (!menuRemoval.me) return false;
+    const items = customItems[year] || [];
+    const inside = [item];
+    for (let i = 0; i < inside.length; i += 1) inside.push(...items.filter((x) => x.parent === inside[i].id));
+    return inside.every((x) => x.createdBy === menuRemoval.me);
+  };
+
   const removeItem = async (year, item) => {
     if (year !== activeYear) await selectYear(year).catch(() => null);
     const res = await fetch(`${API_BASE_URL}/api/ucds/menu-items/${item.id}`, { method: "DELETE", credentials: "include" });
     if (res.ok) refreshMenuItems();
+    else message.error((await res.json().catch(() => null))?.message || "Could not remove the item.");
   };
 
   // A user-added item as a menu entry: a folder holds its children (and can
@@ -287,7 +304,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       <span className="menu-item-actions" onClick={stopEvent}>
         {item.kind === "folder" && actionButton("Add inside", () => addItem(year, item.id), <PlusOutlined />)}
         {actionButton("Rename or move", async () => { if (year !== activeYear) await selectYear(year).catch(() => null); setItemDialog({ year, item }); }, "✎")}
-        {actionButton(item.kind === "folder" ? "Remove folder and its contents" : "Remove", () => removeItem(year, item), "×", "is-danger")}
+        {mayRemove(year, item) && actionButton(item.kind === "folder" ? "Remove folder and its contents" : "Remove", () => removeItem(year, item), "×", "is-danger")}
       </span>
     );
   };

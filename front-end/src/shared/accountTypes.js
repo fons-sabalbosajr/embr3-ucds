@@ -63,5 +63,23 @@ export const accountTypeFor = (permission, ermsUnit) => {
   return type.value === "records" && ERMS_SYSTEM_LABEL[ermsUnit] ? { ...type, label: ERMS_SYSTEM_LABEL[ermsUnit] } : type;
 };
 
+/**
+ * A capability added after accounts existed is held by these types until it
+ * is switched either way on the account. Mirrors ROLE_DEFAULT_CAPABILITIES in
+ * server/services/authorization.js; the server is the authority.
+ */
+const ROLE_DEFAULT_CAPABILITIES = { canRemoveMenuItems: ["admin", "planning"] };
+
+/** Whether an account document (as /api/users returns it) holds a capability. */
+export const holdsCapability = (account, key) => {
+  const type = String(account?.permission || "").toLowerCase();
+  if (type === "developer") return true;
+  const nested = account?.capabilities && typeof account.capabilities === "object" ? account.capabilities : {};
+  if (account?.[key] === true || nested[key] === true) return true;
+  // Switched off on the account, or a capability with no default: not held.
+  if (typeof account?.[key] === "boolean" || key in nested || !ROLE_DEFAULT_CAPABILITIES[key]) return false;
+  return ROLE_DEFAULT_CAPABILITIES[key].includes(type);
+};
+
 /** Types that may hold storage containers at all. */
 export const STORAGE_TYPES = new Set(["developer", "planning", "records", "admin"]);

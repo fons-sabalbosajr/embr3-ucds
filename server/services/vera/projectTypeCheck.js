@@ -56,17 +56,45 @@ async function projectTypes() {
   return (await db.collection(RECORDS).distinct('project.type')).filter((t) => typeof t === 'string' && t.trim());
 }
 
-/** The scan's first pages as a small PDF, base64; null when it cannot be read. */
-async function firstPages(record, pages) {
+// Why a scan's pages could not be had. These say the file itself will not do
+// (reading it again changes nothing); any other reason — the share down,
+// switched off, refusing this server — may pass, and is worth another try.
+const UNREADABLE = new Set(['no-file', 'missing', 'not-a-file', 'invalid-path', 'not-pdf', 'too-large', 'damaged']);
+
+/**
+ * The scan's first pages as a small PDF, base64 — { pdf } — or { reason }.
+ * `container`: the share to look on when the record does not name its own
+ * (a Legal or Laboratory document's is its unit's, never the Records share).
+ */
+async function pagesOf(record, pages, { container } = {}) {
   const nas = require('../nasStorage');
   const stored = record.document?.sharePath || record.document?.filePath;
-  if (!stored) return null;
-  const file = await nas.statFile(stored, String(record.document?.container || nas.RECORDS_KEY).toLowerCase());
-  if (!file.ok || file.contentType !== 'application/pdf' || file.size > 60 * 1024 * 1024) return null;
-  const whole = await new Promise((resolve, reject) => {
-    const chunks = [];
-    nas.openStream(file.resolved).on('data', (c) => chunks.push(c)).on('end', () => resolve(Buffer.concat(chunks))).on('error', reject);
-  });
+  if (!stored) return { reason: 'no-file' };
+  const file = await nas.statFile(stored, String(record.document?.container || container || nas.RECORDS_KEY).toLowerCase());
+  if (!file.ok) return { reason: file.reason || 'unreachable' };
+  if (file.contentType !== 'application/pdf') return { reason: 'not-pdf' };
+  if (file.size > 60 * 1024 * 1024) return { reason: 'too-large' };
+  let whole;
+  try {
+    whole = await new Promise((resolve, reject) => {
+      const chunks = [];
+      nas.openStream(file.resolved).on('data', (c) => chunks.push(c)).on('end', () => resolve(Buffer.concat(chunks))).on('error', reject);
+    });
+  } catch {
+    return { reason: 'unreachable' };
+  }
+  return cutPages(whole, pages);
+}
+
+/**
+ * A PDF's first `pages` pages as a small PDF, base64 — { pdf } or { reason }.
+ * For a file in hand: a scan on the share (pagesOf), or one a clerk has just
+ * chosen in the upload form, before it is filed (services/vera/uploadGuide).
+ */
+async function cutPages(whole, pages) {
+  // A PDF may carry a few bytes before its header; readers look in the first kilobyte.
+  if (!Buffer.isBuffer(whole) || !whole.subarray(0, 1024).includes('%PDF-')) return { reason: 'not-pdf' };
+  if (whole.length > 60 * 1024 * 1024) return { reason: 'too-large' };
   const { PDFDocument } = require('pdf-lib');
   try {
     const src = await PDFDocument.load(whole, { ignoreEncryption: true, updateMetadata: false });
@@ -75,10 +103,15 @@ async function firstPages(record, pages) {
     copied.forEach((p) => cut.addPage(p));
     const out = Buffer.from(await cut.save({ useObjectStreams: true }));
     // Inline documents are limited in size by both providers.
-    return out.length <= 15 * 1024 * 1024 ? out.toString('base64') : null;
+    return out.length <= 15 * 1024 * 1024 ? { pdf: out.toString('base64') } : { reason: 'too-large' };
   } catch {
-    return null;
+    return { reason: 'damaged' };
   }
+}
+
+/** The scan's first pages as a small PDF, base64; null when it cannot be read. */
+async function firstPages(record, pages, options) {
+  return (await pagesOf(record, pages, options)).pdf || null;
 }
 
 const SYSTEM =
@@ -199,22 +232,27 @@ async function report() {
   return { proposals: proposals.map(strip), recent: recent.map(strip), counts: by, records, checked: Object.values(by).reduce((a, n) => a + n, 0) };
 }
 
-/** Apply one proposal (or all waiting), recording what the record held. */
+/**
+ * Apply one proposal (or all waiting), recording what the record held. One
+ * batched write to the records and one to the check — it was two writes per
+ * proposal, a thousand round trips for "Apply all" on a full page.
+ */
 async function apply(serialNos, user) {
   await connectToMongo();
   const db = getDb();
   const filter = serialNos === 'all' ? { status: 'proposed' } : { status: 'proposed', serialNo: { $in: serialNos } };
-  const wanted = await db.collection(COLLECTION).find(filter).toArray();
+  const wanted = await db.collection(COLLECTION).find(filter, { projection: { serialNo: 1, suggested: 1 } }).toArray();
+  if (!wanted.length) return { applied: 0, changed: 0 };
   const who = user?.username || 'unknown';
-  let changed = 0;
-  for (const p of wanted) {
-    const res = await db.collection(RECORDS).updateOne(
-      { serialNo: p.serialNo },
-      { $set: { 'project.type': p.suggested, updatedAt: new Date(), updatedBy: `VERA (approved by ${who})` } }
-    );
-    changed += res.modifiedCount;
-    await db.collection(COLLECTION).updateOne({ serialNo: p.serialNo }, { $set: { status: 'applied', appliedAt: new Date(), appliedBy: who } });
-  }
+  const now = new Date();
+  const res = await db.collection(RECORDS).bulkWrite(
+    wanted.map((p) => ({
+      updateOne: { filter: { serialNo: p.serialNo }, update: { $set: { 'project.type': p.suggested, updatedAt: now, updatedBy: `VERA (approved by ${who})` } } },
+    })),
+    { ordered: false }
+  );
+  const changed = res.modifiedCount || 0;
+  await db.collection(COLLECTION).updateMany({ serialNo: { $in: wanted.map((p) => p.serialNo) } }, { $set: { status: 'applied', appliedAt: now, appliedBy: who } });
   if (changed) require('../../shared/services/shortCache').invalidate('erms:records:');
   return { applied: wanted.length, changed };
 }
@@ -236,4 +274,4 @@ async function settle(serialNo, action, user) {
   return { ok: true };
 }
 
-module.exports = { COLLECTION, DEFAULTS, settingsOf, cleanSettings, parseVerdict, firstPages, scan, report, apply, settle };
+module.exports = { COLLECTION, DEFAULTS, UNREADABLE, settingsOf, cleanSettings, parseVerdict, projectTypes, pagesOf, cutPages, firstPages, scan, report, apply, settle };

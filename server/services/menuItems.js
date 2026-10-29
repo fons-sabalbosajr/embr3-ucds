@@ -1,5 +1,5 @@
 const { connectToMongo, getDb, ObjectId } = require('../config/db');
-const { badRequest, notFoundError } = require('../shared/middleware/errorHandler');
+const { badRequest, notFoundError, forbidden } = require('../shared/middleware/errorHandler');
 
 // ---------------------------------------------------------------------------
 // User-added items in the Universe Central DB menu.
@@ -132,18 +132,36 @@ async function ancestorIds(year, id) {
   return out;
 }
 
-/** Remove an item and everything inside it. */
-async function remove(year, id) {
+/**
+ * Remove an item and everything inside it. `anyone` (the canRemoveMenuItems
+ * capability: Planning, administrators, the Developer) removes whatever is
+ * there; anyone else only an item they made, with nothing inside it made by
+ * somebody else — an Encoder cannot delete the Planning Unit's tables.
+ */
+async function remove(year, id, { actor = null, anyone = false } = {}) {
   await connectToMongo();
   if (!ObjectId.isValid(id)) throw notFoundError('Item not found.', 'ITEM_NOT_FOUND');
   const root = await collection().findOne({ _id: new ObjectId(id), year });
   if (!root) throw notFoundError('Item not found.', 'ITEM_NOT_FOUND');
   const ids = [String(root._id)];
+  const makers = new Set([root.createdBy]);
   let frontier = [String(root._id)];
   while (frontier.length) {
-    const children = await collection().find({ year, parent: { $in: frontier } }, { projection: { _id: 1 } }).toArray();
+    const children = await collection().find({ year, parent: { $in: frontier } }, { projection: { _id: 1, createdBy: 1 } }).toArray();
     frontier = children.map((c) => String(c._id));
     ids.push(...frontier);
+    for (const c of children) makers.add(c.createdBy);
+  }
+  if (!anyone) {
+    const me = actor?.username || null;
+    if (!me || [...makers].some((m) => m !== me)) {
+      throw forbidden(
+        root.kind === 'folder' && makers.has(me)
+          ? 'This folder holds items made by someone else. Only Planning, an administrator or the Developer may remove it.'
+          : `Only Planning, an administrator or the Developer may remove “${root.label}” — it was made by ${root.createdBy || 'someone else'}.`,
+        'REMOVE_NOT_ALLOWED'
+      );
+    }
   }
   await collection().deleteMany({ _id: { $in: ids.map((x) => new ObjectId(x)) } });
   // A removed table's rows go with it (required here: customTables requires this file).

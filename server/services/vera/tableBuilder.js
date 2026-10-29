@@ -18,6 +18,7 @@
 // ---------------------------------------------------------------------------
 
 const provider = require('./provider');
+const guardrails = require('./guardrails');
 const permits = require('./permitAnalysis');
 const { authorizedProvinces } = require('../authorization');
 const { provinceFilter } = require('../provinces');
@@ -91,7 +92,9 @@ const FIELD = new Map(CATALOG.map((c) => [c.key, c]));
 const OPS = ['eq', 'ne', 'contains', 'in', 'empty', 'filled', 'gt', 'lt', 'before', 'after', 'within_days'];
 const MAX_COLUMNS = 30;
 const MAX_FILTERS = 12;
-const MAX_ROWS = 2000;
+// As many rows as a table holds (services/customTables): at 2,000, a table of
+// every establishment kept only the first serials — Aurora and part of Bataan.
+const MAX_ROWS = require('../customTables').MAX_ROWS;
 const PREVIEW = 50;
 
 // ── The spec ─────────────────────────────────────────────────────────────────
@@ -384,15 +387,22 @@ const SYSTEM = [
 /** Ask the model for a spec; checked before anything is run. */
 async function draft(request, { cfg, col }) {
   if (!provider.isOperational(cfg)) return { ok: false, status: 409, message: "VERA's AI model is not available right now. Build the table with the form below instead — pick the columns and conditions yourself." };
+  const asked = clean(request, 600);
+  // Refused here with a 400 rather than as the model's failure (provider.complete checks it too).
+  if (guardrails.looksLikeInjection(asked)) return { ok: false, status: 400, message: guardrails.INJECTION_REPLY };
   const cat = await catalog(col);
   // Ten values a field, each short: enough to copy a spelling, and the draft stays near a thousand tokens.
   const fields = cat.map((c) => `${c.key} — ${c.label} (${c.type})${c.values ? ` VALUES: ${c.values.slice(0, 10).map((v) => clean(v, 40)).join(' | ')}` : ''}`).join('\n');
+  const today = new Date().toLocaleDateString('en-US');
   const out = await provider.complete(cfg, {
     system: SYSTEM,
-    prompt: `FIELDS:\n${fields}\n\nToday is ${new Date().toLocaleDateString('en-US')}.\n\nREQUEST: ${clean(request, 600)}`,
+    prompt: `FIELDS:\n${fields}\n\nToday is ${today}.\n\nREQUEST: ${asked}`,
     maxTokens: 1500,
     tier: 'main',
     feature: 'table',
+    // The same request in other words, over the same fields on the same day,
+    // is drafted once (services/vera/semanticCache).
+    semantic: { question: asked, context: `${fields}\n${today}` },
   });
   const text = String(out.text || '');
   let parsed = null;

@@ -34,7 +34,8 @@ import {
   DashboardOutlined,
 } from "@ant-design/icons";
 
-import { getVeraConfig, updateVeraConfig, testVeraConnection, getCorrectionsPending, getRegisterLinksPending } from "./veraService";
+import { getVeraConfig, updateVeraConfig, testVeraConnection, getVeraFixesPending } from "./veraService";
+import { getSocket, initializeSocket } from "../../api/socketService";
 import VeraCorrections from "./VeraCorrections";
 import VeraRegisterLinks from "./VeraRegisterLinks";
 import VeraSerials from "./VeraSerials";
@@ -97,9 +98,18 @@ export default function VeraSettings() {
   const [preview, setPreview] = useState("burning");
   const { mode } = useTheme();
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "configuration");
-  // Answers for the Developer only (403 otherwise), which also decides the tab.
-  const { data: pendingCorrections } = useQuery({ queryKey: ["vera", "corrections", "pending"], queryFn: getCorrectionsPending, retry: false, staleTime: 30 * 1000 });
-  const { data: pendingLinks } = useQuery({ queryKey: ["vera", "register-links", "pending"], queryFn: getRegisterLinksPending, retry: false, staleTime: 30 * 1000 });
+  // What each check holds waiting — for the Developer only (403 otherwise),
+  // which also decides whether the check tabs show. Counted again whenever a
+  // check, an apply or an undo is made anywhere (the server's vera:fixes).
+  const { data: fixes } = useQuery({ queryKey: ["vera", "fixes-pending"], queryFn: getVeraFixesPending, retry: false, staleTime: 30 * 1000 });
+  useEffect(() => {
+    const socket = getSocket() || initializeSocket();
+    const recount = () => queryClient.invalidateQueries({ queryKey: ["vera", "fixes-pending"] });
+    socket?.on("vera:fixes", recount);
+    return () => socket?.off("vera:fixes", recount);
+  }, [queryClient]);
+  const developerTabs = fixes !== undefined;
+  const waiting = (n) => (n ? <Tag color="gold" style={{ marginInlineStart: 6 }}>{n}</Tag> : null);
   const provider = Form.useWatch("provider", form);
 
   const load = async () => {
@@ -480,6 +490,16 @@ export default function VeraSettings() {
                 <Switch checkedChildren="On" unCheckedChildren="Off" />
               </Form.Item>
             </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item
+                name="chatModelChoice"
+                label="Let administrators choose the model in the chat"
+                valuePropName="checked"
+                tooltip="For the Developer and administrators only: the chat offers VERA's models with how each stands — ready or resting, today's use, when its quota starts again. The chosen one answers first; the next model stands in when it cannot. Other staff always get VERA's own choice, which keeps to the free models first, so no one else can spend the paid model's credit."
+              >
+                <Switch checkedChildren="On" unCheckedChildren="Off" />
+              </Form.Item>
+            </Col>
           </Row>
           <Paragraph type="secondary" style={{ marginBottom: 8 }}>
             What each account type may use. Off for <Text strong>AI model answers</Text> keeps that role on the help library: nothing they type is sent to a
@@ -556,9 +576,7 @@ export default function VeraSettings() {
       <Tabs
         // The bell links to ?tab=corrections or ?tab=links; until that tab
         // exists (the Developer check is still answering), Configuration shows.
-        activeKey={
-          ((tab === "corrections" || tab === "serials" || tab === "project-types" || tab === "ref-numbers" || tab === "scan-text") && pendingCorrections === undefined) || (tab === "links" && pendingLinks === undefined) ? "configuration" : tab
-        }
+        activeKey={["corrections", "links", "serials", "project-types", "ref-numbers", "scan-text"].includes(tab) && !developerTabs ? "configuration" : tab}
         onChange={setTab}
         items={[
           { key: "configuration", label: <span><RobotOutlined /> Configuration</span>, children: configuration },
@@ -567,27 +585,20 @@ export default function VeraSettings() {
           { key: "logs", label: <span><FileSearchOutlined /> Activity Log</span>, children: <VeraLogs /> },
           // VERA's report on the Records project types — the Developer's alone,
           // shown when the server says this account may see it.
-          ...(pendingCorrections !== undefined
-            ? [{ key: "corrections", label: <span><ThunderboltOutlined /> Data corrections{pendingCorrections ? <Tag color="gold" style={{ marginInlineStart: 6 }}>{pendingCorrections}</Tag> : null}</span>, children: <VeraCorrections /> }]
-            : []),
-          ...(pendingLinks !== undefined
-            ? [{ key: "links", label: <span><LinkOutlined /> Register links{pendingLinks ? <Tag color="gold" style={{ marginInlineStart: 6 }}>{pendingLinks}</Tag> : null}</span>, children: <VeraRegisterLinks /> }]
-            : []),
-          // Serial numbers across the three ERMS units — the Developer's, like the two above.
-          ...(pendingCorrections !== undefined
-            ? [{ key: "serials", label: <span><NumberOutlined /> Serial numbers</span>, children: <VeraSerials /> }]
-            : []),
-          // Each record's project type, read against its document.
-          ...(pendingCorrections !== undefined
-            ? [{ key: "project-types", label: <span><FileSearchOutlined /> Project types</span>, children: <VeraProjectTypes /> }]
-            : []),
-          // Each record's Ref. No., read against the number printed on its scan.
-          ...(pendingCorrections !== undefined
-            ? [{ key: "ref-numbers", label: <span><NumberOutlined /> Ref. numbers</span>, children: <VeraRefNumbers /> }]
-            : []),
-          // Reading scans' text so the libraries can search inside them.
-          ...(pendingCorrections !== undefined
-            ? [{ key: "scan-text", label: <span><FileSearchOutlined /> Scan text</span>, children: <VeraScanText /> }]
+          // The Developer's checks, each with what it holds waiting.
+          ...(developerTabs
+            ? [
+                { key: "corrections", label: <span><ThunderboltOutlined /> Data corrections{waiting(fixes.corrections)}</span>, children: <VeraCorrections /> },
+                { key: "links", label: <span><LinkOutlined /> Register links{waiting(fixes.links)}</span>, children: <VeraRegisterLinks /> },
+                // Serial numbers across the three ERMS units.
+                { key: "serials", label: <span><NumberOutlined /> Serial numbers{waiting(fixes.serials)}</span>, children: <VeraSerials /> },
+                // Each record's project type, read against its document.
+                { key: "project-types", label: <span><FileSearchOutlined /> Project types{waiting(fixes.projectTypes)}</span>, children: <VeraProjectTypes /> },
+                // Each record's Ref. No., read against the number printed on its scan.
+                { key: "ref-numbers", label: <span><NumberOutlined /> Ref. numbers{waiting(fixes.refNumbers)}</span>, children: <VeraRefNumbers /> },
+                // Reading scans' text so the libraries can search inside them.
+                { key: "scan-text", label: <span><FileSearchOutlined /> Scan text</span>, children: <VeraScanText /> },
+              ]
             : []),
         ]}
       />

@@ -207,6 +207,32 @@ router.get('/api/erms/filter-options', ermsAccess, ctrl.filterOptions);
 // Autocomplete on the upload forms: values already on file, within scope.
 const suggestQuery = (fields) => z.object({ field: z.enum(fields), q: z.string().trim().max(100).optional() });
 router.get('/api/erms/records/suggest', ermsAccess, validate(suggestQuery(['proponentName', 'projectTitle', 'specificProjectType', 'permitNumber']).extend({ projectType: z.string().trim().max(200).optional() }), 'query'), ctrl.suggest);
+// VERA's upload guide (services/vera/uploadGuide): her suggestions for the
+// form as it is filled (by rule), and her reading of the scan chosen (one
+// model call, on request).
+const guideText = (max) => z.string().max(max).optional().nullable();
+router.post(
+  '/api/erms/records/vera/guide',
+  ermsWrite,
+  validate(
+    z.object({
+      isNew: z.boolean().optional(),
+      proponentName: guideText(300),
+      projectTitle: guideText(500),
+      permitType: guideText(40),
+      permitNumber: guideText(120),
+      dateApproved: guideText(30),
+      dateAmended: guideText(30),
+      projectType: guideText(200),
+      specificProjectType: guideText(200),
+      province: guideText(40),
+      city: guideText(120),
+      fileName: guideText(260),
+    })
+  ),
+  ctrl.veraGuide
+);
+router.post('/api/erms/records/vera/read-scan', ermsWrite, expensiveLimiter, uploadOne, ctrl.veraReadScan);
 // The desktop system's menus (project types, statuses, addresses), for the forms.
 router.get(
   '/api/erms/lookups',
@@ -402,6 +428,25 @@ router.get(
   unitCtrl.suggest
 );
 router.post('/api/erms/units/:unit/documents', ermsAccess, requireNasActive, validate(unitParam, 'params'), uploadOne, unitCtrl.createDocument);
+// VERA's upload guide on the Legal and Laboratory forms (services/vera/uploadGuide):
+// her suggestions by rule, and her reading of the scan chosen. Filers only.
+router.post(
+  '/api/erms/units/:unit/vera/guide',
+  ermsAccess,
+  validate(unitParam, 'params'),
+  validate(
+    z.object({
+      docType: z.string().trim().max(40),
+      province: z.string().trim().max(40).optional().nullable(),
+      serialNo: z.string().trim().max(80).optional().nullable(),
+      isNew: z.boolean().optional(),
+      fileName: z.string().max(260).optional().nullable(),
+      fields: z.record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean(), z.null()])).optional(),
+    })
+  ),
+  unitCtrl.veraGuide
+);
+router.post('/api/erms/units/:unit/vera/read-scan', ermsAccess, validate(unitParam, 'params'), expensiveLimiter, uploadOne, unitCtrl.veraReadScan);
 router.get('/api/erms/units/:unit/documents/export', ermsAccess, expensiveLimiter, validate(unitParam, 'params'), validate(unitListQuery, 'query'), unitCtrl.exportDocuments);
 router.get('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), unitCtrl.getDocument);
 router.patch('/api/erms/units/:unit/documents/:serialNo', ermsAccess, validate(unitSerialParam, 'params'), validate(unitUpdateSchema), unitCtrl.updateDocument);

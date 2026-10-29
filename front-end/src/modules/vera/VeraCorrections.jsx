@@ -1,6 +1,20 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Card, Empty, Popconfirm, Segmented, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
-import { CheckOutlined, ReloadOutlined, RobotOutlined, ThunderboltOutlined, ToolOutlined, UndoOutlined } from "@ant-design/icons";
+import { Alert, Badge, Button, Card, Empty, Popconfirm, Segmented, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
+import {
+  AppstoreOutlined,
+  CheckOutlined,
+  EnvironmentOutlined,
+  FileTextOutlined,
+  HistoryOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  TagsOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  ToolOutlined,
+  UndoOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { message } from "../../shared/feedback";
@@ -20,6 +34,68 @@ const { Text, Paragraph } = Typography;
 // ---------------------------------------------------------------------------
 
 const errorText = (e, fallback) => e?.response?.data?.message || fallback;
+
+const FIELD_ICON = {
+  "project.type": <AppstoreOutlined />,
+  "project.otherType": <TagsOutlined />,
+  projectTitle: <FileTextOutlined />,
+  proponentName: <TeamOutlined />,
+  "location.city": <EnvironmentOutlined />,
+  "location.barangay": <EnvironmentOutlined />,
+};
+
+/**
+ * What VERA did, at a glance: a chip per field (its values, and a badge for
+ * the corrections found), and one for how the spelling was checked. The
+ * sentences are in each chip's tooltip. A report from before the summary
+ * (29 Oct 2026) shows its notes as they were written.
+ */
+const ReportSummary = ({ report }) => {
+  const s = report.summary;
+  if (!s) {
+    return report.notes?.length > 0 ? (
+      <Alert type="info" showIcon message="What VERA did" description={<ul style={{ margin: 0, paddingInlineStart: 18 }}>{report.notes.map((n) => <li key={n}>{n}</li>)}</ul>} />
+    ) : null;
+  }
+  const sp = s.spelling;
+  const spelling =
+    !sp ? null : sp.by === "model" ? (
+      <Tooltip title={`Project type spelling checked by ${sp.model || "VERA's AI model"}: ${sp.sent} value(s) sent${sp.remembered ? `, ${sp.remembered} remembered from before` : ""}${sp.refused ? `; ${sp.refused} suggestion(s) refused as more than a spelling fix` : ""}.`}>
+        <Tag icon={<RobotOutlined />} color="purple">
+          {sp.model || "AI"} · {sp.sent} sent
+        </Tag>
+      </Tooltip>
+    ) : sp.by === "memory" ? (
+      <Tooltip title={`All ${sp.of} project types were judged by VERA's AI model before — no request made, no tokens spent.`}>
+        <Tag icon={<HistoryOutlined />} color="green">
+          Remembered · no AI request
+        </Tag>
+      </Tooltip>
+    ) : (
+      <Tooltip title={`Near-identical project type spellings were paired by rule. ${sp.why || ""}`}>
+        <Tag icon={<WarningOutlined />} color="gold">
+          Spelling by rule
+        </Tag>
+      </Tooltip>
+    );
+  return (
+    <Space size={[6, 8]} wrap>
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        Checked:
+      </Text>
+      {s.fields.map((f) => (
+        <Tooltip key={f.field} title={`${f.label}: ${f.values.toLocaleString()} different values checked, ${f.proposals} to correct.`}>
+          <Badge count={f.proposals} size="small" offset={[-4, 2]} overflowCount={999}>
+            <Tag icon={FIELD_ICON[f.field]} style={{ marginInlineEnd: 0 }}>
+              {f.label} <Text type="secondary" style={{ fontSize: 11 }}>{f.values.toLocaleString()}</Text>
+            </Tag>
+          </Badge>
+        </Tooltip>
+      ))}
+      {spelling}
+    </Space>
+  );
+};
 
 const VeraCorrections = () => {
   const queryClient = useQueryClient();
@@ -178,9 +254,7 @@ const VeraCorrections = () => {
               <Statistic title="Records they would change" value={pendingRecords} />
               <Statistic title="Applied" value={appliedCount} />
             </Space>
-            {report.notes?.length > 0 && (
-              <Alert type="info" showIcon message="What VERA did" description={<ul style={{ margin: 0, paddingInlineStart: 18 }}>{report.notes.map((n) => <li key={n}>{n}</li>)}</ul>} />
-            )}
+            <ReportSummary report={report} />
 
             <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
               <Space wrap>

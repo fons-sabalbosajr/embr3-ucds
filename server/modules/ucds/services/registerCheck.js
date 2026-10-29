@@ -183,7 +183,11 @@ async function scan({ col, register, cfg, by }) {
         try {
           const r = await spellingByModel(field, first.canonical, cfg);
           spelling = r.proposals;
-          notes.push(`Industry classifications spell-checked by VERA's model (${r.model || 'model'})${r.rejected ? `; ${r.rejected} suggestion(s) refused as more than a spelling fix` : ''}.`);
+          notes.push(
+            r.sent
+              ? `Industry classifications spell-checked by VERA's model (${r.model || 'model'}): ${r.sent} of ${first.canonical.size} value(s) sent, the rest judged before${r.rejected ? `; ${r.rejected} suggestion(s) refused as more than a spelling fix` : ''}.`
+              : `Industry classifications: all ${first.canonical.size} value(s) were judged by VERA's model before — no request made.`
+          );
         } catch (err) {
           spelling = spellingByRule(field, first.canonical);
           notes.push(`The AI model could not be used — ${err.message} Industry classifications were paired by rule instead.`);
@@ -297,58 +301,87 @@ async function latest(register) {
   return { current: publicRun(run) };
 }
 
+/**
+ * Apply proposals (by id, or all not yet applied).
+ *
+ * The records each proposal touches are found in one read per field, and
+ * every change goes in one batched write. (It was a read and a write per
+ * proposal, and two per swapped coordinate: "Apply all" on a whole register
+ * ran for minutes, the request was cut off midway, and the report — written
+ * only at the end — still showed as waiting the fixes already made in the
+ * register, which then could not be undone.)
+ */
 async function apply({ col, register, runId, ids, user }) {
   await connectToMongo();
   const run = ObjectId.isValid(runId) ? await checks().findOne({ _id: new ObjectId(runId), register }) : null;
   if (!run) return { ok: false, status: 404, message: 'That report is no longer there. Run a new check.' };
-  // Underscores-for-spaces last: the other spellings first go to the
-  // majority's, then the majority (now everything) changes at once.
-  const wanted = run.proposals
-    .filter((p) => !p.applied && (ids === 'all' || ids.includes(p.id)))
-    .sort((a, b) => Number(a.reason === UNDERSCORES) - Number(b.reason === UNDERSCORES));
   const now = new Date();
   const who = user?.username || 'unknown';
   const stamp = { updated_at: now, updated_by: `VERA (approved by ${who})` };
-  let changed = 0;
-  for (const p of wanted) {
+  const wanted = run.proposals.filter((p) => !p.applied && (ids === 'all' || ids.includes(p.id)));
+
+  // Underscores for spaces, settled first: what waits towards the underscored
+  // spelling goes straight to the spaced one, and a fix from the spaced to the
+  // underscored one would undo it, so it is superseded.
+  for (const u of wanted.filter((p) => p.reason === UNDERSCORES)) {
+    for (const q of run.proposals) {
+      if (q === u || q.applied || q.field !== u.field) continue;
+      if (q.from === u.to && q.to === u.from) Object.assign(q, { applied: true, appliedAt: now, appliedBy: who, changed: 0, superseded: true });
+      else if (q.to === u.from) q.to = u.to;
+    }
+  }
+  const batch = wanted.filter((p) => !p.superseded);
+
+  // The records holding each old value, field by field.
+  const hitsOf = new Map(); // `${field}\u0000${from}` -> [_id]
+  const byField = new Map();
+  for (const p of batch) {
+    if (p.method === 'erms' || p.field === COORDS) continue;
+    if (!byField.has(p.field)) byField.set(p.field, new Set());
+    byField.get(p.field).add(p.from);
+  }
+  for (const [field, froms] of byField) {
+    for await (const d of col.find({ [field]: { $in: [...froms] } }, { projection: { [field]: 1 } })) {
+      const key = `${field}\u0000${d[field]}`;
+      if (!hitsOf.has(key)) hitsOf.set(key, []);
+      hitsOf.get(key).push(d._id);
+    }
+  }
+  // The records named by a coordinate or ERMS proposal, as they are now.
+  const named = batch.flatMap((p) => (p.method === 'erms' ? [p.recordId] : p.field === COORDS ? p.targets || [] : []));
+  const current = new Map();
+  if (named.length) {
+    for await (const d of col.find({ _id: { $in: named } }, { projection: { lat: 1, long: 1, ecc_cnc: 1 } })) current.set(String(d._id), d);
+  }
+
+  const ops = [];
+  for (const p of batch) {
+    let hits;
     if (p.method === 'erms') {
       // One record's own permit from ERMS (permitDuplicates.js): changed only
       // while it still holds the shared number it was proposed against.
-      const res = await col.updateOne({ _id: p.recordId, ecc_cnc: p.oldValue }, { $set: { ecc_cnc: p.newValue, ...stamp } });
-      p.changed = res.modifiedCount;
-      p.appliedIds = res.modifiedCount ? [p.recordId] : [];
+      const d = current.get(String(p.recordId));
+      hits = d && d.ecc_cnc === p.oldValue ? [p.recordId] : [];
+      if (hits.length) ops.push({ updateOne: { filter: { _id: p.recordId, ecc_cnc: p.oldValue }, update: { $set: { ecc_cnc: p.newValue, ...stamp } } } });
     } else if (p.field === COORDS) {
-      // Swap each record's own pair, only where it is still the wrong way round.
-      let n = 0;
+      // Each record's own pair, only where it is still the wrong way round —
+      // and only those are remembered, so an undo swaps back nothing else.
+      hits = [];
       for (const _id of p.targets || []) {
-        const d = await col.findOne({ _id }, { projection: { lat: 1, long: 1 } });
+        const d = current.get(String(_id));
         if (!d || !(inRange(num(d.long), REGION.lat) && inRange(num(d.lat), REGION.long))) continue;
-        await col.updateOne({ _id }, { $set: { lat: d.long, long: d.lat, ...stamp } });
-        n += 1;
+        hits.push(_id);
+        ops.push({ updateOne: { filter: { _id, lat: d.lat, long: d.long }, update: { $set: { lat: d.long, long: d.lat, ...stamp } } } });
       }
-      p.changed = n;
-      p.appliedIds = p.targets || [];
     } else {
-      const hits = await col.find({ [p.field]: p.from }, { projection: { _id: 1 } }).limit(MAX_REMEMBERED + 1).toArray();
-      const res = await col.updateMany({ [p.field]: p.from }, { $set: { [p.field]: p.to, ...stamp } });
-      p.changed = res.modifiedCount;
-      p.appliedIds = hits.length <= MAX_REMEMBERED ? hits.map((h) => h._id) : null;
+      hits = hitsOf.get(`${p.field}\u0000${p.from}`) || [];
+      if (hits.length) ops.push({ updateMany: { filter: { _id: { $in: hits }, [p.field]: p.from }, update: { $set: { [p.field]: p.to, ...stamp } } } });
     }
-    p.applied = true;
-    p.appliedAt = now;
-    p.appliedBy = who;
-    changed += p.changed;
-    if (p.reason === UNDERSCORES) {
-      // What still waits towards the underscored spelling goes to the spaced
-      // one now; a fix from the spaced to the underscored one would undo
-      // this, so it is settled as superseded.
-      for (const q of run.proposals) {
-        if (q.applied || q.field !== p.field) continue;
-        if (q.from === p.to && q.to === p.from) Object.assign(q, { applied: true, appliedAt: now, appliedBy: who, changed: 0, superseded: true });
-        else if (q.to === p.from) q.to = p.to;
-      }
-    }
+    Object.assign(p, { applied: true, appliedAt: now, appliedBy: who, changed: hits.length, appliedIds: hits.length <= MAX_REMEMBERED ? hits : null });
   }
+  const res = ops.length ? await col.bulkWrite(ops, { ordered: false }) : { modifiedCount: 0 };
+  const changed = res.modifiedCount || 0;
+
   const left = run.proposals.filter((p) => !p.applied).length;
   await checks().updateOne({ _id: run._id }, { $set: { proposals: run.proposals, status: left ? 'partly-applied' : 'applied' } });
   if (changed) require('../../../shared/services/shortCache').invalidate('ucds:');

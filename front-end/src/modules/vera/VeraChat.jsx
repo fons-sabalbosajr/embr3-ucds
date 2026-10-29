@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Grid } from "antd";
-import { SendOutlined, CloseOutlined, MinusOutlined, ReloadOutlined, DeleteOutlined, WarningOutlined, MessageOutlined } from "@ant-design/icons";
+import { Grid, Popover } from "antd";
+import {
+  SendOutlined,
+  CloseOutlined,
+  MinusOutlined,
+  ReloadOutlined,
+  DeleteOutlined,
+  WarningOutlined,
+  MessageOutlined,
+  DownOutlined,
+  RightOutlined,
+  CheckOutlined,
+} from "@ant-design/icons";
 
 import { VeraFlame } from "./VeraMark";
 import { BorderBeam } from "border-beam";
-import { getVeraStatus, askVera, getVeraPublicStatus, askVeraPublic, pageKeyFromPath, VERA_ASK_EVENT } from "./veraService";
+import { getVeraStatus, askVera, getVeraPublicStatus, askVeraPublic, getVeraChatModels, pageKeyFromPath, VERA_ASK_EVENT } from "./veraService";
 import { useTheme } from "../../theme/ThemeProvider";
 import "./vera.css";
 
@@ -124,6 +135,133 @@ function TypedAnswer({ text, onTick, onDone }) {
   );
 }
 
+// ── The model chosen for the chat ────────────────────────────────────────────
+// The Developer and administrators may pick which of VERA's models answers
+// them, seeing how each stands (GET /api/vera/chat-models, which offers no
+// choice to anyone else — the route holds a paid model). "Auto" is VERA's
+// own choice: the light model for a short question, the legal one for the
+// law. The choice is remembered in this browser only.
+const MODEL_KEY = "eu.vera.model";
+const AUTO = "auto";
+
+/** "4h 12m", "38m", "under a minute". */
+function untilText(at, now) {
+  const ms = new Date(at).getTime() - now;
+  if (!Number.isFinite(ms)) return "";
+  if (ms <= 60 * 1000) return "under a minute";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.round((ms % 3600000) / 60000);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** "gemini-2.5-flash" → "Gemini 2.5 Flash", "openai/gpt-oss-120b" → "GPT-OSS 120B", "claude-opus-5-5" → "Claude Opus 5.5". */
+function modelName(id = "") {
+  const words = [];
+  for (const w of String(id).split("/").pop().split("-")) {
+    if (/^\d{8}$/.test(w)) continue; // a release date
+    const last = words[words.length - 1];
+    if (/^\d{1,2}$/.test(w) && /^\d+$/.test(last || "")) words[words.length - 1] = `${last}.${w}`;
+    else words.push(w);
+  }
+  return words
+    .map((w) => (/^(gpt|oss)$/i.test(w) || /^\d+[bm]$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ")
+    .replace("GPT OSS", "GPT-OSS");
+}
+
+/** What a model is for, in a word or two. */
+function purposeOf(m) {
+  const what = m.accurate ? "Legal" : m.light ? "Fastest" : m.paid ? "Most capable" : "Everyday";
+  return m.paid ? `${what} · paid` : what;
+}
+
+/** Its allowance for the day used up: not chosen until it resets (the server holds to it too). */
+const usedUp = (m, now) => Boolean(m?.usedUpUntil && new Date(m.usedUpUntil).getTime() > now);
+
+/** How a model stands now, shortly: used up or resting and until when, or what is left and when it resets. */
+function usageOf(m, now) {
+  if (usedUp(m, now)) return `Used up · back in ${untilText(m.usedUpUntil, now)}`;
+  if (m.status === "resting") return `Resting · back in ${untilText(m.restingUntil, now)}`;
+  const parts = [m.left != null ? `${m.left}% left` : m.limit ? `${m.today?.calls || 0}/${m.limit}` : `${m.today?.calls || 0} today`];
+  if (m.resetIn) parts.push(`resets ${m.resetIn}`);
+  else if (m.resetsAt) parts.push(`resets ${untilText(m.resetsAt, now)}`);
+  return parts.join(" · ");
+}
+
+/** Cannot answer now: resting, or its allowance used up. */
+const unavailable = (m, now) => m.status === "resting" || usedUp(m, now);
+
+// The first models of the route show at once; the rest wait under "More models".
+const FIRST_MODELS = 3;
+
+/** The model menu, after Claude's: Auto, the first models, "More models" for the rest; a tick on the chosen one. */
+function ModelMenu({ name, models, value, clock, onPick, onClose }) {
+  const listRef = useRef(null);
+  const first = models.slice(0, FIRST_MODELS);
+  const more = models.slice(FIRST_MODELS);
+  const [showMore, setShowMore] = useState(() => more.some((m) => m.id === value));
+
+  // Opens on the chosen item, like a native menu.
+  useEffect(() => {
+    const list = listRef.current;
+    (list?.querySelector('[aria-checked="true"]') || list?.querySelector("button:not(:disabled)"))?.focus();
+  }, []);
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") {
+      // The chat window closes on Escape too: only the menu closes here.
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = [...listRef.current.querySelectorAll("button:not(:disabled)")];
+    const at = items.indexOf(document.activeElement);
+    items[(at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+  };
+
+  const item = (id, title, purpose, usage, { off = false } = {}) => (
+    <button
+      key={id}
+      type="button"
+      role="menuitemradio"
+      aria-checked={value === id}
+      // Resting or used up, a model cannot answer now: shown, with when it is back, not chosen.
+      disabled={off}
+      className={`vera-model-item${value === id ? " is-on" : ""}${off ? " is-off" : ""}`}
+      onClick={() => onPick(id)}
+    >
+      <span className="vera-model-item__text">
+        <span className="vera-model-item__name">{title}</span>
+        <span className="vera-model-item__purpose">{purpose}</span>
+        {usage ? <span className="vera-model-item__usage">{usage}</span> : null}
+      </span>
+      <span className="vera-model-item__tick" aria-hidden>
+        {value === id ? <CheckOutlined /> : null}
+      </span>
+    </button>
+  );
+  const modelItem = (m) => item(m.id, modelName(m.model), purposeOf(m), usageOf(m, clock), { off: unavailable(m, clock) });
+
+  return (
+    <div className="vera-model-menu" role="menu" aria-label="Model" ref={listRef} onKeyDown={onKeyDown}>
+      {item(AUTO, "Auto", `${name} picks for each question`, "")}
+      {first.map(modelItem)}
+      {more.length > 0 && (
+        <>
+          <div className="vera-model-menu__rule" role="separator" />
+          <button type="button" className="vera-model-more" aria-expanded={showMore} onClick={() => setShowMore((s) => !s)}>
+            <span>More models</span>
+            <RightOutlined className={`vera-model-more__chev${showMore ? " is-open" : ""}`} />
+          </button>
+          {showMore && more.map(modelItem)}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function VeraChat({ variant = "staff", holdIntro = false }) {
   const isPublic = variant === "public";
   const fetchStatus = isPublic ? getVeraPublicStatus : getVeraStatus;
@@ -169,6 +307,54 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
   }, [variant, isPublic, isPublic ? pageKey : null]);
 
   const name = status?.name || "VERA";
+
+  // The models on offer, and the one chosen (staff only, while the chat is open).
+  const [chatModels, setChatModels] = useState({ choice: false, models: [] });
+  const [modelChoice, setModelChoice] = useState(() => {
+    try {
+      return localStorage.getItem(MODEL_KEY) || AUTO;
+    } catch {
+      return AUTO;
+    }
+  });
+  const [clock, setClock] = useState(Date.now());
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const chooseModel = (id) => {
+    setModelChoice(id);
+    setModelMenuOpen(false);
+    inputRef.current?.focus();
+    try {
+      localStorage.setItem(MODEL_KEY, id);
+    } catch {
+      /* private window: chosen for this visit only */
+    }
+  };
+  const loadModels = useCallback(async () => {
+    if (isPublic || !status?.modelAvailable) return;
+    try {
+      const res = await getVeraChatModels();
+      setChatModels({ choice: Boolean(res?.choice), models: res?.models || [] });
+      setClock(Date.now());
+    } catch {
+      setChatModels({ choice: false, models: [] });
+    }
+  }, [isPublic, status?.modelAvailable]);
+  useEffect(() => {
+    if (!open || isPublic) return undefined;
+    loadModels();
+    const t = setInterval(loadModels, 30000);
+    // The countdowns move between loads.
+    const tick = setInterval(() => setClock(Date.now()), 15000);
+    return () => {
+      clearInterval(t);
+      clearInterval(tick);
+    };
+  }, [open, isPublic, loadModels]);
+  // A model no longer on offer (taken out of the route), or used up for the
+  // day, falls back to VERA's choice; a used-up one comes back once it resets.
+  const picked = chatModels.models.find((m) => m.id === modelChoice) || null;
+  const chosen = picked && !usedUp(picked, clock) ? picked : null;
+  const modelId = chatModels.choice && chosen ? chosen.id : AUTO;
 
   // Where the page asks for it (the Document Portal), VERA says hello by
   // herself: a moment after the page settles, her flame ignites beside the
@@ -279,13 +465,16 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
         message,
         history: nextMessages.slice(-HISTORY_TURNS * 2).map((m) => ({ role: m.role, content: m.content })),
         page: status?.sendPageContext === false ? "" : pageKey,
+        ...(!isPublic && modelId !== AUTO ? { model: modelId } : {}),
       });
       setMessages((prev) => [
         ...prev,
         res?.success === false
           ? { id: ++msgSeq.current, role: "assistant", content: res.message || `${name} could not answer that right now.`, source: "error", retry: true }
-          : { id: ++msgSeq.current, role: "assistant", content: res.answer, source: res.source, notice: res.notice, typing: true },
+          : { id: ++msgSeq.current, role: "assistant", content: res.answer, source: res.source, notice: res.notice, model: res.model || null, modelNote: res.modelNote || null, typing: true },
       ]);
+      // Today's counts and what is left moved with this answer.
+      if (chatModels.choice) loadModels();
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -472,6 +661,8 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                             <AnswerText>{m.content}</AnswerText>
                           )}
                           {m.notice ? <div className="vera-notice">{m.notice}</div> : null}
+                          {m.modelNote ? <div className="vera-notice">{m.modelNote}</div> : null}
+                          {m.model && !m.typing ? <div className="vera-answered-by">by {modelName(m.model)}</div> : null}
                           {m.retry && !sending ? (
                             <button type="button" className="vera-retry-btn" onClick={retryLast}>
                               <ReloadOutlined /> Retry
@@ -539,6 +730,49 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                     }
                   }}
                 />
+                {/* The model that answers, on the message box's row: VERA's choice, or one chosen here. */}
+                {chatModels.choice && chatModels.models.length > 0 && (
+                  <Popover
+                    open={modelMenuOpen}
+                    onOpenChange={setModelMenuOpen}
+                    trigger="click"
+                    placement="topRight"
+                    arrow={false}
+                    rootClassName="vera-model-pop"
+                    // Inside the chat window, which sits above the page's own layers.
+                    getPopupContainer={(node) => node.closest(".vera-window") || document.body}
+                    destroyOnHidden
+                    content={
+                      <ModelMenu
+                        name={name}
+                        models={chatModels.models}
+                        value={modelId}
+                        clock={clock}
+                        onPick={chooseModel}
+                        onClose={() => setModelMenuOpen(false)}
+                      />
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="vera-model-switch"
+                      aria-haspopup="menu"
+                      aria-expanded={modelMenuOpen}
+                      aria-label={`Model: ${chosen ? modelName(chosen.model) : "Auto"}`}
+                      title={
+                        chosen
+                          ? usageOf(chosen, clock)
+                          : picked
+                            ? `${modelName(picked.model)} is used up · ${name} picks until it resets`
+                            : `${name} picks for each question`
+                      }
+                    >
+                      {chosen?.status === "resting" || (picked && !chosen) ? <i className="vera-model-switch__dot" aria-hidden /> : null}
+                      <span className="vera-model-switch__name">{chosen ? modelName(chosen.model) : "Auto"}</span>
+                      <DownOutlined className="vera-model-switch__chev" />
+                    </button>
+                  </Popover>
+                )}
                 <button type="submit" className="vera-send-btn" aria-label="Send message" disabled={!draft.trim() || sending}>
                   <SendOutlined />
                 </button>
@@ -548,8 +782,8 @@ export default function VeraChat({ variant = "staff", holdIntro = false }) {
                 <MessageOutlined />
                 <span>
                   {isPublic
-                    ? `${name} explains how to get into E-Universe. It cannot see or confirm any account — contact the administrator for anything about yours.`
-                    : `${name} explains how E-Universe works, counts the register and checks a firm's permits against the law — only what your account can see. Check the details on the screen itself before acting on them.`}
+                    ? `${name} can't see any account — ask the administrator about yours.`
+                    : `${name} can make mistakes. Check the screen before acting.`}
                 </span>
               </div>
             </>

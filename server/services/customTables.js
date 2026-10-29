@@ -22,7 +22,10 @@ const ROWS = 'ucds-custom-rows';
 const TYPES = ['text', 'number', 'date', 'select', 'checkbox', 'formula'];
 const TOTALS = ['sum', 'avg', 'count', 'min', 'max'];
 const MAX_COLUMNS = 100;
-const MAX_ROWS = 10000;
+// Enough for a whole year's register (26,199 establishments in 2027): a table
+// built by VERA from it is not cut short. UCDS_TABLE_MAX_ROWS sets it lower
+// should the shared cluster's space run short.
+const MAX_ROWS = Number(process.env.UCDS_TABLE_MAX_ROWS) || 30000;
 const MAX_VALUE = 4000;
 
 const rows = () => getDb().collection(ROWS);
@@ -225,4 +228,4 @@ function workbookOf({ title, headers, rows: grid, totals }) {
   return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), rows: body.length };
 }
 
-module.exports = { ROWS, TYPES, TOTALS, ensureIndexes, read, saveColumns, replaceFromBuild, addRows, updateRow, deleteRows, removeRowsOf, workbookOf };
+module.exports = { ROWS, TYPES, TOTALS, MAX_ROWS, ensureIndexes, read, saveColumns, replaceFromBuild, addRows, updateRow, deleteRows, removeRowsOf, workbookOf };

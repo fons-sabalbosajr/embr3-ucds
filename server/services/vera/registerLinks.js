@@ -357,14 +357,29 @@ async function latest() {
   return { current: publicRun(run || null) };
 }
 
-/** How many links wait for the Developer, for the bell. */
+/**
+ * How many links of the latest report wait for the Developer, for the bell —
+ * counted by the database. The latest report only, as the tab shows: an
+ * older part-applied one, replaced by a later check, waits for nothing.
+ */
 async function pendingCount() {
   await connectToMongo();
-  const run = await collection().findOne({ status: { $in: ['proposed', 'partly-applied'] } }, { sort: { startedAt: -1 }, projection: { proposals: 1 } });
-  return (run?.proposals || []).filter((p) => !p.applied).length;
+  const [run] = await collection()
+    .aggregate([
+      { $sort: { startedAt: -1 } },
+      { $limit: 1 },
+      { $project: { waiting: { $size: { $filter: { input: { $ifNull: ['$proposals', []] }, cond: { $not: ['$$this.applied'] } } } } } },
+    ])
+    .toArray();
+  return run?.waiting || 0;
 }
 
-/** Apply links (by id, or every one not yet applied). A record linked since the check is left alone. */
+/**
+ * Apply links (by id, or every one not yet applied). A record linked since
+ * the check is left alone. One read finds which records are still unlinked
+ * and one batched write links them — a write per link made "Apply all" on a
+ * few hundred links wait on a few hundred round trips to the database.
+ */
 async function apply(runId, ids, user) {
   await connectToMongo();
   const run = ObjectId.isValid(runId) ? await collection().findOne({ _id: new ObjectId(runId) }) : null;
@@ -372,34 +387,43 @@ async function apply(runId, ids, user) {
   const wanted = run.proposals.filter((p) => !p.applied && (ids === 'all' || ids.includes(p.id)));
   const now = new Date();
   const who = user?.username || 'unknown';
-  let linked = 0;
+  const UNLINKED = { $or: [{ ucdsRef: null }, { ucdsRef: { $exists: false } }, { 'ucdsRef.unmatched': true }] };
+  const open = new Set(
+    wanted.length
+      ? (await records().find({ _id: { $in: wanted.map((p) => p.recordId) }, ...UNLINKED }, { projection: { _id: 1 } }).toArray()).map((r) => String(r._id))
+      : []
+  );
+  const ops = [];
   let skipped = 0;
   for (const p of wanted) {
-    const res = await records().updateOne(
-      { _id: p.recordId, $or: [{ ucdsRef: null }, { ucdsRef: { $exists: false } }, { 'ucdsRef.unmatched': true }] },
-      {
-        $set: {
-          ucdsRef: {
-            sortKey: p.sortKey,
-            nameSnapshot: p.registerName || p.registerTitle || null,
-            provinceKey: p.province || null,
-            matchedOn: `vera:${p.pass}`,
-            capturedAt: now,
-            unmatched: false,
-            linkedBy: `VERA (approved by ${who})`,
-          },
-          updatedAt: now,
-          updatedBy: `VERA (approved by ${who})`,
-        },
-      }
-    );
-    if (res.modifiedCount) {
-      Object.assign(p, { applied: true, appliedAt: now, appliedBy: who });
-      linked += 1;
-    } else {
+    // Two proposals for one record: the first links it, the other is skipped.
+    if (!open.delete(String(p.recordId))) {
       skipped += 1;
+      continue;
     }
+    ops.push({
+      updateOne: {
+        filter: { _id: p.recordId, ...UNLINKED },
+        update: {
+          $set: {
+            ucdsRef: {
+              sortKey: p.sortKey,
+              nameSnapshot: p.registerName || p.registerTitle || null,
+              provinceKey: p.province || null,
+              matchedOn: `vera:${p.pass}`,
+              capturedAt: now,
+              unmatched: false,
+              linkedBy: `VERA (approved by ${who})`,
+            },
+            updatedAt: now,
+            updatedBy: `VERA (approved by ${who})`,
+          },
+        },
+      },
+    });
+    Object.assign(p, { applied: true, appliedAt: now, appliedBy: who });
   }
+  const linked = ops.length ? (await records().bulkWrite(ops, { ordered: false })).modifiedCount || 0 : 0;
   const left = run.proposals.filter((p) => !p.applied).length;
   await collection().updateOne({ _id: run._id }, { $set: { proposals: run.proposals, status: left ? 'partly-applied' : 'applied' } });
   if (linked) require('../../shared/services/shortCache').invalidate('erms:records:');

@@ -135,7 +135,7 @@ const PROTECTED_USER_FIELDS = ['_id', 'password', 'resetToken', 'resetTokenExpir
 // be a back door to any of them.
 const ACCESS_FIELDS = [
   'permission', 'domains', 'capabilities', 'nasContainers', 'assignedYears', 'isDemo', 'ermsUnit',
-  'canAccessRangePicker', 'canGenerateData', 'canManageData', 'canViewAdminPanel', 'canViewDataHistory',
+  'canAccessRangePicker', 'canGenerateData', 'canManageData', 'canViewAdminPanel', 'canViewDataHistory', 'canRemoveMenuItems',
   'aurora', 'bataan', 'bulacan', 'nuevaEcija', 'pampanga', 'tarlac', 'zambales',
 ];
 
@@ -569,15 +569,16 @@ module.exports.getOnlineUsers = getOnlineUsers;
 // ---- Additional Users endpoints migrated from server.js ----
 async function updateUserPermissionsByEmail(req, res) {
   const { email } = req.params;
-  const { canViewAdminPanel, canViewDataHistory, canManageData, canGenerateData, canAccessRangePicker } = req.body || {};
+  const { canViewAdminPanel, canViewDataHistory, canManageData, canGenerateData, canAccessRangePicker, canRemoveMenuItems } = req.body || {};
+  // canRemoveMenuItems only when sent, as a yes or no: left unset, the
+  // account keeps its type's default (authorization.ROLE_DEFAULT_CAPABILITIES).
+  const set = { canViewAdminPanel, canViewDataHistory, canManageData, canGenerateData, canAccessRangePicker };
+  if (typeof canRemoveMenuItems === 'boolean') set.canRemoveMenuItems = canRemoveMenuItems;
   try {
     await connectToMongo();
     const user = await collections.users.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User  not found' });
-    const result = await collections.users.updateOne(
-      { email },
-      { $set: { canViewAdminPanel, canViewDataHistory, canManageData, canGenerateData, canAccessRangePicker } }
-    );
+    const result = await collections.users.updateOne({ email }, { $set: set });
     if (result.modifiedCount === 0) return res.status(204).send();
     return res.status(200).json({ message: 'User  permissions updated successfully' });
   } catch (error) {

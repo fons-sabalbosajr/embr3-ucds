@@ -16,7 +16,9 @@ const { connectToMongo, collections, getDb } = db;
 const PASSWORD = 'MenuTestPw!x9';
 const PLANNER = '__test_menu_planner';
 const ENCODER = '__test_menu_encoder';
-const USERNAMES = [PLANNER, ENCODER];
+// An Encoder who may change data, but not remove the Planning Unit's tables.
+const EDITOR = '__test_menu_editor';
+const USERNAMES = [PLANNER, ENCODER, EDITOR];
 
 const base = (username, extra) => ({
   username, name: username, email: `${username}@test.local`, division: 'TEST', status: 'offline',
@@ -35,6 +37,7 @@ async function signIn(username) {
 
 let planner;
 let encoder;
+let editor;
 
 beforeAll(async () => {
   await connectToMongo();
@@ -43,9 +46,10 @@ beforeAll(async () => {
   await collections.users.insertMany([
     base(PLANNER, { password, permission: 'planning', capabilities: { canManageData: true } }),
     base(ENCODER, { password, permission: 'viewer', capabilities: { canManageData: false } }),
+    base(EDITOR, { password, permission: 'viewer', capabilities: { canManageData: true } }),
   ]);
   await getDb().collection('ucds-menu-items').deleteMany({ createdBy: { $in: USERNAMES } });
-  [planner, encoder] = await Promise.all([signIn(PLANNER), signIn(ENCODER)]);
+  [planner, encoder, editor] = await Promise.all([signIn(PLANNER), signIn(ENCODER), signIn(EDITOR)]);
 }, 90000);
 
 afterAll(async () => {
@@ -103,6 +107,19 @@ describe('items people add to the year’s menu', () => {
     const moved = await planner.patch(`/api/ucds/menu-items/${tableId}`).send({ parent: 'root' });
     expect(moved.body.item.parent).toBe('root');
     await planner.patch(`/api/ucds/menu-items/${tableId}`).send({ parent: folderId });
+  });
+
+  it('keeps the Planning Unit’s items from an Encoder, who removes only their own', async () => {
+    const list = await editor.get('/api/ucds/menu-items');
+    expect(list.body.canManage).toBe(true);
+    expect(list.body.canRemoveAny).toBe(false);
+    const theirs = await editor.delete(`/api/ucds/menu-items/${tableId}`);
+    expect(theirs.status).toBe(403);
+    expect(theirs.body.code).toBe('REMOVE_NOT_ALLOWED');
+    const own = await editor.post('/api/ucds/menu-items').send({ label: 'Scratch', kind: 'table', parent: 'root' });
+    expect(own.status).toBe(201);
+    const removed = await editor.delete(`/api/ucds/menu-items/${own.body.item.id}`);
+    expect(removed.status).toBe(200);
   });
 
   it('removes a folder with everything inside it', async () => {

@@ -31,6 +31,7 @@
   --v-err-bg: #fdecec;
   --v-err-line: #f4c7c7;
   --v-err-ink: #a0262e;
+  --v-warn: #b97700;
   --v-font: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -213,6 +214,7 @@
   --v-err-bg: #3a1418;
   --v-err-line: #6b2a30;
   --v-err-ink: #ffb4b4;
+  --v-warn: #f0b44c;
 }
 
 .vera-root {
@@ -686,6 +688,156 @@
   color: var(--v-muted);
   background: var(--v-surface);
   border-bottom: 1px solid var(--v-line);
+}
+
+/* ═══ The model chosen for the chat (Developer and administrators) ════════
+   After Claude's: a quiet "Auto ⌄" on the message box's row, beside Send,
+   opening a menu of names with what each is for and how it stands. */
+
+.vera-model-switch {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 128px;
+  height: 40px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--v-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.vera-model-switch:hover,
+.vera-model-switch[aria-expanded="true"] {
+  background: var(--v-chip);
+  color: var(--v-ink);
+}
+.vera-model-switch:focus-visible {
+  outline: 2px solid var(--v-accent);
+  outline-offset: 1px;
+}
+.vera-model-switch__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vera-model-switch__chev {
+  flex: none;
+  font-size: 9px;
+  opacity: 0.8;
+}
+.vera-model-switch__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--v-warn);
+}
+
+/* The menu (inside .vera-window, so the chat's colours carry over). */
+.vera-model-pop .ant-popover-inner {
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--v-surface);
+  border: 1px solid var(--v-line);
+  box-shadow: var(--v-shadow);
+}
+.vera-model-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: min(296px, calc(100vw - 48px));
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+  font-family: var(--v-font);
+}
+.vera-model-item,
+.vera-model-more {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--v-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vera-model-item:hover:not(:disabled),
+.vera-model-item:focus-visible,
+.vera-model-more:hover,
+.vera-model-more:focus-visible {
+  background: var(--v-chip);
+  outline: none;
+}
+.vera-model-item:disabled {
+  cursor: not-allowed;
+}
+.vera-model-item__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+.vera-model-item__name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.vera-model-item__purpose {
+  font-size: 11.5px;
+  color: var(--v-muted);
+}
+.vera-model-item__usage {
+  font-size: 10.5px;
+  color: var(--v-muted);
+  opacity: 0.8;
+}
+/* Resting or used up: greyed, with when it is back. */
+.vera-model-item.is-off .vera-model-item__name,
+.vera-model-item.is-off .vera-model-item__purpose {
+  opacity: 0.5;
+}
+.vera-model-item.is-off .vera-model-item__usage {
+  color: var(--v-warn);
+  opacity: 1;
+}
+.vera-model-item__tick {
+  flex: none;
+  width: 14px;
+  font-size: 12px;
+  color: var(--v-accent-text);
+}
+.vera-model-menu__rule {
+  height: 1px;
+  margin: 3px 6px;
+  background: var(--v-line);
+}
+.vera-model-more {
+  justify-content: space-between;
+  font-size: 13px;
+}
+.vera-model-more__chev {
+  font-size: 10px;
+  color: var(--v-muted);
+  transition: transform 0.15s ease;
+}
+.vera-model-more__chev.is-open {
+  transform: rotate(90deg);
+}
+/* Under an answer: which model wrote it. */
+.vera-answered-by {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.65;
 }
 
 /* ═══ Messages ═════════════════════════════════════════════════════════════ */

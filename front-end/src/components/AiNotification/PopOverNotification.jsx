@@ -52,6 +52,9 @@ const ITEM_LOOK = {
   "admin-signup": [UserAddOutlined, "green"],
   "vera-corrections": [RobotOutlined, "purple"],
   "vera-links": [RobotOutlined, "purple"],
+  "vera-project-types": [FileSearchOutlined, "purple"],
+  "vera-ref-numbers": [FileExclamationOutlined, "orange"],
+  "vera-serials": [ExclamationCircleOutlined, "red"],
   // VERA's repairs of the register, and her permit findings (the VERA tab).
   "vera-repaired": [CheckCircleOutlined, "green"],
   "vera-waiting": [ToolOutlined, "purple"],

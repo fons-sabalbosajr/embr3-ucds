@@ -180,6 +180,14 @@ export const fetchUnitDuplicateGroups = async (unit) => (await client.get(`/unit
 /** Values already on file, for the upload forms' autocomplete: [{ value, count, fill? }]. */
 export const fetchRecordSuggestions = async (field, q, extra = {}) =>
   (await client.get("/records/suggest", { params: pruned({ field, q, ...extra }) })).data.items;
+
+// VERA's upload guide: her suggestions for the form as it stands (by rule),
+// and her reading of the scan chosen (one AI call, on request).
+export const fetchVeraUploadTips = async (values) => (await client.post("/records/vera/guide", values)).data.tips;
+export const veraReadScan = async (file) => (await client.post("/records/vera/read-scan", multipart({}, file), { timeout: 3 * 60 * 1000 })).data;
+// The same on the Legal and Laboratory forms, for the document type chosen.
+export const fetchUnitVeraTips = async (unit, values) => (await client.post(`/units/${unit}/vera/guide`, values)).data.tips;
+export const unitVeraReadScan = async (unit, docType, file) => (await client.post(`/units/${unit}/vera/read-scan`, multipart({ docType }, file), { timeout: 3 * 60 * 1000 })).data;
 export const fetchUnitSuggestions = async (unit, field, q) =>
   (await client.get(`/units/${unit}/suggest`, { params: pruned({ field, q }) })).data.items;
 
@@ -298,6 +306,57 @@ export const PERMIT_OPTIONS = [
   { value: "coa", label: "Certificate of Accreditation" },
   { value: "other", label: "Other" },
 ];
+
+// How each permit type's number is written, from the numbers on file (29 Oct
+// 2026: these match 93–100% of each type's; the rest are mostly typos — a
+// doubled hyphen, a space, "OL-" without "ECC-"). The example is the format
+// in use now; the older ones stay accepted, as the register still holds them.
+// Types nothing has been filed under yet have no format to hold to.
+const ECC_FORMATS = [
+  /^ECC-OL-R\d{1,2}[A-Z]?-\d{4}-\d{4}$/, // ECC-OL-R03-2015-0035 (the online system)
+  /^(ECC-)?R\d{1,2}[A-Z]?-\d{4}-\d{4}$/, // R03-0908-0039, ECC-R03-2208-0013
+  /^R\d{1,2}-\d{8}-\d{4}$/, // R03-01072022-5173
+  /^R\d{1,2}-\d{4}-\d{3}-\d{4}$/, // R3-0706-264-9999
+  /^III-\d{4}-\d{3}-\d{3}[A-Z]$/, // III-9001-028-303A
+  /^\d{2}[A-Z]{2}-?\d{4}(-\d{2,6}){1,3}-\d{3}[A-Z]$/, // 03PA-0203-10-029-120A
+];
+export const PERMIT_FORMATS = {
+  "ecc-original": { label: "ECC Ref No", example: "R03-01072022-5173", also: ["ECC-R03-2208-0013", "ECC-OL-R03-2022-0012"], patterns: ECC_FORMATS },
+  "ecc-amended": { label: "ECC Ref No", example: "ECC-OL-R03-2015-0035", also: ["R03-0908-0045", "R03-01082016-3804"], patterns: ECC_FORMATS },
+  cnc: {
+    label: "CNC No",
+    example: "CNC-R03-1201-0003",
+    also: ["CNC-R3-0712-426-8492", "CNC-03PA-0501-13-003"],
+    patterns: [
+      /^CNC-R\d{1,2}-\d{4}-\d{3,4}$/, // CNC-R03-1201-0003
+      /^CNC-R\d{1,2}-\d{4}-\d{3}-\d{4}$/, // CNC-R3-0712-426-8492
+      /^CNC-\d{2}[A-Z]{2}-\d{4}-\d{2}-\d{3}$/, // CNC-03PA-0501-13-003
+      /^CNC-\d{4}(-\d{2})?-\d{2}[A-Z]{2}-\d{3}$/, // CNC-0501-03PA-229
+      /^R\d{1,2}-\d{4}-\d{3}-\d{4}$/, // R3-0712-494-3118 (filed without the prefix)
+    ],
+  },
+  "hw-generator": {
+    label: "HWID No",
+    example: "GR-R3-08-00001",
+    also: ["M-GR-R3-14-00382", "GR-03-08-0098"],
+    patterns: [/^(M-)?GR-(R\d{1,2}|\d{2})(-\d{2})?-\d{3,6}$/],
+  },
+  pto: { label: "PTO No", example: null, also: [], patterns: null },
+  dp: { label: "DP No", example: null, also: [], patterns: null },
+  luc: { label: "LUC No", example: null, also: [], patterns: null },
+  coa: { label: "COA No", example: null, also: [], patterns: null },
+  other: { label: "Permit number", example: null, also: [], patterns: null },
+};
+
+/** The number format of a permit type (the "other" one when unknown). */
+export const permitFormatOf = (type) => PERMIT_FORMATS[type] || PERMIT_FORMATS.other;
+
+/** Whether a number is written the way its permit type's numbers are; true where the type has no format. */
+export const fitsPermitFormat = (type, number) => {
+  const { patterns } = permitFormatOf(type);
+  const n = String(number || "").trim().toUpperCase();
+  return !patterns || !n || patterns.some((re) => re.test(n));
+};
 
 export const PROVINCE_LABEL = {
   aurora: "Aurora",

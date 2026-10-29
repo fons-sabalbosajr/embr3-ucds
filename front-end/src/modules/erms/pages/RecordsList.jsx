@@ -122,7 +122,9 @@ const RecordsList = () => {
   const { data: options } = useQuery({
     queryKey: ["erms", "filter-options"],
     queryFn: fetchFilterOptions,
-    staleTime: 5 * 60 * 1000,
+    // A minute, not five: it carries the count still needing review, which
+    // VERA's fixes and other people's edits bring down.
+    staleTime: 60 * 1000,
   });
 
   const { data, isFetching, error } = useQuery({
@@ -380,13 +382,16 @@ const RecordsList = () => {
             onChange={(v) => patch({ uploadedBy: v })}
             options={(options?.uploaders || []).map((u) => ({ value: u, label: u }))}
           />
-          <Button
-            type={query.flagged ? "primary" : "default"}
-            icon={<WarningOutlined />}
-            onClick={() => patch({ flagged: query.flagged ? undefined : true })}
-          >
-            Needs review
-          </Button>
+          {/* Only while something needs review — or while the filter is on, so it can be turned off. */}
+          {(query.flagged || options?.flagged > 0) && (
+            <Button
+              type={query.flagged ? "primary" : "default"}
+              icon={<WarningOutlined />}
+              onClick={() => patch({ flagged: query.flagged ? undefined : true })}
+            >
+              Needs review{options?.flagged > 0 ? ` (${options.flagged.toLocaleString()})` : ""}
+            </Button>
+          )}
           <Button
             onClick={() => {
               setSearchDraft("");

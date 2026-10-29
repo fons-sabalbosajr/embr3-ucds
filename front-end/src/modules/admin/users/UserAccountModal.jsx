@@ -5,7 +5,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import { message } from "../../../shared/feedback";
 import AvatarWithName from "../../../components/AvatarwithName";
-import { accountType } from "../../../shared/accountTypes";
+import { accountType, holdsCapability } from "../../../shared/accountTypes";
 import { API_BASE_URL } from "../../../config/api";
 import "./useraccountmodal.css";
 
@@ -34,6 +34,7 @@ const CAPABILITIES = [
   ["canViewDataHistory", "View data history"],
   ["canAccessRangePicker", "Date range picker"],
   ["canViewAdminPanel", "Admin panel"],
+  ["canRemoveMenuItems", "Remove year menu tables"],
 ];
 
 const CONTAINER_LABELS = { records: "Records", legal: "Legal", laboratory: "Laboratory", "clearance-permitting": "Clearance and Permitting" };
@@ -81,7 +82,7 @@ const UserAccountModal = ({ user, onClose, onSaved }) => {
   }, [current]);
   const developer = String(current?.permission || "").toLowerCase() === "developer";
   const provinceScope = PROVINCES.filter(([k]) => current?.[k] && current[k] !== "none");
-  const capabilities = CAPABILITIES.filter(([k]) => developer || current?.[k] === true || current?.capabilities?.[k] === true);
+  const capabilities = CAPABILITIES.filter(([k]) => developer || holdsCapability(current, k));
 
   const startEdit = () => {
     form.setFieldsValue({

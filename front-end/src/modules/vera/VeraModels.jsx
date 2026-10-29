@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Card, Col, Descriptions, Empty, Progress, Row, Space, Spin, Table, Tag, Tooltip, Typography } from "antd";
+import { Alert, Card, Col, Descriptions, Empty, Progress, Row, Segmented, Select, Space, Spin, Table, Tag, Tooltip, Typography } from "antd";
 import {
   ApiOutlined,
   BookOutlined,
@@ -122,21 +122,16 @@ function Allowance({ label, a, unit }) {
   );
 }
 
-/** Requests or tokens per day, stacked by model, the day's total over each column. */
-function DailyStack({ data, days, models, colourOf, field, name, dark }) {
-  const rows = [];
-  for (const day of days) {
-    for (const m of models) {
-      const d = data.find((x) => x.day === day && x.model === m);
-      const value = field === "tokens" ? (d?.inputTokens || 0) + (d?.outputTokens || 0) : d?.calls || 0;
-      rows.push({ day: dayjs(day).format("MMM D"), model: m, value });
-    }
-  }
-  const totals = days.map((day) => ({
-    day: dayjs(day).format("MMM D"),
-    total: rows.filter((r) => r.day === dayjs(day).format("MMM D")).reduce((s, r) => s + r.value, 0),
-  }));
-  if (!totals.some((t) => t.total > 0)) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing yet in the last 14 days" />;
+/**
+ * Requests or tokens per day, stacked by model, the day's total over each
+ * column. Only what happened is drawn: every model on every day used to be a
+ * row, so 98 rows carried 8 values, and each day's tooltip listed every model
+ * — at 0, all named "Requests" — over and over. Every day keeps its place on
+ * the axis (the scale's domain), with or without a column.
+ */
+function DailyStack({ rows, dayLabels, models, colourOf, name, dark, emptyText }) {
+  const totals = dayLabels.map((day) => ({ day, total: rows.filter((r) => r.day === day).reduce((s, r) => s + r.value, 0) })).filter((t) => t.total > 0);
+  if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} style={{ height: 228, paddingTop: 60 }} />;
   return (
     <Column
       data={rows}
@@ -146,16 +141,17 @@ function DailyStack({ data, days, models, colourOf, field, name, dark }) {
       stack
       height={260}
       theme={dark ? "classicDark" : "classic"}
-      scale={{ color: { domain: models, range: models.map(colourOf) } }}
+      scale={{ x: { domain: dayLabels }, color: { domain: models, range: models.map(colourOf) } }}
       // A 2px surface gap between stacked segments.
       style={{ stroke: dark ? "#1a1a19" : "#ffffff", lineWidth: 2, maxWidth: 26, radiusTopLeft: 3, radiusTopRight: 3 }}
       axis={{ x: { title: false, labelFontSize: 11 }, y: { title: false, grid: true, labelFormatter: (v) => compact(v), labelFontSize: 11 } }}
       legend={{ color: { position: "bottom", itemLabelFontSize: 11 } }}
-      tooltip={{ items: [{ channel: "y", name, valueFormatter: (v) => fmt(v) }] }}
+      // The day, then each model that day by its name — not "Requests" seven times.
+      tooltip={{ title: "day", items: [(d) => ({ name: d.model, value: fmt(d.value), color: colourOf(d.model) })] }}
       annotations={[
         {
           type: "text",
-          data: totals.filter((t) => t.total > 0),
+          data: totals,
           encode: { x: "day", y: "total", text: (d) => compact(d.total) },
           style: { textAlign: "center", textBaseline: "bottom", dy: -4, fontSize: 11, fill: dark ? "#d9d9d6" : "#4a4a47" },
           tooltip: false,
@@ -164,6 +160,113 @@ function DailyStack({ data, days, models, colourOf, field, name, dark }) {
       animate={false}
       aria-label={`${name} per day, by model`}
     />
+  );
+}
+
+const REQUEST_METRICS = [
+  { value: "calls", label: "All", of: (d) => d.calls || 0 },
+  { value: "ok", label: "Answered", of: (d) => d.ok || 0 },
+  { value: "failed", label: "Failed", of: (d) => d.failed || 0 },
+];
+const TOKEN_METRICS = [
+  { value: "total", label: "Total", of: (d) => (d.inputTokens || 0) + (d.outputTokens || 0) },
+  { value: "in", label: "Input", of: (d) => d.inputTokens || 0 },
+  { value: "out", label: "Output", of: (d) => d.outputTokens || 0 },
+];
+
+/**
+ * The two charts in one card, with what they show chosen above them: the
+ * period, the provider and the models (for both), and per chart, which
+ * requests (all, answered, failed) or which tokens (total, in, out).
+ */
+function UsageCharts({ data, colourOf, dark }) {
+  const [range, setRange] = useState(14);
+  const [provider, setProvider] = useState("all");
+  const [picked, setPicked] = useState([]);
+  const [reqMetric, setReqMetric] = useState("calls");
+  const [tokMetric, setTokMetric] = useState("total");
+
+  const days = data.days.slice(-range);
+  const dayLabels = days.map((d) => dayjs(d).format("MMM D"));
+  const inPeriod = data.daily.filter((d) => days.includes(d.day) && (provider === "all" || d.provider === provider));
+  // The models used in the period, in the route's order (and so their colours).
+  const used = data.models.map((m) => m.model).filter((m) => inPeriod.some((d) => d.model === m));
+  const shown = picked.length ? used.filter((m) => picked.includes(m)) : used;
+  const providers = [...new Set(data.daily.map((d) => d.provider))];
+
+  const rowsOf = (metric) =>
+    inPeriod
+      .filter((d) => shown.includes(d.model))
+      .map((d) => ({ day: dayjs(d.day).format("MMM D"), model: d.model, value: metric.of(d) }))
+      .filter((r) => r.value > 0);
+  const reqRows = rowsOf(REQUEST_METRICS.find((m) => m.value === reqMetric));
+  const tokRows = rowsOf(TOKEN_METRICS.find((m) => m.value === tokMetric));
+  const sum = (rows) => rows.reduce((s, r) => s + r.value, 0);
+  const period = range === 7 ? "the last 7 days" : "the last 14 days";
+
+  return (
+    <Card
+      size="small"
+      title="Use by model, per day"
+      extra={
+        <Space size={8} wrap>
+          <Segmented size="small" value={range} onChange={setRange} options={[{ label: "7 days", value: 7 }, { label: "14 days", value: 14 }]} />
+          <Select
+            size="small"
+            value={provider}
+            onChange={(v) => {
+              setProvider(v);
+              setPicked([]);
+            }}
+            style={{ width: 150 }}
+            options={[{ value: "all", label: "Every provider" }, ...providers.map((p) => ({ value: p, label: PROVIDER_LABEL[p] || p }))]}
+          />
+          <Select
+            size="small"
+            mode="multiple"
+            allowClear
+            maxTagCount="responsive"
+            placeholder="Every model"
+            value={picked.filter((m) => used.includes(m))}
+            onChange={setPicked}
+            style={{ minWidth: 200, maxWidth: 320 }}
+            options={used.map((m) => ({
+              value: m,
+              label: (
+                <span>
+                  <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: colourOf(m), marginInlineEnd: 6 }} aria-hidden />
+                  {m}
+                </span>
+              ),
+            }))}
+          />
+        </Space>
+      }
+    >
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={12}>
+          <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 6 }} wrap>
+            <Text strong>
+              Requests <Text type="secondary" style={{ fontSize: 12 }}>· {fmt(sum(reqRows))} in {period}</Text>
+            </Text>
+            <Segmented size="small" value={reqMetric} onChange={setReqMetric} options={REQUEST_METRICS.map(({ value, label }) => ({ value, label }))} />
+          </Space>
+          <DailyStack rows={reqRows} dayLabels={dayLabels} models={shown} colourOf={colourOf} name="Requests" dark={dark} emptyText={`No ${reqMetric === "calls" ? "" : `${REQUEST_METRICS.find((m) => m.value === reqMetric).label.toLowerCase()} `}requests in ${period}`} />
+        </Col>
+        <Col xs={24} xl={12}>
+          <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 6 }} wrap>
+            <Text strong>
+              Tokens <Text type="secondary" style={{ fontSize: 12 }}>· {compact(sum(tokRows))} in {period}</Text>
+            </Text>
+            <Segmented size="small" value={tokMetric} onChange={setTokMetric} options={TOKEN_METRICS.map(({ value, label }) => ({ value, label }))} />
+          </Space>
+          <DailyStack rows={tokRows} dayLabels={dayLabels} models={shown} colourOf={colourOf} name="Tokens" dark={dark} emptyText={`No tokens in ${period}`} />
+        </Col>
+      </Row>
+      <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 12 }}>
+        Only models used in the period are listed. A failed request spends no tokens, so a model that only failed shows in Requests and not in Tokens.
+      </Text>
+    </Card>
   );
 }
 
@@ -505,18 +608,7 @@ export default function VeraModels() {
         </Text>
       </Card>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={12}>
-          <Card size="small" title="Requests per day, by model (last 14 days)">
-            <DailyStack data={data.daily} days={data.days} models={models} colourOf={colourOf} field="calls" name="Requests" dark={dark} />
-          </Card>
-        </Col>
-        <Col xs={24} xl={12}>
-          <Card size="small" title="Tokens per day, by model (last 14 days)">
-            <DailyStack data={data.daily} days={data.days} models={models} colourOf={colourOf} field="tokens" name="Tokens" dark={dark} />
-          </Card>
-        </Col>
-      </Row>
+      <UsageCharts data={data} colourOf={colourOf} dark={dark} />
 
       {data.laws && (
         <Card size="small" title={<Space><BookOutlined /> VERA&rsquo;s law library</Space>} extra={<Text type="secondary" style={{ fontSize: 12 }}>Built {dayjs(data.laws.builtAt).format("MMM D, YYYY")}</Text>}>

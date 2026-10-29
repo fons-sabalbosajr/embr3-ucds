@@ -853,6 +853,39 @@ async function suggest(req, res, next) {
   }
 }
 
+// --- VERA's upload guide (services/vera/uploadGuide) ------------------------
+const uploadGuide = require('../../../services/vera/uploadGuide');
+
+/** POST /api/erms/records/vera/guide — VERA's suggestions for the form as it stands. By rule: no model. */
+async function veraGuide(req, res, next) {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    res.json({ tips: await uploadGuide.review(body, { allowedProvinces: readScope(req) }) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/erms/records/vera/read-scan — VERA's model reads the scan chosen in the form and suggests the fields. */
+async function veraReadScan(req, res, next) {
+  try {
+    if (!req.file?.buffer) return res.status(400).json({ message: 'Choose the scan for VERA to read.' });
+    const vera = require('../../../controllers/veraController');
+    const cfg = await vera.loadConfig();
+    // RBAC: an administrator may keep a role on rules alone (VERA settings › roles).
+    const { roleOf } = require('../../../services/authorization');
+    if (require('../../../services/vera/policy').accessFor(cfg, roleOf(principalOf(req))).model === false) {
+      return res.status(403).json({ message: "VERA's AI model is not open to your account type. Her checks above still apply." });
+    }
+    const result = await uploadGuide.readScan(cfg, req.file.buffer);
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await vera.log(req, 'vera:upload-guide:read', { fields: result.suggestions.length, model: result.model, cached: result.cached, bytes: req.file.size });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 // --- tracking --------------------------------------------------------------
 
 async function listTracking(req, res, next) {
@@ -1084,6 +1117,8 @@ module.exports = {
   dashboard,
   filterOptions,
   suggest,
+  veraGuide,
+  veraReadScan,
   listTracking,
   addTracking,
   overdueLoans,

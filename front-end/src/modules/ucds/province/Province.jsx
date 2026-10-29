@@ -281,6 +281,26 @@ const Province = ({ theme, currentUser }) => {
     }
   };
 
+  // VERA repaired the register (her check's fixes applied or undone, or "Let
+  // VERA fix it"): the rows on screen are read again, in place, so the fixed
+  // values show without leaving the page. Settled for a moment, as fixes
+  // come in batches.
+  const reloadAfterRepair = useRef(null);
+  reloadAfterRepair.current = () => provinceName && handleReload(provinceName);
+  useEffect(() => {
+    const socket = getSocket() || initializeSocket();
+    let t = null;
+    const onRepaired = () => {
+      clearTimeout(t);
+      t = setTimeout(() => reloadAfterRepair.current?.(), 1000);
+    };
+    socket?.on("vera:repaired", onRepaired);
+    return () => {
+      clearTimeout(t);
+      socket?.off("vera:repaired", onRepaired);
+    };
+  }, []);
+
   const findDuplicateECC = (records) => {
     const eccCount = {};
     const duplicates = {};

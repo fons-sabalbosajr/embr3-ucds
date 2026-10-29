@@ -142,9 +142,29 @@ function cutShort(field, canonical) {
   return proposals;
 }
 
+// What the model has said of each value, per field: "this is the spelling"
+// or "it is fine". A check after a correction changes the list, so the whole
+// list never matched the cache again and every value was sent once more; now
+// only the values it has not judged are sent, and none at all when it has
+// judged them all. Process memory, the semantic cache's lifetime and switch.
+const judged = new Map(); // `${field}\u0000${value}` -> { to: string|null, expires }
+const JUDGED_TTL_MS = () => Number(process.env.VERA_CACHE_TTL_MS) || 12 * 60 * 60 * 1000;
+
 /** Pass 2 with the model: clear misspellings among the project types, checked to be small edits. */
 async function spellingByModel(field, canonical, cfg) {
-  const list = [...canonical.keys()].sort();
+  const remember = require('./semanticCache').enabled(cfg);
+  const now = Date.now();
+  const known = (v) => {
+    const j = remember && judged.get(`${field}\u0000${v}`);
+    return j && j.expires > now ? j : null;
+  };
+  const list = [...canonical.keys()].filter((v) => !known(v)).sort();
+  const fromMemory = () =>
+    [...canonical.keys()]
+      .map((from) => ({ from, to: known(from)?.to }))
+      .filter((p) => p.to && p.to !== p.from && canonical.has(p.from))
+      .map((p) => ({ field, from: p.from, to: p.to, count: canonical.get(p.from), reason: 'Spelling', method: 'vera-ai', confidence: 'review' }));
+  if (!list.length) return { proposals: fromMemory(), model: 'remembered', rejected: 0, sent: 0 };
   const system =
     'You correct SPELLING ONLY in a list of environmental project type names used by a Philippine government office. ' +
     'Return a JSON array of objects {"from": "<exact item from the list>", "to": "<the same name, correctly spelled>"} — ' +
@@ -160,9 +180,10 @@ async function spellingByModel(field, canonical, cfg) {
   try {
     pairs = JSON.parse(json || '[]');
   } catch {
-    return { proposals: [], model: out?.model || null, rejected: 0 };
+    // Not understood: nothing is remembered, so the next check asks again.
+    return { proposals: fromMemory(), model: out?.model || null, rejected: 0, sent: list.length };
   }
-  const proposals = [];
+  const fixes = new Map();
   let rejected = 0;
   for (const p of Array.isArray(pairs) ? pairs : []) {
     const from = typeof p?.from === 'string' ? p.from : null;
@@ -177,9 +198,19 @@ async function spellingByModel(field, canonical, cfg) {
       rejected += 1;
       continue;
     }
-    proposals.push({ field, from, to, count: canonical.get(from), reason: 'Spelling', method: 'vera-ai', confidence: 'review' });
+    fixes.set(from, to);
   }
-  return { proposals, model: out?.model || null, rejected };
+  // Every value sent is judged now: its fix, or fine as it is.
+  if (remember) {
+    // A bound, not a policy: past it the memory starts afresh.
+    if (judged.size + list.length > 50000) judged.clear();
+    for (const v of list) judged.set(`${field}\u0000${v}`, { to: fixes.get(v) || null, expires: now + JUDGED_TTL_MS() });
+  }
+  const proposals = [...fixes].map(([from, to]) => ({ field, from, to, count: canonical.get(from), reason: 'Spelling', method: 'vera-ai', confidence: 'review' }));
+  // With what was judged before, for the values not sent this time.
+  const sent = new Set(list);
+  proposals.push(...fromMemory().filter((p) => !sent.has(p.from)));
+  return { proposals, model: out?.model || null, rejected, sent: list.length };
 }
 
 /** Pass 2 without a model: near-identical spellings paired, the rarer towards the more common. */
@@ -211,8 +242,15 @@ async function scan({ cfg, by }) {
   const started = new Date();
   const notes = [];
   const all = [];
-  for (const field of Object.keys(FIELDS)) {
-    const values = await countsOf(field);
+  // What the report says at a glance (the tab shows it as chips): each field
+  // with its values and corrections, and how the spelling was checked. The
+  // notes keep the same in sentences, for reports read elsewhere.
+  const summary = { fields: [], spelling: null };
+  // The six counts at once: each is one aggregation over the library, and
+  // they waited on one another for nothing.
+  const counted = await Promise.all(Object.keys(FIELDS).map((field) => countsOf(field)));
+  for (const [i, field] of Object.keys(FIELDS).entries()) {
+    const values = counted[i];
     const first = sameWording(field, values);
     // Values cut short go to their full value, and leave the spelling pass.
     const completed = cutShort(field, first.canonical);
@@ -224,14 +262,22 @@ async function scan({ cfg, by }) {
         try {
           const r = await spellingByModel(field, first.canonical, cfg);
           spelling = r.proposals;
-          notes.push(`Project type spelling checked by VERA's model (${r.model || 'model'})${r.rejected ? `; ${r.rejected} suggestion(s) refused as more than a spelling fix` : ''}.`);
+          const of = first.canonical.size;
+          summary.spelling = { by: r.sent ? 'model' : 'memory', model: r.sent ? r.model || null : null, sent: r.sent, remembered: of - r.sent, of, refused: r.rejected };
+          notes.push(
+            r.sent
+              ? `Project type spelling: ${r.sent === of ? `all ${of}` : `${r.sent} new of ${of}`} sent to ${r.model || "VERA's model"}${r.sent < of ? `, ${of - r.sent} remembered` : ''}${r.rejected ? `; ${r.rejected} suggestion(s) refused as more than a spelling fix` : ''}.`
+              : `Project type spelling: all ${of} remembered from before — no AI request.`
+          );
         } catch (err) {
           spelling = spellingByRule(field, first.canonical);
-          notes.push(`The AI model could not be used — ${err.message} Near-identical spellings were paired by rule instead.`);
+          summary.spelling = { by: 'rule', why: err.message };
+          notes.push(`Project type spelling paired by rule: the AI model could not be used (${err.message})`);
         }
       } else {
         spelling = spellingByRule(field, first.canonical);
-        notes.push('No AI model is switched on: near-identical project type spellings were paired by rule.');
+        summary.spelling = { by: 'rule', why: 'No AI model is switched on.' };
+        notes.push('Project type spelling paired by rule: no AI model is switched on.');
       }
     } else if (PLACE_FIELDS.has(field)) {
       spelling = spellingByRule(field, first.canonical);
@@ -243,8 +289,10 @@ async function scan({ cfg, by }) {
     for (const p of fieldProposals) {
       for (let hops = 0; hops < 4 && next.has(p.to) && next.get(p.to) !== p.from; hops++) p.to = next.get(p.to);
     }
-    all.push(...fieldProposals.filter((p) => p.from !== p.to));
-    notes.push(`${FIELDS[field]}: ${values.length} different values checked.`);
+    const kept = fieldProposals.filter((p) => p.from !== p.to);
+    all.push(...kept);
+    summary.fields.push({ field, label: FIELDS[field], values: values.length, proposals: kept.length });
+    notes.push(`${FIELDS[field]}: ${values.length.toLocaleString('en-US')} values, ${kept.length} to correct.`);
   }
   const proposals = all
     .sort((a, b) => (a.field === b.field ? b.count - a.count : a.field.localeCompare(b.field)))
@@ -256,6 +304,7 @@ async function scan({ cfg, by }) {
     finishedAt: new Date(),
     by: by || null,
     notes,
+    summary,
     totals: {
       proposals: proposals.length,
       records: proposals.reduce((a, p) => a + p.count, 0),
@@ -274,25 +323,52 @@ const publicRun = (run) =>
     finishedAt: run.finishedAt,
     by: run.by,
     notes: run.notes || [],
+    summary: run.summary || null,
     totals: run.totals,
     proposals: (run.proposals || []).map(({ appliedIds, ...p }) => ({ ...p, fieldLabel: FIELDS[p.field] || p.field })),
   };
 
-/** The latest report, and the earlier ones in brief. */
+/**
+ * The latest report, and the earlier ones in brief. Only the latest is read
+ * whole: the other nine were read with every proposal (hundreds of KB each)
+ * on each refresh of the tab, to count how many had been applied.
+ */
 async function latest() {
   await connectToMongo();
-  const runs = await collection().find({}).sort({ startedAt: -1 }).limit(10).toArray();
+  const [current, history] = await Promise.all([
+    collection().findOne({}, { sort: { startedAt: -1 } }),
+    collection()
+      .aggregate([
+        { $sort: { startedAt: -1 } },
+        { $skip: 1 },
+        { $limit: 9 },
+        { $project: { status: 1, startedAt: 1, by: 1, totals: 1, applied: { $size: { $filter: { input: { $ifNull: ['$proposals', []] }, cond: '$$this.applied' } } } } },
+      ])
+      .toArray(),
+  ]);
   return {
-    current: publicRun(runs[0] || null),
-    history: runs.slice(1).map((r) => ({ id: String(r._id), status: r.status, startedAt: r.startedAt, by: r.by, totals: r.totals, applied: (r.proposals || []).filter((p) => p.applied).length })),
+    current: publicRun(current || null),
+    history: history.map((r) => ({ id: String(r._id), status: r.status, startedAt: r.startedAt, by: r.by, totals: r.totals, applied: r.applied })),
   };
 }
 
-/** How many proposals wait for the Developer, for the bell. */
+/**
+ * How many proposals of the latest report wait for the Developer, for the
+ * bell — counted by the database, not read whole. The latest report only:
+ * once it was applied in full, this went back to an older, part-applied
+ * report that later checks had replaced, and the bell said 658 were waiting
+ * while the tab showed none.
+ */
 async function pendingCount() {
   await connectToMongo();
-  const run = await collection().findOne({ status: { $in: ['proposed', 'partly-applied'] } }, { sort: { startedAt: -1 }, projection: { proposals: 1 } });
-  return (run?.proposals || []).filter((p) => !p.applied).length;
+  const [run] = await collection()
+    .aggregate([
+      { $sort: { startedAt: -1 } },
+      { $limit: 1 },
+      { $project: { waiting: { $size: { $filter: { input: { $ifNull: ['$proposals', []] }, cond: { $not: ['$$this.applied'] } } } } } },
+    ])
+    .toArray();
+  return run?.waiting || 0;
 }
 
 /** A dotted field's value in a document ("project.type"). */

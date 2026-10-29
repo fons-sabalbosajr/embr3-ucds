@@ -18,6 +18,8 @@ router.post('/api/vera/public-chat', ctrl.publicChat);
 // reach, scoped to their domains, and it can never read a record.
 router.get('/api/vera/status', authenticateSession, ctrl.getStatus);
 router.post('/api/vera/chat', authenticateSession, ctrl.chat);
+// The models a person may choose in the chat, and how each stands now.
+router.get('/api/vera/chat-models', authenticateSession, ctrl.chatModels);
 
 // ── Administration ───────────────────────────────────────────────────────────
 const admin = [authenticateSession, requireDomain(DOMAINS.ADMIN)];
@@ -70,6 +72,8 @@ router.post('/api/vera/ref-numbers/scan', developer, ctrl.refNumbersScan);
 // or undoing the links she proposes.
 router.get('/api/vera/register-links', developer, ctrl.linksReport);
 router.get('/api/vera/register-links/pending', developer, ctrl.linksPending);
+// Every Document Library check's waiting fixes at once, for the bell.
+router.get('/api/vera/fixes-pending', developer, ctrl.fixesPending);
 router.post('/api/vera/register-links/scan', developer, ctrl.linksScan);
 router.post('/api/vera/register-links/:id/apply', developer, ctrl.linksApply);
 router.post('/api/vera/register-links/:id/undo', developer, ctrl.linksUndo);

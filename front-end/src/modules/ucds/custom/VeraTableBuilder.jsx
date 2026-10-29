@@ -27,7 +27,8 @@ const EXAMPLES = [
   "How many establishments per province have a missing or expired permit, and how many have serious findings",
   "Poultry and piggery farms with their ECC, discharge permit, hazardous waste ID and section in charge",
 ];
-const EMPTY_SPEC = { title: "", columns: [], filters: [], sort: null, limit: 2000 };
+// No limit set: every establishment that matches, up to what a table holds.
+const EMPTY_SPEC = { title: "", columns: [], filters: [], sort: null };
 
 export default function VeraTableBuilder({ open, onClose, tableId, hasRows, onBuilt }) {
   const [request, setRequest] = useState("");
@@ -275,7 +276,7 @@ export default function VeraTableBuilder({ open, onClose, tableId, hasRows, onBu
               <Text type="secondary" style={{ fontSize: 12 }}>
                 at most
               </Text>
-              <InputNumber size="small" min={1} max={catalog?.maxRows || 2000} value={spec.limit} onChange={(limit) => set({ limit: limit || 2000 })} style={{ width: 90 }} />
+              <InputNumber size="small" min={1} max={catalog?.maxRows} value={spec.limit} placeholder="all" onChange={(limit) => set({ limit: limit || undefined })} style={{ width: 90 }} />
               <Text type="secondary" style={{ fontSize: 12 }}>
                 rows
               </Text>
@@ -287,7 +288,7 @@ export default function VeraTableBuilder({ open, onClose, tableId, hasRows, onBu
         {result && result.columns?.length > 0 ? (
           <div>
             <Paragraph style={{ margin: "0 0 6px" }}>
-              <Text strong>{result.total}</Text> {grouped ? "group(s)" : "establishment(s)"} match{result.truncated ? ` — the table takes the first ${spec.limit}` : ""}.{" "}
+              <Text strong>{result.total}</Text> {grouped ? "group(s)" : "establishment(s)"} match{result.truncated ? ` — the table takes the first ${(spec.limit ?? catalog?.maxRows)?.toLocaleString()}` : ""}.{" "}
               {result.rows.length < result.total && <Text type="secondary">The first {result.rows.length} are shown here.</Text>}
               {result.stale && <Text type="warning"> Changed since — Preview again to see the rows.</Text>}
             </Paragraph>

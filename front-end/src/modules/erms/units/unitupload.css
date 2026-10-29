@@ -19,6 +19,37 @@
   padding-top: 8px;
 }
 
+/* A field two columns wide (a name, a title, a note) — still one line high,
+   so the fields sit side by side rather than a text box to a row. */
+.unit-upload-grid .unit-upload-span2 {
+  grid-column: span 2;
+}
+/* A row of its own (the register lookup, the other Ref Nos). */
+.unit-upload-grid .unit-upload-full {
+  grid-column: 1 / -1;
+}
+/* Where the coordinates came from (auto, as saved, manual), beside them. */
+.unit-upload-grid .unit-upload-coords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  /* Level with the boxes, below their labels. */
+  padding-top: 30px;
+  min-height: 32px;
+}
+@media (max-width: 640px) {
+  .unit-upload-grid .unit-upload-coords {
+    padding-top: 0;
+    margin-bottom: 12px;
+  }
+}
+
+/* The few fields under the scan: no reserved height. */
+.unit-upload-grid.unit-upload-grid--tail {
+  min-height: 0;
+}
+
 /* The scan, then where it files: one above the other, each the full width
    of the dialog, as Upload record has them — the folder browser needs the
    width for long project folder names, and side by side the drop zone left
@@ -46,5 +77,12 @@
 @media (max-width: 820px) {
   .unit-upload-head {
     grid-template-columns: 1fr;
+  }
+}
+
+/* One column on a phone: a two-wide field must not add a second. */
+@media (max-width: 640px) {
+  .unit-upload-grid .unit-upload-span2 {
+    grid-column: 1 / -1;
   }
 }

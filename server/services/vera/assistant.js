@@ -626,7 +626,7 @@ function guardReply(msg, ctx) {
  * Answer one message.
  * @returns {Promise<{answer, source: "model"|"cache"|"fallback"|"guard", usedModel, hitIds, inputTokens?, outputTokens?, model?, provider?, tier?, guardrail?}>}
  */
-async function answer({ message, history = [], page = '', config = {}, viewer = {}, figures = null, signal } = {}) {
+async function answer({ message, history = [], page = '', config = {}, viewer = {}, figures = null, signal, prefer = null } = {}) {
   const ctx = contextFor(viewer, page, config);
   const msg = sanitizeInput(message);
   const hist = sanitizeHistory(history);
@@ -681,7 +681,9 @@ async function answer({ message, history = [], page = '', config = {}, viewer = 
   // The semantic cache: the same question, asked before by someone who may
   // see the same things, is answered from memory (services/vera/semanticCache).
   const q = cacheQuery(msg, hist, law.length ? [...hits, ...law] : hits, hitIds, counted, ctx, page, config);
-  if (q?.read) {
+  // A model chosen in the chat is asked: the person wants its answer, not
+  // one remembered from another (it is still remembered for the next asker).
+  if (q?.read && !prefer) {
     const found = cache.lookup(q);
     if (found) return { answer: found.answer, source: 'cache', usedModel: false, cached: true, hitIds };
   }
@@ -700,6 +702,12 @@ async function answer({ message, history = [], page = '', config = {}, viewer = 
     ...(law.length ? { maxTokens: Math.max(provider.resolveMaxTokens(config), 1500) } : {}),
     // Counted as chat on the Models tab (services/vera/modelUsage).
     feature: viewer.realm === 'public' ? 'public-chat' : 'chat',
+    // The chat keeps its own cache (partitioned by who may see an answer,
+    // above) and its own guardrails (guardReply, and the screen below, which
+    // knows the realm): the provider's would only repeat them.
+    cache: false,
+    guard: false,
+    prefer,
   });
   const screened = guardrails.screenOutput(sanitizeOutput(resp.text), ctx);
   const usage = { inputTokens: resp.inputTokens || 0, outputTokens: resp.outputTokens || 0, model: resp.model, provider: resp.provider, tier };
@@ -787,6 +795,8 @@ module.exports = {
   looksLikeAccountProbe,
   looksLikeCountQuestion,
   retrieve,
+  // For the cache of the other model calls (semanticCache modelQuery).
+  tokenize,
   looksInScope,
   buildSystemPrompt,
   buildUserPrompt,

@@ -53,6 +53,8 @@ async function rowsPage(req, res, next) {
 }
 
 const canEdit = (req) => hasCapability(principalOf(req), 'canManageData');
+// Removing a year menu's folders and tables whoever made them (User Accounts › Access Settings).
+const canRemoveAny = (req) => hasCapability(principalOf(req), 'canRemoveMenuItems');
 
 /** Editing can be switched off for everyone from Universe Central DB settings. */
 async function editingAllowed(req, res) {
@@ -186,7 +188,13 @@ const audit = require('../shared/services/audit');
 async function listMenuItems(req, res, next) {
   try {
     const years = await authorizedYears(principalOf(req));
-    res.json({ years: await menuItems.forYears(years), canManage: canEdit(req) });
+    res.json({
+      years: await menuItems.forYears(years),
+      canManage: canEdit(req),
+      // Removing what others made (see menuItems.remove); without it, only one's own.
+      canRemoveAny: canRemoveAny(req),
+      me: principalOf(req)?.username || null,
+    });
   } catch (error) {
     next(error);
   }
@@ -233,7 +241,7 @@ async function updateMenuItem(req, res, next) {
 
 async function deleteMenuItem(req, res, next) {
   try {
-    const result = await menuItems.remove(req.activeYear, req.params.id);
+    const result = await menuItems.remove(req.activeYear, req.params.id, { actor: principalOf(req), anyone: canRemoveAny(req) });
     await audit.record(req, { domain: 'ucds', action: 'menu-item-delete', label: `menu item removed: ${result.label} (${result.removed})`, collection: menuItems.COLLECTION, documentId: req.params.id });
     res.json(result);
   } catch (error) {

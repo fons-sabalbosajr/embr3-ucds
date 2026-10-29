@@ -138,7 +138,22 @@ const CAPABILITY_KEYS = [
   'canViewAdminPanel',
   'canViewDataHistory',
   'canAccessRangePicker',
+  // Remove folders and tables from a year container's menu, whoever made
+  // them (29 Oct 2026): the Planning Unit's tables are not for every Encoder
+  // with Manage Data to delete. Without it, a person removes only what they
+  // made themselves (menuItems.remove).
+  'canRemoveMenuItems',
 ];
+
+/**
+ * A capability's value for an account that was never given one either way:
+ * the roles listed hold it, everyone else does not. Only for capabilities
+ * added after accounts existed, so those accounts get the intended default
+ * without a migration; the older ones stay false when unset, as they were.
+ */
+const ROLE_DEFAULT_CAPABILITIES = {
+  canRemoveMenuItems: [ROLES.ADMIN, ROLES.PLANNING],
+};
 
 function roleOf(user) {
   const raw = String(user?.permission || '').trim().toLowerCase();
@@ -193,8 +208,10 @@ function capabilitiesOf(user) {
       acc[key] = true;
     } else if (nested && key in nested) {
       acc[key] = nested[key] === true;
-    } else {
+    } else if (typeof user?.[key] === 'boolean' || !ROLE_DEFAULT_CAPABILITIES[key]) {
       acc[key] = user?.[key] === true;
+    } else {
+      acc[key] = ROLE_DEFAULT_CAPABILITIES[key].includes(roleOf(user));
     }
     return acc;
   }, {});
@@ -315,6 +332,7 @@ module.exports = {
   nasContainersOf,
   canOpenContainer,
   CAPABILITY_KEYS,
+  ROLE_DEFAULT_CAPABILITIES,
   DEFAULT_DOMAINS,
   roleOf,
   isDeveloper,

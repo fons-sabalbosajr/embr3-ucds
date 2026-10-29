@@ -25,6 +25,8 @@
 
 const AnthropicSdk = require('@anthropic-ai/sdk');
 const usage = require('./modelUsage');
+const guardrails = require('./guardrails');
+const memo = require('./semanticCache');
 
 const Anthropic = AnthropicSdk.default || AnthropicSdk;
 
@@ -178,6 +180,10 @@ function sanitizeError(err) {
       code: allQuota ? 'quota_exhausted' : 'no_model',
       message: `No AI model VERA may use is answering${reasons.length ? ` (${reasons.join('; ')})` : ''}.${until} VERA answers from the help library meanwhile; choose another model in VERA settings, or add credit or a key for the other provider in server/.env.`,
     };
+  } else if (err?.code === 'injection') {
+    out = { code: 'injection', message: guardrails.INJECTION_REPLY };
+  } else if (err?.code === 'guardrail') {
+    out = { code: 'guardrail', message: "The model's answer was withheld by VERA's guardrails: it repeated VERA's own instructions." };
   } else if (isDailyQuota(err)) {
     out = {
       code: 'quota_exhausted',
@@ -568,16 +574,52 @@ async function geminiOnce({ key, model, maxTokens, temperature, timeoutMs, syste
  * `ignoreRest`: try every model in the route, resting ones too (the
  * connection test asks whether anything answers now, not what answered last).
  */
-async function complete(cfg, { system, prompt, maxTokens, signal, documents, tier = 'main', configuredOnly = false, timeoutMs: budgetMs, ignoreRest = false, exclude = [], feature = 'tools' } = {}) {
+/**
+ * Guardrails and the cache, round every call but the chat's (which keeps its
+ * own of both, knowing who asked — services/vera/assistant):
+ *   `guard`     (default on) the data fence on the system prompt, a person's
+ *               words checked for an injection, the answer screened
+ *               (services/vera/guardrails);
+ *   `cache`     (default on) an answer to the same call is given from memory
+ *               (services/vera/semanticCache) — before the router, so it
+ *               answers while every model is resting too;
+ *   `semantic`  { question, context }: the words a person typed, matched by
+ *               meaning, and the rest of the call, matched exactly.
+ */
+/**
+ * `prefer`: { provider, model } a person chose in the chat — tried first when
+ * it is in the route and not resting; the rest of the route still answers
+ * when it cannot, so choosing never leaves a question unanswered.
+ */
+async function complete(cfg, { system, prompt, maxTokens, signal, documents, tier = 'main', configuredOnly = false, timeoutMs: budgetMs, ignoreRest = false, exclude = [], feature = 'tools', guard = true, cache = true, semantic = null, prefer = null } = {}) {
   if (!resolveKey(cfg).key) {
     const err = new Error('not_configured');
     err.code = 'not_configured';
     throw err;
   }
+  if (guard && semantic?.question && guardrails.looksLikeInjection(semantic.question)) throw toSafe({ code: 'injection' });
+  if (guard) system = [system, guardrails.DATA_FENCE].filter(Boolean).join('\n\n');
+  const q = cache && !configuredOnly && !ignoreRest && memo.enabled(cfg) ? memo.modelQuery(cfg, { feature, tier, system, prompt, documents: documents || [], maxTokens, semantic }) : null;
+  const remembered = q && memo.lookup(q);
+  if (remembered) return { ...remembered.answer, inputTokens: 0, outputTokens: 0, cached: true };
+  /** The answer as it may be used: screened, and remembered when whole. */
+  const finish = (out) => {
+    if (!guard) return out;
+    const screened = guardrails.screenOutput(out.text);
+    if (screened.leaked) throw toSafe({ code: 'guardrail' });
+    const text = screened.text.trim();
+    // Not an answer cut off at the length limit (it would fail the same way
+    // for the cache's whole lifetime), nor one with something cut out.
+    const cut = /^(max_tokens|length)$/i.test(String(out.stopReason || ''));
+    if (q && text && !cut && !screened.redactions) memo.remember(q, { provider: out.provider, model: out.model, text, stopReason: out.stopReason });
+    return { ...out, text, ...(screened.redactions ? { redactions: screened.redactions } : {}) };
+  };
   // The connection test asks about the configured model alone, resting or not.
-  const route = configuredOnly
+  let route = configuredOnly
     ? [{ provider: resolveProvider(cfg), model: resolveModel(cfg) }]
     : routeFor(cfg, tier, { documents: Boolean(documents?.length) }).filter((c) => ENV.key(c.provider) && !exclude.some((x) => x.provider === c.provider && x.model === c.model));
+  const chosen = prefer && !configuredOnly ? route.findIndex((c) => c.provider === prefer.provider && c.model === prefer.model) : -1;
+  if (chosen > 0) route = [route[chosen], ...route.slice(0, chosen), ...route.slice(chosen + 1)];
   if (!route.length) throw toSafe({ code: 'all_resting', reasons: [] });
   if (configuredOnly) resting.delete(restKey(route[0].provider, route[0].model));
   const ready = ignoreRest ? route : route.filter((c) => !restingUntil(c));
@@ -613,13 +655,13 @@ async function complete(cfg, { system, prompt, maxTokens, signal, documents, tie
       effort: tier === 'accurate' ? 'medium' : 'low',
     };
     const at = Date.now();
+    let out;
     try {
       const call = c.provider === 'gemini' ? geminiOnce : c.provider === 'groq' ? groqOnce : completeAnthropic;
-      const out = await call(args);
+      out = await call(args);
       // It answers: whatever it rested for is over.
       resting.delete(restKey(c.provider, c.model));
       usage.record({ provider: c.provider, model: c.model, ok: true, inputTokens: out.inputTokens, outputTokens: out.outputTokens, ms: Date.now() - at, feature });
-      return out;
     } catch (err) {
       lastErr = err;
       const code = sanitizeError(err).code;
@@ -631,7 +673,11 @@ async function complete(cfg, { system, prompt, maxTokens, signal, documents, tie
       // The caller's own cancel, or a request no model would take (a bad
       // request, a refusal): stop here rather than try the same on the next.
       if (signal?.aborted || !rest(c, err)) break;
+      continue;
     }
+    // Outside the try: a withheld answer is not the model failing, and is
+    // not tried again on the next one.
+    return finish(out);
   }
   // More than one model tried and none answered: say what each said.
   if (failures.length > 1 && !signal?.aborted) throw toSafe({ code: 'all_resting', reasons: failures });
@@ -664,7 +710,8 @@ function toSafe(err) {
  */
 async function testConnection(cfg) {
   const started = Date.now();
-  const ping = { prompt: 'Reply with the single word: OK', maxTokens: 16, feature: 'test' };
+  // Never from the cache: a test asks whether a model answers now.
+  const ping = { prompt: 'Reply with the single word: OK', maxTokens: 16, feature: 'test', cache: false, guard: false };
   const firstShare = Math.max(8000, Math.round(resolveTimeoutMs(cfg) * 0.45));
   let configuredError;
   try {

@@ -760,6 +760,8 @@ module.exports = {
   listFilter,
   assertUnit,
   assertCanSee,
+  // VERA's upload guide answers only those who may file (services/vera/uploadGuide).
+  assertCanFile,
   get,
   history,
   dashboard,

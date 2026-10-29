@@ -48,7 +48,7 @@ const VERA_ACTIONS = Object.freeze({
   'vera:public-chat': 'Chat (sign-in page)',
   'vera:test': 'Connection test',
   'vera:settings:updated': 'Settings changed',
-  'vera:corrections:scan': 'Data check (project types)',
+  'vera:corrections:scan': 'Data check (Document Library)',
   'vera:corrections:apply': 'Corrections applied',
   'vera:corrections:undo': 'Correction undone',
   'vera:corrections:auto-fix': 'Data fixed by VERA',
@@ -73,6 +73,7 @@ const VERA_ACTIONS = Object.freeze({
   'vera:ucds-check:auto-fix': 'Universe Central DB fixed by VERA',
   'vera:table-draft': 'Table drafted by VERA',
   'vera:table-build': 'Table built by VERA from the register',
+  'vera:upload-guide:read': 'Scan read to fill the upload form',
 });
 
 async function loadConfig() {
@@ -261,6 +262,9 @@ const startOfToday = () => {
 };
 
 /** One metadata row. Never the question or the answer. */
+// The actions that change what VERA's checks hold waiting (see log()).
+const FIX_ACTION_RE = /^vera:(corrections|links|serials|ref-check|project-types:(scan|apply|undo|dismiss))(:|$)/;
+
 async function log(req, action, details) {
   try {
     const user = principalOf(req);
@@ -278,6 +282,10 @@ async function log(req, action, details) {
     // A chat — by the model, the cache or the library — changes the Models
     // tab's counts: open tabs reload (at most every 5 seconds).
     if (action === 'vera:chat' || action === 'vera:public-chat') modelUsage.changed();
+    // A check, an apply, an undo: what waits for a person has changed, and
+    // every open bell counts again at once (Universe.jsx), not at its next
+    // two-minute poll. The register's own check says so as vera:repaired.
+    if (FIX_ACTION_RE.test(action)) notifier.broadcast('vera:fixes', { action });
   } catch (error) {
     console.error('VERA log write failed:', error.message);
   }
@@ -376,7 +384,11 @@ async function chat(req, res) {
     // The model's time starts once the figures are counted: counting on a
     // busy database used to eat into it and time the answer out.
     timer = setTimeout(() => controller.abort(), provider.resolveTimeoutMs(cfg) + 2000);
-    const result = await vera.answer({ message, history, page, config: cfg, viewer, figures, signal: controller.signal });
+    // A model chosen in the chat: only one of VERA's route, and only where
+    // the choice is open to this account (chatChoiceOpen).
+    // A model whose allowance is used up is not used until it resets: VERA chooses instead.
+    const { prefer = null, usedUp = null } = chatChoiceOpen(cfg, viewer) ? await chosenModel(cfg, req.body?.model) : {};
+    const result = await vera.answer({ message, history, page, config: cfg, viewer, figures, signal: controller.signal, prefer });
     log(req, 'vera:chat', {
       requestHash,
       source: result.source,
@@ -391,12 +403,24 @@ async function chat(req, res) {
       model: result.model || null,
       tier: result.tier || null,
       guardrail: result.guardrail || null,
+      chosen: prefer ? prefer.model : null,
       durationMs: Date.now() - started,
     });
     if (result.usedModel) {
       patchConfig({ lastSuccessfulConnectionAt: new Date(), lastError: '' }).catch(() => {});
     }
-    return res.json({ success: true, answer: result.answer, source: result.source, usedModel: result.usedModel });
+    // Which model wrote the answer, and when it was not the one chosen, why.
+    const stoodIn = prefer && result.usedModel && result.model && result.model !== prefer.model;
+    return res.json({
+      success: true,
+      answer: result.answer,
+      source: result.source,
+      usedModel: result.usedModel,
+      model: result.usedModel ? result.model || null : null,
+      ...(stoodIn ? { modelNote: `${prefer.model} could not answer just now, so ${result.model} did.` } : {}),
+      ...(prefer && !result.usedModel && result.source === 'fallback' ? { modelNote: `${prefer.model} could not answer just now; this is from the help library.` } : {}),
+      ...(usedUp ? { modelNote: `${usedUp.model} has used up its allowance until it resets, so ${K.ASSISTANT_NAME} chose.`, modelUsedUp: usedUp.model } : {}),
+    });
   } catch (error) {
     const safe = provider.sanitizeError(error);
     console.error('vera chat error:', safe.code);
@@ -446,6 +470,7 @@ async function getConfig(req, res) {
         semanticCache: cfg.semanticCache !== false,
         modelRouting: cfg.modelRouting !== false,
         crossProviderFallback: cfg.crossProviderFallback !== false,
+        chatModelChoice: cfg.chatModelChoice !== false,
         roleAccess: veraPolicy.describe(cfg),
         updatedAt: cfg.updatedAt || null,
       },
@@ -490,7 +515,7 @@ async function updateConfig(req, res) {
       if (b[k] !== undefined) next[k] = String(b[k] || '').trim().slice(0, max);
     };
 
-    ['enabled', 'showLauncher', 'sendPageContext', 'developerMode', 'publicEnabled', 'portalEnabled', 'semanticCache', 'modelRouting', 'crossProviderFallback'].forEach(bool);
+    ['enabled', 'showLauncher', 'sendPageContext', 'developerMode', 'publicEnabled', 'portalEnabled', 'semanticCache', 'modelRouting', 'crossProviderFallback', 'chatModelChoice'].forEach(bool);
     // The form sends the table it shows: [{ role, model, figures }, …].
     if (b.roleAccess !== undefined) {
       const rows = Array.isArray(b.roleAccess)
@@ -643,6 +668,121 @@ async function getUsage(req, res) {
 // The Models tab: each model VERA may use — its place in the route, whether it
 // is answering or resting and until when, its use today and in the provider's
 // quota window, and 14 days of history per model (services/vera/modelUsage).
+// ── Choosing the model in the chat ───────────────────────────────────────────
+// The Developer and administrators may pick which of VERA's models answers
+// them, seeing how each stands: ready or resting, today's requests, what is
+// left of its allowance and when it starts again. Only models in VERA's
+// route (the provider and keys decide it); the router still stands in with
+// the next model when the chosen one cannot answer.
+//
+// Not the rest of the staff (29 Oct 2026): the route offers a paid model
+// (Anthropic), and fifty people choosing it would spend the account's credit.
+// They get VERA's own choice, which keeps to the free models first. The
+// whole choice can be closed too (settings: chatModelChoice).
+const CHOOSES_MODEL = new Set([ROLES.DEVELOPER, ROLES.ADMIN]);
+
+const chatChoiceOpen = (cfg, viewer) =>
+  cfg.chatModelChoice !== false && viewer?.realm !== 'public' && CHOOSES_MODEL.has(viewer?.role) && viewer?.access?.model !== false && provider.isOperational(cfg);
+
+/** "1h2m3.4s", "7.66s", "120ms" (Groq's reset wording) as milliseconds. */
+function durationMs(text) {
+  const s = String(text || '');
+  const part = (re) => Number((re.exec(s) || [0, 0])[1]) || 0;
+  return Math.round((part(/(\d+)h/) * 3600 + part(/(\d+)m(?!s)/) * 60 + part(/([\d.]+)s/)) * 1000 + part(/(\d+)ms/));
+}
+
+/**
+ * Until when a model's allowance for the day is used up, or null while some
+ * is left: none of its requests left, or none of its tokens for the day.
+ * Ends when the provider said its count resets, at midnight Pacific for
+ * Gemini's daily quota, and at midnight in Manila for what VERA counts.
+ */
+function usedUpUntil(m, now = Date.now()) {
+  const req = m.available?.requests;
+  const tokens = m.available?.tokensPerDay;
+  const nextManila = new Date(modelUsage.dayBounds('Asia/Manila', now).next);
+  let until = null;
+  if (req && req.left === 0) {
+    if (req.at && req.resetIn) until = new Date(new Date(req.at).getTime() + durationMs(req.resetIn));
+    else until = m.quotaWindow?.resetsAt ? new Date(m.quotaWindow.resetsAt) : nextManila;
+  } else if (tokens && tokens.left === 0) {
+    until = nextManila;
+  }
+  return until && until.getTime() > now ? until : null;
+}
+
+/**
+ * The models a person may choose in the chat, and how each stands. Shared by
+ * everyone with the chat open for 15 seconds: the counts move slowly, and
+ * resting and resetting are timed on the screen.
+ */
+function chatStanding(cfg) {
+  return require('../shared/services/shortCache').cached('vera:chat-models', 15 * 1000, async () => {
+    const status = provider.routerStatus(cfg);
+    const keys = Object.fromEntries(Object.keys(provider.PROVIDERS).map((p) => [p, Boolean(provider.ENV.key(p))]));
+    const caps = Object.fromEntries(status.route.map((c) => [`${c.provider}|${c.model}`, provider.capabilitiesOf(c.provider, c.model)]));
+    const roles = Object.fromEntries(status.route.map((c) => [`${c.provider}|${c.model}`, c.role]));
+    const r = await modelUsage.report({ route: status.route, roles, keys, days: 1, caps });
+    return r.models
+      .filter((m) => m.position && m.keyPresent)
+      .map((m) => ({
+        id: `${m.provider}|${m.model}`,
+        provider: m.provider,
+        providerLabel: provider.PROVIDERS[m.provider]?.label || m.provider,
+        model: m.model,
+        role: m.role,
+        status: m.status,
+        restingUntil: m.restingUntil,
+        reason: m.reason || '',
+        today: { calls: m.today.calls, ok: m.today.ok, failed: m.today.failed },
+        // What is left today, when the provider says or VERA has seen the limit.
+        left: m.available?.requests?.pct ?? null,
+        limit: m.available?.requests?.of ?? m.quotaWindow?.limit ?? null,
+        resetsAt: m.quotaWindow?.resetsAt || null,
+        resetIn: m.available?.requests?.resetIn || null,
+        // Used up for the day: not offered until it resets.
+        usedUpUntil: usedUpUntil(m),
+        paid: m.provider === 'anthropic',
+        accurate: Boolean(m.capabilities?.accurate),
+        light: Boolean(m.capabilities?.light),
+      }));
+  });
+}
+
+const isUsedUp = (m, now = Date.now()) => Boolean(m?.usedUpUntil && new Date(m.usedUpUntil).getTime() > now);
+
+/**
+ * The model chosen in the chat, if it is in the route and has some of its
+ * allowance left: `{prefer}`, or `{usedUp}` naming the model refused, or {}.
+ */
+async function chosenModel(cfg, id) {
+  const [p, ...rest] = String(id || '').split('|');
+  const m = rest.join('|');
+  if (!p || !m) return {};
+  if (!provider.routerStatus(cfg).route.some((c) => c.provider === p && c.model === m)) return {};
+  let standing = null;
+  try {
+    standing = (await chatStanding(cfg)).find((s) => s.id === `${p}|${m}`);
+  } catch {
+    standing = null; // the counts could not be read: the router still stands in if the model refuses
+  }
+  if (isUsedUp(standing)) return { usedUp: { model: m, until: standing.usedUpUntil } };
+  return { prefer: { provider: p, model: m } };
+}
+
+/** GET /api/vera/chat-models — the models a person may choose in the chat, and how each stands. */
+async function chatModels(req, res) {
+  try {
+    const cfg = await loadConfig();
+    if (!chatChoiceOpen(cfg, viewerFor(req, cfg))) return res.json({ success: true, choice: false, models: [] });
+    const models = await chatStanding(cfg);
+    return res.json({ success: true, choice: true, models });
+  } catch (error) {
+    console.error('vera chatModels error:', error.message);
+    return res.json({ success: true, choice: false, models: [] });
+  }
+}
+
 async function getModels(req, res) {
   try {
     const cfg = await loadConfig();
@@ -1039,7 +1179,8 @@ async function scanTextNext(req, res, next) {
   try {
     const unit = ['records', 'legal', 'laboratory'].includes(req.body?.unit) ? req.body.unit : 'records';
     const result = await scanText.readNext(await loadConfig(), unit, Number(req.body?.limit) || 10, principalOf(req)?.username || null);
-    await log(req, 'vera:scan-text', { unit, ...result });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await log(req, 'vera:scan-text', { unit, read: result.read, failed: result.failed, unreadable: result.unreadable, left: result.left, stopped: Boolean(result.stopped) });
     return res.json(result);
   } catch (err) {
     return next(err);
@@ -1075,6 +1216,30 @@ async function refNumbersScan(req, res, next) {
 async function correctionsPending(req, res, next) {
   try {
     return res.json({ pending: await corrections.pendingCount() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * GET /api/vera/fixes-pending — for the bell: what every one of VERA's
+ * Document Library checks holds waiting for the Developer, in one request.
+ * Each counted by the database; one that fails counts as nothing rather than
+ * leaving the bell empty.
+ */
+async function fixesPending(req, res, next) {
+  try {
+    await connectToMongo();
+    const db = getDb();
+    const zero = () => 0;
+    const [dataCorrections, links, projectTypes, refNumbers, serials] = await Promise.all([
+      corrections.pendingCount().catch(zero),
+      registerLinks.pendingCount().catch(zero),
+      db.collection(projectTypeCheck.COLLECTION).countDocuments({ status: 'proposed' }).catch(zero),
+      db.collection(refNoCheck.COLLECTION).countDocuments({ status: { $in: ['differs', 'missing'] } }).catch(zero),
+      serialCheck.pendingCount().catch(zero),
+    ]);
+    return res.json({ corrections: dataCorrections, links, projectTypes, refNumbers, serials });
   } catch (err) {
     return next(err);
   }
@@ -1277,6 +1442,8 @@ function analyzePermits(req, res) {
 }
 
 module.exports = {
+  chatModels,
+  fixesPending,
   analyzePermits,
   repairsSummary,
   // For tests: reading the years and the follow-ups of a count question.

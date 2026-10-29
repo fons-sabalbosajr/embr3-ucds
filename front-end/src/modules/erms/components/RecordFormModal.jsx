@@ -9,6 +9,7 @@ import RegisterLookup from "./RegisterLookup";
 import NasFolderBrowser from "./NasFolderBrowser";
 import SuggestInput from "./SuggestInput";
 import ListInput from "./ListInput";
+import VeraUploadGuide from "./VeraUploadGuide";
 import FloatingModal from "../../../shared/components/FloatingModal";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +24,8 @@ import {
   fetchRecord,
   fetchRecordSuggestions,
   fetchUnitSettings,
+  fitsPermitFormat,
+  permitFormatOf,
   updateRecord,
   uploadRecord,
 } from "../api/ermsService";
@@ -51,6 +54,9 @@ const TYPE_FOLDER = {
   coa: "COA Folder",
   other: "Others",
 };
+
+// A city or barangay option's value is "name@@id"; the record keeps the name.
+const pickedName = (v) => (typeof v === "string" ? v.split("@@")[0] : v);
 
 // What one of a record's other ECC Ref Nos is.
 const REF_KINDS = ["Original", "Amendment", "Re-issued", "Other"].map((v) => ({ value: v, label: v }));
@@ -255,6 +261,28 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   // The Ref No as typed or chosen, for the register lookup and the duplicate check.
   const watchedPermit = Form.useWatch("permitNumber", form);
   useEffect(() => setPermitNumber(watchedPermit || ""), [watchedPermit]);
+
+  // The number's name, example and format follow the permit type: an ECC Ref
+  // No for an ECC, a CNC No for a CNC, an HWID No for a generator.
+  const format = permitFormatOf(permitType);
+  const typeLabel = PERMIT_OPTIONS.find((o) => o.value === permitType)?.label || "this permit";
+  const numberPlaceholder = format.example ? `e.g. ${format.example}` : "As written on the permit";
+  const formatTip = format.example ? ` Usual formats: ${[format.example, ...format.also].join(", ")}.` : "";
+  // A number not written the way the type's are: told, not refused — older
+  // and odd numbers exist, and the permit itself is the authority.
+  const formatRule = {
+    warningOnly: true,
+    validator: (_, v) =>
+      fitsPermitFormat(permitType, v)
+        ? Promise.resolve()
+        : Promise.reject(new Error(`Not the usual ${format.label} format for ${typeLabel} (e.g. ${format.example}). Check it against the permit.`)),
+  };
+  // Changing the type checks the number already typed against the new format.
+  useEffect(() => {
+    if (open && form.getFieldValue("permitNumber")) form.validateFields(["permitNumber"]).catch(() => {});
+  }, [permitType, open, form]);
+  // Typed in capitals, as the numbers are filed, where the type has a format.
+  const upper = (v) => (format.patterns && typeof v === "string" ? v.toUpperCase() : v);
   const standardHint = [PROVINCE_LABEL[province] || null, dateApproved ? String(dateApproved.year()) : "this year", projectTitle ? `“${projectTitle}”` : "the project", TYPE_FOLDER[permitType] || null]
     .filter(Boolean)
     .join(" \\ ");
@@ -307,27 +335,78 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
     return [...groups].map(([label, options]) => ({ label, options }));
   }, [lookups]);
 
+  // City and barangay are chosen from the province's lists (dropdowns, typed
+  // to search). An option's value carries its id after "@@" so two barangays
+  // of one name in different towns stay apart; the field keeps only the name
+  // (pickedName), and a stored name not on the list still shows as it is.
   const cityOptions = useMemo(
-    () => (lookups?.cities || []).map((c) => ({ value: c.label, id: c.id, lat: c.lat, long: c.long })),
+    () => (lookups?.cities || []).map((c) => ({ value: `${c.label}@@${c.id}`, label: c.label, name: c.label, id: c.id, lat: c.lat, long: c.long })),
     [lookups]
   );
-  const barangayOptions = useMemo(() => {
-    const cityId = cityOptions.find((c) => c.value === city)?.id;
-    return (lookups?.barangays || [])
-      .filter((b) => !cityId || b.cityId === cityId)
-      .map((b) => ({ value: b.label, lat: b.lat, long: b.long }));
-  }, [lookups, cityOptions, city]);
+  const cityId = cityOptions.find((c) => c.name === city)?.id;
+  const cityNameOf = useMemo(() => new Map(cityOptions.map((c) => [c.id, c.name])), [cityOptions]);
+  // The chosen city's barangays; with no city yet, the province's, each with its town.
+  const barangayOptions = useMemo(
+    () =>
+      (lookups?.barangays || [])
+        .filter((b) => !cityId || b.cityId === cityId)
+        .map((b) => ({ value: `${b.label}@@${b.id}`, label: b.label, name: b.label, town: cityId ? null : cityNameOf.get(b.cityId) || null, cityId: b.cityId, lat: b.lat, long: b.long })),
+    [lookups, cityId, cityNameOf]
+  );
 
-  // The desktop system's address tables carry coordinates: choosing a
-  // barangay (or, failing that, a city) fills the latitude and longitude
-  // when they are still empty — never over coordinates someone entered.
-  const fillCoordinates = (_, option) => {
-    if (typeof option?.lat !== "number" || typeof option?.long !== "number" || (!option.lat && !option.long)) return;
-    const lat = form.getFieldValue("lat");
-    const long = form.getFieldValue("long");
-    const fromCity = cityOptions.some((c) => c.lat === lat && c.long === long);
-    if ((lat == null && long == null) || fromCity) form.setFieldsValue({ lat: option.lat, long: option.long });
+  // The coordinates: filled from the barangay (or, failing that, the city)
+  // the address tables place — or typed by the clerk, which is never written
+  // over. `coordFrom` names the place they came from; null while they are the
+  // clerk's own (or the record's as saved) or empty.
+  const [coordFrom, setCoordFrom] = useState(null);
+  useEffect(() => {
+    if (open) setCoordFrom(null);
+  }, [open, current?.serialNo]);
+  const placed = (o) => typeof o?.lat === "number" && typeof o?.long === "number" && Boolean(o.lat || o.long);
+  const fillCoordinates = (option, from) => {
+    if (!placed(option)) return;
+    const empty = form.getFieldValue("lat") == null && form.getFieldValue("long") == null;
+    if (empty || coordFrom) {
+      form.setFieldsValue({ lat: option.lat, long: option.long });
+      setCoordFrom(from);
+    }
   };
+  const lat = Form.useWatch("lat", form);
+  const long = Form.useWatch("long", form);
+  const barangay = Form.useWatch("barangay", form);
+  // The place the address points at now, for "Use the barangay's".
+  const pointedAt = useMemo(() => {
+    const b = (lookups?.barangays || []).find((x) => x.label === barangay && (!cityId || x.cityId === cityId));
+    if (placed(b)) return { ...b, from: `Barangay ${b.label}` };
+    const c = cityOptions.find((x) => x.name === city);
+    return placed(c) ? { ...c, from: c.name } : null;
+  }, [lookups, barangay, cityId, cityOptions, city]);
+  const manualCoords = !coordFrom && (lat != null || long != null);
+  // On an edit, the record's own until someone changes them.
+  const savedCoords = isEdit && manualCoords && lat === (initialValues.lat ?? null) && long === (initialValues.long ?? null);
+  // "14.676041, 120.536529" pasted into either box fills both.
+  const pasteCoordinates = (e) => {
+    const m = /(-?\d{1,3}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)/.exec(e.clipboardData?.getData("text") || "");
+    if (!m) return;
+    e.preventDefault();
+    form.setFieldsValue({ lat: Number(m[1]), long: Number(m[2]) });
+    setCoordFrom(null);
+    form.validateFields(["lat", "long"]).catch(() => {});
+  };
+  // Region III, loosely: told, not refused (a project may sit just outside).
+  const coordRule = (which) => ({
+    warningOnly: true,
+    validator: () => {
+      const la = form.getFieldValue("lat");
+      const lo = form.getFieldValue("long");
+      if (typeof la === "number" && typeof lo === "number" && la > 100 && lo < 30) {
+        return which === "lat" ? Promise.reject(new Error("Latitude and longitude look swapped.")) : Promise.resolve();
+      }
+      if (which === "lat" && typeof la === "number" && (la < 14.3 || la > 16.6)) return Promise.reject(new Error("Outside Region III — check the latitude."));
+      if (which === "long" && typeof lo === "number" && (lo < 119.6 || lo > 122.4)) return Promise.reject(new Error("Outside Region III — check the longitude."));
+      return Promise.resolve();
+    },
+  });
 
   // Which tab holds which fields, so a validation error can open the tab it
   // is on rather than fail silently behind another one.
@@ -357,7 +436,9 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
         <div className="unit-upload-grid">
           {/* Offered from what is already on file, so a second permit for a
               proponent is spelled the way the first was. */}
-          <Form.Item name="proponentName" label="Proponent" rules={[{ required: true, message: "Enter the proponent." }]} style={{ gridColumn: "1 / -1" }}>
+          {/* Side by side, a line each: proponent and permit type, title and
+              process, the Ref No and its dates — not a text box to a row. */}
+          <Form.Item name="proponentName" label="Proponent" rules={[{ required: true, message: "Enter the proponent." }]} className="unit-upload-span2">
             <SuggestInput
               placeholder="Name of the proponent"
               queryKey={["records", "proponentName"]}
@@ -367,15 +448,15 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
               }}
             />
           </Form.Item>
-          <Form.Item name="projectTitle" label="Project title" rules={[{ required: true, message: "Enter the project title." }]} style={{ gridColumn: "1 / -1" }}>
+          <Form.Item name="permitType" label="Permit type" rules={[{ required: true }]}>
+            <Select placeholder="Select the permit type" options={PERMIT_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="projectTitle" label="Project title" rules={[{ required: true, message: "Enter the project title." }]} className="unit-upload-span2">
             <SuggestInput
               placeholder="Title of the project"
               queryKey={["records", "projectTitle"]}
               fetcher={(q) => fetchRecordSuggestions("projectTitle", q)}
             />
-          </Form.Item>
-          <Form.Item name="permitType" label="Permit type" rules={[{ required: true }]}>
-            <Select placeholder="Select the permit type" options={PERMIT_OPTIONS} />
           </Form.Item>
           <Form.Item name="processSource" label="Process">
             <Select placeholder="Select the process"
@@ -386,29 +467,39 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
               ]}
             />
           </Form.Item>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Form.Item
-              name="permitNumber"
-              label="Permit number"
-              extra="Used to link this record to an establishment in the Universe register."
-              style={{ marginBottom: 8 }}
-              rules={rules?.dataQuality?.requirePermitNumber ? [{ required: true, message: "The permit number is required." }] : undefined}
-            >
-              {/* The ECC Ref No, completed as it is typed: the numbers already
-                  filed (an amendment carries its original's) and the
-                  register's. Choosing one fills the proponent, project and
-                  date approved where they are still empty. */}
-              <SuggestInput
-                placeholder="ECC-OL-R03-2019-0573"
-                queryKey={["records", "permitNumber"]}
-                fetcher={(q) => fetchRecordSuggestions("permitNumber", q)}
-                onPick={(fill) => {
-                  if (fill.proponentName && !form.getFieldValue("proponentName")) form.setFieldValue("proponentName", fill.proponentName);
-                  if (fill.projectTitle && !form.getFieldValue("projectTitle")) form.setFieldValue("projectTitle", fill.projectTitle);
-                  if (fill.dateApproved && !form.getFieldValue("dateApproved")) form.setFieldValue("dateApproved", dayjs(fill.dateApproved));
-                }}
-              />
-            </Form.Item>
+          <Form.Item
+            name="permitNumber"
+            label={format.label}
+            tooltip={`Used to link this record to an establishment in the Universe register.${formatTip}`}
+            normalize={upper}
+            rules={[
+              ...(rules?.dataQuality?.requirePermitNumber ? [{ required: true, message: `The ${format.label} is required.` }] : []),
+              formatRule,
+            ]}
+          >
+            {/* The ECC Ref No, completed as it is typed: the numbers already
+                filed (an amendment carries its original's) and the
+                register's. Choosing one fills the proponent, project and
+                date approved where they are still empty. */}
+            <SuggestInput
+              placeholder={numberPlaceholder}
+              queryKey={["records", "permitNumber"]}
+              fetcher={(q) => fetchRecordSuggestions("permitNumber", q)}
+              onPick={(fill) => {
+                if (fill.proponentName && !form.getFieldValue("proponentName")) form.setFieldValue("proponentName", fill.proponentName);
+                if (fill.projectTitle && !form.getFieldValue("projectTitle")) form.setFieldValue("projectTitle", fill.projectTitle);
+                if (fill.dateApproved && !form.getFieldValue("dateApproved")) form.setFieldValue("dateApproved", dayjs(fill.dateApproved));
+              }}
+            />
+          </Form.Item>
+          <Form.Item name="dateApproved" label="Date approved" rules={rules?.dataQuality?.requireDateApproved ? [{ required: true, message: "The date approved is required." }] : undefined}>
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="dateAmended" label="Date amended">
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          {/* What the Ref No matches — already filed, and in the register — under its row. */}
+          <div className="unit-upload-full">
             {dupes?.duplicates?.length > 0 && (
               <Alert
                 type={dupes.blocks ? "error" : "warning"}
@@ -430,26 +521,43 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             )}
             <RegisterLookup permitNumber={permitNumber} />
           </div>
-          <Form.Item name="dateApproved" label="Date approved" rules={rules?.dataQuality?.requireDateApproved ? [{ required: true, message: "The date approved is required." }] : undefined}>
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item name="dateAmended" label="Date amended">
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
           {/* A record can carry more than one ECC Ref No — the original's and
               each amendment's — every one with the date it was approved. The
               first, above, is the one the register link and the lists use. */}
+          <Form.Item name="projectType" label="Project type" rules={rules?.dataQuality?.requireProjectType ? [{ required: true, message: "The project type is required." }] : undefined}>
+            <ListInput options={projectTypeOptions} placeholder="e.g. Mining and Quarrying Projects" />
+          </Form.Item>
+          {/* The desktop system's "specific project type". Suggested from the
+              records already filed — within the project type, once one is
+              chosen — and choosing one fills in the project type it is
+              usually filed under, when that is still empty. */}
+          <Form.Item name="specificProjectType" label="Specific project type" className="unit-upload-span2">
+            <SuggestInput
+              placeholder="e.g. Poultry Farm, Gasoline Filling Station"
+              queryKey={["records", "specificProjectType", projectTypeValue || null]}
+              fetcher={(q) => fetchRecordSuggestions("specificProjectType", q, { projectType: projectTypeValue || undefined })}
+              onPick={(fill) => {
+                if (fill.projectType && !form.getFieldValue("projectType")) form.setFieldValue("projectType", fill.projectType);
+              }}
+            />
+          </Form.Item>
           <Form.List name="permitRefs">
             {(fields, { add, remove }) => (
-              <div style={{ gridColumn: "1 / -1", marginBottom: 16 }}>
+              <div className="unit-upload-full" style={{ marginBottom: 16 }}>
                 <Space size={6} wrap>
-                  <Typography.Text strong>Other ECC Ref Nos</Typography.Text>
+                  <Typography.Text strong>Other {format.label}s</Typography.Text>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>an amendment&rsquo;s or a re-issue&rsquo;s number, each with its date approved</Typography.Text>
                 </Space>
                 {fields.map(({ key, name, ...rest }) => (
                   <div key={key} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start", marginTop: 8 }}>
-                    <Form.Item {...rest} name={[name, "number"]} rules={[{ required: true, message: "Enter the Ref No." }]} style={{ marginBottom: 0, flex: "2 1 240px" }}>
-                      <Input placeholder="ECC-OL-R03-2021-0123" />
+                    <Form.Item
+                      {...rest}
+                      name={[name, "number"]}
+                      normalize={upper}
+                      rules={[{ required: true, message: `Enter the ${format.label}.` }, formatRule]}
+                      style={{ marginBottom: 0, flex: "2 1 240px" }}
+                    >
+                      <Input placeholder={numberPlaceholder} />
                     </Form.Item>
                     <Form.Item {...rest} name={[name, "dateApproved"]} style={{ marginBottom: 0, flex: "1 1 150px" }}>
                       <DatePicker placeholder="Date approved" style={{ width: "100%" }} />
@@ -461,28 +569,11 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
                   </div>
                 ))}
                 <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})} style={{ marginTop: 8 }}>
-                  Add another ECC Ref No
+                  Add another {format.label}
                 </Button>
               </div>
             )}
           </Form.List>
-          <Form.Item name="projectType" label="Project type" style={{ gridColumn: "1 / -1" }} rules={rules?.dataQuality?.requireProjectType ? [{ required: true, message: "The project type is required." }] : undefined}>
-            <ListInput options={projectTypeOptions} placeholder="e.g. Mining and Quarrying Projects" />
-          </Form.Item>
-          {/* The desktop system's "specific project type". Suggested from the
-              records already filed — within the project type, once one is
-              chosen — and choosing one fills in the project type it is
-              usually filed under, when that is still empty. */}
-          <Form.Item name="specificProjectType" label="Specific project type" style={{ gridColumn: "1 / -1" }}>
-            <SuggestInput
-              placeholder="e.g. Poultry Farm, Gasoline Filling Station"
-              queryKey={["records", "specificProjectType", projectTypeValue || null]}
-              fetcher={(q) => fetchRecordSuggestions("specificProjectType", q, { projectType: projectTypeValue || undefined })}
-              onPick={(fill) => {
-                if (fill.projectType && !form.getFieldValue("projectType")) form.setFieldValue("projectType", fill.projectType);
-              }}
-            />
-          </Form.Item>
         </div>
       ),
     },
@@ -496,28 +587,141 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             name="province"
             label="Province"
             rules={[{ required: true, message: "Select a province." }]}
-            extra={writableProvinces ? "Only provinces your account may modify are listed." : undefined}
+            tooltip={writableProvinces ? "Only provinces your account may modify are listed." : undefined}
           >
-            <Select placeholder="Select a province" options={provinceOptions} />
+            <Select
+              placeholder="Select a province"
+              options={provinceOptions}
+              // Another province: its towns and barangays, not the last one's.
+              onChange={() => {
+                form.setFieldsValue({ city: undefined, barangay: undefined, ...(coordFrom ? { lat: null, long: null } : {}) });
+                if (coordFrom) setCoordFrom(null);
+              }}
+            />
           </Form.Item>
-          <Form.Item name="city" label="City / Municipality">
-            <ListInput options={cityOptions} placeholder={province ? "Choose or type" : "Select the province first"} onSelect={fillCoordinates} />
+          {/* Dropdowns from the province's lists, typed to search. With no
+              list for the province (none loaded), they take free text. */}
+          <Form.Item
+            name="city"
+            label="City / Municipality"
+            normalize={pickedName}
+            // The stored name shown as its option, so the list marks it.
+            getValueProps={(v) => ({ value: cityOptions.find((c) => c.name === v)?.value ?? v })}
+          >
+            {cityOptions.length ? (
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                placeholder="Choose the city or municipality"
+                options={cityOptions}
+                onChange={(_, option) => {
+                  // A barangay of another town goes; the coordinates follow the town.
+                  const b = (lookups?.barangays || []).find((x) => x.label === form.getFieldValue("barangay"));
+                  if (b && option && b.cityId !== option.id) form.setFieldValue("barangay", undefined);
+                  if (option) fillCoordinates(option, option.name);
+                }}
+              />
+            ) : (
+              <ListInput options={[]} placeholder={province ? "Type the city or municipality" : "Select the province first"} disabled={!province} />
+            )}
           </Form.Item>
-          <Form.Item name="barangay" label="Barangay">
-            <ListInput options={barangayOptions} placeholder={city ? "Choose or type" : "Choose the city first"} onSelect={fillCoordinates} />
+          <Form.Item
+            name="barangay"
+            label="Barangay"
+            normalize={pickedName}
+            getValueProps={(v) => ({ value: barangayOptions.find((b) => b.name === v)?.value ?? v })}
+          >
+            {barangayOptions.length ? (
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                placeholder={city ? "Choose the barangay" : "Choose — the town fills itself"}
+                options={barangayOptions}
+                optionRender={(o) => (
+                  <span>
+                    {o.data.name}
+                    {o.data.town ? <Typography.Text type="secondary" style={{ fontSize: 12 }}> · {o.data.town}</Typography.Text> : null}
+                  </span>
+                )}
+                onChange={(_, option) => {
+                  if (!option) return;
+                  // Its town, when none is chosen yet (or another one is).
+                  const town = cityNameOf.get(option.cityId);
+                  if (town && form.getFieldValue("city") !== town) form.setFieldValue("city", town);
+                  fillCoordinates(option, `Barangay ${option.name}`);
+                }}
+              />
+            ) : (
+              <ListInput options={[]} placeholder={city ? "Type the barangay" : "Choose the city first"} disabled={!province} />
+            )}
           </Form.Item>
+          {/* One line each, growing as they are typed. */}
           <Form.Item name="street" label="Street">
-            <Input.TextArea rows={2} autoSize={{ minRows: 2, maxRows: 4 }} placeholder="Street, purok or sitio" />
+            <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder="Street, purok or sitio" />
           </Form.Item>
-          <Form.Item name="mailingAddress" label="Mailing address" style={{ gridColumn: "1 / -1" }}>
-            <Input.TextArea rows={2} maxLength={500} placeholder="Where correspondence goes, when not the project site" />
+          <Form.Item name="mailingAddress" label="Mailing address" className="unit-upload-span2">
+            <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} maxLength={500} placeholder="Where correspondence goes, when not the project site" />
           </Form.Item>
-          <Form.Item name="lat" label="Latitude" extra="Filled from the barangay or city when chosen.">
-            <InputNumber min={-90} max={90} step={0.000001} precision={6} style={{ width: "100%" }} placeholder="e.g. 14.676041" />
+          {/* Filled from the barangay or town, or typed (or pasted as "lat, long")
+              by the clerk — typed coordinates are kept, whatever is chosen after. */}
+          <Form.Item
+            name="lat"
+            label="Latitude"
+            tooltip="Filled from the barangay or city when chosen. Type your own to use the project site's exact point, or paste “14.676041, 120.536529” to fill both."
+            dependencies={["long"]}
+            rules={[coordRule("lat")]}
+          >
+            <InputNumber
+              min={-90}
+              max={180}
+              step={0.000001}
+              precision={6}
+              style={{ width: "100%" }}
+              placeholder="e.g. 14.676041"
+              onChange={() => setCoordFrom(null)}
+              onPaste={pasteCoordinates}
+            />
           </Form.Item>
-          <Form.Item name="long" label="Longitude">
-            <InputNumber min={-180} max={180} step={0.000001} precision={6} style={{ width: "100%" }} placeholder="e.g. 120.536529" />
+          <Form.Item name="long" label="Longitude" dependencies={["lat"]} rules={[coordRule("long")]}>
+            <InputNumber
+              min={-180}
+              max={180}
+              step={0.000001}
+              precision={6}
+              style={{ width: "100%" }}
+              placeholder="e.g. 120.536529"
+              onChange={() => setCoordFrom(null)}
+              onPaste={pasteCoordinates}
+            />
           </Form.Item>
+          <div className="unit-upload-coords">
+            {coordFrom ? (
+              <Tag color="blue">Auto · from {coordFrom}</Tag>
+            ) : savedCoords ? (
+              <Tag>As saved</Tag>
+            ) : manualCoords ? (
+              <Tag color="gold">Manual</Tag>
+            ) : (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Choose a barangay to fill them, or type them.
+              </Typography.Text>
+            )}
+            {manualCoords && pointedAt && (pointedAt.lat !== lat || pointedAt.long !== long) && (
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  form.setFieldsValue({ lat: pointedAt.lat, long: pointedAt.long });
+                  setCoordFrom(pointedAt.from);
+                  form.validateFields(["lat", "long"]).catch(() => {});
+                }}
+              >
+                Use {pointedAt.from}&rsquo;s instead
+              </Button>
+            )}
+          </div>
         </div>
       ),
     },
@@ -622,12 +826,15 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
               />
             </Form.Item>
           )}
-          <Form.Item name="fileClass" label="Classification" extra="Who the document is for. The unit's default applies when left as is (Settings › ERMS › Data privacy).">
-            <Select placeholder="The unit's default" options={classifications.map((c) => ({ value: c, label: c }))} />
-          </Form.Item>
-          <Form.Item name="remarks" label="Remarks">
-            <Input.TextArea placeholder="Anything the next person should know" rows={3} />
-          </Form.Item>
+          {/* Classification and remarks on one row. */}
+          <div className="unit-upload-grid unit-upload-grid--tail">
+            <Form.Item name="fileClass" label="Classification" tooltip="Who the document is for. The unit's default applies when left as is (Settings › ERMS › Data privacy).">
+              <Select placeholder="The unit's default" options={classifications.map((c) => ({ value: c, label: c }))} />
+            </Form.Item>
+            <Form.Item name="remarks" label="Remarks" className="unit-upload-span2">
+              <Input.TextArea placeholder="Anything the next person should know" autoSize={{ minRows: 1, maxRows: 4 }} />
+            </Form.Item>
+          </div>
         </>
       ),
     },
@@ -687,6 +894,8 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
         <Skeleton active paragraph={{ rows: 8 }} />
       ) : (
         <Form key={current?.serialNo || "new"} form={form} layout="vertical" preserve={false} initialValues={initialValues}>
+          {/* VERA's suggestions for the form as it is filled, and her reading of the scan. */}
+          <VeraUploadGuide form={form} scan={scan} isEdit={isEdit} onGoto={(field) => TAB_OF[field] && setTab(TAB_OF[field])} />
           <UnitTabs unit="records" activeKey={tab} onChange={setTab} items={tabs} />
         </Form>
       )}

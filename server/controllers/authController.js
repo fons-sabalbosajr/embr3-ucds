@@ -347,6 +347,7 @@ function checkAuth(req, res) {
     canViewAdminPanel: u.canViewAdminPanel,
     canViewDataHistory: u.canViewDataHistory,
     canAccessRangePicker: u.canAccessRangePicker,
+    canRemoveMenuItems: capabilitiesOf(u).canRemoveMenuItems,
     aurora: u.aurora,
     bataan: u.bataan,
     bulacan: u.bulacan,

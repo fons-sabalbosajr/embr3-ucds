@@ -291,23 +291,25 @@ async function overdue(allowedProvinces) {
   if (!loans.length) return [];
 
   // A loan is only outstanding if nothing later brought the record back.
-  const results = [];
-  for (const loan of loans) {
-    const later = await collection().findOne({
-      recordSerialNo: loan.recordSerialNo,
-      createdAt: { $gt: loan.createdAt },
-      action: { $in: ['returned', 'received', 'retrieved', 'archived'] },
-    });
-    if (later) continue;
+  // The latest return of each record and the records themselves in one read
+  // each (it was two reads per loan, on every dashboard that lists them).
+  const serials = [...new Set(loans.map((l) => l.recordSerialNo))];
+  const returns = await collection()
+    .aggregate([
+      { $match: { recordSerialNo: { $in: serials }, action: { $in: ['returned', 'received', 'retrieved', 'archived'] } } },
+      { $group: { _id: '$recordSerialNo', last: { $max: '$createdAt' } } },
+    ])
+    .toArray();
+  const returnedAt = new Map(returns.map((r) => [r._id, r.last]));
+  const open = loans.filter((loan) => !(returnedAt.get(loan.recordSerialNo) > loan.createdAt));
+  if (!open.length) return [];
 
-    const filter = { serialNo: loan.recordSerialNo };
-    if (Array.isArray(allowedProvinces)) filter['location.province'] = { $in: allowedProvinces };
-    const record = await getDb()
-      .collection(RECORDS)
-      .findOne(filter, { projection: { serialNo: 1, proponentName: 1, projectTitle: 1, location: 1 } });
-    if (record) results.push({ ...loan, record });
-  }
-  return results;
+  const filter = { serialNo: { $in: [...new Set(open.map((l) => l.recordSerialNo))] } };
+  if (Array.isArray(allowedProvinces)) filter['location.province'] = { $in: allowedProvinces };
+  const records = new Map(
+    (await getDb().collection(RECORDS).find(filter, { projection: { serialNo: 1, proponentName: 1, projectTitle: 1, location: 1 } }).toArray()).map((r) => [r.serialNo, r])
+  );
+  return open.filter((loan) => records.has(loan.recordSerialNo)).map((loan) => ({ ...loan, record: records.get(loan.recordSerialNo) }));
 }
 
 /** A Legal or Laboratory document's custody trail, newest first. */

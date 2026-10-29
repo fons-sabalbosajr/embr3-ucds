@@ -84,6 +84,56 @@ async function suggest(req, res, next) {
   }
 }
 
+// --- VERA's upload guide (services/vera/uploadGuide) ------------------------
+const uploadGuide = require('../../../services/vera/uploadGuide');
+
+/** The unit, checked as filing is, and the document type the form is on. */
+async function guideTarget(req, code) {
+  const user = await principalOf(req);
+  const unit = units.assertUnit(req.params.unit);
+  units.assertCanFile(user, unit);
+  const docType = ((await config.unit(unit))?.docTypes || []).find((t) => t.code === code) || null;
+  return { user, unit, docType };
+}
+
+/** POST /api/erms/units/:unit/vera/guide — VERA's suggestions for the form as it stands. By rule: no model. */
+async function veraGuide(req, res, next) {
+  try {
+    const b = req.body || {};
+    const { unit, docType } = await guideTarget(req, b.docType);
+    if (!docType) return res.json({ tips: [] });
+    res.json({ tips: await uploadGuide.reviewUnit({ unit, docType, province: b.province || null, fields: b.fields || {}, serialNo: b.serialNo || null, isNew: b.isNew === true, fileName: b.fileName || null }) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/erms/units/:unit/vera/read-scan — VERA's model reads the chosen scan for the document type's fields. */
+async function veraReadScan(req, res, next) {
+  try {
+    if (!req.file?.buffer) return res.status(400).json({ message: 'Choose the scan for VERA to read.' });
+    const { user, docType } = await guideTarget(req, req.body?.docType);
+    if (!docType) return res.status(400).json({ message: 'Choose the document type first.' });
+    const vera = require('../../../controllers/veraController');
+    const cfg = await vera.loadConfig();
+    const { roleOf } = require('../../../services/authorization');
+    if (require('../../../services/vera/policy').accessFor(cfg, roleOf(user)).model === false) {
+      return res.status(403).json({ message: "VERA's AI model is not open to your account type. Her checks above still apply." });
+    }
+    // The lists this type's lookup fields choose from, by name.
+    const all = await lookups.all();
+    const lists = Object.fromEntries(
+      [...new Set((docType.fields || []).filter((f) => f.type === 'lookup' && f.lookup).map((f) => f.lookup))].map((k) => [k, (all[k]?.items || []).map((i) => String(i.label || i.value || i)).filter(Boolean)])
+    );
+    const result = await uploadGuide.readUnitScan(cfg, req.file.buffer, { docType, lists });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await vera.log(req, 'vera:upload-guide:read', { unit: req.params.unit, docType: docType.code, fields: result.suggestions.length, model: result.model, cached: result.cached, bytes: req.file.size });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function getDocument(req, res, next) {
   try {
     res.json(await units.get(await principalOf(req), req.params.unit, req.params.serialNo));
@@ -1004,6 +1054,8 @@ module.exports = {
   unitDashboard,
   listDocuments,
   suggest,
+  veraGuide,
+  veraReadScan,
   getDocument,
   documentHistory,
   createDocument,

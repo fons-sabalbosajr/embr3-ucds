@@ -375,14 +375,17 @@ async function filterOptions(allowedProvinces) {
   const scope = Array.isArray(allowedProvinces)
     ? { 'location.province': { $in: allowedProvinces } }
     : {};
-  const [uploaders, provinces] = await Promise.all([
+  const [uploaders, provinces, flagged] = await Promise.all([
     collection().distinct('document.uploadedBy', scope),
     collection().distinct('location.province', scope),
+    // How many still need review: the list hides its "Needs review" filter at none.
+    collection().countDocuments({ ...scope, 'dataQuality.clean': false }),
   ]);
   return {
     permitTypes: PERMIT_TYPES,
     uploaders: uploaders.filter(Boolean).sort(),
     provinces: provinces.filter(Boolean).sort(),
+    flagged,
   };
 }
 
@@ -778,31 +781,59 @@ function openIssues(record) {
   return (record?.dataQuality?.issues || []).filter((i) => (STILL_OPEN[i.field] ? STILL_OPEN[i.field](record) : true));
 }
 
-/** Write a record's issues down to the ones still open; returns the record as it now is. */
-async function settleDataQuality(record, username = null) {
-  if (!record || record.dataQuality?.clean !== false) return record;
+/** A record's dataQuality with its issues down to the ones still open, or null when nothing changes. */
+function settledQuality(record, username = null) {
+  if (!record || record.dataQuality?.clean !== false) return null;
   const issues = record.dataQuality.issues || [];
   const remaining = openIssues(record);
-  if (remaining.length && remaining.length === issues.length) return record;
-  const dataQuality = {
+  if (remaining.length && remaining.length === issues.length) return null;
+  return {
     ...record.dataQuality,
     clean: remaining.length === 0,
     issues: remaining,
     resolved: [...(record.dataQuality.resolved || []), ...issues.filter((i) => !remaining.includes(i)).map((i) => ({ ...i, at: new Date(), by: username }))],
   };
+}
+
+/** Write a record's issues down to the ones still open; returns the record as it now is. */
+async function settleDataQuality(record, username = null) {
+  const dataQuality = settledQuality(record, username);
+  if (!dataQuality) return record;
   await collection().updateOne({ _id: record._id }, { $set: { dataQuality } });
   return { ...record, dataQuality };
 }
 
-/** Settle every flagged record matching `filter` (after a bulk write such as a VERA correction). */
+// What openIssues() reads, and no more: a whole record can carry a scan's text.
+const QUALITY_PROJECTION = {
+  dataQuality: 1,
+  serialNo: 1,
+  'permit.dateApprovedRaw': 1,
+  'permit.dateApproved': 1,
+  'permit.dateAmendedRaw': 1,
+  'permit.dateAmended': 1,
+  'permit.type': 1,
+  'location.province': 1,
+  'document.sharePath': 1,
+  'document.uploadedAt': 1,
+};
+
+/**
+ * Settle every flagged record matching `filter` (after a bulk write such as a
+ * VERA correction): one read of only the fields that decide it, one batched
+ * write. A whole record read and a write per record made applying VERA's
+ * corrections wait on every record they touched.
+ */
 async function recheckDataQuality(filter = {}, username = null) {
   await connectToMongo();
-  const flagged = await collection().find({ ...filter, 'dataQuality.clean': false }).toArray();
+  const ops = [];
   let cleared = 0;
-  for (const r of flagged) {
-    const after = await settleDataQuality(r, username);
-    if (after.dataQuality.issues.length < (r.dataQuality.issues || []).length) cleared += 1;
+  for await (const r of collection().find({ ...filter, 'dataQuality.clean': false }, { projection: QUALITY_PROJECTION })) {
+    const dataQuality = settledQuality(r, username);
+    if (!dataQuality) continue;
+    ops.push({ updateOne: { filter: { _id: r._id }, update: { $set: { dataQuality } } } });
+    if (dataQuality.issues.length < (r.dataQuality.issues || []).length) cleared += 1;
   }
+  if (ops.length) await collection().bulkWrite(ops, { ordered: false });
   return cleared;
 }
 

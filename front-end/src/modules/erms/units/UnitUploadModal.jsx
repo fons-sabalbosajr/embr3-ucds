@@ -10,6 +10,7 @@ import { message } from "../../../shared/feedback";
 import { checkUnitDuplicates, claimDocket, describeApiError, fetchLookups, fetchNextDocket, fetchUnitSuggestions, uploadUnitDocument, updateUnitDocument } from "../api/ermsService";
 import NasFolderBrowser from "../components/NasFolderBrowser";
 import SuggestInput from "../components/SuggestInput";
+import VeraUploadGuide from "../components/VeraUploadGuide";
 import { PROVINCE_OPTIONS, groupFields, unitTheme } from "./unitTheme";
 import "./unitupload.css";
 
@@ -135,7 +136,8 @@ const FieldInput = ({ field: given, lookups, unit, onPick, value, onChange, dock
   const props = { value, onChange, ...rest };
   switch (field.type) {
     case "textarea":
-      return <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder={field.placeholder} {...props} />;
+      // One line to start, growing as it is typed: the form stays short.
+      return <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder={field.placeholder} {...props} />;
     case "date":
       return <DatePicker style={{ width: "100%" }} placeholder={field.placeholder} {...props} />;
     case "number":
@@ -416,6 +418,20 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }
           )}
         </div>
 
+        {/* VERA's suggestions for the form as it is filled, and her reading of the scan. */}
+        <VeraUploadGuide
+          form={form}
+          scan={scan}
+          isEdit={isEdit}
+          unit={unit}
+          docType={docType}
+          serialNo={document?.serialNo}
+          onGoto={(field) => {
+            const to = field === "scan" ? (isEdit ? null : "scan") : tabOf(field);
+            if (to) setTab(to);
+          }}
+        />
+
         <UnitTabs
           unit={unit}
           activeKey={tab}
@@ -440,7 +456,8 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }
                       label={f.label}
                       valuePropName={f.type === "checkbox" ? "checked" : "value"}
                       rules={f.required ? [{ required: true, message: `${f.label} is required.` }] : undefined}
-                      style={f.type === "textarea" ? { gridColumn: "1 / -1" } : undefined}
+                      // A text box is two columns wide, not a row of its own.
+                      className={f.type === "textarea" ? "unit-upload-span2" : undefined}
                     >
                       <FieldInput field={f} lookups={lookups} unit={unit} onPick={fillFrom} docket={issuesDocket ? { yearField: unitConfig?.folder?.yearField } : null} />
                     </Form.Item>
