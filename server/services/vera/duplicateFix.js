@@ -32,7 +32,10 @@ const UNITS = ['records', 'legal', 'laboratory'];
 
 const sourceOf = (scope) => (scope === 'records' ? 'erms-records' : 'erms-documents');
 const hasScan = (d) => Boolean(d.document?.fileName || d.document?.sharePath || d.document?.filePath);
-const filled = (v) => (v && typeof v === 'object' ? Object.values(v).reduce((n, x) => n + filled(x), 0) : v === null || v === undefined || v === '' ? 0 : 1);
+// A date or an id is one value, not an object to count inside: counted as
+// empty, the entry holding a resolution date lost to the one without it.
+const filled = (v) =>
+  v instanceof Date || v?._bsontype ? 1 : v && typeof v === 'object' ? Object.values(v).reduce((n, x) => n + filled(x), 0) : v === null || v === undefined || v === '' ? 0 : 1;
 // The same name: capitals, spacing and punctuation aside, or the same words
 // (company suffixes and titles aside — registerLinks.namesAgree).
 const bare = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9ñ]+/g, '');
@@ -52,8 +55,21 @@ function best(docs) {
 
 // What tells one document from another of the same kind: entries that
 // differ in any of these are separate documents, even sharing a scan (a
-// laboratory scan often holds several chain-of-custody forms).
-const UNIT_IDS = ['cocNo', 'docketNo', 'referenceNo', 'orNumber', 'dateOfSampling', 'dateIssued', 'date'];
+// laboratory scan often holds several chain-of-custody forms; a revised
+// test report keeps the file name with a later date reported).
+const UNIT_IDS = ['cocNo', 'docketNo', 'referenceNo', 'orNumber', 'dateOfSampling', 'dateReported', 'dateReceived', 'novDateIssued', 'tcActualDate', 'orderDateIssued', 'resolutionDateIssued', 'dateIssued', 'date'];
+
+/**
+ * How many test reports a laboratory scan holds, from its name:
+ * "2022PC-0088-0093 BALER BAY.pdf" holds reports 0088 to 0093, six of them,
+ * each filed as its own entry with the same firm, date and parameters.
+ */
+function reportsInScan(fileName) {
+  const m = /^\s*\d{4}[A-Z]{0,3}-(\d{3,5})-(\d{3,5})\b/i.exec(String(fileName || ''));
+  if (!m) return 1;
+  const size = Number(m[2]) - Number(m[1]) + 1;
+  return size > 1 && size <= 100 ? size : 1;
+}
 const idOf = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : bare(v));
 function differIn(docs, read, names) {
   for (const name of names) {
@@ -78,6 +94,9 @@ function judge(scope, docs) {
     const agree = names.every((n) => sameName(n, names[0]));
     if (!agree) return { verdict: 'review', reason: 'Different proponents under one permit number — perhaps a number typed wrong. Check each against its scan.' };
     if (differIn(parents, (d) => d.permit?.dateApproved, ['dateApproved'])) return { verdict: 'review', reason: 'The same permit number and proponent, approved on different dates — a re-issue, or a date typed wrong. Check each against its scan.' };
+    const projects = parents.map((d) => d.projectTitle).filter(Boolean);
+    if (!projects.every((t) => sameName(t, projects[0]))) return { verdict: 'review', reason: 'The same permit number and proponent for different project titles — two projects, or a number typed wrong. Check each against its scan.' };
+    if (differIn(parents, (d, k) => d.location?.[k], ['city', 'barangay'])) return { verdict: 'review', reason: 'The same permit number and proponent at different places — two sites, or an address typed wrong. Check each against its scan.' };
   } else {
     const types = new Set(docs.map((d) => d.docType));
     if (types.size > 1) return { verdict: 'legitimate', reason: 'One file name used for different kinds of document.' };
@@ -86,6 +105,9 @@ function judge(scope, docs) {
     if (!agree) return { verdict: 'legitimate', reason: 'One file name reused for documents of different firms or cases.' };
     const field = differIn(docs, (d, k) => d.fields?.[k], UNIT_IDS);
     if (field) return { verdict: 'legitimate', reason: `Separate documents in one scan — each has its own ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}.` };
+    const reports = scope === 'laboratory' ? reportsInScan(docs[0].document?.fileName) : 1;
+    if (reports > 1 && docs.length <= reports) return { verdict: 'legitimate', reason: `One scan holding ${reports} test reports, each filed as its own entry.` };
+    if (reports > 1) return { verdict: 'review', reason: `More entries (${docs.length}) than the ${reports} test reports the scan holds. Open it and keep one entry per report.` };
   }
   const pool = scope === 'records' ? parents : docs;
   const scans = new Set(pool.filter(hasScan).map((d) => String(d.document.sharePath || d.document.filePath || d.document.fileName).toLowerCase()));
@@ -111,7 +133,9 @@ async function review(scope, allowedProvinces = null) {
       : { unit: scope, 'document.fileName': { $nin: [null, ''] } };
   const by = scope === 'records' ? '$permit.number' : '$document.fileName';
   const groups = await col
-    .aggregate([{ $match: match }, { $group: { _id: by, count: { $sum: 1 }, ids: { $push: '$_id' } } }, { $match: { count: { $gt: 1 } } }, { $sort: { count: -1, _id: 1 } }, { $limit: 300 }])
+    // Every group: at 300, the Records Unit's 377 were cut short and the
+    // rest never read, fixed or counted.
+    .aggregate([{ $match: match }, { $group: { _id: by, count: { $sum: 1 }, ids: { $push: '$_id' } } }, { $match: { count: { $gt: 1 } } }, { $sort: { count: -1, _id: 1 } }, { $limit: 5000 }])
     .toArray();
   const reviewed = new Map((await db.collection(REVIEWS).find({ scope }).toArray()).map((r) => [r.key, r]));
   const docs = await col.find({ _id: { $in: groups.flatMap((g) => g.ids) } }).toArray();

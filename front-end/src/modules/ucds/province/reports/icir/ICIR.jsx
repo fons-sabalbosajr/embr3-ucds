@@ -272,14 +272,24 @@ const ICIR = ({ editedRecord, resetCheckboxesKey }) => {
       const blob = await fetchPdf(fields);
       const fileName = fileNameFor("ICIR_Draft", fields);
       const formData = new FormData();
-      formData.append("reportInfo", JSON.stringify({ ...fields, purpose }));
+      // Which establishment the draft is for, whatever was ticked to print:
+      // the Reports log lists the open record's drafts by these.
+      formData.append(
+        "reportInfo",
+        JSON.stringify({ ...fields, purpose, recordId: editedRecord._id, sort_key: editedRecord.sort_key, id_no: editedRecord.id_no, title: editedRecord.title, name: editedRecord.name, ecc_cnc: editedRecord.ecc_cnc })
+      );
       formData.append("user", JSON.stringify({ name: userResponse.data.name }));
       formData.append("date", new Date().toISOString());
       formData.append("fileName", fileName);
       formData.append("pdfFile", blob, fileName);
-      await axios.post(`${API_BASE_URL}/save-draft-report`, formData, { withCredentials: true });
+      const saved = await axios.post(`${API_BASE_URL}/save-draft-report`, formData, { withCredentials: true });
       download(blob, fileName);
-      modal.success({ title: "Draft saved", content: `Saved to the Reports log (${purpose}).` });
+      modal.success({
+        title: "Draft saved",
+        content: saved.data?.fileSaved
+          ? `Saved to this establishment's Reports log (${purpose}).`
+          : `Listed in this establishment's Reports log (${purpose}), but the PDF could not be kept on the share — the copy just downloaded is the one to keep.`,
+      });
     } catch (error) {
       console.error("Error saving the draft:", error);
       modal.error({ title: "The draft could not be saved", content: error.message || "Please try again." });

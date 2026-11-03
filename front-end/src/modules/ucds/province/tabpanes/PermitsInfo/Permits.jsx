@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Table, Button } from "antd";
+import { Button, Tag, Tooltip } from "antd";
+import { CheckCircleFilled, DeleteOutlined, ExclamationCircleFilled, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import SuggestInput from "../SuggestInput";
+import { Section, Value } from "../RecordForm";
 import { isRawLayout, NOV_RECOMMENDATION } from "../registerLayout";
 import { FullDate } from "../DateInputs";
 import VeraPermitCheck from "./VeraPermitCheck";
@@ -34,11 +36,23 @@ const DATE_FIELDS = new Set([
   "chem_permit_issued", "chem_permit_exp", "importer_clearance_issued", "importer_clearance_exp", "tsd_issued", "tsd_expiration", "tp_trc_issued", "tp_trc_expiration",
 ]);
 
-function renderCell(value, row, field, base) {
+// Free text that runs long: a wider column, and two lines of box.
+const WIDE_FIELDS = /remarks$/;
+
+/** An entry's columns across the card: dates narrower, free text wider, then the remove button. */
+const gridOf = (cols, isEditing) =>
+  [...cols.map(([, field]) => (DATE_FIELDS.has(field) ? "minmax(0, 0.8fr)" : WIDE_FIELDS.test(field) || field === "pco_name" ? "minmax(0, 1.6fr)" : "minmax(0, 1fr)")), ...(isEditing ? ["36px"] : [])].join(" ");
+
+/** One field of an entry: its value, or while editing a box that suggests what is already encoded. */
+function renderField(value, field, base, isEditing, onCell) {
   const expired = EXPIRY_FIELDS.has(field) && isExpired(value);
-  const style = expired ? { background: "#ffcccc", color: "#a00", fontWeight: "bold" } : undefined;
-  if (!row.isEditing) return <span style={style}>{value || "-"}</span>;
-  if (DATE_FIELDS.has(field)) return <FullDate value={value} onChange={(v) => row.onCell(field, v, row.key)} style={style} />;
+  if (!isEditing) {
+    if (!String(value ?? "").trim()) return <Value />;
+    return <Value mono={CODE_FIELDS.has(field)}>{expired ? <span className="rf-expired">{value} · expired</span> : value}</Value>;
+  }
+  const style = expired ? { color: "#cf1322", fontWeight: 600 } : undefined;
+  if (DATE_FIELDS.has(field)) return <FullDate value={value} onChange={onCell} style={style} />;
+  // A line break is a space: the register reads one as the start of another entry.
   return (
     <SuggestInput
       field={field}
@@ -46,33 +60,14 @@ function renderCell(value, row, field, base) {
       base={base}
       onEmpty={!CODE_FIELDS.has(field)}
       value={value}
-      onChange={(v) => row.onCell(field, v, row.key)}
-      placeholder="-"
+      onChange={(v) => onCell(String(v ?? "").replace(/\s*\n\s*/g, " "))}
+      placeholder="Not encoded"
+      multiline={WIDE_FIELDS.test(field)}
+      autoSize={{ minRows: 1, maxRows: 2 }}
       inputStyle={style}
     />
   );
 }
-
-// Every card's columns on one grid: each column but the last the same share
-// of the width, so the first, second and third columns line up from card to
-// card and the last takes what is left.
-const COL_WIDTH = "19%";
-const columnsOf = (cols) =>
-  cols.map(([title, field, base], i) => ({
-    // A date column says so: a full date, picked from a calendar while editing.
-    title: DATE_FIELDS.has(field) ? (
-      <span>
-        {title} <span className="rf-col-hint">full date</span>
-      </span>
-    ) : (
-      title
-    ),
-    dataIndex: field,
-    key: field,
-    align: "left",
-    width: i === cols.length - 1 ? undefined : COL_WIDTH,
-    render: (value, row) => renderCell(value, row, field, base),
-  }));
 
 // ---------------------------------------------------------------------------
 // The permits, one card per law. Up to 2026 each has free remarks; from 2027
@@ -172,12 +167,13 @@ const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
   };
   const addRow = (law) => {
     const list = rowsRef.current[law.key] || [];
-    commit({ ...rowsRef.current, [law.key]: [...list, { key: String(list.length + 1), ...Object.fromEntries(law.cols.map((c) => [c[1], ""])) }] });
+    const next = list.reduce((m, r) => Math.max(m, Number(r.key) || 0), 0) + 1;
+    commit({ ...rowsRef.current, [law.key]: [...list, { key: String(next), ...Object.fromEntries(law.cols.map((c) => [c[1], ""])) }] });
   };
-  const removeRow = (law) => {
+  // Any entry may go, not only the last; the only one left is emptied instead.
+  const removeRow = (law, rowKey) => {
     const list = rowsRef.current[law.key] || [];
-    if (list.length < 2) return;
-    const kept = list.slice(0, -1);
+    const kept = list.length < 2 ? [{ key: "1", ...Object.fromEntries(law.cols.map((c) => [c[1], ""])) }] : list.filter((r) => r.key !== rowKey).map((r, i) => ({ ...r, key: String(i + 1) }));
     commit({ ...rowsRef.current, [law.key]: kept });
     for (const [, field] of law.cols) handleChange(field, kept.map((r) => String(r[field] ?? "").trim()).filter(Boolean).join(", "));
   };
@@ -189,39 +185,94 @@ const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
 
   const held = (law) => law.cols.some(([, field]) => String(editedRecord?.[field] ?? "").trim());
 
-  // One card per law, each a full line; the columns share one grid (see
-  // columnsOf), and Add / Remove sit under the table while editing.
+  // The cards start closed — the head says whether a permit is on file — and
+  // close again for another record.
+  const [open, setOpen] = useState(() => new Set());
+  useEffect(() => setOpen(new Set()), [editedRecord?.sort_key]);
+  const toggle = (key) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  // One card per law, a line each across the window. Its entries as the
+  // Monitoring tab's IIS numbers are: the column names once, then an entry
+  // to a line — the values in the other tabs' boxes and size — and, while
+  // editing, a remove button on each and "Add entry" under them.
   const permitCard = (law) => {
-    const data = (rows[law.key] || []).map((r) => ({ ...r, isEditing, onCell: (f, v, k) => onCell(law.key, f, v, k) }));
-    const empty = data.length <= 1 && !law.cols.some(([, f]) => String(data[0]?.[f] ?? "").trim());
+    const data = rows[law.key] || [];
+    const filled = data.filter((r) => law.cols.some(([, f]) => String(r[f] ?? "").trim())).length;
+    const expired = data.some((r) => law.cols.some(([, f]) => EXPIRY_FIELDS.has(f) && isExpired(r[f])));
+    const isOpen = open.has(law.key);
+    const columns = { gridTemplateColumns: gridOf(law.cols, isEditing) };
+    // On file or not, and expired, read from the head of a closed card.
+    const status = expired ? (
+      <Tag color="error" icon={<ExclamationCircleFilled />} style={{ marginInlineEnd: 0 }}>
+        expired · {filled} {filled === 1 ? "entry" : "entries"}
+      </Tag>
+    ) : filled ? (
+      <Tag color="success" icon={<CheckCircleFilled />} style={{ marginInlineEnd: 0 }}>
+        {filled} {filled === 1 ? "entry" : "entries"}
+      </Tag>
+    ) : (
+      <Tag style={{ marginInlineEnd: 0 }}>none encoded</Tag>
+    );
     return (
-      <section key={law.key} className="rf-section rf-span-6">
-        <header className="rf-section-head">
+      <Section
+        key={law.key}
+        className={`rf-permit${expired ? " is-expired" : filled ? " is-filled" : ""}`}
+        collapsed={!isOpen}
+        onToggle={() => toggle(law.key)}
+        title={
           <span className="rf-permit-head">
+            <RightOutlined className={`rf-permit-caret${isOpen ? " is-open" : ""}`} />
             {law.title}
             <span className={`rf-permit-law ${law.tag}`}>{law.law}</span>
           </span>
-          <span className="rf-hint">{empty ? "none encoded" : `${data.length} ${data.length === 1 ? "entry" : "entries"}`}</span>
-        </header>
-        <Table columns={columnsOf(law.cols)} dataSource={data} size="small" pagination={false} bordered tableLayout="fixed" rowKey="key" />
-        {isEditing && (
-          <div className="rf-permit-actions">
-            <Button size="small" type="primary" ghost onClick={() => addRow(law)}>
+        }
+        extra={status}
+      >
+        <div className="rf-permit-entries">
+          <div className="rf-permit-row rf-permit-row--head" style={columns} aria-hidden="true">
+            {law.cols.map(([title, field]) => (
+              <span key={field}>
+                {title}
+                {DATE_FIELDS.has(field) && <span className="rf-hint"> full date</span>}
+              </span>
+            ))}
+            {isEditing && <span />}
+          </div>
+          {data.map((row) => (
+            <div key={row.key} className="rf-permit-row" style={columns}>
+              {law.cols.map(([title, field, base]) => (
+                <div key={field} className="rf-permit-cell" aria-label={title}>
+                  {renderField(row[field], field, base, isEditing, (v) => onCell(law.key, field, v, row.key))}
+                </div>
+              ))}
+              {isEditing && (
+                <Tooltip title="Remove this entry">
+                  <Button className="rf-permit-remove" danger icon={<DeleteOutlined />} aria-label="Remove this entry" onClick={() => removeRow(law, row.key)} />
+                </Tooltip>
+              )}
+            </div>
+          ))}
+          {isEditing && (
+            <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => addRow(law)} style={{ alignSelf: "flex-start" }}>
               Add entry
             </Button>
-            <Button size="small" danger onClick={() => removeRow(law)} disabled={data.length < 2}>
-              Remove last
-            </Button>
-          </div>
-        )}
-      </section>
+          )}
+        </div>
+      </Section>
     );
   };
 
   return (
     <div className={`rf ${isEditing ? "is-editing" : "is-viewing"}`}>
-      <VeraPermitCheck record={editedRecord} />
       <div className="rf-permits">{laws.filter((l) => !l.whenHeld || held(l)).map(permitCard)}</div>
+      {/* VERA's check: a button floating at the foot of the tab, the check a card over the permits. */}
+      <VeraPermitCheck record={editedRecord} />
     </div>
   );
 };

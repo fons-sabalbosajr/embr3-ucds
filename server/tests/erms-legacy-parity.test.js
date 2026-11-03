@@ -266,6 +266,15 @@ describe('attachments to a record', () => {
     expect(n(again.body.record.serialNo)).toBe(n(att.serialNo) + 1);
   });
 
+  it('lists an attachment that needs review as a row of its own, its record being fine', async () => {
+    const att = created.records.find((s) => / Att-/.test(s));
+    await collections.ermsRecords.updateOne({ serialNo: att }, { $set: { 'dataQuality.clean': false, 'dataQuality.issues': [{ field: 'File_Path', problem: 'test' }] } });
+    const res = await agents[RECORDS].get('/api/erms/records').query({ flagged: true, province: 'bataan', pageSize: 100 });
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((r) => r.serialNo)).toContain(att);
+    expect(res.body.items.map((r) => r.serialNo)).not.toContain(parent.serialNo);
+  });
+
   it('is refused against an attachment, or a record that does not exist', async () => {
     const att = created.records.find((s) => / Att-/.test(s));
     const res = await agents[RECORDS].post('/api/erms/records').send({

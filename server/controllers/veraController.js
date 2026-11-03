@@ -685,12 +685,6 @@ const chatChoiceOpen = (cfg, viewer) =>
   cfg.chatModelChoice !== false && viewer?.realm !== 'public' && CHOOSES_MODEL.has(viewer?.role) && viewer?.access?.model !== false && provider.isOperational(cfg);
 
 /** "1h2m3.4s", "7.66s", "120ms" (Groq's reset wording) as milliseconds. */
-function durationMs(text) {
-  const s = String(text || '');
-  const part = (re) => Number((re.exec(s) || [0, 0])[1]) || 0;
-  return Math.round((part(/(\d+)h/) * 3600 + part(/(\d+)m(?!s)/) * 60 + part(/([\d.]+)s/)) * 1000 + part(/(\d+)ms/));
-}
-
 /**
  * Until when a model's allowance for the day is used up, or null while some
  * is left: none of its requests left, or none of its tokens for the day.
@@ -703,7 +697,8 @@ function usedUpUntil(m, now = Date.now()) {
   const nextManila = new Date(modelUsage.dayBounds('Asia/Manila', now).next);
   let until = null;
   if (req && req.left === 0) {
-    if (req.at && req.resetIn) until = new Date(new Date(req.at).getTime() + durationMs(req.resetIn));
+    if (req.resetAt) until = new Date(req.resetAt);
+    else if (req.at && req.resetIn) until = new Date(new Date(req.at).getTime() + modelUsage.durationMs(req.resetIn));
     else until = m.quotaWindow?.resetsAt ? new Date(m.quotaWindow.resetsAt) : nextManila;
   } else if (tokens && tokens.left === 0) {
     until = nextManila;

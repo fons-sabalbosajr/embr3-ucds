@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { Button, DatePicker, Input, Select } from "antd";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { AutoComplete, Button, DatePicker, Input, Select, Typography } from "antd";
 import { DeleteOutlined, LinkOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { iisNumbersOf, iisTrackerUrl } from "./registerLayout";
+import { DataContext } from "../DataContext";
 
 dayjs.extend(customParseFormat);
 
@@ -178,7 +179,53 @@ export function IisAllYearsList({ record }) {
 let entrySeq = 0;
 const newId = () => `iis${(entrySeq += 1)}`;
 
+const MAX_IIS_OPTIONS = 10;
+
+/**
+ * The IIS numbers already in the province's records, each with the firm it is
+ * on: offered as one is typed (from two characters), so a number is completed
+ * rather than retyped, and one already on another firm shows as theirs.
+ */
+function useIisDirectory(record) {
+  const { data } = useContext(DataContext) || {};
+  return useMemo(() => {
+    const out = new Map(); // number -> firm
+    for (const row of data || []) {
+      if (row?.sort_key === record?.sort_key) continue;
+      for (const [k, v] of Object.entries(row || {})) {
+        if (!/^iis_(no_|survey)/.test(k) || !v) continue;
+        for (const m of String(v).matchAll(IIS_NO_ALL)) {
+          const no = m[0].toUpperCase();
+          if (!out.has(no)) out.set(no, row.title || row.name || row.sort_key || "");
+        }
+      }
+    }
+    return out;
+  }, [data, record?.sort_key]);
+}
+
 export function IisEntries({ record, onChange }) {
+  const directory = useIisDirectory(record);
+  const optionsFor = (row) => {
+    const q = row.ref.trim().toUpperCase();
+    // An empty box: the start of the year's numbers.
+    if (!q) return [{ value: `R3-${row.year}-`, label: `R3-${row.year}-…` }];
+    if (q.length < 2) return [];
+    const hits = [];
+    for (const [no, firm] of directory) {
+      if (no.includes(q) && no !== q) hits.push({ no, firm });
+      if (hits.length >= MAX_IIS_OPTIONS) break;
+    }
+    return hits.map(({ no, firm }) => ({
+      value: no,
+      label: (
+        <span>
+          {no}
+          {firm ? <Typography.Text type="secondary" style={{ fontSize: 12 }}> · on {firm}</Typography.Text> : null}
+        </span>
+      ),
+    }));
+  };
   const now = new Date().getFullYear();
   const baseYears = iisYearsOf(record);
   const defaultYear = Number(record?.year) || Math.max(now, ...baseYears);
@@ -230,22 +277,22 @@ export function IisEntries({ record, onChange }) {
         const mismatch = written && Number(written) !== row.year;
         return (
           <div key={row.id} className="rf-iis-entry">
-            <Input
-              value={row.ref}
-              onChange={(e) => setRef(row, e.target.value)}
-              placeholder="R3-2027-000000"
-              spellCheck={false}
-              status={mismatch ? "warning" : undefined}
-              suffix={
-                IIS_NO.test(row.ref) ? (
-                  <a href={iisTrackerUrl(IIS_NO.exec(row.ref)[0])} target="_blank" rel="noopener noreferrer" title="Open in the IIS document tracker" onMouseDown={(e) => e.preventDefault()}>
-                    <LinkOutlined />
-                  </a>
-                ) : (
-                  <span />
-                )
-              }
-            />
+            <AutoComplete value={row.ref} options={optionsFor(row)} onChange={(v) => setRef(row, v ?? "")} popupMatchSelectWidth={false} style={{ width: "100%" }}>
+              <Input
+                placeholder="R3-2027-000000"
+                spellCheck={false}
+                status={mismatch ? "warning" : undefined}
+                suffix={
+                  IIS_NO.test(row.ref) ? (
+                    <a href={iisTrackerUrl(IIS_NO.exec(row.ref)[0])} target="_blank" rel="noopener noreferrer" title="Open in the IIS document tracker" onMouseDown={(e) => e.preventDefault()}>
+                      <LinkOutlined />
+                    </a>
+                  ) : (
+                    <span />
+                  )
+                }
+              />
+            </AutoComplete>
             <Select value={row.year} options={yearOptions} onChange={(year) => save(rows.map((r) => (r.id === row.id ? { ...r, year, picked: true } : r)))} />
             <Button type="text" danger icon={<DeleteOutlined />} aria-label="Remove this IIS no." onClick={() => save(rows.filter((r) => r.id !== row.id))} />
             {mismatch && <span className="rf-iis-warn">The number says {written}; it will be filed under {row.year}.</span>}

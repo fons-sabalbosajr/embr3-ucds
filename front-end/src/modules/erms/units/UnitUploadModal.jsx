@@ -162,7 +162,7 @@ const FieldInput = ({ field: given, lookups, unit, onPick, value, onChange, dock
  *                  the case's province, docket and company filled in, and the
  *                  server numbers it after the case (FSN-NOV00432 Att-00240)
  */
-const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }) => {
+const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose, unitSwitch = null }) => {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [docTypeCode, setDocTypeCode] = useState(null);
@@ -387,6 +387,8 @@ const UnitUploadModal = ({ unit, unitConfig, open, document, attachTo, onClose }
       resizable={false}
       top={32}
     >
+      {/* The other units' uploads, for someone who files in several (UploadHub). */}
+      {!isEdit && !attaching && unitSwitch}
       {/* Rebuilt for each document, and once the unit's field list is in,
           so the initial values always match the fields on show. */}
       <Form key={isEdit ? `${document.serialNo}:${docTypes.length}` : attaching ? `attach:${attachTo.serialNo}` : "new"} form={form} layout="vertical" preserve={false} initialValues={isEdit ? editValues : attachValues}>

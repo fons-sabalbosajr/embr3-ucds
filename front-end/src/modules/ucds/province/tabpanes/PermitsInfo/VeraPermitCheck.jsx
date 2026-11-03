@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Collapse, Popover, Space, Tag, Tooltip, Typography, theme } from "antd";
+import { Badge, Button, Collapse, Popover, Space, Tag, Tooltip, Typography, theme } from "antd";
 import { ClockCircleOutlined, EditOutlined, ExclamationCircleOutlined, MessageOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import dayjs from "dayjs";
@@ -17,6 +17,10 @@ const { Text, Paragraph } = Typography;
 // sections of the law it rests on — the enacted text a click away. Follows the
 // record as it is edited. "Ask VERA" opens the chat on this firm, where the
 // same file is explained and cited.
+//
+// A round button floating at the foot of the tab, its badge the findings
+// (red when one is serious); the check opens over the permits as a card. It
+// was a card of its own above them, taking the tab's height from the permits.
 // ---------------------------------------------------------------------------
 
 const SHORT = { ecc: "ECC/CNC", pto: "PTO", wwdp: "WWDP", hw: "HW ID", pco: "PCO", chem: "Chemical", importer: "Importer", tsd: "TSD", trc: "TRC" };
@@ -84,7 +88,6 @@ const VeraPermitCheck = ({ record }) => {
     placeholderData: (prev) => prev,
   });
 
-  if (isError) return null;
   const findings = data?.findings || [];
   const summary = data?.summary || {};
   const law = data?.law || [];
@@ -124,8 +127,8 @@ const VeraPermitCheck = ({ record }) => {
     </Space>
   );
 
-  return (
-    <section className="rf-section rf-span-6" style={{ marginBottom: 12 }}>
+  const card = (
+    <div className="rf-vera-card">
       <header className="rf-section-head" style={{ flexWrap: "wrap", gap: 8 }}>
         <span className="rf-permit-head" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <VeraFlame size={18} label="VERA" />
@@ -138,6 +141,7 @@ const VeraPermitCheck = ({ record }) => {
         </span>
         <Space size={6} wrap>
           {isLoading && <Text type="secondary">checking…</Text>}
+          {isError && !data && <Text type="secondary">VERA could not check this record just now.</Text>}
           {data && !findings.length && <Tag color="success">Nothing to flag</Tag>}
           {["high", "medium", "low"].map((s) =>
             summary[s] ? (
@@ -181,7 +185,27 @@ const VeraPermitCheck = ({ record }) => {
           </Text>
         </div>
       )}
-    </section>
+    </div>
+  );
+
+  const count = findings.length;
+  return (
+    <div className="rf-vera-float">
+      <Popover content={card} trigger="click" placement="topRight" arrow={false} overlayClassName="rf-vera-popover">
+        <span className="rf-vera-button">
+          <Badge count={count} size="small" color={summary.high ? token.colorError : token.colorWarning} offset={[-4, 4]}>
+            <Button
+              shape="circle"
+              size="large"
+              // Drawn for the dark button: with the app's light theme the flame was drawn for white, and vanished on it.
+              icon={<VeraFlame size={32} theme="dark" label="" />}
+              aria-label={`VERA's permit check${count ? `: ${count} finding${count === 1 ? "" : "s"}` : ""}`}
+              title={isLoading ? "VERA is checking the permits…" : count ? `VERA's permit check: ${count} finding${count === 1 ? "" : "s"}` : "VERA's permit check: nothing to flag"}
+            />
+          </Badge>
+        </span>
+      </Popover>
+    </div>
   );
 };
 

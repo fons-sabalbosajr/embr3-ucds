@@ -4,9 +4,12 @@ import { parsePSICCode } from "../../../../../../data/utils/parsePSICCode";
 
 const { Paragraph } = Typography;
 
+// `onChange`: told the code worked out from the classification, so the
+// record saves it (it was shown, never saved).
 const PSICCode = ({
   selectedIndustryClass,
   onIndustryTypeChange,
+  onChange,
   readOnly,
 }) => {
   const [psicCodeMap, setPsicCodeMap] = useState({});
@@ -28,6 +31,7 @@ const PSICCode = ({
     if (selectedIndustryClass && psicCodeMap[selectedIndustryClass]) {
       const { psicCode, industryType } = psicCodeMap[selectedIndustryClass];
       setPsicCode(psicCode);
+      if (!readOnly) onChange?.(psicCode);
       if (onIndustryTypeChange) {
         onIndustryTypeChange(industryType);
       }
@@ -39,7 +43,7 @@ const PSICCode = ({
       }
       // console.log("PSIC Code Reset");
     }
-  }, [selectedIndustryClass, psicCodeMap, onIndustryTypeChange]);
+  }, [selectedIndustryClass, psicCodeMap, onIndustryTypeChange, onChange, readOnly]);
 
   return (
     <ConfigProvider
@@ -54,7 +58,6 @@ const PSICCode = ({
       }}
     >
       <Paragraph>
-        <strong>PSIC Code</strong>
         <Input placeholder="Filled in automatically"
           value={psicCode}
           readOnly

@@ -27,6 +27,7 @@ import {
   fetchRecords,
 } from "../api/ermsService";
 import RecordFormModal from "../components/RecordFormModal";
+import UploadHub from "../components/UploadHub";
 import ExportButton from "../components/ExportButton";
 import FloatingModal from "../../../shared/components/FloatingModal";
 import useFitHeight from "../../../shared/useFitHeight";
@@ -503,10 +504,9 @@ const RecordsList = () => {
         </div>
       </Space>
 
-      <RecordFormModal
+      <UploadHub
+        start="records"
         open={creating}
-        record={null}
-        writableProvinces={options?.writableProvinces}
         onClose={(saved) => {
           setCreating(false);
           if (searchParams.get("new")) setSearchParams({});

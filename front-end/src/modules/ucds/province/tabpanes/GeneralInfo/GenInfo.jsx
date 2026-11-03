@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Col, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Checkbox, Col, Input, Space, Tag, Tooltip, Typography } from "antd";
 import { AimOutlined, EnvironmentOutlined, LinkOutlined } from "@ant-design/icons";
 import Papa from "papaparse";
 import "./geninfo.css";
@@ -76,9 +76,13 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing }) => {
   const [located, setLocated] = useState(null); // { label, precision, inRegion } | { error }
   const autoTried = useRef("");
 
+  // Which record the fields hold: nothing is written back before they hold it.
+  const [loadedKey, setLoadedKey] = useState(null);
+
   // Load the record.
   useEffect(() => {
     if (!editedRecord) return;
+    setLoadedKey(editedRecord.sort_key ?? "");
     setProponentName(editedRecord.name || "");
     setProjectTitle(editedRecord.title || "");
     setSelectedIndustryClass(editedRecord.industry_class || "");
@@ -112,11 +116,14 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing }) => {
   const outside = hasPoint && (lat < REGION.south || lat > REGION.north || lng < REGION.west || lng > REGION.east);
   const swapped = hasPoint && lat > 100 && lng < 30; // longitude typed in the latitude box
 
-  // Back to the record while editing — the derived fields too.
+  // Back to the record while editing — the derived fields too. Only once the
+  // fields hold this record, and only what differs: on the first render the
+  // fields were still empty and were written over the record, which emptied
+  // the fields again, and the two traded values without end — the
+  // coordinates blinked.
   useEffect(() => {
-    if (!isEditing || !setEditedRecord) return;
-    setEditedRecord((prev) => ({
-      ...prev,
+    if (!isEditing || !setEditedRecord || loadedKey !== (editedRecord?.sort_key ?? "")) return;
+    const fields = {
       name: proponentName,
       title: projectTitle,
       industry_class: selectedIndustryClass,
@@ -134,9 +141,10 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing }) => {
       ...(raw ? { protected_area: protectedArea } : {}),
       ...(derived?.district ? { cong_district: derived.district } : {}),
       ...(derived?.waterbody ? { waterbody: derived.waterbody } : {}),
-    }));
+    };
+    setEditedRecord((prev) => (Object.keys(fields).some((k) => String(prev?.[k] ?? "") !== String(fields[k] ?? "")) ? { ...prev, ...fields } : prev));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proponentName, projectTitle, selectedIndustryClass, industryType, industrySubType, psicCode, selectedProvince, selectedMunicipality, selectedBarangay, street, longitude, latitude, mbuArea, protectedArea, isEditing]);
+  }, [proponentName, projectTitle, selectedIndustryClass, industryType, industrySubType, psicCode, selectedProvince, selectedMunicipality, selectedBarangay, street, longitude, latitude, mbuArea, protectedArea, isEditing, loadedKey]);
 
   const locate = async () => {
     if (!selectedMunicipality && !selectedBarangay) {
@@ -188,35 +196,30 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing }) => {
         </Field>
       </Section>
 
+      {/* The classification and its PSIC code on one line; the type and
+          sub-type it gives, a line each — their names are long. */}
       <Section title="Industry">
-        <Field label="Industry classification">
-          <IndustryClass onChange={setSelectedIndustryClass} value={selectedIndustryClass} readOnly={!isEditing} />
+        <Field label="Industry classification" md={16}>
+          {isEditing ? <IndustryClass onChange={setSelectedIndustryClass} value={selectedIndustryClass} /> : <Value>{selectedIndustryClass}</Value>}
         </Field>
         <Field label="PSIC code" hint="from the classification" md={8}>
           <PSICCode selectedIndustryClass={selectedIndustryClass} value={psicCode} onChange={setPsicCode} readOnly={!isEditing} />
         </Field>
-        <Field label="Industry type" hint="from the classification" md={8}>
+        <Field label="Industry type" hint="from the classification">
           <IndustryType bare selectedIndustryClass={selectedIndustryClass} setIndustryType={setIndustryType} readOnly={!isEditing} />
         </Field>
-        <Field label="Industry sub-type" hint="from the classification" md={8}>
+        <Field label="Industry sub-type" hint="from the classification">
           <IndustrySubType bare selectedIndustryClass={selectedIndustryClass} setIndustrySubType={setIndustrySubType} readOnly={!isEditing} />
         </Field>
       </Section>
 
       <Section title="Environment" className="rf-fill">
-        <Field label="Within Manila Bay area" md={raw ? 8 : 24}>
-          {isEditing ? (
-            <Select
-              value={mbuArea || undefined}
-              onChange={(v) => setMbuArea(v ?? "")}
-              allowClear
-              placeholder="Yes or no"
-              options={[{ value: "✔", label: "✔ Yes" }, { value: "✘", label: "✘ No" }]}
-              style={{ width: "100%" }}
-            />
-          ) : (
-            <Value>{mbuArea ? (isYes(mbuArea) ? "✔ Yes" : "✘ No") : ""}</Value>
-          )}
+        {/* A tick: saved ✔ or ✘, as the register writes it. A record with
+            neither shows unticked until it is changed. */}
+        <Field label="Manila Bay" md={raw ? 8 : 24} box>
+          <Checkbox className="gi-check" checked={isYes(mbuArea)} disabled={!isEditing} onChange={(e) => setMbuArea(e.target.checked ? "✔" : "✘")}>
+            Within Manila Bay area
+          </Checkbox>
         </Field>
         {raw && (
           <Field label="Protected area" md={16}>
@@ -228,14 +231,45 @@ const GenInfo = ({ editedRecord, setEditedRecord, isEditing }) => {
 
       <Stack>
       <Section title="Location" icon={<EnvironmentOutlined />}>
+        {/* Each list follows the one before it: another province, its own
+            towns; another town, its own barangays. */}
         <Field label="Province" md={8}>
-          <Province value={selectedProvince} onChange={setSelectedProvince} disabled={!isEditing} readOnly={!isEditing} />
+          {isEditing ? (
+            <Province
+              value={selectedProvince}
+              onChange={(v) => {
+                if (v === selectedProvince) return;
+                setSelectedProvince(v);
+                setSelectedMunicipality("");
+                setSelectedBarangay("");
+              }}
+            />
+          ) : (
+            <Value>{String(selectedProvince || "").replace(/_/g, " ")}</Value>
+          )}
         </Field>
         <Field label="Municipality / city" md={8}>
-          <Municipality value={selectedMunicipality} onChange={setSelectedMunicipality} selectedProvince={selectedProvince} readOnly={!selectedProvince || !isEditing} />
+          {isEditing ? (
+            <Municipality
+              value={selectedMunicipality}
+              selectedProvince={selectedProvince}
+              disabled={!selectedProvince}
+              onChange={(v) => {
+                if (v === selectedMunicipality) return;
+                setSelectedMunicipality(v);
+                setSelectedBarangay("");
+              }}
+            />
+          ) : (
+            <Value>{String(selectedMunicipality || "").replace(/_/g, " ")}</Value>
+          )}
         </Field>
         <Field label="Barangay" md={8}>
-          <Barangay value={selectedBarangay} onChange={setSelectedBarangay} selectedProvince={selectedProvince} selectedMunicipality={selectedMunicipality} readOnly={!selectedMunicipality || !isEditing} />
+          {isEditing ? (
+            <Barangay value={selectedBarangay} onChange={setSelectedBarangay} selectedProvince={selectedProvince} selectedMunicipality={selectedMunicipality} disabled={!selectedMunicipality} />
+          ) : (
+            <Value>{String(selectedBarangay || "").replace(/_/g, " ")}</Value>
+          )}
         </Field>
         <Field label="Street / building">
           {isEditing ? <SuggestInput field="street" value={street} onChange={setStreet} placeholder="House no., street, building, purok" /> : <Value>{street}</Value>}

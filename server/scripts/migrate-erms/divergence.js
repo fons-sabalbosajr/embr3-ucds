@@ -59,10 +59,14 @@ async function main() {
   }
 
   const dbDocs = await records.find({}).toArray();
-  const { webOnly, sourceOnly, conflicting, clean } = classify(fromSource, dbDocs);
+  const setAsideSerials = new Set(
+    (await client.db(DB_NAME).collection('erms-set-aside').find({ scope: 'records' }, { projection: { serialNo: 1 } }).toArray()).map((d) => d.serialNo)
+  );
+  const { webOnly, sourceOnly, conflicting, setAside, clean } = classify(fromSource, dbDocs, { setAside: setAsideSerials });
 
   log(`${pad('export records', 26)}${rows.length}`);
   log(`${pad('database records', 26)}${dbDocs.length}`);
+  log(`${pad('set aside (duplicates)', 26)}${setAside.length}${setAside.length ? ' — filed twice in the desktop, kept once here (expected)' : ''}`);
   log('');
   log(`${pad('web-only (expected)', 26)}${webOnly.length}`);
   log(`${pad('source-only', 26)}${sourceOnly.length}`);

@@ -127,8 +127,11 @@ async function listRecords(options, allowedProvinces) {
   // An attachment stays with its record: unless something is being searched
   // for, it is not a row of its own but listed under the record it belongs
   // to (`attachments`). One whose record is not on file keeps its own row,
-  // so nothing drops out of sight.
-  const packed = !String(options.search || '').trim();
+  // so nothing drops out of sight. Nor when the filter picks entries one by
+  // one ("Needs review", one uploader's): the attachment is what matched,
+  // and packed under a record that did not, it vanished — the button said
+  // four needed review and the table showed none.
+  const packed = !String(options.search || '').trim() && options.flagged !== true && !options.uploadedBy;
   const filter = packed ? { $and: [base, { $or: [{ isAttachment: { $ne: true } }, { parentSerialNo: null }] }] } : base;
 
   const [items, total] = await Promise.all([

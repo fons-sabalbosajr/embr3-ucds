@@ -39,7 +39,12 @@ export default function FitToHeight({ children, min = 0.72 }) {
         if (next >= scale - 0.005) break;
         scale = next;
         inner.style.zoom = String(scale);
-        inner.style.width = `${100 / scale}%`;
+        // Widened by the same factor only where the browser needs it: with
+        // standardized CSS zoom (Chrome 128 on) a zoomed box already spans
+        // its holder, and `width: 100/scale %` pushed the content's right
+        // side past the window, cut off — the Clearances tab's remove buttons.
+        inner.style.width = "";
+        if (inner.getBoundingClientRect().width < holder.clientWidth - 1) inner.style.width = `${100 / scale}%`;
         if (scale <= min) break;
       }
       // Still too tall at the smallest readable size: let it scroll.

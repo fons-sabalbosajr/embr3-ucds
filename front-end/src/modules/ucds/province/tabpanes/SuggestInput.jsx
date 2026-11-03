@@ -14,17 +14,22 @@ import { DataContext } from "../DataContext";
 
 const MAX_OPTIONS = 12;
 
+// One spelling per value: capitals and spacing aside ("Alyanna Y.  Patdu",
+// with two spaces in 440 records, was offered beside the list's "Alyanna Y.
+// Patdu"). The fixed list's spelling wins, then the first one met, tidied.
+const keyOf = (v) => v.replace(/\s+/g, " ").trim().toUpperCase();
+
 function useSuggestions(field, split, base) {
   const { data } = useContext(DataContext) || {};
   return useMemo(() => {
     const seen = new Map();
-    for (const v of base || []) seen.set(v.toUpperCase(), v);
+    for (const v of base || []) seen.set(keyOf(v), v);
     for (const row of data || []) {
       const raw = row?.[field];
       if (raw == null || raw === "") continue;
       for (const part of split ? String(raw).split(/[,;\n]/) : [String(raw)]) {
-        const v = part.trim();
-        const k = v.toUpperCase();
+        const v = part.replace(/\s+/g, " ").trim();
+        const k = keyOf(v);
         if (v && v !== "-" && !seen.has(k)) seen.set(k, v);
       }
     }

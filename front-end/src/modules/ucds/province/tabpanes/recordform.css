@@ -292,6 +292,15 @@ body[data-theme="dark"] .rf-label {
 .rf .ant-select-auto-complete .ant-input {
   width: 100% !important;
 }
+/* A suggesting field (SuggestInput, the pickers built on AutoComplete) is a
+   bordered input inside a select: the input is the box, the select around
+   it takes no room of its own. Padded like the selects above, it pushed the
+   box 5px down and made it 5px taller than a date picker beside it. */
+.rf .ant-select-auto-complete .ant-select-selector {
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
 /* The shared pickers bring labels and fixed widths of their own. */
 .rf .ant-typography {
   margin-bottom: 0 !important;
@@ -320,18 +329,7 @@ body[data-theme="dark"] .rf-label {
   font-size: 13.5px;
 }
 
-/* --- Clearances and Permits: one card per law, side by side -------------- */
-.rf-permits {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
-}
-.rf-permits > .rf-span-3 { grid-column: span 3; }
-.rf-permits > .rf-span-2 { grid-column: span 2; }
-@media (max-width: 1200px) {
-  .rf-permits > .rf-span-3,
-  .rf-permits > .rf-span-2 { grid-column: span 6; }
-}
+/* --- Clearances and Permits: a card per law, as the other tabs have -------- */
 .rf-permit-head {
   display: inline-flex;
   align-items: center;
@@ -349,57 +347,129 @@ body[data-theme="dark"] .rf-label {
 .rf-permit-law.is-wwdp { background: #b45248; }
 .rf-permit-law.is-haz { background: #415e20; }
 .rf-permit-law.is-pco { background: #3d4a5c; }
-.rf-permits .ant-table {
-  font-size: 13px;
-  background: transparent;
+/* A card that opens and closes from its head (Section's onToggle). */
+.rf-section.is-toggle > .rf-section-head {
+  cursor: pointer;
+  user-select: none;
 }
-.rf-permits .ant-table-thead > tr > th {
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 6px 8px !important;
-  /* Long titles wrap within their column rather than push the grid. */
-  white-space: normal;
-  line-height: 1.25;
-  vertical-align: middle;
-  text-align: left !important;
+.rf-section.is-toggle > .rf-section-head:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
-.rf-permits .ant-table-tbody > tr > td {
-  padding: 6px 8px !important;
-  word-break: break-word;
-  vertical-align: middle;
-  text-align: left !important;
+.rf-section.is-collapsed > .rf-section-head {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
-.rf-col-hint {
-  display: block;
-  font-weight: 400;
-  font-size: 10.5px;
-  opacity: 0.65;
+.rf-permit-caret {
+  font-size: 11px;
+  opacity: 0.6;
+  transition: transform 0.15s ease;
 }
-.rf-permits .ant-table-tbody > tr > td .ant-picker {
-  width: 100% !important;
-  min-height: 32px !important;
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+.rf-permit-caret.is-open {
+  transform: rotate(90deg);
 }
-/* Every field fills its cell, at one height. */
-.rf-permits .ant-table-tbody > tr > td .ant-select,
-.rf-permits .ant-table-tbody > tr > td .ant-input {
-  width: 100% !important;
-  margin: 0 !important;
+/* On file: a green edge; expired: a red one; nothing encoded: none. */
+/* Drawn inside the border, so the titles stay level from card to card. */
+.rf-permit.is-filled {
+  box-shadow: inset 3px 0 0 #52c41a;
 }
-.rf-permits .ant-table-tbody > tr > td .ant-input,
-.rf-permits .ant-table-tbody > tr > td .ant-select-selector {
-  font-size: 13px !important;
-  min-height: 32px !important;
-  height: 32px !important;
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+.rf-permit.is-expired {
+  box-shadow: inset 3px 0 0 #ff4d4f;
 }
-.rf-permit-actions {
+
+/* The cards, one under another across the window. */
+.rf-permits {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  /* Room under the last card for VERA's floating button, so it covers no head. */
+  padding-bottom: 56px;
+}
+/* A law's entries, as the IIS numbers are listed: the column names once,
+   then an entry to a line — each column a share of the card's width that
+   may shrink, so nothing reaches past the window. */
+.rf-permit-entries {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rf-permit-row {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+.rf-permit-row > * {
+  min-width: 0;
+}
+.rf-permit-row--head {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(100, 100, 100, 1);
+}
+body[data-theme="dark"] .rf-permit-row--head {
+  color: rgba(200, 200, 200, 0.85);
+}
+.rf-permit-row--head .rf-hint {
+  font-size: 11px;
+}
+.rf-permit-cell .rf-value {
+  min-height: 36px;
+}
+/* VERA's permit check: a round button kept at the foot of the tab as it
+   scrolls, taking no height of its own; the check opens above it as a card. */
+.rf-vera-float {
+  position: sticky;
+  bottom: 12px;
+  height: 0;
+  display: flex;
   justify-content: flex-end;
-  margin-top: 6px;
+  z-index: 20;
+  pointer-events: none;
+}
+.rf-vera-button {
+  display: inline-flex;
+  pointer-events: auto;
+  transform: translate(-8px, -58px);
+}
+/* Dark, so VERA's light flame shows against it in either theme. */
+.rf-vera-button .ant-btn,
+.rf-vera-button .ant-btn:not(:disabled):focus-visible {
+  width: 50px;
+  height: 50px;
+  background: #13293a !important;
+  border-color: #13293a !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+.rf-vera-button .ant-btn:not(:disabled):hover {
+  background: #1d3d55 !important;
+  border-color: #1d3d55 !important;
+}
+.rf-vera-popover .ant-popover-inner {
+  width: min(560px, 90vw);
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+.rf-vera-card .rf-section-head {
+  margin-bottom: 8px;
+}
+
+/* Remove: a red box the height of the fields, level with them. */
+.rf-permit-row > .rf-permit-remove.ant-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+.rf-permit textarea.ant-input {
+  resize: none;
 }
 .rf-expired {
   color: #cf1322;
@@ -417,55 +487,4 @@ body[data-theme="dark"] .rf-expired {
 }
 .rf-stack > .rf-fill {
   flex: 1 1 auto;
-}
-.rf-permits {
-  align-items: stretch;
-}
-.rf-permits > .rf-span-6 { grid-column: span 6; }
-.rf-permits > .rf-section {
-  display: flex;
-  flex-direction: column;
-}
-.rf-permits > .rf-section > .ant-table-wrapper {
-  flex: 1 1 auto;
-}
-
-/* Clearances and Permits: one card per permit, each a full line — the law's
-   name and badge at the left, its entries in a table across the width. */
-.rf-permits > .rf-span-6 {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  column-gap: 16px;
-  align-items: start;
-}
-.rf-permits > .rf-span-6 > .rf-section-head {
-  grid-row: 1 / span 2;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0;
-  padding: 2px 0;
-  border-bottom: 0;
-}
-.rf-permits > .rf-span-6 > .rf-section-head .rf-permit-head {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 14px;
-}
-.rf-permits > .rf-span-6 > .ant-table-wrapper,
-.rf-permits > .rf-span-6 > .rf-permit-actions {
-  grid-column: 2;
-}
-@media (max-width: 900px) {
-  .rf-permits > .rf-span-6 {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .rf-permits > .rf-span-6 > .rf-section-head,
-  .rf-permits > .rf-span-6 > .ant-table-wrapper,
-  .rf-permits > .rf-span-6 > .rf-permit-actions {
-    grid-column: 1;
-    grid-row: auto;
-  }
 }

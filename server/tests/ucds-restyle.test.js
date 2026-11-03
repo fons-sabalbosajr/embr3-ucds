@@ -70,7 +70,7 @@ describe("VERA's check of the register", () => {
     await col.insertMany([
       { sort_key: 'PA-00001', title: 'Alpha Mill', province: 'PAMPANGA', city: 'San Fernando', ecc_cnc: 'ECC-OL-R03-2017-0370', lat: 15.03, long: 120.69 },
       { sort_key: 'PA-00002', title: 'Beta Mill', province: 'Pampanga', city: 'San  fernando', ecc_cnc: 'ECC OL R3 2017 370', lat: 120.7, long: 15.04 },
-      { sort_key: 'PA-00003', title: 'Gamma Farm', province: 'Pampanga', city: 'San Fernando', pto_code: 'PTO-1', pto_expiration: '1/5/2020' },
+      { sort_key: 'PA-00003', title: 'Gamma Farm', province: 'Pampanga', city: 'San Fernando', pto_code: 'PTO-OL-R03-2019-01234', pto_expiration: '1/5/2020' },
       // Two real barangays a letter apart, one written without its accent, and a placeholder.
       { sort_key: 'PA-00004', title: 'Delta', province: 'Pampanga', city: 'San Fernando', brgy: 'Santa Rosa', ecc_cnc: 'ECC-1' },
       { sort_key: 'PA-00005', title: 'Epsilon', province: 'Pampanga', city: 'San Fernando', brgy: 'Santa Rita', ecc_cnc: 'ECC-2' },
@@ -78,6 +78,9 @@ describe("VERA's check of the register", () => {
       { sort_key: 'PA-00007', title: 'Eta', province: 'Pampanga', city: 'San Fernando', brgy: 'Santo Nino', ecc_cnc: 'ECC-4' },
       { sort_key: 'PA-00008', title: 'Theta', province: 'Pampanga', city: 'San Fernando', brgy: 'No Barangay', ecc_cnc: 'ECC-5' },
       { sort_key: 'PA-00009', title: 'Iota', province: 'Pampanga', city: 'San Fernando', brgy: '--no barangay--', ecc_cnc: 'ECC-6' },
+      // No city: the one firm "missing". A firm without a permit (Gamma) is
+      // judged against the laws instead (permitAnalysis), not counted here.
+      { sort_key: 'PA-00010', title: 'Kappa', province: 'Pampanga', ecc_cnc: 'ECC-7' },
     ]);
   });
   afterAll(async () => {

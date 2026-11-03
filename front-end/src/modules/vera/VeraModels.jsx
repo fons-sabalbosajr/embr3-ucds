@@ -433,7 +433,11 @@ export default function VeraModels() {
         if (!a.requests && !a.tokensPerMinute && !a.tokensPerDay) {
           return (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {m.provider === "anthropic" ? "Per minute; draws on account credit" : "Not known yet — shown once the provider states its limit"}
+              {m.provider === "anthropic"
+                ? "Per minute; draws on account credit"
+                : m.quotaWindow
+                  ? `${m.quotaWindow.calls ? `${fmt(m.quotaWindow.calls)} used` : "Full — none used"} since the last reset; the limit shows once the provider states it`
+                  : "Not known yet — shown once the provider states its limit"}
               {m.quotaWindow?.resetsAt ? ` · resets in ${untilText(m.quotaWindow.resetsAt, now)}` : ""}
             </Text>
           );

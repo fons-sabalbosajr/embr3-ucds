@@ -106,6 +106,18 @@ describe('classify', () => {
     expect(result.clean).toBe(true);
   });
 
+  it('treats an attachment filed here from the desktop register, and a duplicate set aside, as expected', () => {
+    const fromRegister = record({ serialNo: 'FSN-0009839 Att-00032', legacySource: 'erms-attachment-register' });
+    const twice = record({ serialNo: 'FSN-0008059' });
+    const result = classify(asSource([record(), twice]), [record(), fromRegister], { setAside: new Set(['FSN-0008059']) });
+
+    expect(result.webOnly.map((d) => d.serialNo)).toEqual(['FSN-0009839 Att-00032']);
+    expect(result.setAside).toEqual(['FSN-0008059']);
+    expect(result.clean).toBe(true);
+    // Set aside only by name: any other missing record is still divergence.
+    expect(classify(asSource([record(), twice]), [record()]).clean).toBe(false);
+  });
+
   it('flags a migrated record missing from the export', () => {
     // The desktop app no longer has a record the database does — the export is
     // stale, or something was deleted upstream.

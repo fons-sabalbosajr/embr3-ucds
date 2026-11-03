@@ -10,6 +10,10 @@ import { API_BASE } from "../../config/api";
 const client = axios.create({ baseURL: API_BASE, withCredentials: true });
 
 export const fetchDashboardStats = async () => (await client.get("/ucds/dashboard-stats")).data;
+/** Who works under each Section in charge: { [code]: { handlers, staff } }, code as sectionCode() writes it. */
+export const fetchSectionStaff = async () => (await client.get("/ucds/section-staff")).data.sections;
+/** "PEMU-Nueva_Ecija" → "PEMU_NUEVA_ECIJA", the server's key for a section. */
+export const sectionCode = (s) => String(s || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
 /**
  * Permits expired or expiring within a month, what expires next first:
  * { data: [{ sort_key, title, permits: [{ type, code, expiry, isExpired, isNearExpiry }] }], total, summary: { expired, expiringSoon } }.

@@ -12,6 +12,7 @@ import useScreen from "../../../shared/useScreen";
 import { useUnits } from "./useUnits";
 import { PROVINCE_OPTIONS, unitTheme, formatValue } from "./unitTheme";
 import UnitUploadModal from "./UnitUploadModal";
+import UploadHub from "../components/UploadHub";
 import UnitDocumentDetail from "./UnitDocumentDetail";
 import "../pages/recordslist.css";
 
@@ -375,9 +376,8 @@ const UnitDocuments = () => {
         </Space>
       </Card>
 
-      <UnitUploadModal
-        unit={unit}
-        unitConfig={unitConfig}
+      <UploadHub
+        start={unit}
         open={filing}
         onClose={(saved) => {
           setFiling(false);

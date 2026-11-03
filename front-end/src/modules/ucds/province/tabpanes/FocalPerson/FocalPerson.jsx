@@ -1,5 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Input, Select } from "antd";
+import { useQuery } from "@tanstack/react-query";
+import { fetchSectionStaff, sectionCode } from "../../../ucdsService";
 import { LinkOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "./focalperson.css";
@@ -148,6 +150,18 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
   // The Planning Unit's remarks: `remarks` up to 2026, the RAW workbooks' Remarks/Recommendations column from 2027.
   const remarksField = raw ? "recommendations" : "remarks";
 
+  // The Inspector / handler box offers the chosen section's people: the
+  // names the register has under it, then its staff in HRPMS. With no
+  // section, or one nobody is known under, the whole list as before.
+  const { data: sectionStaff } = useQuery({ queryKey: ["ucds", "section-staff"], queryFn: fetchSectionStaff, enabled: isEditing, staleTime: 60 * 60 * 1000 });
+  const section = editedRecord?.section_incharged;
+  const handlerOptions = useMemo(() => {
+    const s = sectionStaff?.[sectionCode(section)];
+    if (!section || !s) return undefined;
+    const group = (label, names) => (names.length ? [{ label, options: names.map((n) => ({ value: n })) }] : []);
+    return [...group(`Handled ${section}'s firms`, s.handlers), ...group(`${section} staff`, s.staff)];
+  }, [sectionStaff, section]);
+
   const pick = (node, value) => (isEditing ? node : <Value>{value}</Value>);
   // A day: a date picker, saved m/d/yyyy as the register writes it (DateInputs.jsx).
   const dateField = (label, field, formatted) => (
@@ -175,7 +189,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
               {pick(<SectionInCharged value={editedRecord ? editedRecord.section_incharged : ""} onChange={(value) => handleChange("section_incharged", value)} readOnly={!isEditing} />, editedRecord?.section_incharged)}
             </Field>
             <Field label="Inspector / handler" md={12}>
-              {pick(<Inspector value={editedRecord ? editedRecord.handler : ""} onChange={(value) => handleChange("handler", value)} readOnly={!isEditing} placeholder="No data" />, editedRecord?.handler)}
+              {pick(<Inspector value={editedRecord ? editedRecord.handler : ""} onChange={(value) => handleChange("handler", value)} readOnly={!isEditing} placeholder="No data" options={handlerOptions} />, editedRecord?.handler)}
             </Field>
             <Field label="Schedule of monitoring" hint="month" md={12}>
               {pick(<MonthOnly value={editedRecord?.monitoring_sched} onChange={(value) => handleChange("monitoring_sched", value)} />, editedRecord?.monitoring_sched)}

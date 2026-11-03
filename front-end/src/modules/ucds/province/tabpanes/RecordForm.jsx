@@ -12,19 +12,39 @@ import "./recordform.css";
 /** Blank, "N/A" and the like: shown as "Not encoded". */
 const isBlank = (v) => v === undefined || v === null || String(v).trim() === "" || /^(n\/?a|none|-)$/i.test(String(v).trim());
 
-/** A section: a titled box of fields on a 24-column grid. */
-export const Section = ({ title, icon, extra, children, className = "", tone }) => (
-  <section className={`rf-section${tone ? ` ${tone}` : ""}${className ? ` ${className}` : ""}`}>
-    <header className="rf-section-head">
-      <span>
-        {icon}
-        {title}
-      </span>
-      {extra}
-    </header>
-    <Row gutter={[20, 16]}>{children}</Row>
-  </section>
-);
+/**
+ * A section: a titled box of fields on a 24-column grid. With `onToggle`, the
+ * head opens and closes it (a click, Enter or Space) and `collapsed` hides
+ * its fields.
+ */
+export const Section = ({ title, icon, extra, children, className = "", tone, collapsed = false, onToggle }) => {
+  const toggle = onToggle
+    ? {
+        role: "button",
+        tabIndex: 0,
+        "aria-expanded": !collapsed,
+        onClick: onToggle,
+        onKeyDown: (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        },
+      }
+    : {};
+  return (
+    <section className={`rf-section${tone ? ` ${tone}` : ""}${className ? ` ${className}` : ""}${collapsed ? " is-collapsed" : ""}${onToggle ? " is-toggle" : ""}`}>
+      <header className="rf-section-head" {...toggle}>
+        <span>
+          {icon}
+          {title}
+        </span>
+        {extra}
+      </header>
+      {!collapsed && <Row gutter={[20, 16]}>{children}</Row>}
+    </section>
+  );
+};
 
 /**
  * A labelled field taking `md` of 24 columns (24 below md). `box`: a div

@@ -17,6 +17,8 @@ const UnitOptions = [
   { value: "PEMU-Tarlac" },
   { value: "PEMU-Zambales" },
   { value: "TCHWMS" },
+  // The 2027 register's name for AWECMES's successor.
+  { value: "WAQMS" },
 ];
 
 const SectionInCharged = ({

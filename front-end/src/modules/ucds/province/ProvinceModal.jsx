@@ -395,7 +395,9 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                 key: "3",
                 label: "Clearances and Permits",
                 children: (
-                  <FitToHeight>
+                  // Scrolled, never shrunk: a card per law, a line each, is
+                  // tall, and shrunk to fit its values were too small to read.
+                  <FitToHeight min={1}>
                     <Permit
                       editedRecord={editedRecord}
                       handleChange={handleChange}
@@ -507,7 +509,7 @@ const getProvincePermissionKey = (provinceNameFromRecord) => {
                   {
                     key: "4",
                     label: "Reports log",
-                    children: <Drafts />,
+                    children: <Drafts record={editedRecord} />,
                   },
                 ]}
               />

@@ -86,7 +86,9 @@ const InspectorOptions = [
   { value: "Ms. Victoria Emery P. Ramos" },
 ];
 
-const Inspectors = ({ value, readOnly, onChange, style, isEditing }) => {
+// `options`: the names to offer instead of the whole list — the chosen
+// section's people (FocalPerson), grouped.
+const Inspectors = ({ value, readOnly, onChange, style, isEditing, options }) => {
   return (
     <ConfigProvider
       theme={{
@@ -104,11 +106,11 @@ const Inspectors = ({ value, readOnly, onChange, style, isEditing }) => {
           width: "100%",
           ...style,
         }}
-        options={readOnly ? [] : InspectorOptions}
+        options={readOnly ? [] : options || InspectorOptions}
         value={value}
         onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>
-          option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+          String(option.value ?? "").toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
         }
         allowClear={true}
       >

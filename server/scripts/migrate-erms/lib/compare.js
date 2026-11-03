@@ -57,36 +57,47 @@ function diffOf(fromSource, fromDb) {
   return changes;
 }
 
+// Records filed in the web module: by a person ('ucds-erms'), or from the
+// desktop's attachment register, which the export does not carry
+// (legacy-sql/orphan-attachments.js, 'erms-attachment-register').
+const WEB_SOURCES = new Set(['ucds-erms', 'erms-attachment-register']);
+
 /**
- * Sort every record into one of three findings.
+ * Sort every record into one of the findings: web-only and set aside are
+ * expected; source-only and conflicting are divergence.
  *
  * @param {Map<string, object>} sourceDocs  transformed rows from the export
  * @param {Array<object>} dbDocs            documents from erms-records
+ * @param {{setAside?: Set<string>}} opts   serials VERA's duplicate fix set
+ *   aside (erms-set-aside): one document filed twice in the desktop system,
+ *   kept once in the web — absent from the database on purpose.
  */
-function classify(sourceDocs, dbDocs) {
+function classify(sourceDocs, dbDocs, { setAside = new Set() } = {}) {
   const byDb = new Map(dbDocs.map((d) => [d.serialNo, d]));
   const webOnly = [];
   const sourceOnly = [];
   const conflicting = [];
+  const asideFound = [];
 
   for (const [serialNo, doc] of byDb) {
     if (sourceDocs.has(serialNo)) continue;
     // A record the web module created is expected to be absent upstream.
-    if (doc.legacySource === 'ucds-erms') webOnly.push(doc);
+    if (WEB_SOURCES.has(doc.legacySource)) webOnly.push(doc);
     else sourceOnly.push({ serialNo, side: 'missing from export', doc });
   }
 
   for (const [serialNo, sourceDoc] of sourceDocs) {
     const dbDoc = byDb.get(serialNo);
     if (!dbDoc) {
-      sourceOnly.push({ serialNo, side: 'missing from database', doc: sourceDoc });
+      if (setAside.has(serialNo)) asideFound.push(serialNo);
+      else sourceOnly.push({ serialNo, side: 'missing from database', doc: sourceDoc });
       continue;
     }
     const changes = diffOf(sourceDoc, dbDoc);
     if (changes.length) conflicting.push({ serialNo, changes });
   }
 
-  return { webOnly, sourceOnly, conflicting, clean: !sourceOnly.length && !conflicting.length };
+  return { webOnly, sourceOnly, conflicting, setAside: asideFound, clean: !sourceOnly.length && !conflicting.length };
 }
 
 module.exports = { COMPARED, diffOf, classify, iso };

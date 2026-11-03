@@ -1,8 +1,9 @@
-import React from "react";
-import { AutoComplete, ConfigProvider, Input } from "antd";
-import "./autocompletestyles.css";
+import { Select } from "antd";
+import { industryClasses } from "../../../../../../data/utils/parsePSICCode";
 
-// Define the list of predefined industry types for autocomplete
+// The industry classifications offered: the PSIC table's (data/psiccode.csv —
+// the PSIC code, industry type and sub-type are read from it, so a class
+// chosen from it always gives them) and the earlier list.
 const industryClassOptions = [
   { value: "Academy" },
   { value: "Air conditioning supply" },
@@ -210,47 +211,21 @@ const industryClassOptions = [
   { value: "Water Treatment" },
 ];
 
-const IndustryClass = ({ value, disabled, onChange, readOnly }) => {
-  return (
-    <ConfigProvider
-      theme={{
-        components: {
-          AutoComplete: {
-            optionFontSize: 10,
-            fontSize: "11px",
-            boxShadow: "none",
-          },
-        },
-      }}
-    >
-      <AutoComplete
-        style={{
-          width: "100%",
-          fontSize: "11px",
-        }}
-        options={industryClassOptions}
-        value={value}
-        disabled={disabled}
-        onSelect={onChange} // Use onSelect to get the selected value
-        filterOption={(inputValue, option) =>
-          option.value.toLowerCase().includes(inputValue.toLowerCase())
-        }
-        allowClear={true}
-        onChange={onChange} // Capture changes while typing
-      >
-        <Input
-          style={{
-            fontSize: "11px",
-            height: "29px",
-            padding: "4px 8px",
-            cursor: readOnly ? "not-allowed" : "text",
-            color: readOnly ? "#aaa" : "inherit",
-          }}
-          placeholder="Select industry classification"
-        />
-      </AutoComplete>
-    </ConfigProvider>
-  );
-};
+const NAMES = [...new Set([...industryClasses(), ...industryClassOptions.map((o) => o.value)])].sort((a, b) => a.localeCompare(b));
+
+const IndustryClass = ({ value, disabled, onChange, readOnly }) => (
+  <Select
+    showSearch
+    allowClear
+    optionFilterProp="label"
+    placeholder="Select the industry classification"
+    // A stored class not on the list stays, so it still shows.
+    options={[...(value && !NAMES.includes(value) ? [value] : []), ...NAMES].map((n) => ({ value: n, label: n }))}
+    value={value || undefined}
+    onChange={(v) => onChange?.(v ?? "")}
+    disabled={disabled || readOnly}
+    style={{ width: "100%" }}
+  />
+);
 
 export default IndustryClass;

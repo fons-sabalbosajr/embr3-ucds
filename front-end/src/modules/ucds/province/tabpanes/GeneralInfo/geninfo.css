@@ -202,3 +202,16 @@ body[data-theme="dark"] .gi-label {
 body[data-theme="dark"] .gi-embedded strong {
   color: rgba(200, 200, 200, 0.85);
 }
+
+/* Within Manila Bay area: a tick, at the size of the values around it. */
+.gi .gi-check {
+  font-size: 14px;
+  padding: 5px 0;
+}
+.gi .gi-check.ant-checkbox-wrapper-disabled {
+  color: inherit;
+  cursor: default;
+}
+.gi .gi-check.ant-checkbox-wrapper-disabled > span:last-child {
+  color: inherit;
+}

@@ -66,16 +66,34 @@ const TAB_KEYS = ["permit", "location", "document"];
 
 const theme = unitTheme("records");
 
-const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
+// A further scan filed with a new record becomes an attachment of it, as
+// AttachmentModal files one: the record's proponent, permit number and place,
+// numbered after it (FSN-0000206 Att-00099), filed beside its scan.
+const attachmentOf = (parent, payload, file, type) => ({
+  parentSerialNo: parent.serialNo,
+  proponentName: payload.proponentName,
+  projectTitle: `${payload.projectTitle} — ${file.name.replace(/\.[a-z0-9]{2,5}$/i, "")}`,
+  remarks: null,
+  permit: { type: type || payload.permit.type, number: payload.permit.number, processSource: payload.permit.processSource, dateApproved: payload.permit.dateApproved },
+  project: { type: payload.project.type },
+  location: { province: payload.location.province, provinceLabel: payload.location.provinceLabel },
+  document: { fileName: file.name, targetPath: null, fileClass: payload.document.fileClass },
+});
+
+const RecordFormModal = ({ open, record, writableProvinces, onClose, unitSwitch = null }) => {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const isEdit = Boolean(record);
   // Watched so the register lookup can react as the number is typed.
   const [permitNumber, setPermitNumber] = useState("");
-  // The scan to file with a new record. Held here, not uploaded on pick: the
-  // record and its file are one request, so nothing lands on the share for a
-  // record that is then not saved.
-  const [scan, setScan] = useState(null);
+  // The scans to file with a new record, { file, type }: the first is the
+  // record's own document, each further one an attachment of it (a second
+  // ECC, the CNC, an amendment) of the type chosen beside it. Held here, not
+  // uploaded on pick: nothing lands on the share for a record not then saved.
+  // On an edit, the one scan that replaces the record's.
+  const [scans, setScans] = useState([]);
+  const scan = scans[0]?.file || null;
+  const extras = scans.slice(1);
   // The project folder and subfolder of the earlier picker: still accepted by
   // the server, no longer chosen here (the folder browser sets targetPath).
   const [folder, setFolder] = useState(null);
@@ -147,7 +165,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             fileClass: current.document?.fileClass,
             permitRefs: (current.permit?.refs || []).map((r) => ({ number: r.number, dateApproved: r.dateApproved ? dayjs(r.dateApproved) : null, label: r.label || undefined })),
           }
-        : { permitType: "cnc", permitRefs: [] },
+        : { permitType: "ecc-original", permitRefs: [] },
     // The serial, not the object: a background refresh of the same record
     // must not rebuild the form under what is being typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,7 +175,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   // Everything outside the form starts afresh each time the dialog opens.
   useEffect(() => {
     if (!open || waiting) return;
-    setScan(null);
+    setScans([]);
     setFolder(null);
     setSubfolder(null);
     setTargetPath(null);
@@ -167,8 +185,8 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
     setPermitNumber(initialValues.permitNumber || "");
   }, [open, waiting, initialValues]);
 
-  const settle = (verb) => (saved) => {
-    message.success(`${verb} ${saved.serialNo}.`);
+  const settle = (verb) => ({ attachments = 0, ...saved }) => {
+    message.success(`${verb} ${saved.serialNo}${attachments ? ` with ${attachments} attachment${attachments === 1 ? "" : "s"}` : ""}.`);
     queryClient.setQueryData(["erms", "record", saved.serialNo], (old) =>
       old && typeof old === "object" ? { ...old, record: saved } : old
     );
@@ -178,7 +196,25 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
   };
 
   const createMutation = useMutation({
-    mutationFn: (payload) => (scan ? uploadRecord({ payload, file: scan, onProgress: setProgress }) : createRecord(payload)),
+    // The record with its scan first, then each further scan as an attachment
+    // of it, one after the other so they are numbered in order; the bar is the
+    // whole batch's. An attachment that fails leaves the record filed.
+    mutationFn: async (payload) => {
+      if (!scan) return createRecord(payload);
+      const count = scans.length;
+      const saved = await uploadRecord({ payload, file: scan, onProgress: (p) => setProgress(Math.round(p / count)) });
+      const failed = [];
+      for (let i = 0; i < extras.length; i++) {
+        const { file, type } = extras[i];
+        try {
+          await uploadRecord({ payload: attachmentOf(saved, payload, file, type), file, onProgress: (p) => setProgress(Math.round(((i + 1 + p / 100) / count) * 100)) });
+        } catch (e) {
+          failed.push(`${file.name} (${describeApiError(e, "not filed")})`);
+        }
+      }
+      if (failed.length) message.warning(`${saved.serialNo} was filed, but not ${failed.join("; ")}. Add ${failed.length === 1 ? "it" : "them"} from the record’s Add attachment.`, 10);
+      return { ...saved, attachments: extras.length - failed.length };
+    },
     onSuccess: settle(scan ? "Filed" : "Created"),
     onSettled: () => setProgress(null),
     onError: (e) => message.error(describeApiError(e, "Could not create the record.")),
@@ -697,9 +733,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             />
           </Form.Item>
           <div className="unit-upload-coords">
-            {coordFrom ? (
-              <Tag color="blue">Auto · from {coordFrom}</Tag>
-            ) : savedCoords ? (
+            {coordFrom ? null : savedCoords ? (
               <Tag>As saved</Tag>
             ) : manualCoords ? (
               <Tag color="gold">Manual</Tag>
@@ -744,10 +778,10 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
                   maxCount={1}
                   accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx"
                   beforeUpload={(file) => {
-                    setScan(file);
+                    setScans([{ file, type: null }]);
                     return false;
                   }}
-                  onRemove={() => setScan(null)}
+                  onRemove={() => setScans([])}
                   fileList={scan ? [scan] : []}
                 >
                   <p className="ant-upload-drag-icon">
@@ -790,25 +824,46 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             </>
           ) : (
             <Form.Item
-              label="Scanned document"
+              label="Scanned documents"
               extra="Filed on the Records share under the province, year and project, like the desktop system did. Leave empty to create the record without a scan."
             >
               <Upload.Dragger
-                maxCount={1}
+                multiple
+                maxCount={20}
                 accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx"
                 beforeUpload={(file) => {
-                  setScan(file);
+                  setScans((list) => (list.some((s) => s.file.name === file.name && s.file.size === file.size) ? list : [...list, { file, type: null }].slice(0, 20)));
                   return false;
                 }}
-                onRemove={() => setScan(null)}
-                fileList={scan ? [scan] : []}
+                onRemove={(file) => setScans((list) => list.filter((s) => s.file.uid !== file.uid))}
+                fileList={scans.map((s) => s.file)}
               >
                 <p className="ant-upload-drag-icon">
                   <InboxOutlined />
                 </p>
-                <p className="ant-upload-text">Click or drag the scan here</p>
-                <p className="ant-upload-hint">PDF or image; one file per record.</p>
+                <p className="ant-upload-text">Click or drag the scans here</p>
+                <p className="ant-upload-hint">PDF or image. The first is the record&rsquo;s own document; choose more — a second ECC, the CNC, an amendment — and each is filed as an attachment of the record (up to 20).</p>
               </Upload.Dragger>
+              {extras.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <Typography.Text strong>Filed with it as attachments</Typography.Text>
+                  {extras.map((s) => (
+                    <div key={s.file.uid} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+                      <Typography.Text ellipsis={{ tooltip: s.file.name }} style={{ flex: "1 1 240px", minWidth: 0 }}>
+                        {s.file.name}
+                      </Typography.Text>
+                      <Select
+                        size="small"
+                        style={{ flex: "0 1 240px", minWidth: 180 }}
+                        aria-label={`Kind of document for ${s.file.name}`}
+                        value={s.type || permitType}
+                        options={PERMIT_OPTIONS}
+                        onChange={(type) => setScans((list) => list.map((x) => (x.file.uid === s.file.uid ? { ...x, type } : x)))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </Form.Item>
           )}
           {!isEdit && (
@@ -871,7 +926,7 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
             disabled={waiting || (isEdit && storedFailed)}
             onClick={submitWithTabs}
           >
-            {isEdit ? (scan ? "Save and re-upload" : "Save") : scan ? "Upload record and scan" : "Save record"}
+            {isEdit ? (scan ? "Save and re-upload" : "Save") : scans.length > 1 ? `Upload record and ${scans.length} scans` : scan ? "Upload record and scan" : "Save record"}
           </Button>
         </Space>
         </UploadFooter>
@@ -882,6 +937,8 @@ const RecordFormModal = ({ open, record, writableProvinces, onClose }) => {
       resizable={false}
       top={32}
     >
+      {/* The other units' uploads, for someone who files in several (UploadHub). */}
+      {!isEdit && unitSwitch}
       {!isEdit && (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
           The serial shown is the next in the FSN sequence and is claimed when the record is saved.

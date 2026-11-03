@@ -1,182 +1,96 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Table, Spin, Alert, Empty } from "antd";
-import { notification } from "../../../../../shared/feedback";
+import { Table, Spin, Alert, Empty, Tag, Typography } from "antd";
 import moment from "moment";
 import "./reportdrafts.css";
 import { API_BASE_URL } from "../../../../../config/api";
 import visibleInterval from "../../../../../shared/visibleInterval";
 
-const ReportDrafts = () => {
+// The Reports log of the establishment open in the modal: the ICIR drafts
+// saved for it, by anyone, newest first. It listed every draft the person
+// had ever saved, for any establishment.
+const ReportDrafts = ({ record }) => {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null); // State for the current user
+  const recordId = record?._id || null;
+  const title = record?.title || null;
 
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/check-auth`, {
-        withCredentials: true,
-      });
-      setCurrentUser(response.data);
-    } catch (err) {
-      setError("Error fetching user information: " + err.message);
+  const fetchDraftReports = useCallback(async () => {
+    if (!recordId && !title) {
+      setDrafts([]);
+      setLoading(false);
+      return;
     }
-  };
-
-  const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
     try {
-      const response = await axios.get(url, options);
-      return response;
-    } catch (error) {
-      if (retries === 0) {
-        throw error;
-      }
-      // Wait for a specified delay before retrying
-      await new Promise((res) => setTimeout(res, delay));
-      return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
-    }
-  };
-
-  const fetchDraftReports = async () => {
-    try {
-      const response = await fetchWithRetry(
-        `${API_BASE_URL}/api/draft-report`,
-        { withCredentials: true }
-      );
-  
-      if (!Array.isArray(response.data)) {
-        throw new Error("Unexpected response format");
-      }
-  
-      const filteredData = response.data.filter(
-        (draft) => draft.user && draft.user.name === currentUser.name
-      );
-  
-      const formattedData = filteredData.map((draft) => {
-        return {
+      const response = await axios.get(`${API_BASE_URL}/api/draft-report`, { params: { recordId: recordId || undefined, title: title || undefined }, withCredentials: true });
+      if (!Array.isArray(response.data)) throw new Error("Unexpected response format");
+      setDrafts(
+        response.data.map((draft) => ({
           reportId: draft._id,
-          userName: draft.user?.name || "Unknown User",
-          dateCreated: draft.date
-            ? moment(draft.date).format("MMMM D, YYYY h:mm A")
-            : "Unknown Date",
-          title: draft.reportInfo?.title || "No Title Available",
-          eccCnc: draft.reportInfo?.ecc_cnc || "No ECC/CNC Available",
-          address: draft.reportInfo?.address || "No Address Available",
-          fileName: draft.fileName || "No filename available",
-          pdfUrl: draft.pdfUrl
-            ? `${API_BASE_URL}/api/files/${draft.fileName}`
-            : "No URL Available",
-        };
-      });
-  
-      // Sort the data from recent to old
-      formattedData.sort((a, b) => moment(b.dateCreated).unix() - moment(a.dateCreated).unix());
-  
-      setDrafts(formattedData);
+          userName: draft.user?.name || "Unknown user",
+          date: draft.date,
+          purpose: draft.reportInfo?.purpose || null,
+          title: draft.reportInfo?.title || "—",
+          address: draft.reportInfo?.address || "—",
+          fileName: draft.fileName || "",
+          pdfUrl: draft.pdfUrl && draft.fileName ? `${API_BASE_URL}/api/files/${encodeURIComponent(draft.fileName)}` : null,
+        }))
+      );
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [recordId, title]);
 
   useEffect(() => {
-    fetchCurrentUser(); // Fetch the current user when the component mounts
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchDraftReports(); // Fetch draft reports only after user information is available
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
-      // Every 60 s while the tab is visible (was 15 s, hidden or not).
-      return visibleInterval(fetchDraftReports, 60000);
-    }
-  }, [currentUser]);
+    setLoading(true);
+    fetchDraftReports();
+    // Every 60 s while the tab is visible.
+    return visibleInterval(fetchDraftReports, 60000);
+  }, [fetchDraftReports]);
 
   const columns = [
     {
-      title: "Date Created/User",
-      dataIndex: "dateCreated",
-      key: "dateCreated",
-      align: "left",
-      render: (text, record) => (
+      title: "Date created / by",
+      dataIndex: "date",
+      key: "date",
+      render: (date, row) => (
         <div>
-          <div>{moment(record.dateCreated).format("MMMM D, YYYY h:mm A")}</div>
-          <div>{record.userName}</div>
+          <div>{date ? moment(date).format("MMMM D, YYYY h:mm A") : "Unknown date"}</div>
+          <Typography.Text type="secondary">{row.userName}</Typography.Text>
         </div>
       ),
     },
+    { title: "Purpose", dataIndex: "purpose", key: "purpose", render: (p) => (p ? <Tag>{p}</Tag> : "—") },
+    { title: "Address", dataIndex: "address", key: "address" },
     {
-      title: "Title",
-      dataIndex: "title",
-      key: "title",
-      align: "left",
-    },
-    {
-      title: "Address",
-      dataIndex: "address",
-      key: "address",
-      align: "left",
-    },
-    {
-      title: "Draft File Name",
+      title: "Draft file",
       dataIndex: "fileName",
       key: "fileName",
-      align: "left",
-      render: (fileName, record) => {
-        const handleClick = (event) => {
-          event.preventDefault(); // Prevent default link behavior
-
-          // Show notification
-          notification.info({
-            message: "File Downloaded",
-            description: `The file "${fileName}" has been downloaded. Please check the "Downloads Folder."`,
-            placement: "topRight",
-          });
-        };
-
-        return (
-          <a
-            href={record.pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleClick}
-          >
+      render: (fileName, row) =>
+        row.pdfUrl ? (
+          <a href={row.pdfUrl} target="_blank" rel="noopener noreferrer">
             {fileName}
           </a>
-        );
-      },
+        ) : (
+          <Typography.Text type="secondary">{fileName || "—"} (no copy kept)</Typography.Text>
+        ),
     },
   ];
 
-  if (loading) {
-    return <Spin size="large" />;
-  }
-
-  if (error) {
-    return <Alert message="Error" description={error} type="error" />;
-  }
-
-  if (drafts.length === 0) {
-    return <Empty description="No draft reports available" />;
-  }
+  if (loading) return <Spin size="large" />;
+  if (error) return <Alert message="The Reports log could not be loaded" description={error} type="error" />;
 
   return (
     <div>
       <div className="report-title">
-        <h3>Report Logs</h3>
-        <p>
-          Ensure that the data is up-to-date before proceeding with report
-          generation. Please update any outdated data as necessary.
-        </p>
+        <h3>Report Logs — {title || record?.sort_key || "this establishment"}</h3>
+        <p>The ICIR drafts saved for this establishment. Ensure the data is up to date before generating a report.</p>
       </div>
-
-      <Table columns={columns} dataSource={drafts} rowKey="reportId" />
+      {drafts.length ? <Table columns={columns} dataSource={drafts} rowKey="reportId" /> : <Empty description="No drafts saved for this establishment yet" />}
     </div>
   );
 };

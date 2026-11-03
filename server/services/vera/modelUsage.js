@@ -14,9 +14,14 @@
 // KEEP_DAYS (a TTL index). Nothing about a question or an answer is kept:
 // counts, tokens, durations and failure codes only.
 //
-// Also remembered in memory: the last success and failure of each model, and
-// the daily request limit a provider stated in its last quota refusal
-// (Gemini: "limit: 20, model: gemini-2.5-flash").
+// Also remembered: the last success and failure of each model, the daily
+// request limit a provider stated in its last quota refusal (Gemini: "limit:
+// 20, model: gemini-2.5-flash"), and the allowance a provider reports on its
+// responses. Kept in vera-model-limits as well as in memory, written with the
+// counts: held in memory alone, a restart forgot every limit, and a model
+// that had not been used up since showed "not known yet". A reported
+// allowance carries the time it is whole again, so it refills on the screen
+// at that time whether or not VERA calls the model again.
 // ---------------------------------------------------------------------------
 
 // Loaded when first needed: the provider (and so this file) is also used by
@@ -24,17 +29,34 @@
 const getDb = () => require('../../config/db').getDb();
 
 const COLLECTION = 'vera-model-usage';
+const LIMITS = 'vera-model-limits';
 const FLUSH_MS = 30 * 1000;
 const KEEP_DAYS = 35;
 const HOUR = 60 * 60 * 1000;
 
 const pending = new Map(); // `${hour}|${provider}|${model}` -> increments
-const live = new Map(); // `${provider}|${model}` -> { lastOkAt, lastErrorAt, lastErrorCode, limitSeen, limitSeenAt }
+const live = new Map(); // `${provider}|${model}` -> { lastOkAt, lastErrorAt, lastErrorCode, limitSeen, limitSeenAt, reported }
+const unsaved = new Set(); // keys of `live` changed since the last flush
 let timer = null;
 let indexed = false;
+let loaded = null; // the promise of reading vera-model-limits back, once per process
 
 const keyOf = (provider, model) => `${provider}|${model}`;
 const hourOf = (t) => new Date(Math.floor(t / HOUR) * HOUR);
+
+/** "2h3m4.5s", "59.56s", "120ms" — how providers write a time to reset — in ms. */
+function durationMs(text) {
+  const s = String(text || '');
+  const part = (re) => Number((re.exec(s) || [0, 0])[1]) || 0;
+  return Math.round((part(/(\d+)h/) * 3600 + part(/(\d+)m(?!s)/) * 60 + part(/([\d.]+)s/)) * 1000 + part(/(\d+)ms/));
+}
+
+/** A span for the screen: "2h 5m", "14m", "under a minute". */
+function spanText(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return 'under a minute';
+  return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`;
+}
 
 /**
  * One attempt at a model.
@@ -65,6 +87,7 @@ function record(a) {
   else Object.assign(l, { lastErrorAt: new Date(now), lastErrorCode: a.code || 'unknown' });
   if (a.limit) Object.assign(l, { limitSeen: a.limit, limitSeenAt: new Date(now) });
   live.set(keyOf(a.provider, a.model), l);
+  unsaved.add(keyOf(a.provider, a.model));
   changed();
 
   if (!timer) {
@@ -83,7 +106,28 @@ function record(a) {
 function limits(provider, model, l) {
   if (!l || (l.requestsPerDay == null && l.tokensPerMinute == null)) return;
   const k = keyOf(provider, model);
-  live.set(k, { ...(live.get(k) || {}), reported: { ...l, at: new Date() } });
+  const at = new Date();
+  // When each count is whole again, as a time: "resets in 2h" read later is wrong.
+  const resetAt = (text) => (text && durationMs(text) > 0 ? new Date(at.getTime() + durationMs(text)) : null);
+  live.set(k, { ...(live.get(k) || {}), reported: { ...l, at, requestsResetAt: resetAt(l.requestsReset), tokensResetAt: resetAt(l.tokensReset) } });
+  unsaved.add(k);
+}
+
+/** What vera-model-limits holds, read back once per process; what this process learned since wins. */
+function loadLive() {
+  if (!loaded) {
+    loaded = (async () => {
+      try {
+        for (const d of await getDb().collection(LIMITS).find({}).toArray()) {
+          const { _id, updatedAt, ...saved } = d;
+          live.set(_id, { ...saved, ...(live.get(_id) || {}) });
+        }
+      } catch {
+        loaded = null; // not connected yet (a script, a test): try again next time
+      }
+    })();
+  }
+  return loaded;
 }
 
 // Browsers with the Models tab open hear that something changed (the
@@ -105,17 +149,25 @@ function changed() {
   if (noticeTimer.unref) noticeTimer.unref();
 }
 
-/** Write what has gathered, as one bulkWrite. */
+/** Write what has gathered, as one bulkWrite (and the limits learned, as another). */
 async function flush() {
-  if (!pending.size) return;
-  const batch = [...pending.values()];
-  pending.clear();
   let db;
   try {
     db = getDb();
   } catch {
     return; // not connected (a script, a test): the counts stay in memory only
   }
+  if (unsaved.size) {
+    const keys = [...unsaved];
+    unsaved.clear();
+    await db
+      .collection(LIMITS)
+      .bulkWrite(keys.map((k) => ({ replaceOne: { filter: { _id: k }, replacement: { ...live.get(k), updatedAt: new Date() }, upsert: true } })), { ordered: false })
+      .catch(() => keys.forEach((k) => unsaved.add(k)));
+  }
+  if (!pending.size) return;
+  const batch = [...pending.values()];
+  pending.clear();
   const col = db.collection(COLLECTION);
   if (!indexed) {
     indexed = true;
@@ -217,7 +269,13 @@ function available({ provider, l, window, today, published, now }) {
   const rep = l.reported;
   let requests = null;
   if (rep?.requestsPerDay != null && rep?.requestsLeft != null) {
-    requests = { left: rep.requestsLeft, of: rep.requestsPerDay, pct: pct(rep.requestsLeft, rep.requestsPerDay), source: 'reported by the provider', at: rep.at, resetIn: rep.requestsReset || null };
+    // Past the time the provider said its count is whole again, it is whole,
+    // whether or not VERA has called it since.
+    const resetAt = rep.requestsResetAt ? new Date(rep.requestsResetAt).getTime() : null;
+    requests =
+      resetAt && now >= resetAt
+        ? { left: rep.requestsPerDay, of: rep.requestsPerDay, pct: 100, source: 'refilled at the provider’s reset', at: rep.at, resetIn: null, resetAt: null }
+        : { left: rep.requestsLeft, of: rep.requestsPerDay, pct: pct(rep.requestsLeft, rep.requestsPerDay), source: 'reported by the provider', at: rep.at, resetIn: resetAt ? spanText(resetAt - now) : rep.requestsReset || null, resetAt: resetAt ? new Date(resetAt) : null };
   } else if (window && (l.limitSeen || published?.rpd)) {
     const of = l.limitSeen || published.rpd;
     const left = Math.max(0, of - window.calls);
@@ -244,6 +302,7 @@ function available({ provider, l, window, today, published, now }) {
 }
 
 async function report({ route = [], roles = {}, keys = {}, days = 14, info = {}, caps = {} } = {}) {
+  await loadLive();
   const now = Date.now();
   const windows = quotaWindows(now);
   const manila = dayBounds(MANILA, now);
@@ -305,4 +364,4 @@ async function report({ route = [], roles = {}, keys = {}, days = 14, info = {},
   };
 }
 
-module.exports = { record, limits, changed, flush, report, quotaWindows, dayBounds, COLLECTION };
+module.exports = { record, limits, changed, flush, report, quotaWindows, dayBounds, durationMs, COLLECTION, LIMITS };

@@ -51,6 +51,16 @@ router.get(
   ctrl.getEstablishment
 );
 
+// The people under each Section in charge, for the record window's
+// Inspector / handler box (services/sectionStaff).
+router.get('/api/ucds/section-staff', ucdsAccess, async (req, res, next) => {
+  try {
+    res.json({ sections: await require('./services/sectionStaff').directory() });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get(
   '/api/erms/register/search',
   ermsAccess,
