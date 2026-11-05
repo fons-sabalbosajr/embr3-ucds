@@ -38,7 +38,7 @@ const LABEL = {
   section_incharged: "Section in charge", handler: "Inspector / handler", monitoring_sched: "Schedule of monitoring", insp_type: "Type of inspection",
   title_status: "Project status", report_type: "Type of report", reported_to_co: "Reported to CO", date_monitored: "Date monitored", date_routed: "Date routed",
   date_signed: "Date signed", days_dmds: "Days monitored → routed", days_drds: "Days routed → signed", iis_no_2024: "IIS no. 2024", iis_no_2025: "IIS no. 2025",
-  iis_no_2026: "IIS no. 2026", iis_no_nov: "IIS no. of NOV", iis_survey: "IIS survey report", remarks: "Remarks", recommendations: "Remarks / recommendations",
+  iis_no_2026: "IIS no. 2026", iis_no_2027: "IIS no. 2027", latest_status: "Latest status / recommendations", standby_genset: "No. of standby gensets", iis_no_nov: "IIS no. of NOV", iis_survey: "IIS survey report", remarks: "Remarks", recommendations: "Remarks / recommendations",
   pismu_tracking: "Received by (PISMU)", pismu_count_month: "Count month", with_nov: "With a previous NOV", emp_total: "Number of employees", wwtf_type: "Type of WWTF",
   bod: "BOD", ecc_cnc: "ECC/CNC", permit_process: "ECC process", date_approved: "ECC approved", date_amended: "ECC amended", pd1586: "PD 1586 NOV recommendation",
   pto_code: "PTO", pto_issued: "PTO issued", pto_expiration: "PTO expires", ra8749: "RA 8749 NOV recommendation", wwdp_code: "WWDP", wwdp_issued: "WWDP issued",

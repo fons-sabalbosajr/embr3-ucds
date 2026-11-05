@@ -28,6 +28,7 @@ const SectionInCharged = ({
   style,
   theme,
   isEditing,
+  options = UnitOptions,
 }) => {
   return (
     <ConfigProvider
@@ -46,7 +47,7 @@ const SectionInCharged = ({
           width: "100%",
           ...style,
         }}
-        options={readOnly ? [] : UnitOptions}
+        options={readOnly ? [] : options}
         value={value}
         onChange={!readOnly ? onChange : undefined}
         filterOption={(inputValue, option) =>

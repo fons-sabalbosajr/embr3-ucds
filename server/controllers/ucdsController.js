@@ -792,6 +792,12 @@ const PROVINCE_PROJECTION = Object.fromEntries(
     'penalty_date', 'amount', 'or_number', 'commitment', 'other_tc_remarks', 'resolution', 'order', 'order_status', 'color',
   ].map((f) => [f, 1])
 );
+// The Monitoring Plan template's other fields (monitoringTemplate.js), which
+// its spreadsheet and list show. Sent only when filled: most rows have none of
+// them, and a province is already 2 to 10 MB.
+const TEMPLATE_ONLY_FIELDS = ['iis_no_2027', 'latest_status', 'recommendations', 'iis_survey', 'reported_to_co', 'pd1586', 'ra8749', 'standby_genset', 'ra9275', 'ra6969'];
+for (const f of TEMPLATE_ONLY_FIELDS) PROVINCE_PROJECTION[f] = 1;
+const templateOnly = (doc) => Object.fromEntries(TEMPLATE_ONLY_FIELDS.filter((f) => doc[f] !== undefined && doc[f] !== null && doc[f] !== '').map((f) => [f, doc[f]]));
 
 // One province as the JSON the screen is sent: see getProvinceData.
 const provinceBody = (req, province, healthcare) =>
@@ -885,6 +891,7 @@ const provinceBody = (req, province, healthcare) =>
       order_issued: doc.order || '',
       order_status: doc.order_status || '',
       color: doc.color || '',
+      ...templateOnly(doc),
     }))));
     },
     { staleMs: REGISTER_STALE_MS }

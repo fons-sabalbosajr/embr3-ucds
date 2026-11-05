@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import "./focalperson.css";
 import { Columns, Field, Section, Stack, Value } from "../RecordForm";
 import SuggestInput from "../SuggestInput";
-import { isRawLayout, isYes, iisNumbersOf, iisTrackerUrl } from "../registerLayout";
+import { isRawLayout, isYes, iisNumbersOf, iisTrackerUrl, INSPECTION_TYPES, PROJECT_STATUSES, SECTIONS, PISMU_STAFF as TEMPLATE_PISMU_STAFF, RECOMMENDATIONS as TEMPLATE_RECOMMENDATIONS, REPORTED_TO_CO } from "../registerLayout";
 import { FullDate, MonthOnly, MonthRange, IisInput, IisEntries, IisAllYearsList } from "../DateInputs";
 import SectionInCharged from "../../../../../components/Autocomplete/SectionInCharge";
 import Inspector from "../../../../../components/Autocomplete/Inspectors";
@@ -66,12 +66,10 @@ const calculateBOD = (empNoTotal, wwtfType) => {
   return bod + " kg/day";
 };
 
-// "Reported to CO": a month or a quarter, as the RAW workbooks write it.
-const REPORTED_TO_CO = ["1ST QUARTER", "2ND QUARTER", "3RD QUARTER", "4TH QUARTER", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
-
-// The RAW workbooks' Planning Unit lists, spelled as they are there (no
-// "Mr."/"Ms.": the names were not matching the file's). The values already
-// in the register are suggested too (SuggestInput).
+// The Planning Unit's lists up to 2026, spelled as the RAW workbooks do (no
+// "Mr."/"Ms.": the names were not matching the file's); from 2027 the Monitoring
+// Plan template's (registerLayout.js). The values already in the register are
+// suggested too (SuggestInput).
 const PISMU_STAFF = ["Marshalle Julluice V. Catua", "Alyanna Y. Patdu", "Christian M. Abad"];
 const RECOMMENDATIONS = ["FFM", "For Issuance of NOV", "For Issuance of ORDER/RESO", "For Appropriate Action of Legal Unit"];
 
@@ -186,7 +184,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
         <Stack>
           <Section title="Monitoring">
             <Field label="Section in charge" md={12}>
-              {pick(<SectionInCharged value={editedRecord ? editedRecord.section_incharged : ""} onChange={(value) => handleChange("section_incharged", value)} readOnly={!isEditing} />, editedRecord?.section_incharged)}
+              {pick(<SectionInCharged value={editedRecord ? editedRecord.section_incharged : ""} onChange={(value) => handleChange("section_incharged", value)} readOnly={!isEditing} options={raw ? SECTIONS : undefined} />, editedRecord?.section_incharged)}
             </Field>
             <Field label="Inspector / handler" md={12}>
               {pick(<Inspector value={editedRecord ? editedRecord.handler : ""} onChange={(value) => handleChange("handler", value)} readOnly={!isEditing} placeholder="No data" options={handlerOptions} />, editedRecord?.handler)}
@@ -195,14 +193,17 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
               {pick(<MonthOnly value={editedRecord?.monitoring_sched} onChange={(value) => handleChange("monitoring_sched", value)} />, editedRecord?.monitoring_sched)}
             </Field>
             <Field label="Type of inspection" md={12}>
-              {pick(<InspectionType value={editedRecord ? editedRecord.insp_type : ""} onChange={(value) => handleChange("insp_type", value)} readOnly={!isEditing} placeholder="No data" />, editedRecord?.insp_type)}
+              {pick(<InspectionType value={editedRecord ? editedRecord.insp_type : ""} onChange={(value) => handleChange("insp_type", value)} readOnly={!isEditing} placeholder="No data" options={raw ? INSPECTION_TYPES : undefined} />, editedRecord?.insp_type)}
             </Field>
             <Field label="Project status" md={12}>
-              {pick(<ProjectStatus value={editedRecord ? editedRecord.title_status : ""} onChange={(value) => handleChange("title_status", value)} readOnly={!isEditing} placeholder="No data" />, editedRecord?.title_status)}
+              {pick(<ProjectStatus value={editedRecord ? editedRecord.title_status : ""} onChange={(value) => handleChange("title_status", value)} readOnly={!isEditing} placeholder="No data" options={raw ? PROJECT_STATUSES : undefined} />, editedRecord?.title_status)}
             </Field>
-            <Field label="Type of report submitted" md={12}>
-              {pick(<ReportType value={editedRecord ? editedRecord.report_type : ""} onChange={(value) => handleChange("report_type", value)} readOnly={!isEditing} placeholder="No data" />, editedRecord?.report_type)}
-            </Field>
+            {/* Not a column of the template: from 2027 only on a record that already holds one. */}
+            {(!raw || editedRecord?.report_type) && (
+              <Field label="Type of report submitted" md={12}>
+                {pick(<ReportType value={editedRecord ? editedRecord.report_type : ""} onChange={(value) => handleChange("report_type", value)} readOnly={!isEditing} placeholder="No data" />, editedRecord?.report_type)}
+              </Field>
+            )}
           </Section>
 
           {/* The Planning Unit's columns, as the RAW workbooks have them:
@@ -212,7 +213,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
           <Section title="Planning Unit" className="rf-fill" tone={isCardDisabled ? "is-locked" : undefined} extra={isCardDisabled && <span className="rf-hint">Planning Unit only</span>}>
             <Field label="Received by (PISMU)" hint="staff receiving the report" md={12}>
               {planningEditable ? (
-                <SuggestInput field="pismu_tracking" base={PISMU_STAFF} value={editedRecord?.pismu_tracking || ""} onChange={(v) => handleChange("pismu_tracking", v)} placeholder="Name of the PISMU staff" />
+                <SuggestInput field="pismu_tracking" base={raw ? TEMPLATE_PISMU_STAFF : PISMU_STAFF} value={editedRecord?.pismu_tracking || ""} onChange={(v) => handleChange("pismu_tracking", v)} placeholder="Name of the PISMU staff" />
               ) : (
                 <Value>{editedRecord?.pismu_tracking}</Value>
               )}
@@ -230,7 +231,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
             </Field>
             <Field label="Remarks / recommendations">
               {planningEditable ? (
-                <SuggestInput field={remarksField} base={RECOMMENDATIONS} value={editedRecord ? editedRecord[remarksField] || "" : ""} onChange={(v) => handleChange(remarksField, v)} placeholder="e.g. FFM, For Issuance of NOV" />
+                <SuggestInput field={remarksField} base={raw ? TEMPLATE_RECOMMENDATIONS : RECOMMENDATIONS} value={editedRecord ? editedRecord[remarksField] || "" : ""} onChange={(v) => handleChange(remarksField, v)} placeholder="e.g. FFM, For Issuance of NOV" />
               ) : (
                 <Value>{editedRecord?.[remarksField]}</Value>
               )}
@@ -245,7 +246,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
             {raw && (
               <Field label="Reported to CO" hint="Manila Bay area" md={12}>
                 {planningEditable ? (
-                  <SuggestInput field="reported_to_co" base={REPORTED_TO_CO} value={editedRecord?.reported_to_co || ""} onChange={(v) => handleChange("reported_to_co", v)} placeholder="e.g. 2ND QUARTER" />
+                  <SuggestInput field="reported_to_co" base={REPORTED_TO_CO} value={editedRecord?.reported_to_co || ""} onChange={(v) => handleChange("reported_to_co", v)} placeholder="e.g. MARCH" />
                 ) : (
                   <Value>{editedRecord?.reported_to_co}</Value>
                 )}
@@ -267,7 +268,7 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
             </Field>
           </Section>
 
-          <Section title="IIS reference numbers" extra={!isEditing && <span className="rf-hint">click a number to open it in IIS</span>}>
+          <Section title={raw ? "Monitoring reference" : "IIS reference numbers"} extra={!isEditing && <span className="rf-hint">click a number to open it in IIS</span>}>
             {/* Every monitoring year's IIS numbers in one field: each line is filed
                 a reference no. and the year it is filed under (DateInputs.jsx IisEntries). */}
             <Field label="Monitoring IIS no." hint={isEditing ? "a reference no. and its year, per entry" : "by year"} box>
@@ -279,6 +280,15 @@ const FocalPerson = ({ editedRecord, handleChange, isEditing, currentUser }) => 
             </Field>
             {raw && iisField("iis_no_nov", "Notice of Violation", 12)}
             {raw && iisField("iis_survey", "Survey report", 12)}
+            {raw && (
+              <Field label="Latest status / recommendations">
+                {isEditing ? (
+                  <SuggestInput field="latest_status" base={TEMPLATE_RECOMMENDATIONS} value={editedRecord?.latest_status || ""} onChange={(v) => handleChange("latest_status", v)} placeholder="e.g. FFM, For Issuance of NOV" />
+                ) : (
+                  <Value>{editedRecord?.latest_status}</Value>
+                )}
+              </Field>
+            )}
           </Section>
 
           <Section title="Wastewater" className="rf-fill">

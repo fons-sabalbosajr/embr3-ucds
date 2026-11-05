@@ -4,7 +4,7 @@ import { ConfigProvider, AutoComplete, Input } from "antd";
 
 const UnitOptions = [{ value: "OPERATIONAL" }, { value: "NON-OPERATIONAL" }];
 
-const ProjectStatus = ({ value, readOnly, disabled, onChange }) => {
+const ProjectStatus = ({ value, readOnly, disabled, onChange, options = UnitOptions }) => {
   return (
     <ConfigProvider
       theme={{
@@ -22,7 +22,7 @@ const ProjectStatus = ({ value, readOnly, disabled, onChange }) => {
           width: "100%",
           fontSize: "11px",
         }}
-        options={UnitOptions}
+        options={options}
         value={value}
         disabled={disabled}
         onChange={onChange}

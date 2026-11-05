@@ -9,6 +9,7 @@ import { updateUcdsDataBySortKey } from "../../../../api/provinceService";
 import { message } from "../../../../shared/feedback";
 import { copyText } from "../../../../shared/copyText";
 import { isRawLayout } from "../tabpanes/registerLayout";
+import { TEMPLATE_FIELDS, TEMPLATE_GROUPS, TEMPLATE_HEALTHCARE_FIELDS, TEMPLATE_WORKING_SET } from "./templateFields";
 import "./spreadsheet.css";
 
 const { Text } = Typography;
@@ -82,23 +83,7 @@ const LEGACY_FIELDS = [
   { key: "with_nov", label: "With NOV", group: "monitoring", width: 90 },
   { key: "remarks", label: "Remarks", group: "monitoring", width: 280 },
 ];
-// From 2027 the register follows the RAW workbooks (tabpanes/registerLayout.js):
-// their remarks/recommendations column, the NOV recommendation per law, the
-// protected area, the BOD, "reported to CO" and the IIS no. of the NOV and of
-// the survey report.
-const after = (list, key, add) => list.flatMap((f) => (f.key === key ? [f, ...add] : [f]));
-const RAW_FIELDS = [
-  [["mbu_area"], [{ key: "protected_area", label: "Protected area", group: "location", width: 200 }, { key: "bod", label: "BOD (kg/day)", group: "location", width: 100, mono: true }]],
-  [["date_approved"], [{ key: "pd1586", label: "ECC: NOV recommendation", group: "permits", width: 170 }]],
-  [["pto_expiration"], [{ key: "ra8749", label: "PTO: NOV recommendation", group: "permits", width: 170 }]],
-  [["wwdp_expiration"], [{ key: "ra9275", label: "WWDP: NOV recommendation", group: "permits", width: 170 }]],
-  [["haz_issued"], [{ key: "ra6969", label: "HWG: NOV recommendation", group: "permits", width: 170 }]],
-  [["report_type"], [{ key: "reported_to_co", label: "Reported to CO", group: "monitoring", width: 130 }]],
-  [["iis_no_2026"], [{ key: "iis_no_nov", label: "IIS of NOV", group: "monitoring", width: 150, mono: true }, { key: "iis_survey", label: "IIS survey report", group: "monitoring", width: 150, mono: true }]],
-]
-  .reduce((list, [[key], add]) => after(list, key, add), LEGACY_FIELDS)
-  .map((f) => (f.key === "remarks" ? { ...f, key: "recommendations", label: "Remarks / recommendations" } : f));
-const GROUPS = [
+const LEGACY_GROUPS = [
   { key: "all", label: "All columns" },
   { key: "profile", label: "Profile" },
   { key: "location", label: "Location" },
@@ -107,6 +92,8 @@ const GROUPS = [
 ];
 // What the "All columns" sheet starts with: the working set, not all 46.
 const LEGACY_DEFAULT_ALL = ["sort_key", "title", "name", "industry_class", "city", "ecc_cnc", "pto_code", "pto_expiration", "wwdp_code", "wwdp_expiration", "haz_id", "pco_no", "pco_validity", "section_incharged", "handler", "date_monitored", "iis_no_2025", "iis_no_2026", "title_status", "remarks"];
+const LEAD_LEGACY = ["sort_key", "title"];
+const LEAD_TEMPLATE = ["sort_key", "name", "title"];
 const PERMIT_FILTERS = [
   { value: "ecc", label: "Has an ECC/CNC" },
   { value: "pto", label: "Has a PTO" },
@@ -127,7 +114,7 @@ const letter = (i) => {
 };
 const blank = (v) => v === undefined || v === null || String(v).trim() === "" || /^n\/?a$/i.test(String(v).trim());
 
-/** Days to a date written m/d/yyyy or yyyy-mm-dd (negative once past), or null. */
+/** Days to a date written m/d/yyyy or yyyy-mm-dd, or the end of a yyyy-yyyy validity (negative once past), or null. */
 const daysTo = (v) => {
   const s = String(v || "").trim();
   let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
@@ -135,6 +122,10 @@ const daysTo = (v) => {
   if (!d) {
     m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
     d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  }
+  if (!d) {
+    m = /\b\d{4}\s*-\s*(\d{4})$/.exec(s);
+    d = m ? new Date(Number(m[1]), 11, 31) : null;
   }
   if (!d || Number.isNaN(d.getTime())) return null;
   const today = new Date();
@@ -147,10 +138,15 @@ const LOCKED = new Set(["sort_key"]);
 const cellId = (serial, key) => `${serial}\u0001${key}`;
 
 export default function SpreadsheetView({ open, onClose, rows = [], rawIis = {}, anchors = {}, province = "", onOpenRecord, canEdit = false, currentUser, onSaved }) {
-  // The year's own columns: the RAW workbooks' from 2027.
+  // The year's own columns: from 2027 the Monitoring Plan template's, in its
+  // order and every one on the screen from the start; up to 2026 the working set.
   const raw = isRawLayout(rows[0]);
-  const FIELDS = raw ? RAW_FIELDS : LEGACY_FIELDS;
-  const DEFAULT_ALL = raw ? LEGACY_DEFAULT_ALL.map((k) => (k === "remarks" ? "recommendations" : k)) : LEGACY_DEFAULT_ALL;
+  const FIELDS = raw ? (/^health/i.test(province) ? TEMPLATE_HEALTHCARE_FIELDS : TEMPLATE_FIELDS) : LEGACY_FIELDS;
+  const GROUPS = raw ? TEMPLATE_GROUPS : LEGACY_GROUPS;
+  const WORKING_SET = raw ? TEMPLATE_WORKING_SET : LEGACY_DEFAULT_ALL;
+  const DEFAULT_ALL = raw ? FIELDS.map((f) => f.key) : LEGACY_DEFAULT_ALL;
+  // What leads each sheet and is frozen: the template has the proponent before the title.
+  const lead = raw ? LEAD_TEMPLATE : LEAD_LEGACY;
   const [sheet, setSheet] = useState("all");
   const [chosen, setChosen] = useState(DEFAULT_ALL); // the "All columns" sheet's columns
   const [q, setQ] = useState("");
@@ -205,9 +201,9 @@ export default function SpreadsheetView({ open, onClose, rows = [], rawIis = {},
     const keys = sheet === "all" ? chosen : FIELDS.filter((f) => f.group === sheet).map((f) => f.key);
     const set = new Set(keys);
     // The serial and title always lead (they are what is frozen).
-    const lead = ["sort_key", "title"].filter((k) => set.has(k) || sheet !== "all");
-    return [...lead, ...FIELDS.map((f) => f.key).filter((k) => set.has(k) && !lead.includes(k))].map((k) => FIELDS.find((f) => f.key === k)).filter(Boolean);
-  }, [sheet, chosen, FIELDS]);
+    const leading = lead.filter((k) => set.has(k) || sheet !== "all");
+    return [...leading, ...FIELDS.map((f) => f.key).filter((k) => set.has(k) && !leading.includes(k))].map((k) => FIELDS.find((f) => f.key === k)).filter(Boolean);
+  }, [sheet, chosen, FIELDS, lead]);
 
   const sectionOptions = useMemo(() => {
     const set = new Set();
@@ -416,7 +412,7 @@ export default function SpreadsheetView({ open, onClose, rows = [], rawIis = {},
   };
 
   // --- the grid's columns ----------------------------------------------------------
-  const frozen = (k) => (freeze === "serial" && k === "sort_key") || (freeze === "title" && (k === "sort_key" || k === "title"));
+  const frozen = (k) => (freeze === "serial" && k === "sort_key") || (freeze === "title" && lead.includes(k));
   const columns = [
     {
       title: <span className="ss-corner" />,
@@ -545,7 +541,7 @@ export default function SpreadsheetView({ open, onClose, rows = [], rawIis = {},
       ))}
       <Space>
         <Button size="small" onClick={() => setChosen(FIELDS.map((f) => f.key))}>Show all</Button>
-        <Button size="small" onClick={() => setChosen(DEFAULT_ALL)}>Working set</Button>
+        <Button size="small" onClick={() => setChosen(WORKING_SET)}>Working set</Button>
       </Space>
     </div>
   );
@@ -603,7 +599,7 @@ export default function SpreadsheetView({ open, onClose, rows = [], rawIis = {},
                 options={[
                   { value: "none", label: "No frozen columns" },
                   { value: "serial", label: "Freeze Serial No" },
-                  { value: "title", label: "Freeze Serial + title" },
+                  { value: "title", label: raw ? "Freeze to the title" : "Freeze Serial + title" },
                 ]}
               />
               <Tooltip title="Wrap long text in the cells">
@@ -650,7 +646,7 @@ export default function SpreadsheetView({ open, onClose, rows = [], rawIis = {},
                     { key: "pdf", icon: <FilePdfOutlined />, label: "PDF — this view", onClick: () => exportAs("pdf") },
                     { key: "copy", icon: <CopyOutlined />, label: "Copy this view (paste into Excel)", onClick: () => exportAs("copy") },
                     { type: "divider" },
-                    { key: "plan", icon: <DownloadOutlined />, label: "Full Monitoring Plan (.xlsx, every field)", onClick: () => exportAs("plan") },
+                    { key: "plan", icon: <DownloadOutlined />, label: raw ? "Full Monitoring Plan (.xlsx, in the template's layout)" : "Full Monitoring Plan (.xlsx, every field)", onClick: () => exportAs("plan") },
                   ],
                 }}
               >

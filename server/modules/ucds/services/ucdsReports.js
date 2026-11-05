@@ -9,7 +9,8 @@
 // Portal's request, as everywhere else.
 //
 // Export: the Monitoring Plan of a province (or all within reach) as Excel,
-// every field the establishments carry.
+// every field the establishments carry; from 2027 in the layout of the
+// Planning Unit's template (monitoringTemplate.js).
 //
 // Accomplishment: per province, how many establishments, how many have a
 // monitoring schedule, how many were monitored, and how many have no record
@@ -95,11 +96,75 @@ const ORDER = [
 ];
 const { HEALTHCARE_SERIAL, isHealthcare, healthcareFilter } = require('./healthcare');
 
+const { templateColumns } = require('./monitoringTemplate');
+
 const SKIP = new Set(['_id', 'helper_column', 'helper_count', 'searchText']);
 // The register spells a province several ways ("Nueva_Ecija", " Tarlac", "BATAAN").
 const provinceRegex = (province) => new RegExp(`^\\s*${String(province).replace(/[^A-Za-z_ ]/g, '').replace(/[_ ]/g, '[_ ]')}\\s*$`, 'i');
 const header = (k) => k.replace(/_/g, ' ').replace(/\b(ecc|cnc|pto|wwdp|haz|pco|psic|nov|tc|iis|mbu|bod|wwtf|or|pd|ra|denr|pab|pismu|id|dmds|drds)\b/gi, (m) => m.toUpperCase()).replace(/^\w/, (c) => c.toUpperCase());
 const cell = (v) => (v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'object' ? JSON.stringify(v) : v);
+
+// A row's bookkeeping: not a field of the plan, on no sheet of the export.
+const BOOKKEEPING = new Set([...SKIP, 'id_no', 'year', 'color', 'updated_by', 'updated_at', 'updatedBy', 'updatedAt', 'createdBy', 'dateAdded', 'division']);
+const filled = (v) => v !== undefined && v !== null && v !== '';
+
+/** Runs of one value in a row of the template's bands: the cells to merge. */
+function bandRow(values, r) {
+  const row = [];
+  const merges = [];
+  values.forEach((v, c) => {
+    if (c && v === values[c - 1]) {
+      row.push('');
+      return;
+    }
+    row.push(v);
+    let end = c;
+    while (end + 1 < values.length && values[end + 1] === v) end += 1;
+    if (end > c) merges.push({ s: { r, c }, e: { r, c: end } });
+  });
+  return { row, merges };
+}
+
+/**
+ * A year with its own register: the plan as the Planning Unit's template — its
+ * columns, in its order, under its bands — then the ERMS anchor. What a firm
+ * holds outside the template (the Legal Unit's columns, a chemical or TSD
+ * permit) goes on a second sheet by serial, not lost from the export.
+ */
+async function templateWorkbook(docs, province) {
+  const columns = templateColumns({ genset: !isHealthcare(province) });
+  const index = await ermsIndex();
+  const all = [...columns, { band: 'ERMS', group: 'ERMS', header: 'In ERMS' }, { band: 'ERMS', group: 'ERMS', header: 'ERMS FSN' }];
+  const band = bandRow(all.map((c) => c.band), 0);
+  const group = bandRow(all.map((c) => c.group), 1);
+  const rows = docs.map((d) => {
+    const a = anchorOne(index, d.ecc_cnc);
+    return [
+      ...columns.map((c) => cell(c.key === 'brgy' && !filled(d.brgy) ? d.barangay : d[c.key])),
+      a.status === 'found' ? 'yes' : a.status === 'missing' ? 'not found' : '',
+      a.serials.join(', '),
+    ];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([band.row, group.row, all.map((c) => c.header), ...rows]);
+  ws['!merges'] = [...band.merges, ...group.merges];
+  ws['!cols'] = all.map((c, i) => ({ wch: Math.min(40, Math.max(12, ...c.header.split('\n').map((l) => l.length), ...rows.slice(0, 300).map((r) => String(r[i] ?? '').length))) }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 2, c: 0 }, e: { r: rows.length + 2, c: all.length - 1 } }) };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, (province ? `${province} Monitoring Plan` : 'Monitoring Plan').slice(0, 31));
+
+  const inTemplate = new Set([...templateColumns().map((c) => c.key), 'barangay']);
+  const isOther = (k) => !inTemplate.has(k) && !BOOKKEEPING.has(k);
+  const others = docs.map((d) => [d, Object.keys(d).filter((k) => isOther(k) && filled(d[k]))]).filter(([, k]) => k.length);
+  if (others.length) {
+    const keys = new Set(others.flatMap(([, k]) => k));
+    const order = [...ORDER.filter((k) => keys.has(k)), ...[...keys].filter((k) => !ORDER.includes(k)).sort()];
+    const extra = XLSX.utils.json_to_sheet(
+      others.map(([d]) => Object.fromEntries([['Serial_No', d.sort_key], ['Project_Title', cell(d.title)], ...order.map((k) => [header(k), cell(d[k])])]))
+    );
+    XLSX.utils.book_append_sheet(wb, extra, 'Other register fields');
+  }
+  return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true }), count: rows.length };
+}
 
 /** The Monitoring Plan as an Excel workbook, with the ERMS anchor as a column. */
 async function monitoringPlanWorkbook(scoped, { province, ownRegister = false } = {}) {
@@ -114,6 +179,7 @@ async function monitoringPlanWorkbook(scoped, { province, ownRegister = false } 
         ? { province: provinceRegex(province), sort_key: { $not: HEALTHCARE_SERIAL } }
         : { province: provinceRegex(province) };
   const docs = await scoped.find(filter).sort({ id_no: 1 }).toArray();
+  if (ownRegister) return templateWorkbook(docs, province);
   const keys = new Set();
   for (const d of docs) for (const k of Object.keys(d)) if (!SKIP.has(k)) keys.add(k);
   const columns = [...ORDER.filter((k) => keys.has(k)), ...[...keys].filter((k) => !ORDER.includes(k)).sort()];

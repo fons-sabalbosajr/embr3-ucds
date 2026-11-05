@@ -10,7 +10,7 @@ const http = require("http");
 const cron = require("node-cron");
 
 const app = require("./app");
-const { connectToMongo, collections, client } = require("./config/db");
+const { connectToMongo, collections, client, getDb } = require("./config/db");
 const { allowedOrigins } = require("./config/cors");
 const setupSocket = require("./socket").setupSocket;
 
@@ -29,6 +29,8 @@ async function connectWithRetry(attempt = 0) {
   try {
     await connectToMongo();
     console.log("MongoDB connected");
+    // Expired sessions go by themselves (see the session store in app.js).
+    await getDb().collection("sessions").createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
     await require("./services/yearService").ensureSeeded();
     await require("./shared/services/orgUnits").ensureIndexes();
     await require("./services/datasetService").ensureIndexes();

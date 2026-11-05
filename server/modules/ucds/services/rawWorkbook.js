@@ -32,6 +32,8 @@ const COLUMNS = [
   ['2024_monitoring', 'iis_no_2024'],
   ['2025_monitoring', 'iis_no_2025'],
   ['2026_monitoring', 'iis_no_2026'],
+  ['latest status', 'latest_status'],
+  ['2027_monitoring', 'iis_no_2027'],
   ['iis no. of notice', 'iis_no_nov'],
   ['section/unit', 'section_incharged'],
   ['inspector/handler', 'handler'],
@@ -55,6 +57,7 @@ const COLUMNS = [
   ['pto_date_issued', 'pto_issued'],
   ['pto_date_of_expiration', 'pto_expiration'],
   ['ra 8749 for issuance', 'ra8749'],
+  ['no. of standby genset', 'standby_genset'],
   ['wwdp_code', 'wwdp_code'],
   ['wwdp_date_issued', 'wwdp_issued'],
   ['wwdp_date_of_expiration', 'wwdp_expiration'],
@@ -167,8 +170,8 @@ function serial(raw) {
 // The register's sections, for saying which part of a row changed.
 const GROUPS = {
   profile: ['name', 'title', 'industry_type', 'industry_subtype', 'industry_class', 'psic_code', 'mbu_area', 'waterbody', 'bod', 'long', 'lat', 'cong_district', 'address', 'street', 'brgy', 'city', 'province', 'protected_area', 'chemical_permit_type'],
-  monitoring: ['iis_no_2024', 'iis_no_2025', 'iis_no_2026', 'iis_no_nov', 'section_incharged', 'handler', 'monitoring_sched', 'insp_type', 'date_monitored', 'date_routed', 'date_signed', 'days_dmds', 'days_drds', 'pismu_tracking', 'title_status', 'recommendations', 'with_nov', 'iis_survey', 'pismu_count_month', 'report_type', 'reported_to_co', 'co_endorsement'],
-  permits: ['ecc_cnc', 'permit_process', 'date_amended', 'date_approved', 'pd1586', 'pto_code', 'pto_issued', 'pto_expiration', 'ra8749', 'wwdp_code', 'wwdp_issued', 'wwdp_expiration', 'ra9275', 'haz_id', 'haz_issued', 'ra6969', 'pco_no', 'pco_name', 'pco_validity', 'chemical_permit', 'chem_permit_issued', 'chem_permit_exp', 'importer_clearance', 'importer_clearance_issued', 'importer_clearance_exp', 'tsd_ref_no', 'tsd_issued', 'tsd_expiration', 'tp_trc_ref_no', 'tp_trc_issued', 'tp_trc_expiration'],
+  monitoring: ['iis_no_2024', 'iis_no_2025', 'iis_no_2026', 'latest_status', 'iis_no_2027', 'iis_no_nov', 'section_incharged', 'handler', 'monitoring_sched', 'insp_type', 'date_monitored', 'date_routed', 'date_signed', 'days_dmds', 'days_drds', 'pismu_tracking', 'title_status', 'recommendations', 'with_nov', 'iis_survey', 'pismu_count_month', 'report_type', 'reported_to_co', 'co_endorsement'],
+  permits: ['ecc_cnc', 'permit_process', 'date_amended', 'date_approved', 'pd1586', 'pto_code', 'pto_issued', 'pto_expiration', 'ra8749', 'standby_genset', 'wwdp_code', 'wwdp_issued', 'wwdp_expiration', 'ra9275', 'haz_id', 'haz_issued', 'ra6969', 'pco_no', 'pco_name', 'pco_validity', 'chemical_permit', 'chem_permit_issued', 'chem_permit_exp', 'importer_clearance', 'importer_clearance_issued', 'importer_clearance_exp', 'tsd_ref_no', 'tsd_issued', 'tsd_expiration', 'tp_trc_ref_no', 'tp_trc_issued', 'tp_trc_expiration'],
 };
 const groupOf = (field) => Object.keys(GROUPS).find((g) => GROUPS[g].includes(field)) || 'legal';
 

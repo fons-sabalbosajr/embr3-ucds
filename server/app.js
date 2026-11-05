@@ -14,7 +14,7 @@ require("./config/dns").configureDns();
 require("./shared/services/pdfWarnings").install();
 
 const MongoStore = require("connect-mongo");
-const { connectToMongo, client, DB_NAME } = require("./config/db");
+const { client, DB_NAME } = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
 const postingRoutes = require("./routes/postingRoutes");
@@ -71,11 +71,17 @@ require('./services/nasStorage')
   .catch(() => require('./services/nasStorage').warnAboutNasConfig());
 
 // Use the shared Mongo client for the session store to avoid a second pool.
+//
+// The client itself, not a promise of a connection, and no index built here:
+// the store keeps one promise for its whole life, made of the connection and
+// that index, with nothing to catch it. A link dropping at that moment (5 Nov
+// 2026) rejected it with no handler, which ends the process, and it would have
+// stayed rejected, with sessions failing until a restart. This way each session
+// read fails or succeeds by itself, and the driver connects when it needs to.
+// server.js builds the index, and tries again if the link drops.
 const sessionStore = MongoStore.create({
-  clientPromise: (async () => {
-    await connectToMongo();
-    return client;
-  })(),
+  client,
+  autoRemove: "disabled",
   // Named, not taken from the URI's path, so sessions live beside the users
   // they belong to whichever database MONGO_DB_NAME selects.
   dbName: DB_NAME,

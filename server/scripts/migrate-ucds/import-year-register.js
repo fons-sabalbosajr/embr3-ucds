@@ -75,6 +75,10 @@ function readWorkbook(file) {
     const at = grid.findIndex((r) => r.some((c) => squeeze(c).startsWith('serial_no')));
     if (at < 0) continue;
     const fields = fieldsOf(grid[at]);
+    // The year before's Remarks/Recommendations (blanked for the new year, see
+    // YEARLY) are the new year's Latest Status/Recommendations, when the sheet
+    // is from before the Monitoring Plan template and has no such column.
+    const latestFrom = fields.includes('latest_status') ? -1 : fields.indexOf('recommendations');
     const rows = [];
     for (const r of grid.slice(at + 1)) {
       const s = serial(r[fields.indexOf('sort_key')]);
@@ -85,6 +89,7 @@ function readWorkbook(file) {
         const v = cell(r[i]);
         if (v != null) doc[f] = v;
       });
+      if (latestFrom >= 0 && cell(r[latestFrom]) != null) doc.latest_status = cell(r[latestFrom]);
       if (!doc.title && !doc.name) continue;
       const province = provinceOfRow(doc.province, name);
       if (province != null && province !== '') doc.province = province;
@@ -95,17 +100,21 @@ function readWorkbook(file) {
   return sheets;
 }
 
+/** The folder's RAW workbooks, one level down too, in the order they load. */
+const workbooksIn = (dir) =>
+  fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? fs.readdirSync(path.join(dir, d.name)).map((f) => path.join(dir, d.name, f)) : [path.join(dir, d.name)]
+  ).filter((f) => /_RAW\.xlsx$/i.test(f) && !/^~\$/.test(path.basename(f)))
+    // The provinces' own universes first, then the healthcare, chemical,
+    // importer and TSD/TRC ones (Z_…): the id_no order is the screens' order.
+    .sort((a, b) => Number(/^Z_/i.test(path.basename(a))) - Number(/^Z_/i.test(path.basename(b))) || path.basename(a).localeCompare(path.basename(b)));
+
 async function main() {
   if (!(YEAR >= 2027 && YEAR <= 2100)) {
     console.error('Give --year (2027 or later): earlier years keep the shared register.');
     process.exit(1);
   }
-  const files =fs.readdirSync(DIR, { withFileTypes: true }).flatMap((d) =>
-    d.isDirectory() ? fs.readdirSync(path.join(DIR, d.name)).map((f) => path.join(DIR, d.name, f)) : [path.join(DIR, d.name)]
-  ).filter((f) => /_RAW\.xlsx$/i.test(f) && !/^~\$/.test(path.basename(f)))
-    // The provinces' own universes first, then the healthcare, chemical,
-    // importer and TSD/TRC ones (Z_…): the id_no order is the screens' order.
-    .sort((a, b) => Number(/^Z_/i.test(path.basename(a))) - Number(/^Z_/i.test(path.basename(b))) || path.basename(a).localeCompare(path.basename(b)));
+  const files = workbooksIn(DIR);
   if (!files.length) {
     console.error(`No *_RAW.xlsx workbooks under ${DIR}.`);
     process.exit(1);
@@ -167,4 +176,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { fieldsOf, serial, cell, provinceOf, provinceOfRow, readWorkbook };
+module.exports = { fieldsOf, serial, cell, provinceOf, provinceOfRow, readWorkbook, workbooksIn };

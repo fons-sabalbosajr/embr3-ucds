@@ -14,6 +14,7 @@ const InspectionType = ({
   theme,
   style,
   readOnly,
+  options = InspectionTypeOptions,
 }) => {
   return (
     <ConfigProvider
@@ -33,7 +34,7 @@ const InspectionType = ({
           ...style,
         }}
        
-        options={readOnly ? [] : InspectionTypeOptions} // Use predefined suggestions
+        options={readOnly ? [] : options} // Use predefined suggestions
         
         value={value}
         disabled={disabled}

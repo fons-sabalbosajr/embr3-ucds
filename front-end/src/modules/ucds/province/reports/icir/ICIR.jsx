@@ -40,6 +40,9 @@ const fieldTitles = {
   iis_no_2024: "IIS Reference No. (2024)",
   iis_no_2025: "IIS Reference No. (2025)",
   iis_no_2026: "IIS Reference No. (2026)",
+  iis_no_2027: "IIS Reference No. (2027)",
+  latest_status: "Latest Status / Recommendations",
+  standby_genset: "No. of Standby Gensets",
   iis_no_nov: "IIS No. of the Notice of Violation",
   protected_area: "Protected Area",
   recommendations: "Remarks / Recommendations",
@@ -129,12 +132,12 @@ const GROUPS = [
   {
     label: "Monitoring",
     color: "green",
-    fields: ["section_incharged", "fmr_section_incharged", "handler", "monitoring_sched", "pismu_tracking", "recommendations", "remarks_recommendations", "with_nov", "iis_no", "iis_no_2024", "iis_no_2025", "iis_no_2026", "iis_no_nov", "insp_type", "report_type", "date_monitored", "date_routed", "date_signed", "days_dmds", "days_drds", "remarks"],
+    fields: ["section_incharged", "fmr_section_incharged", "handler", "monitoring_sched", "pismu_tracking", "recommendations", "remarks_recommendations", "with_nov", "iis_no", "iis_no_2024", "iis_no_2025", "iis_no_2026", "iis_no_2027", "latest_status", "iis_no_nov", "insp_type", "report_type", "date_monitored", "date_routed", "date_signed", "days_dmds", "days_drds", "remarks"],
   },
   {
     label: "Permits",
     color: "cyan",
-    fields: ["pd1586", "ecc_cnc", "permit_process", "date_amended", "date_approved", "ra8749", "pto_code", "pto_issued", "pto_expiration", "ra9275", "wwdp_code", "wwdp_issued", "wwdp_expiration", "ra6969", "haz_id", "haz_issued", "tsd", "tsd_ref_no", "tsd_issued", "tsd_expiration", "tp_trc", "tp_trc_ref_no", "tp_trc_issued", "tp_trc_expiration", "chemical_permit", "chemical_permit_type", "chemical_permit_sub_type", "chem_permit_issued", "chem_permit_exp", "pco", "pco_no", "pco_name", "pco_tel_no", "pco_validity"],
+    fields: ["pd1586", "ecc_cnc", "permit_process", "date_amended", "date_approved", "ra8749", "pto_code", "pto_issued", "pto_expiration", "standby_genset", "ra9275", "wwdp_code", "wwdp_issued", "wwdp_expiration", "ra6969", "haz_id", "haz_issued", "tsd", "tsd_ref_no", "tsd_issued", "tsd_expiration", "tp_trc", "tp_trc_ref_no", "tp_trc_issued", "tp_trc_expiration", "chemical_permit", "chemical_permit_type", "chemical_permit_sub_type", "chem_permit_issued", "chem_permit_exp", "pco", "pco_no", "pco_name", "pco_tel_no", "pco_validity"],
   },
   {
     label: "Legal",

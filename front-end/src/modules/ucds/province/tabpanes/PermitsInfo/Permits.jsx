@@ -3,7 +3,7 @@ import { Button, Tag, Tooltip } from "antd";
 import { CheckCircleFilled, DeleteOutlined, ExclamationCircleFilled, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import SuggestInput from "../SuggestInput";
 import { Section, Value } from "../RecordForm";
-import { isRawLayout, NOV_RECOMMENDATION } from "../registerLayout";
+import { isListSerial, isRawLayout, NOV_RECOMMENDATION, PERMIT_PROCESSES } from "../registerLayout";
 import { FullDate } from "../DateInputs";
 import VeraPermitCheck from "./VeraPermitCheck";
 import "./permits.css";
@@ -19,8 +19,10 @@ const EXPIRY_FIELDS = new Set(["pto_expiration", "wwdp_expiration", "pco_validit
 
 function isExpired(dateStr) {
   if (!dateStr) return false;
+  // A validity written yyyy-yyyy, as the Monitoring Plan template has the PCO's, runs to the end of its last year.
+  const validity = /\b\d{4}\s*-\s*(\d{4})$/.exec(String(dateStr).trim());
   // Accepts YYYY-MM-DD, MM/DD/YYYY, or similar
-  const d = new Date(dateStr);
+  const d = validity ? new Date(Number(validity[1]), 11, 31) : new Date(dateStr);
   if (isNaN(d.getTime())) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -36,6 +38,9 @@ const DATE_FIELDS = new Set([
   "chem_permit_issued", "chem_permit_exp", "importer_clearance_issued", "importer_clearance_exp", "tsd_issued", "tsd_expiration", "tp_trc_issued", "tp_trc_expiration",
 ]);
 
+// From 2027 the PCO's validity is years (yyyy-yyyy, the Monitoring Plan template's), typed, not a day picked.
+const isDateField = (field, raw) => DATE_FIELDS.has(field) && !(raw && field === "pco_validity");
+
 // Free text that runs long: a wider column, and two lines of box.
 const WIDE_FIELDS = /remarks$/;
 
@@ -44,14 +49,14 @@ const gridOf = (cols, isEditing) =>
   [...cols.map(([, field]) => (DATE_FIELDS.has(field) ? "minmax(0, 0.8fr)" : WIDE_FIELDS.test(field) || field === "pco_name" ? "minmax(0, 1.6fr)" : "minmax(0, 1fr)")), ...(isEditing ? ["36px"] : [])].join(" ");
 
 /** One field of an entry: its value, or while editing a box that suggests what is already encoded. */
-function renderField(value, field, base, isEditing, onCell) {
+function renderField(value, field, base, isEditing, onCell, raw) {
   const expired = EXPIRY_FIELDS.has(field) && isExpired(value);
   if (!isEditing) {
     if (!String(value ?? "").trim()) return <Value />;
     return <Value mono={CODE_FIELDS.has(field)}>{expired ? <span className="rf-expired">{value} · expired</span> : value}</Value>;
   }
   const style = expired ? { color: "#cf1322", fontWeight: 600 } : undefined;
-  if (DATE_FIELDS.has(field)) return <FullDate value={value} onChange={onCell} style={style} />;
+  if (isDateField(field, raw)) return <FullDate value={value} onChange={onCell} style={style} />;
   // A line break is a space: the register reads one as the start of another entry.
   return (
     <SuggestInput
@@ -78,14 +83,14 @@ function renderField(value, field, base, isEditing, onCell) {
 // record holds one.
 // ---------------------------------------------------------------------------
 const nov = (field) => ["NOV recommendation", field, NOV_RECOMMENDATION];
-const lawsFor = (raw) => [
+const lawsFor = (raw, genset) => [
   {
     key: "ecc", title: "ECC / CNC", law: "PD 1586", tag: "is-ecc",
-    cols: [["ECC/CNC Reference No.", "ecc_cnc"], ["Permit Process Source", "permit_process", ECC_PROCESS_OPTIONS], ["Date Approved", "date_approved"], ["Date Amended", "date_amended"], raw ? nov("pd1586") : ["Remarks", "pd1586_remarks"]],
+    cols: [["ECC/CNC Reference No.", "ecc_cnc"], ["Permit Process Source", "permit_process", raw ? PERMIT_PROCESSES : ECC_PROCESS_OPTIONS], ["Date Approved", "date_approved"], ["Date Amended", "date_amended"], raw ? nov("pd1586") : ["Remarks", "pd1586_remarks"]],
   },
   {
     key: "pto", title: "Permit to Operate", law: "RA 8749", tag: "is-pto",
-    cols: [["PTO Code", "pto_code"], ["Date Issued", "pto_issued"], ["Date of Expiration", "pto_expiration"], raw ? nov("ra8749") : ["Remarks", "ra8749_remarks"]],
+    cols: [["PTO Code", "pto_code"], ["Date Issued", "pto_issued"], ["Date of Expiration", "pto_expiration"], raw ? nov("ra8749") : ["Remarks", "ra8749_remarks"], ...(genset ? [["No. of Standby Gensets", "standby_genset"]] : [])],
   },
   {
     key: "wwdp", title: "Wastewater Discharge Permit", law: "RA 9275", tag: "is-wwdp",
@@ -100,7 +105,7 @@ const lawsFor = (raw) => [
   {
     key: "pco", title: "PCO Accreditation", law: "DAO 2014-02", tag: "is-pco",
     cols: raw
-      ? [["PCO No.", "pco_no"], ["Validity", "pco_validity"], ["Name", "pco_name"]]
+      ? [["PCO No.", "pco_no"], ["Validity (yyyy-yyyy)", "pco_validity"], ["Name", "pco_name"]]
       : [["PCO No.", "pco_no"], ["Validity", "pco_validity"], ["Name", "pco_name"], ["Tel. No.", "pco_tel_no"], ["Remarks", "pco_remarks"]],
   },
   ...(raw
@@ -136,7 +141,8 @@ function expandRowsFromRecord(record, keys) {
 
 const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
   const raw = isRawLayout(editedRecord);
-  const laws = lawsFor(raw);
+  // The template's province sheet has the standby gensets; its healthcare and permit lists do not.
+  const laws = lawsFor(raw, raw && !isListSerial(editedRecord?.sort_key));
   const [rows, setRows] = useState({}); // law key -> entries
   const rowsRef = useRef({});
   const commit = (next) => {
@@ -203,7 +209,8 @@ const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
   // editing, a remove button on each and "Add entry" under them.
   const permitCard = (law) => {
     const data = rows[law.key] || [];
-    const filled = data.filter((r) => law.cols.some(([, f]) => String(r[f] ?? "").trim())).length;
+    // A number of standby gensets alone is no permit on file.
+    const filled = data.filter((r) => law.cols.some(([, f]) => f !== "standby_genset" && String(r[f] ?? "").trim())).length;
     const expired = data.some((r) => law.cols.some(([, f]) => EXPIRY_FIELDS.has(f) && isExpired(r[f])));
     const isOpen = open.has(law.key);
     const columns = { gridTemplateColumns: gridOf(law.cols, isEditing) };
@@ -239,7 +246,7 @@ const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
             {law.cols.map(([title, field]) => (
               <span key={field}>
                 {title}
-                {DATE_FIELDS.has(field) && <span className="rf-hint"> full date</span>}
+                {isDateField(field, raw) && <span className="rf-hint"> full date</span>}
               </span>
             ))}
             {isEditing && <span />}
@@ -248,7 +255,7 @@ const Permits = ({ editedRecord, handleChange, isEditing, onRa8749Change }) => {
             <div key={row.key} className="rf-permit-row" style={columns}>
               {law.cols.map(([title, field, base]) => (
                 <div key={field} className="rf-permit-cell" aria-label={title}>
-                  {renderField(row[field], field, base, isEditing, (v) => onCell(law.key, field, v, row.key))}
+                  {renderField(row[field], field, base, isEditing, (v) => onCell(law.key, field, v, row.key), raw)}
                 </div>
               ))}
               {isEditing && (

@@ -540,6 +540,11 @@ const Province = ({ theme, currentUser }) => {
         record.monitoring_sched,
         record.iis_no_2024,
         record.iis_no_2025,
+        record.iis_no_2026,
+        record.iis_no_2027,
+        record.latest_status,
+        record.recommendations,
+        record.standby_genset,
         record.insp_type,
         record.report_type,
         record.date_monitored,
@@ -1231,7 +1236,7 @@ const Province = ({ theme, currentUser }) => {
         </div>
       ),
       key: "remarks",
-      ...getColumnSearchProps("remarks"),
+      ...getColumnSearchProps(isRawLayout() ? "recommendations" : "remarks"),
       // From 2027 the RAW workbooks' Remarks/Recommendations column is `recommendations`.
       render: (text, record) => <div>{isRawLayout(record) ? record.recommendations : record.remarks}</div>,
       align: "center",
@@ -1380,6 +1385,22 @@ const Province = ({ theme, currentUser }) => {
               </p>
             );
           })()}
+
+          {/* 2027: the Monitoring Plan template's own column. */}
+          {record.iis_no_2027 && record.iis_no_2027 !== "N/A" && (
+            <p className="monitoring-label">
+              {iisNumbersOf(record.iis_no_2027).map((iis) => (
+                <Tooltip key={iis} title={<div style={{ fontSize: "10px" }}>2027 IIS reference no.</div>} color="#08979c">
+                  <span style={{ display: "block", lineHeight: "1.2" }}>
+                    <TagsOutlined style={{ color: "#08979c", marginRight: 4 }} />
+                    <a href={iisTrackerUrl(iis)} target="_blank" rel="noopener noreferrer" style={{ color: "#08979c", textDecoration: "none" }}>
+                      {iis}
+                    </a>
+                  </span>
+                </Tooltip>
+              ))}
+            </p>
+          )}
 
           {/* PISMU Tracking */}
           {record.pismu_tracking && record.pismu_tracking.trim() !== "" && (
