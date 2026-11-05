@@ -83,10 +83,31 @@ describe("a record's other ECC Ref Nos", () => {
 });
 
 describe("VERA's model timeout", () => {
+  // The environment sets it (a saved value has been ignored since 28 Oct), so
+  // this sets its own rather than depending on the machine's server/.env.
+  const NAMES = ['VERA_TIMEOUT_MS', 'ANTHROPIC_TIMEOUT_MS', 'GEMINI_TIMEOUT_MS'];
+  const saved = {};
+  beforeAll(() => {
+    for (const n of NAMES) saved[n] = process.env[n];
+    delete process.env.VERA_TIMEOUT_MS;
+    process.env.ANTHROPIC_TIMEOUT_MS = '15000';
+    process.env.GEMINI_TIMEOUT_MS = '15000';
+  });
+  afterAll(() => {
+    for (const n of NAMES) {
+      if (saved[n] === undefined) delete process.env[n];
+      else process.env[n] = saved[n];
+    }
+  });
+
   it('is never below 45s for Gemini or a model that thinks before answering', () => {
-    expect(provider.resolveTimeoutMs({ provider: 'anthropic', model: 'claude-opus-5-5', requestTimeoutMs: 15000 })).toBe(45000);
-    expect(provider.resolveTimeoutMs({ provider: 'gemini', requestTimeoutMs: 15000 })).toBe(45000);
-    expect(provider.resolveTimeoutMs({ provider: 'anthropic', model: 'claude-haiku-4-5', requestTimeoutMs: 15000 })).toBe(15000);
+    expect(provider.resolveTimeoutMs({ provider: 'anthropic', model: 'claude-opus-5-5' })).toBe(45000);
+    expect(provider.resolveTimeoutMs({ provider: 'gemini' })).toBe(45000);
+    expect(provider.resolveTimeoutMs({ provider: 'anthropic', model: 'claude-haiku-4-5' })).toBe(15000);
+  });
+
+  it('ignores a value saved in the settings before it stopped being one', () => {
+    expect(provider.resolveTimeoutMs({ provider: 'anthropic', model: 'claude-haiku-4-5', requestTimeoutMs: 99000 })).toBe(15000);
   });
 });
 

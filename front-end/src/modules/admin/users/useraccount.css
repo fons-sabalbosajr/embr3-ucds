@@ -254,3 +254,31 @@
     padding: 8px;
   }
 }
+
+/* The Access column: the modules, then years, provinces, actions and storage.
+   Faded when the account holds none; the tooltip says how many. */
+.user-access {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-access-module {
+  color: var(--primary-color);
+  font-size: 14px;
+}
+
+.user-access-item {
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.user-access-none {
+  opacity: 0.45;
+}
+
+.user-access-problem {
+  color: #d4380d;
+  font-size: 14px;
+}

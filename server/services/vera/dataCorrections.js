@@ -173,7 +173,7 @@ async function spellingByModel(field, canonical, cfg) {
     'If nothing is misspelled, return []. Output the JSON array and nothing else.';
   const prompt = `LIST:\n${list.map((v) => `- ${v}`).join('\n')}`;
   // A spelling pass, checked afterwards to be small edits: the light model's work.
-  const out = await provider.complete(cfg, { system, prompt, maxTokens: 2048, tier: 'light' });
+  const out = await provider.complete(cfg, { system, prompt, maxTokens: 2048, tier: 'light', feature: 'spelling-check' });
   const text = String(out?.text || '');
   const json = text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
   let pairs = [];

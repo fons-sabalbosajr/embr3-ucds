@@ -116,12 +116,11 @@ async function findBySortKey(sortKey, allowedProvinces = null) {
   await connectToMongo();
   if (!sortKey) return null;
 
-  const filter = { sort_key: sortKey };
-  if (Array.isArray(allowedProvinces)) {
-    if (!allowedProvinces.length) return null; // fail closed
-    filter.province = { $in: allowedProvinces };
-  }
-  return register().findOne(filter, { projection: DETAIL_PROJECTION });
+  // Keys ("bataan") against the register's values ("Bataan"): provinceFilter
+  // matches them, as search() below does, and matches nothing for an empty scope.
+  const { provinceFilter } = require('../../../services/provinces');
+  const scope = Array.isArray(allowedProvinces) ? provinceFilter(allowedProvinces) : null;
+  return register().findOne({ sort_key: sortKey, ...(scope || {}) }, { projection: DETAIL_PROJECTION });
 }
 
 /**

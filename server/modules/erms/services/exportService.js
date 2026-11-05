@@ -26,10 +26,12 @@ const day = (v) => {
   const d = v instanceof Date ? v : new Date(v);
   return Number.isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
 };
+// One formatter, shared, as toLocaleString builds a new one per cell of an export.
+const STAMP_FORMAT = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
 const stamp = (v) => {
   if (!v) return '';
   const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
+  return Number.isNaN(d.getTime()) ? String(v) : STAMP_FORMAT.format(d);
 };
 const text = (v) => (v === null || v === undefined ? '' : Array.isArray(v) ? v.map(text).filter(Boolean).join('; ') : typeof v === 'object' ? (v instanceof Date ? day(v) : JSON.stringify(v)) : String(v));
 

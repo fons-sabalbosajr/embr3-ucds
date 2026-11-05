@@ -1,7 +1,7 @@
 const dayjs = require('dayjs');
 const { connectToMongo, collections, client, ObjectId } = require('../config/db');
 const { withYear, stampYear, registerOf } = require('../services/yearScope');
-const { provinceScoped, requestAllowsProvince, provinceFilter: provinceFilterOf, userWritableProvinceKeys } = require('../services/provinces');
+const { PROVINCES, provinceScoped, requestAllowsProvince, provinceFilter: provinceFilterOf, userWritableProvinceKeys } = require('../services/provinces');
 const { canAccessAllYears } = require('../services/authorization');
 const { principalOf } = require('../middleware/auth');
 const shortCache = require('../shared/services/shortCache');
@@ -118,6 +118,11 @@ function registerScopeKey(req, prefix = REGISTER_CHECKS_CACHE) {
   return scope + (Array.isArray(list) ? list.map((r) => String(r)).sort().join('|') : JSON.stringify(req.provinceFilter));
 }
 
+// How long a register answer still serves while the next is worked out behind
+// it (shortCache). Only a write changes these, and a write through the
+// application drops them at once; a reload by script is seen on the next ask.
+const REGISTER_STALE_MS = 24 * 60 * 60 * 1000;
+
 async function computeRegisterChecks(req) {
   await connectToMongo();
   const projection = { _id: 0, sort_key: 1, id_no: 1, ...Object.fromEntries(REGISTER_CHECKS.map(([key]) => [key, 1])) };
@@ -139,7 +144,7 @@ async function computeRegisterChecks(req) {
 
 async function checkData(req, res) {
   try {
-    const result = await shortCache.cached(registerScopeKey(req), 5 * 60 * 1000, () => computeRegisterChecks(req));
+    const result = await shortCache.cached(registerScopeKey(req), 5 * 60 * 1000, () => computeRegisterChecks(req), { staleMs: REGISTER_STALE_MS });
     return res.json(result);
   } catch (error) {
     console.error('Error fetching or validating data:', error);
@@ -148,13 +153,18 @@ async function checkData(req, res) {
 }
 
 /** A register edit changes what is missing, monitored, due: recompute on the next ask. */
-const clearRegisterChecks = () => shortCache.invalidate(REGISTER_CACHE);
+const clearRegisterChecks = () => {
+  shortCache.invalidate(REGISTER_CACHE);
+  warmSoon();
+};
 
-async function getDuplicates(req, res) {
-  try {
-    // A grouping over the whole register, asked by every Planning page load
-    // (the bell): shared per scope for two minutes, cleared by any edit.
-    const duplicates = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}duplicates:`), 2 * 60 * 1000, async () => {
+// A grouping over the whole register, asked by every Planning page load
+// (the bell): shared per scope for two minutes, cleared by any edit.
+const registerDuplicates = (req) =>
+  shortCache.cached(
+    registerScopeKey(req, `${REGISTER_CACHE}duplicates:`),
+    2 * 60 * 1000,
+    async () => {
       await connectToMongo();
       return ucdsFor(req).aggregate([
         { $match: { ecc_cnc: { $exists: true, $ne: null } } },
@@ -162,8 +172,13 @@ async function getDuplicates(req, res) {
         { $match: { count: { $gt: 1 } } },
         { $project: { _id: 0, ecc_cnc: '$_id', idNos: 1, count: 1 } },
       ], { allowDiskUse: true }).toArray();
-    });
-    return res.status(200).json({ duplicates });
+    },
+    { staleMs: REGISTER_STALE_MS }
+  );
+
+async function getDuplicates(req, res) {
+  try {
+    return res.status(200).json({ duplicates: await registerDuplicates(req) });
   } catch (error) {
     console.error('Error detecting duplicate ECC/CNC values:', error);
     return res.status(500).json({ error: 'An error occurred while detecting duplicate ECC/CNC values.' });
@@ -517,6 +532,49 @@ async function getDailyNotices(req, res) {
 module.exports.getMonitoredDates = getMonitoredDates;
 module.exports.getDailyNotices = getDailyNotices;
 
+// Every permit of every establishment, with its expiry worked out: three dates
+// parsed per record, on Node's one thread — the slowest thing on the Planning
+// dashboard. Only the rows with a permit date cross the link: the rest were read
+// (about two rows in three) to be dropped by the caller for having no permit.
+async function computePermits(req, mongoQuery) {
+  const now = new Date();
+  const hasPermitDate = { $or: ['pto_issued', 'wwdp_issued', 'pco_validity'].map((field) => ({ [field]: { $nin: [null, ''] } })) };
+  const allMatchingRecords = await ucdsFor(req)
+    .find({ ...mongoQuery, $and: [hasPermitDate] }, { projection: { sort_key: 1, title: 1, name: 1, ecc_cnc: 1, pto_issued: 1, pto_code: 1, wwdp_issued: 1, wwdp_code: 1, pco_validity: 1, pco_no: 1 } })
+    .toArray();
+  return allMatchingRecords.map((record) => {
+    const permits = [];
+    if (record.pto_issued) {
+      const issuedDate = parseDateStringForStats(record.pto_issued);
+      if (isValidDate(issuedDate)) {
+        const expiry = new Date(issuedDate); expiry.setFullYear(expiry.getFullYear() + 2);
+        permits.push({ type: 'PTO', code: record.pto_code || '', expiry, isNearExpiry: isPermitNearExpiry(expiry.toISOString().split('T')[0], now), isExpired: isPermitExpired(expiry.toISOString().split('T')[0]) });
+      }
+    }
+    if (record.wwdp_issued) {
+      const issuedDate = parseDateStringForStats(record.wwdp_issued);
+      if (isValidDate(issuedDate)) {
+        const expiry = new Date(issuedDate); expiry.setFullYear(expiry.getFullYear() + 1);
+        permits.push({ type: 'WWDP', code: record.wwdp_code || '', expiry, isNearExpiry: isPermitNearExpiry(expiry.toISOString().split('T')[0], now), isExpired: isPermitExpired(expiry.toISOString().split('T')[0]) });
+      }
+    }
+    if (record.pco_validity) {
+      const validityDate = parseDateStringForStats(record.pco_validity);
+      if (isValidDate(validityDate)) {
+        const expiry = validityDate;
+        permits.push({ type: 'PCO', code: record.pco_no || '', expiry, isNearExpiry: isPermitNearExpiry(expiry.toISOString().split('T')[0], now), isExpired: isPermitExpired(expiry.toISOString().split('T')[0]) });
+      }
+    }
+    return { sort_key: record.sort_key, title: record.title || record.name || 'Untitled', ecc_cnc: record.ecc_cnc || '', permits };
+  });
+}
+
+// Without a search it is the same for everyone in the same scope, so it is
+// shared for two minutes (cleared by any register edit); filtering and paging
+// are per request and cheap.
+const sharedPermits = (req, prefixList, mongoQuery) =>
+  shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}permits:${prefixList.join(',')}:`), 2 * 60 * 1000, () => computePermits(req, mongoQuery), { staleMs: REGISTER_STALE_MS });
+
 async function permitsSummary(req, res) {
   let { page = 1, pageSize = PERMITS_SUMMARY_DEFAULT_PAGE_SIZE, prefixes = '', searchText = '', filterEstablishmentsByExpiryStatus = 'false', permitTypesFilter = '' } = req.query;
   let currentPage = parseInt(page, 10);
@@ -535,43 +593,7 @@ async function permitsSummary(req, res) {
       const searchRegex = { $regex: searchText, $options: 'i' };
       mongoQuery.$or = [{ sort_key: searchRegex }, { title: searchRegex }, { name: searchRegex }, { ecc_cnc: searchRegex }];
     }
-    // Every permit of every establishment, with its expiry worked out: the
-    // whole register read and three dates parsed per record, on Node's one
-    // thread — the slowest thing on the Planning dashboard. Without a search
-    // it is the same for everyone in the same scope, so it is shared for two
-    // minutes (cleared by any register edit); filtering and paging below are
-    // per request and cheap.
-    const processPermits = async () => {
-    const allMatchingRecords = await ucdsFor(req).find(mongoQuery, { projection: { sort_key: 1, title: 1, name: 1, ecc_cnc: 1, pto_issued: 1, pto_code: 1, wwdp_issued: 1, wwdp_code: 1, pco_validity: 1, pco_no: 1 } }).toArray();
-    return allMatchingRecords.map((record) => {
-      const permits = [];
-      if (record.pto_issued) {
-        const issuedDate = parseDateStringForStats(record.pto_issued);
-        if (isValidDate(issuedDate)) {
-          const expiry = new Date(issuedDate); expiry.setFullYear(expiry.getFullYear() + 2);
-          permits.push({ type: 'PTO', code: record.pto_code || '', expiry, isNearExpiry: isPermitNearExpiry(expiry.toISOString().split('T')[0], now), isExpired: isPermitExpired(expiry.toISOString().split('T')[0]) });
-        }
-      }
-      if (record.wwdp_issued) {
-        const issuedDate = parseDateStringForStats(record.wwdp_issued);
-        if (isValidDate(issuedDate)) {
-          const expiry = new Date(issuedDate); expiry.setFullYear(expiry.getFullYear() + 1);
-          permits.push({ type: 'WWDP', code: record.wwdp_code || '', expiry, isNearExpiry: isPermitNearExpiry(expiry.toISOString().split('T')[0], now), isExpired: isPermitExpired(expiry.toISOString().split('T')[0]) });
-        }
-      }
-      if (record.pco_validity) {
-        const validityDate = parseDateStringForStats(record.pco_validity);
-        if (isValidDate(validityDate)) {
-          const expiry = validityDate;
-          permits.push({ type: 'PCO', code: record.pco_no || '', expiry, isNearExpiry: isPermitNearExpiry(expiry.toISOString().split('T')[0], now), isExpired: isPermitExpired(expiry.toISOString().split('T')[0]) });
-        }
-      }
-      return { sort_key: record.sort_key, title: record.title || record.name || 'Untitled', ecc_cnc: record.ecc_cnc || '', permits };
-    });
-    };
-    const processedRecords = searchText
-      ? await processPermits()
-      : await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}permits:${prefixList.join(',')}:`), 2 * 60 * 1000, processPermits);
+    const processedRecords = searchText ? await computePermits(req, mongoQuery) : await sharedPermits(req, prefixList, mongoQuery);
     let finalRecordsToPaginate = processedRecords.filter((rec) => rec.permits.length > 0);
     if (shouldFilterByExpiry) {
       finalRecordsToPaginate = finalRecordsToPaginate.map((rec) => ({ ...rec, permits: rec.permits.filter((p) => p.isExpired || p.isNearExpiry) })).filter((rec) => rec.permits.length > 0);
@@ -611,33 +633,111 @@ async function permitsSummary(req, res) {
 async function dashboardStats(req, res) {
   try {
     await connectToMongo();
-    const { permitTypeFilterKey } = req.query;
-    const totalIndustries = await ucdsFor(req).countDocuments({});
-    const [resolvedEccCount, resolvedPtoCount, resolvedWwdpCount, resolvedHwgCount, resolvedPcoCount] = await Promise.all([
+    // Only a filter the dashboard knows: it names the cache entry below.
+    const permitTypeFilterKey = permitKeyToFieldMap[req.query.permitTypeFilterKey] ? req.query.permitTypeFilterKey : '';
+    // Nine aggregations and a read of the whole register, about 3 s on 4 Nov
+    // 2026, for each viewer on every refresh of a dashboard that refreshes
+    // itself. Worked out once per scope for two minutes (any register edit
+    // clears it), and the reads no longer wait on one another.
+    // By year as well: years can share a register, and the monitoring history
+    // differs between them.
+    return res.json(await sharedDashboardStats(req, permitTypeFilterKey));
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    return res.status(500).json({ error: 'Failed to fetch dashboard statistics.' });
+  }
+}
+
+const sharedDashboardStats = (req, permitTypeFilterKey) =>
+  shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}dashboard:${req.activeYear}:${permitTypeFilterKey}:`), 2 * 60 * 1000, () => computeDashboardStats(req, permitTypeFilterKey), { staleMs: REGISTER_STALE_MS });
+
+// A value the dashboard counts as filled in, in the database's terms: truthy, and
+// text once trimmed. Worked out there: reading every row here to count them was
+// nearly all of this screen's time.
+const truthyExpr = (field) => ({ $not: [{ $in: [{ $ifNull: [`$${field}`, ''] }, ['', 0, false]] }] });
+const filledExpr = (field) => ({ $ne: [{ $trim: { input: { $convert: { input: `$${field}`, to: 'string', onError: '[not text]', onNull: '' } } } }, ''] });
+const countIf = (expr) => ({ $sum: { $cond: [expr, 1, 0] } });
+
+async function computeDashboardStats(req, permitTypeFilterKey) {
+    const year = Number(req.activeYear) || new Date().getFullYear();
+    const historyYears = Array.from({ length: 4 }, (_, i) => year - 4 + i);
+    const iisField = (y) => `iis_no_${y}`;
+    const permitMatch = permitTypeFilterKey ? [{ $match: { [permitKeyToFieldMap[permitTypeFilterKey].queryField]: { $exists: true, $ne: null, $ne: '' } } }] : [];
+    const [totalIndustries, resolvedEccCount, resolvedPtoCount, resolvedWwdpCount, resolvedHwgCount, resolvedPcoCount, sectionBreakdownResults, projectStatusResults, notYetMonitored, unitRows, expiryRows] = await Promise.all([
+      ucdsFor(req).countDocuments({}),
       ucdsFor(req).countDocuments({ ecc_cnc: { $exists: true, $ne: null, $ne: '' } }),
       ucdsFor(req).countDocuments({ pto_code: { $exists: true, $ne: null, $ne: '' } }),
       ucdsFor(req).countDocuments({ wwdp_code: { $exists: true, $ne: null, $ne: '' } }),
       ucdsFor(req).countDocuments({ haz_id: { $exists: true, $ne: null, $ne: '' } }),
       ucdsFor(req).countDocuments({ pco_no: { $exists: true, $ne: null, $ne: '' } }),
+      ucdsFor(req).aggregate([
+        ...permitMatch,
+        { $match: { section_incharged: { $exists: true, $ne: null, $ne: '' } } },
+        { $project: { sections: { $split: [{ $ifNull: ['$section_incharged', ''] }, ','] } } },
+        { $unwind: '$sections' },
+        { $project: { section: { $trim: { input: { $toUpper: { $replaceAll: { input: '$sections', find: ' ', replacement: '_' } } } } } } },
+        { $match: { section: { $nin: ['N/A', 'NONE', '', null] } } },
+        { $group: { _id: '$section', count: { $sum: 1 } } },
+        { $project: { _id: 0, section: '$_id', count: 1 } },
+        { $sort: { count: -1 } },
+      ]).toArray(),
+      ucdsFor(req).aggregate([
+        ...permitMatch,
+        { $match: { title_status: { $exists: true, $ne: null, $ne: '' } } },
+        { $project: { status: { $toUpper: { $trim: { input: { $ifNull: ['$title_status', ''] } } } } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]).toArray(),
+      // "Not yet monitored" is every establishment with no project status — the
+      // field absent as well as blank. Only the blank ones were counted, so the
+      // dashboard said 0 while thousands had never been monitored.
+      ucdsFor(req).countDocuments({ $or: [{ title_status: { $exists: false } }, { title_status: null }, { title_status: { $regex: '^\\s*$' } }] }),
+      // Grouped by the serial without its number, and the province: the most
+      // that the list a row counts under (unitOf) can depend on. With the rows
+      // holding any permit, those monitored this year, and those with an IIS
+      // number of the years before: an establishment with one was monitored
+      // that year (the monitoring history).
+      ucdsFor(req)
+        .aggregate([
+          {
+            $group: {
+              _id: {
+                serial: { $ifNull: [{ $first: { $getField: { field: 'captures', input: { $regexFind: { input: { $convert: { input: '$sort_key', to: 'string', onError: '', onNull: '' } }, regex: '^(.*-)\\d+$' } } } } }, { $convert: { input: '$sort_key', to: 'string', onError: '', onNull: '' } }] },
+                province: '$province',
+              },
+              n: { $sum: 1 },
+              anyPermit: countIf({ $or: ['ecc_cnc', 'pto_code', 'wwdp_code', 'haz_id', 'pco_no'].map(truthyExpr) }),
+              monitored: countIf(filledExpr('date_monitored')),
+              ...Object.fromEntries(historyYears.map((y) => [`y${y}`, countIf(filledExpr(iisField(y)))])),
+            },
+          },
+        ])
+        .toArray(),
+      // The three expiry dates, as many rows as hold each combination.
+      ucdsFor(req)
+        .aggregate([
+          { $match: { $or: ['pto_expiration', 'wwdp_expiration', 'pco_validity'].map((field) => ({ [field]: { $nin: [null, ''] } })) } },
+          { $group: { _id: { pto: '$pto_expiration', wwdp: '$wwdp_expiration', pco: '$pco_validity' }, n: { $sum: 1 } } },
+        ])
+        .toArray(),
     ]);
+    // Per province of the Monitoring Plan and per list (Healthcare Industries,
+    // Chemical permits, TSD / TRC, Importers — the 2027 registers' own series),
+    // as the Progress Tracker counts them (analyze.js unitOf).
+    const byUnit = new Map();
+    const monitoringHistory = Object.fromEntries(historyYears.map((y) => [y, 0]));
+    let monitoredThisYear = 0;
+    let industriesWithAnyPermit = 0;
+    for (const row of unitRows) {
+      // A number on the serial stands for the one it had: unitOf reads the shape.
+      const key = /-$/.test(row._id.serial) ? `${row._id.serial}0` : row._id.serial;
+      const unit = unitOf(key, row._id.province);
+      byUnit.set(unit, (byUnit.get(unit) || 0) + row.n);
+      industriesWithAnyPermit += row.anyPermit;
+      monitoredThisYear += row.monitored;
+      for (const y of historyYears) monitoringHistory[y] += row[`y${y}`];
+    }
+    const industriesWithAtLeastOneExpiredPermit = expiryRows.reduce((sum, r) => sum + (isPermitExpired(r._id.pto) || isPermitExpired(r._id.wwdp) || isPermitExpired(r._id.pco) ? r.n : 0), 0);
     const permitBreakdown = { ecc: resolvedEccCount, pto: resolvedPtoCount, wwdp: resolvedWwdpCount, hwg: resolvedHwgCount, pco: resolvedPcoCount };
-    const sectionBreakdownResults = await ucdsFor(req).aggregate([
-      ...(permitTypeFilterKey && permitKeyToFieldMap[permitTypeFilterKey] ? [{ $match: { [permitKeyToFieldMap[permitTypeFilterKey].queryField]: { $exists: true, $ne: null, $ne: '' } } }] : []),
-      { $match: { section_incharged: { $exists: true, $ne: null, $ne: '' } } },
-      { $project: { sections: { $split: [{ $ifNull: ['$section_incharged', ''] }, ','] } } },
-      { $unwind: '$sections' },
-      { $project: { section: { $trim: { input: { $toUpper: { $replaceAll: { input: '$sections', find: ' ', replacement: '_' } } } } } } },
-      { $match: { section: { $nin: ['N/A', 'NONE', '', null] } } },
-      { $group: { _id: '$section', count: { $sum: 1 } } },
-      { $project: { _id: 0, section: '$_id', count: 1 } },
-      { $sort: { count: -1 } },
-    ]).toArray();
-    const projectStatusResults = await ucdsFor(req).aggregate([
-      ...(permitTypeFilterKey && permitKeyToFieldMap[permitTypeFilterKey] ? [{ $match: { [permitKeyToFieldMap[permitTypeFilterKey].queryField]: { $exists: true, $ne: null, $ne: '' } } }] : []),
-      { $match: { title_status: { $exists: true, $ne: null, $ne: '' } } },
-      { $project: { status: { $toUpper: { $trim: { input: { $ifNull: ['$title_status', ''] } } } } } },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-    ]).toArray();
     const projectStatusBreakdown = { operational: 0, nonOperational: 0, notOperational: 0, notYetMonitored: 0, other: 0 };
     projectStatusResults.forEach((item) => {
       if (item._id === 'OPERATIONAL') projectStatusBreakdown.operational = item.count;
@@ -646,43 +746,15 @@ async function dashboardStats(req, res) {
       else if (item._id === '') projectStatusBreakdown.notYetMonitored = item.count;
       else if (item._id && item._id !== 'N/A' && item._id !== 'NONE') projectStatusBreakdown.other += item.count;
     });
-    // "Not yet monitored" is every establishment with no project status — the
-    // field absent as well as blank. Only the blank ones were counted, so the
-    // dashboard said 0 while thousands had never been monitored.
-    projectStatusBreakdown.notYetMonitored = await ucdsFor(req).countDocuments({ $or: [{ title_status: { $exists: false } }, { title_status: null }, { title_status: { $regex: '^\\s*$' } }] });
-    // The years before this one whose IIS numbers the register carries: an
-    // establishment with one was monitored that year (the monitoring history).
-    const year = Number(req.activeYear) || new Date().getFullYear();
-    const historyYears = Array.from({ length: 4 }, (_, i) => year - 4 + i);
-    const iisField = (y) => `iis_no_${y}`;
-    const industriesCursor = ucdsFor(req).find(
-      {},
-      { projection: { _id: 1, sort_key: 1, province: 1, ecc_cnc: 1, pto_code: 1, wwdp_code: 1, haz_id: 1, pco_no: 1, pto_expiration: 1, wwdp_expiration: 1, pco_validity: 1, date_monitored: 1, ...Object.fromEntries(historyYears.map((y) => [iisField(y), 1])) } }
-    );
-    const industriesWithAnyPermitSet = new Set();
-    const industriesWithExpiredPermitSet = new Set();
-    // Per province of the Monitoring Plan and per list (Healthcare Industries,
-    // Chemical permits, TSD / TRC, Importers — the 2027 registers' own series),
-    // as the Progress Tracker counts them (analyze.js unitOf).
-    const byUnit = new Map();
-    const monitoringHistory = Object.fromEntries(historyYears.map((y) => [y, 0]));
-    let monitoredThisYear = 0;
-    await industriesCursor.forEach((item) => {
-      if (item.ecc_cnc || item.pto_code || item.wwdp_code || item.haz_id || item.pco_no) industriesWithAnyPermitSet.add(item._id.toString());
-      if (isPermitExpired(item.pto_expiration) || isPermitExpired(item.wwdp_expiration) || isPermitExpired(item.pco_validity)) industriesWithExpiredPermitSet.add(item._id.toString());
-      const unit = unitOf(String(item.sort_key || ''), item.province);
-      byUnit.set(unit, (byUnit.get(unit) || 0) + 1);
-      for (const y of historyYears) if (String(item[iisField(y)] ?? '').trim()) monitoringHistory[y] += 1;
-      if (String(item.date_monitored ?? '').trim()) monitoredThisYear += 1;
-    });
+    projectStatusBreakdown.notYetMonitored = notYetMonitored;
     const unitRank = (u) => (groupOfUnit(u) === 'province' ? 0 : groupOfUnit(u) === 'healthcare' ? 1 : 2);
     const byList = [...byUnit]
       .map(([unit, count]) => ({ unit, label: unit.replace(/_/g, ' '), group: groupOfUnit(unit), count }))
       .sort((a, b) => unitRank(a.unit) - unitRank(b.unit) || (a.group === 'province' ? a.unit.localeCompare(b.unit) : b.count - a.count));
-    return res.json({
+    return {
       totalIndustries,
-      industriesWithAnyPermit: industriesWithAnyPermitSet.size,
-      industriesWithAtLeastOneExpiredPermit: industriesWithExpiredPermitSet.size,
+      industriesWithAnyPermit,
+      industriesWithAtLeastOneExpiredPermit,
       permitBreakdown,
       sectionBreakdown: sectionBreakdownResults,
       projectStatusBreakdown,
@@ -691,11 +763,7 @@ async function dashboardStats(req, res) {
       // Only the years the register has any IIS number for.
       monitoringHistory: Object.entries(monitoringHistory).filter(([, n]) => n > 0).map(([y, count]) => ({ year: Number(y), count })),
       monitoredThisYear,
-    });
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    return res.status(500).json({ error: 'Failed to fetch dashboard statistics.' });
-  }
+    };
 }
 
 // ----- Province data extractors migrated from server.js -----
@@ -725,35 +793,12 @@ const PROVINCE_PROJECTION = Object.fromEntries(
   ].map((f) => [f, 1])
 );
 
-async function getProvinceData(req, res) {
-  try {
-    await connectToMongo();
-    const provinceQuery = req.query.province;
-    if (!provinceQuery) return res.status(400).json({ error: 'Province parameter is required.' });
-    const province = capitalizeFirstLetter(provinceQuery);
-    // Healthcare Industries is not a province: the year's healthcare list,
-    // across the provinces the account may see (ucdsFor applies that scope).
-    const healthcare = healthcareList.isHealthcare(province);
-    if (healthcare && !healthcareList.hasOwnRegister(req)) return res.json([]);
-
-    // A province named in the query is a request, not an entitlement.
-    if (!healthcare && !requestAllowsProvince(req, province)) {
-      return res.status(403).json({
-        code: 'PROVINCE_FORBIDDEN',
-        error: `${province} is not available in the ${req.activeYear} data container for your account.`,
-      });
-    }
-
-    // ucdsFor() already applies the request's province scope to every find, so
-    // the filter here only narrows to the province that was asked for. This
-    // previously called an undefined `withProvinceScope`, which threw on every
-    // request — the helper exists in services/provinces.js but was never
-    // imported, and applying it here would have scoped the query twice anyway.
-    // Everyone opening the same province in the same scope shares one read
-    // for 30 seconds — the whole province, 2 to 8 MB, was read from Atlas
-    // for each of them. Every write to the register clears it (see
-    // clearRegisterChecks), so an edit shows at once.
-    const formattedData = await shortCache.cached(registerScopeKey(req, `${REGISTER_CACHE}province:${province.toLowerCase()}:`), 30 * 1000, async () => {
+// One province as the JSON the screen is sent: see getProvinceData.
+const provinceBody = (req, province, healthcare) =>
+  shortCache.cached(
+    registerScopeKey(req, `${REGISTER_CACHE}province:${province.toLowerCase()}:`),
+    2 * 60 * 1000,
+    async () => {
     // Only the fields the screen is sent (below): a register row loaded from
     // a RAW workbook carries many more, and every one was read from Atlas
     // and held in memory for each province, only to be dropped here.
@@ -761,7 +806,7 @@ async function getProvinceData(req, res) {
       .find(healthcare ? healthcareList.healthcareFilter() : healthcareList.provinceFilter(req, new RegExp(`^${province}$`, 'i')), { projection: PROVINCE_PROJECTION })
       .toArray();
     provinceData.sort((a, b) => (a.id_no || 0) - (b.id_no || 0));
-    return provinceData.map((doc) => ({
+    return Buffer.from(JSON.stringify(provinceData.map((doc) => ({
       id_no: doc.id_no,
       sort_key: doc.sort_key || '',
       helper_column: doc.helper_column || '',
@@ -840,10 +885,50 @@ async function getProvinceData(req, res) {
       order_issued: doc.order || '',
       order_status: doc.order_status || '',
       color: doc.color || '',
-    }));
-    });
-    if (formattedData.length === 0) return res.status(404).json({ message: `No data found for ${province}.` });
-    return res.status(200).json(formattedData);
+    }))));
+    },
+    { staleMs: REGISTER_STALE_MS }
+  );
+
+async function getProvinceData(req, res) {
+  try {
+    await connectToMongo();
+    const provinceQuery = req.query.province;
+    if (!provinceQuery) return res.status(400).json({ error: 'Province parameter is required.' });
+    const province = capitalizeFirstLetter(provinceQuery);
+    // Healthcare Industries is not a province: the year's healthcare list,
+    // across the provinces the account may see (ucdsFor applies that scope).
+    const healthcare = healthcareList.isHealthcare(province);
+    if (healthcare && !healthcareList.hasOwnRegister(req)) return res.json([]);
+
+    // A province named in the query is a request, not an entitlement.
+    if (!healthcare && !requestAllowsProvince(req, province)) {
+      return res.status(403).json({
+        code: 'PROVINCE_FORBIDDEN',
+        error: `${province} is not available in the ${req.activeYear} data container for your account.`,
+      });
+    }
+
+    // ucdsFor() already applies the request's province scope to every find, so
+    // the filter here only narrows to the province that was asked for. This
+    // previously called an undefined `withProvinceScope`, which threw on every
+    // request — the helper exists in services/provinces.js but was never
+    // imported, and applying it here would have scoped the query twice anyway.
+    // Everyone opening the same province in the same scope shares one read
+    // for two minutes — the whole province, 2 to 10 MB, was read from Atlas
+    // for each of them. Every write to the register clears it (see
+    // clearRegisterChecks), so an edit shows at once.
+    // A browser keeps its copy and asks each time whether it is still right
+    // (no-cache is "check first", not "do not keep"): unchanged, the answer is
+    // a 304 with no body rather than the province again.
+    res.set('Cache-Control', 'private, no-cache');
+    // Kept as the JSON it is sent as: a fraction of the memory the rows take,
+    // and not written out afresh (a tenth of a second of Node's one thread) for
+    // each person. Past the two minutes it still answers, and is read again
+    // behind that: a province was seconds over the link, tens of them at worst.
+    const body = await provinceBody(req, province, healthcare);
+    if (body.length <= 2) return res.status(404).json({ message: `No data found for ${province}.` });
+    return res.status(200).type('application/json').send(body);
   } catch (error) {
     console.error('Error retrieving data:', error);
     return res.status(500).json({ error: 'Failed to retrieve data. Please try again later.' });
@@ -975,6 +1060,50 @@ async function extractProvinceData(req, res) {
 }
 
 module.exports.getProvinceData = getProvinceData;
+
+// ----- Worked out ahead of the people who ask -----
+// When a Planning screen opens, its dashboard, permits, register check and
+// reports all ask at once, each reading over a link that slows with every reader:
+// up to 9 s each on 4 Nov 2026, for the first to arrive after a restart or an
+// edit. Done here one after another, for the whole of each open year (every
+// account holding all seven provinces shares these): nothing waits on it, and
+// a person who arrives first simply joins what is under way.
+let warmable = false;
+let warmTimer = null;
+
+async function warmRegisterCaches({ provinces = false } = {}) {
+  warmable = true;
+  const started = Date.now();
+  const yearService = require('../services/yearService');
+  const reports = require('../modules/ucds/services/ucdsReports');
+  const { authorizedProvinces } = require('../services/authorization');
+  let warmed = 0;
+  for (const container of await yearService.listYears()) {
+    if (!(await yearService.isSelectableYear(container.year))) continue;
+    const req = { activeYear: container.year, yearContainer: container, provinceFilter: provinceFilterOf(authorizedProvinces({ permission: 'developer' }, container)) };
+    await sharedDashboardStats(req, '');
+    await shortCache.cached(registerScopeKey(req), 5 * 60 * 1000, () => computeRegisterChecks(req), { staleMs: REGISTER_STALE_MS });
+    await registerDuplicates(req);
+    await sharedPermits(req, [], {});
+    await reports.notInErms(ucdsFor(req), { cacheKey: reports.scopeKeyOf(req) });
+    // Every province too, at startup: the slowest read of all, and only the first
+    // person to open each would wait. Not after each edit: only the province
+    // edited needs it, and that is read when it is next opened.
+    if (provinces) for (const { value } of PROVINCES) await provinceBody(req, value, false);
+    warmed += 1;
+  }
+  console.log(`Register answers ready for ${warmed} year(s) in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+}
+
+/** After an edit drops them, once the edits have paused. */
+function warmSoon() {
+  if (!warmable) return;
+  clearTimeout(warmTimer);
+  warmTimer = setTimeout(() => warmRegisterCaches().catch((err) => console.warn(`[cache] could not warm the register answers: ${err.message}`)), 30 * 1000);
+  if (warmTimer.unref) warmTimer.unref();
+}
+
+module.exports.warmRegisterCaches = warmRegisterCaches;
 module.exports.extractProvinceData = extractProvinceData;
 
 async function getBySortKey(req, res) {

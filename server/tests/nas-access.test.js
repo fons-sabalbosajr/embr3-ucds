@@ -29,7 +29,9 @@ const PLANNING = '__test_nas_planning';
 // not open its document without the Records Unit's approval.
 const PLANNING_ERMS = '__test_nas_planning_erms';
 const DEVELOPER = '__test_nas_dev';
-const USERNAMES = [RECORDS, PLANNING, PLANNING_ERMS, DEVELOPER];
+// UCDS only, and neither the Planning Unit nor a PEMU: asks in the portal.
+const ENCODER = '__test_nas_encoder';
+const USERNAMES = [RECORDS, PLANNING, PLANNING_ERMS, DEVELOPER, ENCODER];
 
 const SERIAL_IN_SCOPE = '__TEST-NAS-1';
 const SERIAL_OUT_OF_SCOPE = '__TEST-NAS-2';
@@ -74,6 +76,7 @@ let records;
 let planning;
 let planningErms;
 let developer;
+let encoder;
 
 beforeAll(async () => {
   await connectToMongo();
@@ -89,6 +92,7 @@ beforeAll(async () => {
     base(PLANNING, { password, permission: 'planning', domains: ['ucds'], bataan: 'readWrite' }),
     base(PLANNING_ERMS, { password, permission: 'planning', domains: ['ucds', 'erms'], nasContainers: ['records'], bataan: 'readWrite' }),
     base(DEVELOPER, { password, permission: 'developer' }),
+    base(ENCODER, { password, permission: 'viewer', domains: ['ucds'], bataan: 'readWrite' }),
   ]);
   await getDb().collection('erms-access-requests').deleteMany({ serialNo: { $in: [SERIAL_IN_SCOPE, SERIAL_NO_DOC] } });
 
@@ -117,11 +121,12 @@ beforeAll(async () => {
       { upsert: true }
     );
 
-  [records, planning, planningErms, developer] = await Promise.all([
+  [records, planning, planningErms, developer, encoder] = await Promise.all([
     signIn(RECORDS),
     signIn(PLANNING),
     signIn(PLANNING_ERMS),
     signIn(DEVELOPER),
+    signIn(ENCODER),
   ]);
 }, 90000);
 
@@ -242,22 +247,35 @@ describe('who may open a document', () => {
   });
 });
 
-describe('a Planning Admin without ERMS, from the planning screens', () => {
-  // The establishment panel on a UCDS screen reaches the same document and
-  // the same rule through the UCDS-domain routes; the ERMS routes still
-  // refuse an account that holds only UCDS.
+describe('a UCDS account without ERMS, from the planning screens', () => {
+  // The establishment panel on a UCDS screen reaches the same document through
+  // the UCDS-domain routes; the ERMS routes still refuse an account that holds
+  // only UCDS. The office's rule (accessRequestService): the Planning Unit and
+  // the PEMUs open it there, in their provinces; anyone else asks in the portal.
   const file = `/api/ucds/records/${SERIAL_IN_SCOPE}/file`;
 
-  it('is pointed to the Document Portal, and has no request route here either', async () => {
+  it('lets the Planning Unit past the approval check, on the UCDS routes only', async () => {
     expect((await planning.get(`/api/erms/records/${SERIAL_IN_SCOPE}/file`)).status).toBe(403);
+    // Allowed: what stops it now is only that the test's scan is not on the share.
+    const res = await planning.get(file);
+    expect(res.body.code).not.toBe('APPROVAL_REQUIRED');
+    expect(res.status).not.toBe(403);
+  });
 
-    const before = await planning.get(file);
+  it('keeps the Planning Unit to its own provinces', async () => {
+    const res = await planning.get(`/api/ucds/records/${SERIAL_OUT_OF_SCOPE}/file`);
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('RECORD_NOT_FOUND');
+  });
+
+  it('points anyone else to the Document Portal, and has no request route here either', async () => {
+    const before = await encoder.get(file);
     expect(before.status).toBe(403);
     expect(before.body.code).toBe('APPROVAL_REQUIRED');
     expect(before.body.reason).toBe('portal');
 
-    expect((await planning.post(`/api/ucds/records/${SERIAL_IN_SCOPE}/access-request`).send({})).status).toBe(404);
-    expect((await planning.get('/api/ucds/access-requests')).status).toBe(404);
+    expect((await encoder.post(`/api/ucds/records/${SERIAL_IN_SCOPE}/access-request`).send({})).status).toBe(404);
+    expect((await encoder.get('/api/ucds/access-requests')).status).toBe(404);
   });
 });
 

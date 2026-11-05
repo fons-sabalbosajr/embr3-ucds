@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, Empty, Input, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, Typography, theme as antdTheme } from "antd";
-import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, KeyOutlined, ReloadOutlined, TeamOutlined, UserAddOutlined } from "@ant-design/icons";
+import { CalendarOutlined, CheckOutlined, CloseOutlined, CloudServerOutlined, DatabaseOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, EnvironmentOutlined, FolderOpenOutlined, KeyOutlined, ReloadOutlined, SettingOutlined, TeamOutlined, ToolOutlined, UserAddOutlined, WarningFilled } from "@ant-design/icons";
 import axios from "axios";
 import UserProfileModal from "./UserAccountModal";
 import AccountPermission from "./AccountPermission";
+import { accessSummary } from "./accessOf";
 import { ApproveRequestModal, RejectRequestModal } from "./ApproveRequestModal";
 import AvatarWithName from "../../../components/AvatarwithName";
 import PageHeader from "../../../shared/components/PageHeader";
@@ -223,6 +224,37 @@ const UserAccounts = () => {
       },
     },
     {
+      title: "Access",
+      key: "access",
+      width: 200,
+      render: (_, u) => {
+        const a = accessSummary(u);
+        const count = (icon, label, n) => (
+          <Tooltip title={`${label}: ${n}`} key={label}>
+            <span className={`user-access-item${n === 0 ? " user-access-none" : ""}`} aria-label={`${label}: ${n}`}>
+              {icon}
+            </span>
+          </Tooltip>
+        );
+        return (
+          <div className="user-access">
+            {a.modules.includes("ucds") && <Tooltip title="Universe Central DB"><DatabaseOutlined className="user-access-module" /></Tooltip>}
+            {a.modules.includes("erms") && <Tooltip title="ERMS"><FolderOpenOutlined className="user-access-module" /></Tooltip>}
+            {a.modules.includes("admin") && <Tooltip title="Administration"><SettingOutlined className="user-access-module" /></Tooltip>}
+            {count(<CalendarOutlined />, "Years", a.years)}
+            {count(<EnvironmentOutlined />, "Provinces", a.provinces)}
+            {count(<ToolOutlined />, "Actions", a.actions)}
+            {count(<CloudServerOutlined />, "Storage containers", a.storage)}
+            {a.problems.length > 0 && (
+              <Tooltip title={a.problems.join(" ")}>
+                <WarningFilled className="user-access-problem" aria-label={a.problems.join(" ")} />
+              </Tooltip>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       title: "Action",
       key: "action",
       width: 120,
@@ -232,8 +264,8 @@ const UserAccounts = () => {
           <Tooltip title="Edit profile">
             <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => setEditingProfile(u)} aria-label="Edit profile" />
           </Tooltip>
-          <Tooltip title="Edit access">
-            <Button size="small" icon={<KeyOutlined />} onClick={() => setEditingAccess(u)} aria-label="Edit access" />
+          <Tooltip title="Manage access">
+            <Button size="small" icon={<KeyOutlined />} onClick={() => setEditingAccess(u)} aria-label="Manage access" />
           </Tooltip>
           {isDeveloper && String(u._id) !== String(me?.user?.userId) && (
             <Tooltip title="Delete account">
@@ -345,7 +377,7 @@ const UserAccounts = () => {
                     loading={loadingUsers}
                     columns={userColumns}
                     dataSource={shown}
-                    scroll={{ x: 900 }}
+                    scroll={{ x: 1100 }}
                     pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 50, 100], showTotal: (t, r) => `${r[0]}–${r[1]} of ${t}` }}
                   />
                 </Space>
@@ -426,7 +458,7 @@ const UserAccounts = () => {
         {editingProfile && <UserProfileModal user={editingProfile} onClose={() => { setEditingProfile(null); loadUsers(); }} />}
       </Modal>
 
-      <Modal title="User Permission" open={Boolean(editingAccess)} footer={null} onCancel={() => { setEditingAccess(null); loadUsers(); }} width={800} destroyOnHidden>
+      <Modal title="Manage access" open={Boolean(editingAccess)} footer={null} onCancel={() => { setEditingAccess(null); loadUsers(); }} width={820} destroyOnHidden>
         {editingAccess && (
           <AccountPermission
             visible

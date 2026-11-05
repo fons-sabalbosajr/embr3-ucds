@@ -60,9 +60,20 @@ const day = (d) => {
   return t && !Number.isNaN(t.getTime()) ? t.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium' }) : null;
 };
 
+/** The ERMS ECC/CNC documents, for a caller to read alongside its own reads. */
+function ermsPermitRecords() {
+  return getDb()
+    .collection('erms-records')
+    .find(
+      { isAttachment: { $ne: true }, 'permit.type': { $in: ECC_TYPES }, $or: [{ 'permit.number': { $nin: [null, ''] } }, { 'permit.refs.number': { $nin: [null, ''] } }] },
+      { projection: { serialNo: 1, permit: 1, proponentName: 1, projectTitle: 1, location: 1 } }
+    )
+    .toArray();
+}
+
 /**
  * @param {Array<{_id, sort_key, title, name, province, ecc_cnc}>} rows every register row with a permit
- * @param {{records?: object[]}} [opts] the ERMS ECC/CNC documents, when the caller has them (tests)
+ * @param {{records?: object[]}} [opts] the ERMS ECC/CNC documents, when the caller has them
  * @returns {Promise<{proposals: object[], review: object[], notes: string[], groups: number}>}
  */
 async function ermsPermitFindings(rows, { records } = {}) {
@@ -78,15 +89,7 @@ async function ermsPermitFindings(rows, { records } = {}) {
   const shared = [...groups.entries()].filter(([, g]) => g.length > 1);
   if (!shared.length) return { proposals: [], review: [], notes: [], groups: 0 };
 
-  const recs =
-    records ||
-    (await getDb()
-      .collection('erms-records')
-      .find(
-        { isAttachment: { $ne: true }, 'permit.type': { $in: ECC_TYPES }, $or: [{ 'permit.number': { $nin: [null, ''] } }, { 'permit.refs.number': { $nin: [null, ''] } }] },
-        { projection: { serialNo: 1, permit: 1, proponentName: 1, projectTitle: 1, location: 1 } }
-      )
-      .toArray());
+  const recs = records || (await ermsPermitRecords());
   const index = pm.buildIndex(recs.map((r) => ({ sort_key: r.serialNo, ecc_cnc: numbersOf(r).join(', '), rec: r })));
   const byName = new Map();
   for (const r of recs) {
@@ -184,4 +187,4 @@ async function ermsPermitFindings(rows, { records } = {}) {
   };
 }
 
-module.exports = { ermsPermitFindings, permitKey, sameEstablishment };
+module.exports = { ermsPermitFindings, ermsPermitRecords, permitKey, sameEstablishment };

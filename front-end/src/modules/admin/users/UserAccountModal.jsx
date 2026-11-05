@@ -14,8 +14,8 @@ const { Text, Title } = Typography;
 // ---------------------------------------------------------------------------
 // Account Details: who this person is, and a plain summary of what their
 // account can reach. Identity fields are edited here; everything under
-// "Access" is set from the User Permission dialog (Edit Access), which
-// carries the checks — this view only reports it.
+// "Access" is set from the Manage access dialog, which carries the checks —
+// this view only reports it.
 // ---------------------------------------------------------------------------
 
 const PROVINCES = [
@@ -43,7 +43,7 @@ const DOMAIN_LABELS = { ucds: "UCDS", erms: "ERMS", admin: "Administration" };
 const DEFAULT_DOMAINS = {
   developer: ["ucds", "erms", "admin"],
   admin: ["ucds", "erms", "admin"],
-  records: ["erms", "ucds"],
+  records: ["erms"],
   planning: ["ucds"],
   viewer: ["ucds"],
 };
@@ -168,7 +168,7 @@ const UserAccountModal = ({ user, onClose, onSaved }) => {
         showIcon
         icon={<SafetyCertificateOutlined />}
         message="What this account can reach"
-        description="Set from Edit Access on the User Accounts table. Shown here as the server applies it."
+        description="Set from Manage access on the User Accounts table. Shown here as the server applies it."
       />
       <Descriptions column={1} size="small" bordered labelStyle={{ width: 180 }}>
         <Descriptions.Item label="Account type">

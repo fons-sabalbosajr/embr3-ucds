@@ -241,6 +241,8 @@ Run from `server/`.
 | `npm run daily-check -- --csv=<export>` | Compare the desktop ERMS export with the web records during the parallel period |
 | `npm run reconcile` | Re-run the ERMS migration data gates |
 | `npm run nas:coverage` | How many records' documents resolve on the share |
+| `npm run size` (in `front-end/`, after a build) | Fail when a main chunk passes its compressed-size budget |
+| `GET /api/health/performance` (Developer) | The slowest routes and longest event-loop stall since the server started; anything over `SLOW_REQUEST_MS` (default 3 s) is also written to the log |
 | `node scripts/backup-collections.js` | Back up collections as Extended JSON, verified by read-back and SHA-256 |
 | `node scripts/drop-backed-up.js` | Drop only collections a verified backup manifest lists (dry run unless `--apply`) |
 
@@ -256,8 +258,8 @@ Run from `server/`.
 - **Guards run on the server before any model is reached.** Secrets, keys and environment values are refused for every role. How the system is built is answered only for developers. Off-topic questions are declined.
 - **Exact figures for staff.** Asked "how many…", VERA quotes live counts for the records the account can see (Records, Legal, Laboratory, the Central DB register, Document Portal requests, accounts for administrators). These come from the same functions the dashboards use.
 - **Sign-in page surface** (off by default). A separate, tiny knowledge base: requesting an account, signing in, resetting a password. It never confirms whether an account exists, refuses every lookup, and is rate limited per address.
-- **Document Portal surface** (on by default). VERA introduces herself in one short line and explains finding, requesting and reading any office document. She sees no request, document or person.
-- **No counts for the public.** On both public surfaces, a question asking for a number gets no figure, only the office website (Admin Settings › VERA Assistant › Office website). This is checked on the server before any model is reached.
+- **Document Portal surface** (on by default). VERA introduces herself in one short line and explains finding, requesting and reading any office document. She can quote what the portal itself shows anyone: how many documents can be requested, and what its search box finds. She sees no request or person, and never what a document contains.
+- **No counts for the public, beyond those portal totals.** On the sign-in page a question asking for a number gets no figure, only the office website (Admin Settings › VERA Assistant › Office website). This is checked on the server before any model is reached. The portal never gives a count of requests.
 - **Keys live only in `server/.env`.** They are never stored in the database or sent to a browser. The master switch is `AUTOMATION_AGENT_ENABLED` (or `VERA_ENABLED`). Without it VERA still works, from the help library, at no cost.
 - **Limits:** per person per day and for the whole office per day; a duplicate-submit guard.
 - **Questions and answers are never stored.** The activity log keeps metadata only: who, when, which screen, which articles matched, model or library, tokens and time.

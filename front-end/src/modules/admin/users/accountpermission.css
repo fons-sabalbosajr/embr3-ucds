@@ -1,26 +1,30 @@
+/* Colours come from the theme (light and dark), so nothing is hard-coded here
+   but the online dot. */
+
 .account-permission-container {
-  padding: 10px 15px;
+  padding: 4px 2px 0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 12px;
 }
 
 .avatar-section {
   position: relative;
-  margin-right: 16px;
+  flex: none;
 }
 
 .status-dot {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
-  width: 14px;
-  height: 14px;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--access-surface);
 }
 
 .status-dot.online {
@@ -28,10 +32,11 @@
 }
 
 .status-dot.offline {
-  background-color: #d9534f;
+  background-color: #a0a0a0;
 }
 
 .user-details {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -43,58 +48,352 @@
 
 .user-email-details {
   font-size: 12px;
-  margin: 0;
-  color: #bbbbbb;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--access-text-2);
 }
 
 .user-permission-details {
-  margin: 4px 0;
+  margin: 4px 0 0;
 }
 
+.access-loading {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--access-text-2);
+}
 
-.note-section {
+.access-warning {
+  margin-bottom: 12px;
+}
+
+/* The tabs: icon, name, and how much is held. */
+
+.access-tabs.ant-tabs-left {
+  min-height: 420px;
+}
+
+.access-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.access-tab-count {
+  margin-inline-start: auto;
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  background: var(--access-fill);
+  color: var(--access-text-2);
+}
+
+.access-tab-edited::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--access-warning);
+}
+
+/* The sections. */
+
+.access-section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.access-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.access-lock {
+  font-size: 12px;
+  color: var(--access-text-3);
+}
+
+.access-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--access-text-2);
+}
+
+.access-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.access-count {
+  margin-inline-start: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--access-text-2);
+}
+
+.access-select-all {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--access-fill-soft);
+}
+
+/* One choice: the box, then an icon in a tile, then what it is. The row is the
+   control's own label (AccessOption), so all of it is the click target. */
+
+.access-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.access-list-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.access-option.ant-checkbox-wrapper,
+.access-option.ant-radio-wrapper,
+.access-option-static {
   display: flex;
   align-items: flex-start;
-  padding: 12px 16px;
-  margin-bottom: 24px;
-}
-
-.note-section svg {
-  margin-right: 12px;
-  margin-top: 2px;
-}
-
-.note-label {
+  width: 100%;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  max-width: 600px;
+  padding: 10px 12px;
+  border: 1px solid var(--access-border);
+  border-radius: 8px;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
-.permission-badge {
-  padding: 2px 8px;
-  border-radius: 12px;
+.access-option.ant-checkbox-wrapper:not(.ant-checkbox-wrapper-disabled):hover,
+.access-option.ant-radio-wrapper:not(.ant-radio-wrapper-disabled):hover {
+  border-color: var(--access-primary);
+}
+
+.access-option-on.ant-checkbox-wrapper,
+.access-option-on.ant-radio-wrapper {
+  border-color: var(--access-primary-border);
+  background-color: color-mix(in srgb, var(--access-primary) 9%, transparent);
+}
+
+/* The box and the icon tile share a centre line, whatever the text does below. */
+.access-option > .ant-checkbox,
+.access-option > .ant-radio {
+  flex: none;
+  align-self: flex-start;
+  top: 0;
+  margin-top: 7px;
+}
+
+.access-option > .ant-checkbox + span,
+.access-option > .ant-radio + span,
+.access-option-body {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding-inline: 12px 0;
+}
+
+/* A box that cannot be changed still reads clearly: on, and fixed. */
+.account-permission-container .ant-checkbox-disabled + span,
+.account-permission-container .ant-radio-disabled + span {
+  color: inherit;
+}
+
+.account-permission-container .ant-checkbox-wrapper-disabled:not(.access-option-on) .access-option-text,
+.account-permission-container .ant-radio-wrapper-disabled:not(.access-option-on) .access-option-text {
+  opacity: 0.6;
+}
+
+.account-permission-container .ant-checkbox-disabled.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: var(--access-text-3);
+  border-color: transparent;
+}
+
+.account-permission-container .ant-checkbox-disabled.ant-checkbox-checked .ant-checkbox-inner::after {
+  border-color: var(--access-surface);
+}
+
+.access-option-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--access-text-2);
+  background: var(--access-fill-soft);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.access-option-on .access-option-icon {
+  color: var(--access-primary);
+  background: color-mix(in srgb, var(--access-primary) 16%, transparent);
+}
+
+.access-option-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 32px;
+}
+
+/* Sizes stated, not inherited: a radio group sets its own font size to 0. */
+.access-option-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.access-option-name .ant-tag {
+  margin: 0;
+}
+
+.access-option-note {
   font-size: 11px;
-  color: white;
-  text-transform: capitalize;
+  font-weight: 400;
+  color: var(--access-text-2);
 }
 
-.icon-container{
-  margin-right: 10px;
+.access-option-description {
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--access-text-2);
 }
 
-.access-details{
+.access-option-compact.ant-checkbox-wrapper,
+.access-option-compact.ant-radio-wrapper {
+  padding: 8px 10px;
+}
+
+.access-option-state {
+  flex: none;
+  width: 18px;
+  margin-top: 7px;
+  font-size: 18px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.access-on {
+  color: var(--access-success);
+}
+
+.access-off {
+  color: var(--access-text-3);
+}
+
+/* Years and storage. */
+
+.access-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.access-tiles + .access-warning {
+  margin: 12px 0 0;
+}
+
+/* The province grid. */
+
+.access-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.access-grid th,
+.access-grid td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--access-border);
+  text-align: center;
+  font-weight: 400;
+}
+
+.access-grid th:first-child {
   text-align: left;
+  font-weight: 500;
 }
+
+.access-grid thead th {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The boxes sit in the middle of their cells, not on a line of text. */
+.access-grid .ant-checkbox-wrapper {
+  display: inline-flex;
+  vertical-align: middle;
+  margin: 0;
+}
+
+.access-grid .ant-checkbox {
+  top: 0;
+}
+
+.access-grid-all th,
+.access-grid-all td {
+  background: var(--access-fill-soft);
+}
+
+.access-grid th.access-grid-level,
+.access-grid td.access-grid-level {
+  width: 92px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--access-text-2);
+}
+
+.access-grid-none th {
+  font-weight: 400;
+  color: var(--access-text-2);
+}
+
+@media (max-width: 480px) {
+  .access-grid th,
+  .access-grid td {
+    padding: 9px 6px;
+  }
+}
+
+/* The footer. */
 
 .footer-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 10px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--access-border);
 }
 
-.year-checkboxes {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 8px 12px;
+.access-unsaved {
+  margin-inline-end: auto;
+  font-size: 12px;
 }
+

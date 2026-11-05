@@ -1,7 +1,7 @@
 const registryService = require('../services/registryService');
 const { principalOf } = require('../../../middleware/auth');
 const { hasDomain, canAccessAllYears, DOMAINS } = require('../../../services/authorization');
-const { userProvinceKeys } = require('../../../services/provinces');
+const { userProvinceKeys, provinceFilter } = require('../../../services/provinces');
 const { notFoundError } = require('../../../shared/middleware/errorHandler');
 
 // ---------------------------------------------------------------------------
@@ -43,9 +43,12 @@ async function establishmentRecords(req, res, next) {
     // its own, renumbered from the RAW workbooks (services/yearScope registerOf).
     const ownRegister = Boolean(req.yearContainer?.register);
     const scope = scopeOf(req);
+    // By provinceFilter: the scope is keys ("bataan") and the register holds
+    // values ("Bataan"). Matched as they were, every establishment answered
+    // "not found" to every account limited by province.
     const establishment = await registerOf(req).findOne({
       sort_key: sortKey,
-      ...(Array.isArray(scope) ? { province: { $in: scope } } : {}),
+      ...(Array.isArray(scope) ? provinceFilter(scope) : {}),
     });
     if (!establishment) throw notFoundError('Establishment not found.', 'ESTABLISHMENT_NOT_FOUND');
 

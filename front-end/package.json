@@ -11,6 +11,7 @@
     "dev": "vite --host",
     "prebuild": "node ../scripts/sync-env.js && node ../scripts/check-client-env.js",
     "build": "vite build",
+    "size": "node scripts/check-bundle-size.js",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "purge:report": "purgecss --config purgecss.report.config.cjs",

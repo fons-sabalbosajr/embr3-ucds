@@ -769,11 +769,12 @@ describe('a season followed through a save', () => {
     }
   });
 
-  it('lets the Developer name the colours on the newly issued lists the workshop does not use, not its own four', async () => {
-    // Peach folds into orange; green is the workshop's.
-    const names = await tracker.setMasterlistNames(String(season._id), { purple: '  For endorsement  ', peach: 'Pending verification', green: 'not allowed', gray: '' });
-    expect(names).toEqual({ purple: 'For endorsement', orange: 'Pending verification' });
-    expect((await tracker.overview(String(season._id))).masterlistNames).toEqual({ purple: 'For endorsement', orange: 'Pending verification' });
+  it('lets the Developer name the colours on the newly issued lists the workshop does not use, not its own', async () => {
+    // Sky blue folds into blue. Green is the workshop's, and so since 21 Oct is
+    // orange, under any of the shades that fold into it.
+    const names = await tracker.setMasterlistNames(String(season._id), { purple: '  For endorsement  ', skyblue: 'Pending verification', green: 'not allowed', orange: 'not allowed', peach: 'not allowed', gray: '' });
+    expect(names).toEqual({ purple: 'For endorsement', blue: 'Pending verification' });
+    expect((await tracker.overview(String(season._id))).masterlistNames).toEqual({ purple: 'For endorsement', blue: 'Pending verification' });
     await expect(tracker.setMasterlistNames(String(season._id), ['x'])).rejects.toMatchObject({ status: 400 });
   });
 

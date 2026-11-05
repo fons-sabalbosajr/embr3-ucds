@@ -21,6 +21,7 @@ const { getDb } = require('../../../config/db');
 const pm = require('./permitMatch');
 
 const INDEX_TTL = 10 * 60 * 1000;
+const INDEX_STALE = 24 * 60 * 60 * 1000;
 let cached = { at: 0, index: null };
 // A build in progress: callers that arrive meanwhile wait for it rather than
 // each reading the whole Document Library again (3 s on the shared cluster).
@@ -28,11 +29,18 @@ let building = null;
 
 /** The ERMS Document Library as a permit index (main records; attachments share their number). */
 async function ermsIndex() {
-  if (cached.index && Date.now() - cached.at < INDEX_TTL) return cached.index;
+  const age = Date.now() - cached.at;
+  if (cached.index && age < INDEX_TTL) return cached.index;
   if (!building) {
     building = buildErmsIndex().finally(() => {
       building = null;
     });
+  }
+  // Past its time, the last index still answers while the next is built: nobody
+  // waits the read of the whole Document Library each time the window ends.
+  if (cached.index && age < INDEX_STALE) {
+    building.catch((err) => console.warn(`[reports] could not rebuild the ERMS index: ${err.message}`));
+    return cached.index;
   }
   return building;
 }
@@ -185,16 +193,29 @@ const provinceLabel = (p) => String(p || 'Unfiled').trim().replace(/_/g, ' ').to
 // once per scope, kept for a few minutes (cleared by any register edit: the
 // key starts with the controller's REGISTER_CACHE prefix), and both reports
 // are read from it.
+//
+// Read in two steps since 4 Nov 2026: what moves over the link is what costs
+// here (on the shared cluster, seconds per few megabytes). Every row's permit
+// and province for the counts, and titles and places only for the rows that are
+// listed. An answer past its window still answers while the next is worked out.
 
 const shortCache = require('../../../shared/services/shortCache');
 const REPORTS_TTL = 5 * 60 * 1000;
+const REPORTS_STALE = 24 * 60 * 60 * 1000;
 const REPORTS_CACHE = 'ucds:register-reports:';
+
+/** Which register and which provinces: the reports are shared between requests with the same scope, never across scopes. */
+function scopeKeyOf(req) {
+  const list = req.provinceFilter?.province?.$in;
+  const provinces = !req.provinceFilter ? 'all' : Array.isArray(list) ? list.map(String).sort().join('|') : JSON.stringify(req.provinceFilter);
+  return `${req.yearContainer?.register || 'shared'}:${provinces}`;
+}
 
 /** Every establishment in scope with its permit's ERMS status, in the register's order. */
 async function anchoredRegister(scoped) {
   const [docs, index] = await Promise.all([
     scoped
-      .find({}, { projection: { _id: 0, sort_key: 1, id_no: 1, title: 1, name: 1, ecc_cnc: 1, province: 1, city: 1, date_approved: 1, monitoring_sched: 1, date_monitored: 1 } })
+      .find({}, { projection: { _id: 0, sort_key: 1, ecc_cnc: 1, province: 1, monitoring_sched: 1, date_monitored: 1 } })
       .sort({ id_no: 1 })
       .toArray(),
     ermsIndex(),
@@ -204,7 +225,14 @@ async function anchoredRegister(scoped) {
 
 /** The anchored register for a scope: shared for REPORTS_TTL when `cacheKey` names the scope. */
 const anchoredFor = (scoped, cacheKey) =>
-  cacheKey ? shortCache.cached(`${REPORTS_CACHE}${cacheKey}`, REPORTS_TTL, () => anchoredRegister(scoped)) : anchoredRegister(scoped);
+  cacheKey ? shortCache.cached(`${REPORTS_CACHE}${cacheKey}`, REPORTS_TTL, () => anchoredRegister(scoped), { staleMs: REPORTS_STALE }) : anchoredRegister(scoped);
+
+/** sort_key → title and place, for the rows the ERMS validation list shows. */
+async function missingDetails(scoped, docs) {
+  const keys = docs.filter((d) => d.erms === 'missing').map((d) => d.sort_key);
+  const rows = await scoped.find({ sort_key: { $in: keys } }, { projection: { _id: 0, sort_key: 1, title: 1, name: 1, city: 1, date_approved: 1 } }).toArray();
+  return new Map(rows.map((r) => [r.sort_key, r]));
+}
 
 /** Per province: establishments, scheduled, monitored, with a permit, found in ERMS. */
 async function accomplishment(scoped, { cacheKey } = {}) {
@@ -227,10 +255,16 @@ async function accomplishment(scoped, { cacheKey } = {}) {
 /** Establishments whose permit is not in the ERMS Document Library — the list to validate. */
 async function notInErms(scoped, { province, cacheKey } = {}) {
   const docs = await anchoredFor(scoped, cacheKey);
+  const details = cacheKey
+    ? await shortCache.cached(`${REPORTS_CACHE}missing:${cacheKey}`, REPORTS_TTL, () => missingDetails(scoped, docs), { staleMs: REPORTS_STALE })
+    : await missingDetails(scoped, docs);
   const inProvince = province ? provinceRegex(province) : null;
   return docs
     .filter((d) => d.erms === 'missing' && (!inProvince || inProvince.test(String(d.province || ''))))
-    .map((d) => ({ sort_key: d.sort_key, title: d.title || d.name || '', ecc_cnc: d.ecc_cnc, province: provinceLabel(d.province), city: d.city || '', date_approved: d.date_approved || '' }));
+    .map((d) => {
+      const x = details.get(d.sort_key) || {};
+      return { sort_key: d.sort_key, title: x.title || x.name || '', ecc_cnc: d.ecc_cnc, province: provinceLabel(d.province), city: x.city || '', date_approved: x.date_approved || '' };
+    });
 }
 
-module.exports = { notInErms, ermsIndex, anchorOne, anchor, monitoringPlanWorkbook, viewWorkbook, accomplishment, provinceLabel, REPORTS_CACHE };
+module.exports = { notInErms, ermsIndex, anchorOne, anchor, monitoringPlanWorkbook, viewWorkbook, accomplishment, provinceLabel, scopeKeyOf, REPORTS_CACHE };

@@ -349,6 +349,10 @@ const formatResume = (until) =>
 // provider:model -> { until, reason }. Process-local: a restart forgets, and
 // the first call after it learns again in one request.
 const resting = new Map();
+// provider:model -> failures in a row, for the rests that grow (restFor). On
+// 4 Nov 2026 gemini-3.8-flash had answered 0 of 13 calls in two weeks at about
+// 18 s each: a model that keeps failing should cost fewer and fewer people that wait.
+const strikes = new Map();
 const restKey = (p, m) => `${p}:${m}`;
 const MIN = 60 * 1000;
 
@@ -372,16 +376,20 @@ function restFor(err) {
   if (err?.status === 404) return { ms: 60 * MIN, reason: 'model not available to this key' };
   // A model that just failed is skipped for a while: while it is overloaded,
   // waiting out its share of the time on every message made each answer slow.
-  if (overloaded(err)) return { ms: 10 * MIN, reason: 'overloaded' };
-  if (timedOut(err)) return { ms: 10 * MIN, reason: 'too slow' };
+  // Doubled each time it fails again, up to an hour (10, 20, 40, 60 minutes).
+  if (overloaded(err)) return { ms: 10 * MIN, reason: 'overloaded', grows: true };
+  if (timedOut(err)) return { ms: 10 * MIN, reason: 'too slow', grows: true };
   return null;
 }
 
 function rest(candidate, err) {
   const r = restFor(err);
   if (!r) return false;
-  const until = Date.now() + r.ms;
-  resting.set(r.wholeProvider ? restKey(candidate.provider, '*') : restKey(candidate.provider, candidate.model), { until, reason: r.reason });
+  const model = restKey(candidate.provider, candidate.model);
+  const times = (strikes.get(model) || 0) + 1;
+  strikes.set(model, times);
+  const ms = r.grows ? Math.min(r.ms * 2 ** (times - 1), 60 * MIN) : r.ms;
+  resting.set(r.wholeProvider ? restKey(candidate.provider, '*') : model, { until: Date.now() + ms, reason: r.reason });
   return true;
 }
 
@@ -661,6 +669,7 @@ async function complete(cfg, { system, prompt, maxTokens, signal, documents, tie
       out = await call(args);
       // It answers: whatever it rested for is over.
       resting.delete(restKey(c.provider, c.model));
+      strikes.delete(restKey(c.provider, c.model));
       usage.record({ provider: c.provider, model: c.model, ok: true, inputTokens: out.inputTokens, outputTokens: out.outputTokens, ms: Date.now() - at, feature });
     } catch (err) {
       lastErr = err;
@@ -757,7 +766,9 @@ async function fetchInfo(provider, model) {
     return { displayName: b.displayName || null, contextWindow: b.inputTokenLimit || null, maxOutput: b.outputTokenLimit || null, thinking: Boolean(b.thinking) };
   }
   if (provider === 'groq') {
-    const r = await fetch(`https://api.groq.com/openai/v1/models/${encodeURIComponent(model)}`, { headers: { authorization: `Bearer ${key}` }, signal: timeout });
+    // The slash in "openai/gpt-oss-120b" stays a slash: Groq answers 404 to %2F,
+    // and the Models tab showed no details for its models.
+    const r = await fetch(`https://api.groq.com/openai/v1/models/${model.split('/').map(encodeURIComponent).join('/')}`, { headers: { authorization: `Bearer ${key}` }, signal: timeout });
     if (!r.ok) return null;
     const b = await r.json();
     return { displayName: b.id || model, contextWindow: b.context_window || null, maxOutput: b.max_completion_tokens || null, thinking: /gpt-oss|qwen3|deepseek-r1/i.test(model) };
@@ -824,5 +835,8 @@ module.exports = {
   routerStatus,
   parseRetryDelay,
   // For tests: forget which models are resting.
-  _resetRouter: () => resting.clear(),
+  _resetRouter: () => {
+    resting.clear();
+    strikes.clear();
+  },
 };

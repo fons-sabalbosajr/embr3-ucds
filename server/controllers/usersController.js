@@ -63,12 +63,15 @@ async function createUser(req, res) {
   try {
     await connectToMongo();
 
-    const existingUser = await collections.users.findOne({ email });
+    // Regardless of capitals: sign-in matches them regardless of capitals, so
+    // "Merlinda" beside "merlinda" would sign one of them in as the other.
+    const caseless = { collation: { locale: 'en', strength: 2 } };
+    const existingUser = await collections.users.findOne({ email }, caseless);
     if (existingUser) {
       return res.status(400).json({ error: 'Email already exists' });
     }
 
-    const existingUsername = await collections.users.findOne({ username });
+    const existingUsername = await collections.users.findOne({ username }, caseless);
     if (existingUsername) {
       return res.status(400).json({ error: 'Username already exists' });
     }
@@ -296,6 +299,40 @@ async function deleteUser(req, res) {
 }
 
 /** GET /api/users/types — the assignable types with their descriptions. */
+/**
+ * PUT /api/users/:id/domains — the modules an account enters: UCDS, ERMS.
+ *
+ * Beyond its type: a Planning Admin who also reads the Document Library, an ERMS
+ * User who also reads the register. Administration comes only with the type, and
+ * a Developer or Administrator holds every module, so neither is set here. The
+ * type's own modules are stored as nothing at all, so that the account follows
+ * its type if the default ever changes.
+ */
+async function setUserDomains(req, res) {
+  const { DEFAULT_DOMAINS, DOMAINS, canAccessAllYears, normalizeDomains } = require('../services/authorization');
+  try {
+    await connectToMongo();
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid user ID' });
+    const wanted = normalizeDomains(req.body?.domains);
+    if (!wanted.length) return res.status(400).json({ error: 'Choose at least one module.' });
+    if (wanted.includes(DOMAINS.ADMIN)) return res.status(400).json({ error: 'Administration comes with the account type.' });
+
+    const account = await collections.users.findOne({ _id: new ObjectId(id) }, { projection: { permission: 1 } });
+    if (!account) return res.status(404).json({ error: 'User not found' });
+    if (canAccessAllYears(account)) return res.status(400).json({ error: 'This account type holds every module.' });
+
+    const defaults = DEFAULT_DOMAINS[String(account.permission || '').toLowerCase()] || [];
+    const asDefault = wanted.length === defaults.length && wanted.every((d) => defaults.includes(d));
+    const stamp = { domainsUpdatedAt: new Date(), domainsUpdatedBy: req.session?.user?.username || 'unknown' };
+    await collections.users.updateOne({ _id: account._id }, asDefault ? { $set: stamp, $unset: { domains: '' } } : { $set: { domains: wanted, ...stamp } });
+    return res.json({ message: 'Modules updated', domains: wanted });
+  } catch (error) {
+    console.error('Error setting modules:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
 function listUserTypes(req, res) {
   const { ASSIGNABLE_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLES, ERMS_UNIT_VALUES, ERMS_UNIT_LABELS } = require('../services/authorization');
   return res.json({
@@ -432,7 +469,7 @@ async function setMyTheme(req, res) {
 }
 void THEME_ACCENTS;
 
-module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, approveSignUp, rejectSignUp, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme };
+module.exports = { updateUserAvatar, createUser, updateUserById, updateProfile, approveSignUp, rejectSignUp, setUserType, setUserDomains, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme };
  
 // ---- Additional Users GET endpoints migrated from server.js ----
 async function getUsers(req, res) {

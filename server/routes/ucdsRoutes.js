@@ -87,13 +87,7 @@ router.get('/api/ucds/dashboard-stats', heavy, dashboardStats);
   const { provinceScoped } = require('../services/provinces');
   const { registerOf } = require('../services/yearScope');
   const scoped = (req) => provinceScoped(registerOf(req), req);
-  // Which register and which provinces: the reports are shared between
-  // requests with the same scope, never across scopes.
-  const scopeKey = (req) => {
-    const list = req.provinceFilter?.province?.$in;
-    const provinces = !req.provinceFilter ? 'all' : Array.isArray(list) ? list.map(String).sort().join('|') : JSON.stringify(req.provinceFilter);
-    return `${req.yearContainer?.register || 'shared'}:${provinces}`;
-  };
+  const scopeKey = reports.scopeKeyOf;
   router.post('/api/ucds/erms-anchor', ucdsAccess, async (req, res, next) => {
     try {
       const keys = (Array.isArray(req.body?.sortKeys) ? req.body.sortKeys : []).map(String).slice(0, 8000);
@@ -166,9 +160,12 @@ router.get('/api/ucds/search-pco-name', ucdsAccess, searchPcoName);
 
 // Simple stats and lists
 router.get('/api/firm-count', ucdsAccess, firmCount);
-router.get('/api/ucds', ucdsAccess, getAllUcds);
+// The whole register, up to 18 MB in about 5 s, and every location, about 1 MB
+// in 2 s (4 Nov 2026). No screen calls either: kept for whoever else may, but
+// under the limit for reads of a whole collection.
+router.get('/api/ucds', heavy, getAllUcds);
 router.get('/api/ucds-data', ucdsAccess, getUcdsData);
-router.get('/api/ucds-locations', ucdsAccess, getUcdsLocations);
+router.get('/api/ucds-locations', heavy, getUcdsLocations);
 router.get('/api/ucds/count', ucdsAccess, getUcdsCount);
 router.get('/api/get-province-data', ucdsAccess, getProvinceData);
 router.get('/api/extract-province-data', heavy, extractProvinceData);

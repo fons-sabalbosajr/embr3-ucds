@@ -44,6 +44,9 @@ async function connectWithRetry(attempt = 0) {
       await portal.ensureIndexes();
       portal.start();
     }
+    // Behind everything else, and nothing waits on it: the register's slowest
+    // answers, ready before the first person asks.
+    require("./controllers/ucdsController").warmRegisterCaches({ provinces: true }).catch((err) => console.warn(`[cache] could not warm the register answers: ${err.message}`));
   } catch (error) {
     const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
     console.error(`MongoDB connection failed (${error.name}: ${error.message}); retrying in ${delay / 1000}s.`);

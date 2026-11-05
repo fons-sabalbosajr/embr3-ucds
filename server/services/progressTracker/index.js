@@ -1342,7 +1342,7 @@ async function setRawColourName(id, input) {
 
 /**
  * The Developer's names for the colours on the newly issued lists that the
- * workshop's legend does not use (orange, blue, purple, gray): { family:
+ * workshop's legend does not use (blue, purple, gray): { family:
  * name }. Named, not judged — the RAW data is not held against them. An empty
  * name takes the name off.
  */
@@ -1355,7 +1355,7 @@ async function setMasterlistNames(id, input) {
   for (const [fam, label] of Object.entries(input)) {
     const to = MERGED[fam] || fam;
     const text = String(label ?? '').trim().slice(0, 60);
-    // Not the workshop's four.
+    // Not the workshop's own (MASTERLIST_LEGEND).
     if (FAMILIES.includes(to) && !MASTERLIST_LEGEND[to] && text) names[to] = text;
   }
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { masterlistNames: names, masterlistNamesUpdatedAt: new Date() } });

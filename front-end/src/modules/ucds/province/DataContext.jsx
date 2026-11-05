@@ -46,12 +46,11 @@ export const DataProvider = ({ children }) => {
       // — again. Callers that overlap now share the request in flight.
       if (!inFlight.current[province]) {
         inFlight.current[province] = axios
-          .get(`${API_BASE_URL}/api/get-province-data`, {
-            params: { province, _nocache: Date.now() },
-            headers: {
-              "Cache-Control": "no-cache", // Force HTTP no-cache
-            },
-          })
+          // No cache-busting here. The server marks this "check first": the
+          // browser asks whether its copy is still right, and an unchanged
+          // province comes back as a 304, not 2 to 10 MB again. A timestamp in
+          // the URL, or a no-cache request header, made the server send it all.
+          .get(`${API_BASE_URL}/api/get-province-data`, { params: { province } })
           .finally(() => {
             delete inFlight.current[province];
           });

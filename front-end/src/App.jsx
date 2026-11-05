@@ -6,7 +6,6 @@ import FeedbackBridge from './shared/FeedbackBridge';
 import Landing from './Landing';
 import Register from './Register';
 import Login from './Login';
-import Universe from './Universe';
 import ProtectedRoute from './ProtectedRoute';
 import YearGuard from './YearGuard';
 import RouteError from './RouteError';
@@ -19,6 +18,9 @@ import { ROUTES, SITE_BASE } from './config/routes';
 import axios from 'axios';
 import PageLoading from './shared/components/PageLoading';
 
+// The signed-in application: its own chunk, so the landing and sign-in pages do
+// not carry it. On 4 Nov 2026 it made them download 4.2 MB (1.3 MB compressed).
+const Universe = lazy(() => import('./Universe'));
 // The public Document Portal: its own chunk, so the landing and sign-in pages
 // do not carry the PDF viewer.
 const DocumentPortal = lazy(() => import('./modules/portal/DocumentPortal'));
@@ -109,7 +111,15 @@ const router = createBrowserRouter(
       <Route element={<ProtectedRoute />}>
         <Route path={ROUTES.selectYear} element={<YearSelect />} errorElement={<RouteError />} />
         <Route element={<YearGuard />}>
-          <Route path='/e-universe/*' element={<Universe />} errorElement={<RouteError />} />
+          <Route
+            path='/e-universe/*'
+            element={
+              <Suspense fallback={<PageLoading tip="Opening E-Universe" />}>
+                <Universe />
+              </Suspense>
+            }
+            errorElement={<RouteError />}
+          />
         </Route>
       </Route>
 

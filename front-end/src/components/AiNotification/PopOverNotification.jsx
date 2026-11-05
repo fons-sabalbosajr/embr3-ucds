@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { lazy, Suspense, useState, useMemo, useEffect } from "react";
 import {
   Popover,
   Badge,
@@ -32,13 +32,15 @@ import {
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 // import { formatDistanceToNow } from "date-fns"; // Removed as dateAdded is not used
-// Known boundary debt: a shared notification popover opens a UCDS screen.
-// Tracked in docs/UNIFICATION-PLAN.md.
-// eslint-disable-next-line no-restricted-imports
-import ProvinceModal from "../../modules/ucds/province/ProvinceModal";
 import DuplicateNotif from "../DuplicateNotification/DuplicateNotif";
 import DeviceNoticesToggle from "../../shared/notifications/DeviceNoticesToggle";
 import "./popovernotification.css";
+
+// Known boundary debt: a shared notification popover opens a UCDS screen.
+// Tracked in docs/UNIFICATION-PLAN.md.
+// Fetched when a notice is opened: it brings the PDF viewer, and this popover
+// is on every screen.
+const ProvinceModal = lazy(() => import("../../modules/ucds/province/ProvinceModal"));
 
 const { Panel } = Collapse;
 
@@ -784,7 +786,9 @@ const NotificationsPopover = ({
         footer={null}
       >
         {selectedRecord && (
-          <ProvinceModal record={selectedRecord} onClose={handleCloseModal} />
+          <Suspense fallback={null}>
+            <ProvinceModal record={selectedRecord} onClose={handleCloseModal} />
+          </Suspense>
         )}
       </Modal>
 

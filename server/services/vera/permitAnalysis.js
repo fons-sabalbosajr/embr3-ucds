@@ -171,7 +171,12 @@ function statusOf(value) {
   return { nonCompliant: Boolean(m[1]), survey: Boolean(m[2]), text: s };
 }
 
-const fmtDate = (d) => d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+// One formatter, shared: toLocaleDateString builds a new one each time, and over
+// a register's dates that was 4.5 s of Node's one thread in a 17 s check (4 Nov
+// 2026), the largest single cost in it. format() throws on an invalid date, where
+// toLocaleDateString said so.
+const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+const fmtDate = (d) => (Number.isNaN(d.getTime()) ? 'Invalid Date' : DATE_FORMAT.format(d));
 const oneLine = (v) => text(v).split(/\s*\n+\s*/).filter(Boolean).join('; ');
 const lawName = (id) => laws.LAWS.get(id)?.number || id;
 const shortLaw = (id) => (id ? id.replace(/^(RA|PD)(\d+)$/, (_, a, n) => `${a} ${n}`) : '');

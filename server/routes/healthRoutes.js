@@ -1,7 +1,14 @@
 const express = require('express');
 const { connectToMongo, client } = require('../config/db');
+const { authenticateSession, requireDeveloper } = require('../middleware/auth');
+const requestTiming = require('../shared/middleware/requestTiming');
 
 const router = express.Router();
+
+// The slowest routes since the server started (shared/middleware/requestTiming).
+router.get('/api/health/performance', authenticateSession, requireDeveloper, (req, res) => {
+  res.json(requestTiming.summary());
+});
 
 // Liveness: process is up
 router.get('/healthz', (req, res) => {

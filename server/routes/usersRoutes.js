@@ -4,7 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { authenticateSession, requireDeveloper, requireRole } = require('../middleware/auth');
 const { logActivity } = require('../middleware/activityLog');
-const { updateUserAvatar, createUser, updateUserById, updateProfile, approveSignUp, rejectSignUp, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, getSignInHistory, setUserType, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme } = require('../controllers/usersController');
+const { updateUserAvatar, createUser, updateUserById, updateProfile, approveSignUp, rejectSignUp, getUsers, getUserDetails, getLoginStatus, getSignUps, getUserAvatar, generatePassword, getCurrentUser, getOnlineUsers, updateUserPermissionsByEmail, updateProvincePermissionsByEmail, removeSignUpUser, getRecentActivity, getSignInHistory, setUserType, setUserDomains, setUserErmsUnit, listUserTypes, deleteUser, setUserYears, setMyTheme } = require('../controllers/usersController');
 
 const router = express.Router();
 
@@ -69,6 +69,8 @@ router.put('/api/users/:id/years', accountManagers, logActivity, setUserYears);
 // the Developer's to set.
 router.get('/api/users/types', authenticateSession, listUserTypes);
 router.put('/api/users/:id/type', authenticateSession, requireDeveloper, logActivity, setUserType);
+// The modules an account enters, beyond what its type gives. Developer only, like the type.
+router.put('/api/users/:id/domains', authenticateSession, requireDeveloper, logActivity, setUserDomains);
 // The ERMS unit ("System") an account works in. Developer only, like the type.
 router.put('/api/users/:id/erms-unit', authenticateSession, requireDeveloper, logActivity, setUserErmsUnit);
 router.delete('/api/users/:id', authenticateSession, requireDeveloper, logActivity, deleteUser);

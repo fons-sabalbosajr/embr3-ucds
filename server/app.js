@@ -55,6 +55,8 @@ const app = express();
 // Must be set before the session middleware: it is what lets Express see
 // Render's TLS termination and therefore issue a Secure cookie.
 app.set("trust proxy", 1);
+// First, so a route's time includes the session read and everything after it.
+app.use(require("./shared/middleware/requestTiming").requestTiming);
 app.use(securityHeaders());
 
 assertSessionSecret();

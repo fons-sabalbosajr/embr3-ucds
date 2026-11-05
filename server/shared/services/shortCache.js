@@ -16,19 +16,53 @@
 // whole window (a province opened while VERA's fixes were being applied
 // showed the register as it was before them).
 //
+// `staleMs`: for an answer that takes seconds to work out and that only a write
+// through the application changes, as the register's are. Past `ttlMs` the last
+// answer is still handed over at once, for up to `staleMs` longer, and worked
+// out again behind it, so that nobody waits each time the window ends. An
+// invalidate() still drops it: an edit is never answered with what it replaced.
+//
 // One process, in memory: the application runs as a single Node process. A
 // second process would keep its own copy, which is still correct (each is at
 // most `ttlMs` stale), only less effective.
 // ---------------------------------------------------------------------------
 
-const entries = new Map(); // key -> { expires, value?, pending? }
+const entries = new Map(); // key -> { expires, staleUntil?, value?, pending?, refreshing? }
 
-async function cached(key, ttlMs, compute) {
+const settled = (ttlMs, staleMs, value) => {
+  const expires = Date.now() + ttlMs;
+  return { expires, staleUntil: expires + staleMs, value };
+};
+
+/** Work the answer out again behind the one being handed over. */
+function refreshBehind(key, hit, ttlMs, staleMs, compute) {
+  if (hit.refreshing) return;
+  hit.refreshing = true;
+  Promise.resolve()
+    .then(compute)
+    .then(
+      (value) => {
+        // Not when an edit dropped it meanwhile: this began before the edit.
+        if (entries.get(key) === hit) entries.set(key, settled(ttlMs, staleMs, value));
+      },
+      (err) => {
+        // The last answer stands, and the next caller tries again.
+        hit.refreshing = false;
+        console.warn(`[cache] could not refresh ${key}: ${err.message}`);
+      }
+    );
+}
+
+async function cached(key, ttlMs, compute, { staleMs = 0 } = {}) {
   const now = Date.now();
   const hit = entries.get(key);
   if (hit) {
     if (hit.pending) return hit.pending;
     if (hit.expires > now) return hit.value;
+    if (hit.staleUntil > now) {
+      refreshBehind(key, hit, ttlMs, staleMs, compute);
+      return hit.value;
+    }
   }
   const entry = { expires: 0, pending: null };
   // Still ours: not invalidated, nor replaced by a later read, meanwhile.
@@ -37,7 +71,7 @@ async function cached(key, ttlMs, compute) {
     .then(compute)
     .then(
       (value) => {
-        if (current()) entries.set(key, { expires: Date.now() + ttlMs, value });
+        if (current()) entries.set(key, settled(ttlMs, staleMs, value));
         return value;
       },
       (err) => {

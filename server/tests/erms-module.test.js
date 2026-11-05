@@ -248,7 +248,7 @@ suite('ERMS module', () => {
     });
 
     it('exposes no write API to other domains', () => {
-      expect(Object.keys(erms.read).sort()).toEqual(['countForFirm', 'listForFirm']);
+      expect(Object.keys(erms.read).sort()).toEqual(['countForFirm', 'forFirm', 'listForFirm']);
     });
   });
 });

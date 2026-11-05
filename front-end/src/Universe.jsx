@@ -21,7 +21,8 @@ import {
 import { API_BASE_URL as backendUrl } from "./config/api";
 import "./index.css";
 import CryptoJS from "crypto-js";
-import Dashboard from "./modules/ucds/dashboard/Dashboard";
+// Its own chunk (the charts): an ERMS account never opens it.
+const Dashboard = lazy(() => import("./modules/ucds/dashboard/Dashboard"));
 const Province = lazy(() => import("./modules/ucds/province/Province"));
 const MBU = lazy(() => import("./modules/ucds/mbu/MBU"));
 const Admin = lazy(() => import("./modules/admin/Admin"));

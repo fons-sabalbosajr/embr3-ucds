@@ -171,7 +171,7 @@ async function scan({ cfg, by }) {
       (pdf ? '\nThe first pages of the document are attached.' : '\nNo document pages could be read; judge from the record.');
     let verdict = null;
     try {
-      const out = await provider.complete(cfg, { system: SYSTEM, prompt, maxTokens: 400, documents: pdf ? [{ mimeType: 'application/pdf', data: pdf }] : [] });
+      const out = await provider.complete(cfg, { system: SYSTEM, prompt, maxTokens: 400, feature: 'project-type', documents: pdf ? [{ mimeType: 'application/pdf', data: pdf }] : [] });
       verdict = parseVerdict(out.text, allowed);
     } catch {
       verdict = null;

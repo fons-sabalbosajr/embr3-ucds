@@ -41,7 +41,7 @@ const INJECTION_RE = [
   /\byou\s+are\s+(now|no\s+longer)\b/i,
   /\b(act|behave|respond)\s+as\s+(if\s+you\s+(are|were)\s+)?(an?\s+)?(unrestricted|unfiltered|jailbroken|different|new)\b/i,
   /\b(pretend|imagine|roleplay|role-play)\b[^.?!]{0,30}\b(no|without)\s+(rules|restrictions|limits|filters|guardrails)\b/i,
-  /\b(developer|god|admin|debug|sudo|dan|jailbreak)\s+mode\b/i,
+  /\b(god|sudo|dan|jailbreak)\s+mode\b/i,
   /\bjailbreak\w*\b/i,
   /\bdo\s+anything\s+now\b/i,
   /<\s*\/?\s*(system|instructions?|assistant)\s*>/i,
@@ -53,9 +53,17 @@ const INJECTION_REPLY =
   "I can't set aside or change the way I work, and I don't share my instructions. " +
   "Ask me how to do something in E-Universe and I'll walk you through it.";
 
+// "Enable developer mode" is an attempt on VERA's rules, but "what is developer
+// mode?" is a question about a real setting (VERA's Developer answers switch):
+// asked about, and not asked of VERA, it is let through.
+const MODE_RE = /\b(developer|admin|debug)\s+mode\b/i;
+const ASKS_ABOUT_RE = /^\s*(what|what'?s|where|how|why|when|who|which|does|do|is|can i)\b/i;
+const ADDRESSES_VERA_RE = /\b(you|your|yourself)\b/i;
+
 function looksLikeInjection(message) {
   const s = String(message || '');
-  return INJECTION_RE.some((re) => re.test(s));
+  if (INJECTION_RE.some((re) => re.test(s))) return true;
+  return MODE_RE.test(s) && (!ASKS_ABOUT_RE.test(s) || ADDRESSES_VERA_RE.test(s));
 }
 
 const DATA_FENCE =

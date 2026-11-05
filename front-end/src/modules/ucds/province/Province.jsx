@@ -49,8 +49,6 @@ import { useUcdsSettings } from "../../../context/UcdsSettingsContext";
 import ProvinceModal from "./ProvinceModal";
 import Highlighter from "react-highlight-words";
 import Swal from "sweetalert2";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
 import { sectionColor, sectionLabel, splitSections } from "./sectionColors";
 import AddProvinceModal from "./actions/AddProvinceModal";
 import moment from "moment"; // Import moment for date calculations
@@ -707,6 +705,15 @@ const Province = ({ theme, currentUser }) => {
     return permits.join(", ");
   };
 
+  // A landscape page to export to. The PDF libraries are fetched here, on the
+  // first export, as SpreadsheetView does: not with every province screen.
+  const newExportPdf = async () => {
+    const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+    doc.autoTable = (options) => autoTable(doc, options);
+    return doc;
+  };
+
   // Function to export selected data
   const exportSelectedData = (provinceName) => {
     Swal.fire({
@@ -716,9 +723,9 @@ const Province = ({ theme, currentUser }) => {
       showCancelButton: true,
       confirmButtonText: "Yes, Export",
       cancelButtonText: "Cancel",
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
-        const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+        const doc = await newExportPdf();
 
         // Customize title with province name
         doc.setFontSize(12);
@@ -776,8 +783,8 @@ const Province = ({ theme, currentUser }) => {
   };
 
   // Function to export all data
-  const exportAllData = (provinceName) => {
-    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+  const exportAllData = async (provinceName) => {
+    const doc = await newExportPdf();
 
     // Customize title with province name
     doc.setFontSize(12);

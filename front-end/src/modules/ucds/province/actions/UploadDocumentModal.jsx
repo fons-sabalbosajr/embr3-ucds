@@ -2,9 +2,6 @@ import { Modal, Upload, Button, Spin, Typography } from "antd";
 import { message } from "../../../../shared/feedback";
 import { UploadOutlined } from "@ant-design/icons";
 import { useState } from "react";
-import * as pdfjsLib from "pdfjs-dist";
-
-import "pdfjs-dist/build/pdf.worker";
 
 const { Text } = Typography;
 
@@ -23,6 +20,9 @@ const UploadDocumentModal = ({ visible, onClose, onExtractedData }) => {
       const typedArray = new Uint8Array(e.target.result);
 
       try {
+        // Fetched when a PDF is read: imported above, the reader came with every
+        // province screen (over a megabyte) whether or not anything was uploaded.
+        const [pdfjsLib] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker")]);
         const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
         let textContent = "";
 

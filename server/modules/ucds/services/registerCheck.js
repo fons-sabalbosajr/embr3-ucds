@@ -29,7 +29,7 @@ const { connectToMongo, getDb } = require('../../../config/db');
 const { sameWording, spellingByRule, spellingByModel, tidy } = require('../../../services/vera/dataCorrections');
 const provider = require('../../../services/vera/provider');
 const { PROVINCES } = require('../../../services/provinces');
-const { ermsPermitFindings } = require('./permitDuplicates');
+const { ermsPermitFindings, ermsPermitRecords } = require('./permitDuplicates');
 const permitAnalysis = require('../../../services/vera/permitAnalysis');
 
 const COLLECTION = 'vera-ucds-checks';
@@ -162,6 +162,37 @@ function accentsOnly(field, canonical) {
   return out;
 }
 
+/** One pass over the records for what is per record. */
+async function readRecords(col) {
+  const swapped = [];
+  const outside = [];
+  const missing = [];
+  // Each record's clearances and permits against the laws (permitAnalysis.js).
+  const permits = permitAnalysis.collector();
+  // Every row with a permit, for the shared-permit check against ERMS.
+  const permitRows = [];
+  const projection = Object.fromEntries([...permitAnalysis.FIELDS, 'lat', 'long'].map((f) => [f, 1]));
+  const cursor = col.find({}, { projection });
+  let total = 0;
+  for await (const d of cursor) {
+    total += 1;
+    const ref = { sort_key: d.sort_key, title: d.title || d.name || '', province: d.province || '' };
+    const lat = num(d.lat);
+    const long = num(d.long);
+    if (lat != null && long != null) {
+      if (inRange(long, REGION.lat) && inRange(lat, REGION.long)) swapped.push({ ...ref, _id: d._id, lat: d.lat, long: d.long });
+      else if (!inRange(lat, REGION.lat) || !inRange(long, REGION.long)) outside.push({ ...ref, detail: `${d.lat}, ${d.long}` });
+    }
+    const gaps = [];
+    if (blank(d.title) && blank(d.name)) gaps.push('title');
+    if (blank(d.city)) gaps.push('city');
+    if (gaps.length) missing.push({ ...ref, detail: gaps.join(', ') });
+    permits.add(d);
+    if (!blank(d.ecc_cnc)) permitRows.push({ _id: d._id, sort_key: d.sort_key, title: d.title || '', name: d.name || '', province: d.province || '', ecc_cnc: d.ecc_cnc });
+  }
+  return { swapped, outside, missing, permits, permitRows, total };
+}
+
 /**
  * A fresh check of `col` (the active year's register, province-scoped by the
  * caller's wrapper is not needed: the Developer checks the whole register).
@@ -172,8 +203,17 @@ async function scan({ col, register, cfg, by }) {
   const notes = [];
   const fixes = [];
 
-  for (const [field, { label, near }] of Object.entries(FIELDS)) {
-    const values = await countsOf(col, field);
+  // Every read at once. On 4 Nov 2026, over the 2027 register, they took about
+  // 2 s for the counts, 6 s for the records and 5 s for ERMS, one after another.
+  // (Caught here so that one failing while another is awaited is not left
+  // unhandled: each is awaited, and answered for, below.)
+  const reading = readRecords(col);
+  const ermsReading = ermsPermitRecords();
+  reading.catch(() => {});
+  ermsReading.catch(() => {});
+  const counted = await Promise.all(Object.keys(FIELDS).map((field) => countsOf(col, field)));
+  for (const [i, [field, { label, near }]] of Object.entries(FIELDS).entries()) {
+    const values = counted[i];
     const first = field === 'province' ? { proposals: provinceFixes(values), canonical: new Map() } : sameWording(field, values);
     let spelling = [];
     if (near === 'accents') {
@@ -209,39 +249,13 @@ async function scan({ col, register, cfg, by }) {
     notes.push(`${label}: ${values.length} different values checked.`);
   }
 
-  // One pass over the records for what is per record.
-  const swapped = [];
-  const outside = [];
-  const missing = [];
-  // Each record's clearances and permits against the laws (permitAnalysis.js).
-  const permits = permitAnalysis.collector();
-  // Every row with a permit, for the shared-permit check against ERMS.
-  const permitRows = [];
-  const projection = Object.fromEntries([...permitAnalysis.FIELDS, 'lat', 'long'].map((f) => [f, 1]));
-  const cursor = col.find({}, { projection });
-  let total = 0;
-  for await (const d of cursor) {
-    total += 1;
-    const ref = { sort_key: d.sort_key, title: d.title || d.name || '', province: d.province || '' };
-    const lat = num(d.lat);
-    const long = num(d.long);
-    if (lat != null && long != null) {
-      if (inRange(long, REGION.lat) && inRange(lat, REGION.long)) swapped.push({ ...ref, _id: d._id, lat: d.lat, long: d.long });
-      else if (!inRange(lat, REGION.lat) || !inRange(long, REGION.long)) outside.push({ ...ref, detail: `${d.lat}, ${d.long}` });
-    }
-    const gaps = [];
-    if (blank(d.title) && blank(d.name)) gaps.push('title');
-    if (blank(d.city)) gaps.push('city');
-    if (gaps.length) missing.push({ ...ref, detail: gaps.join(', ') });
-    permits.add(d);
-    if (!blank(d.ecc_cnc)) permitRows.push({ _id: d._id, sort_key: d.sort_key, title: d.title || '', name: d.name || '', province: d.province || '', ecc_cnc: d.ecc_cnc });
-  }
+  const { swapped, outside, missing, permits, permitRows, total } = await reading;
 
   // The same permit on several firms, settled from the ERMS documents where
   // they say whose it is (permitDuplicates.js). Never fatal to the check.
   let shared = { proposals: [], review: [], notes: [] };
   try {
-    shared = await ermsPermitFindings(permitRows);
+    shared = await ermsPermitFindings(permitRows, { records: await ermsReading });
   } catch (err) {
     notes.push(`The shared permits could not be checked against ERMS (${err.message}).`);
   }
@@ -399,12 +413,11 @@ async function undo({ col, register, runId, id, user }) {
     // Back to the number it held, unless someone has changed it since.
     if ((p.appliedIds || []).length) restored = (await col.updateOne({ _id: p.recordId, ecc_cnc: p.newValue }, { $set: { ecc_cnc: p.oldValue, ...stamp } })).modifiedCount;
   } else if (p.field === COORDS) {
-    for (const _id of p.appliedIds || []) {
-      const d = await col.findOne({ _id }, { projection: { lat: 1, long: 1 } });
-      if (!d) continue;
-      await col.updateOne({ _id }, { $set: { lat: d.long, long: d.lat, ...stamp } });
-      restored += 1;
-    }
+    // One read and one batched write: a read and a write per record made
+    // undoing a swap of 1,377 records take minutes.
+    const docs = await col.find({ _id: { $in: p.appliedIds || [] } }, { projection: { lat: 1, long: 1 } }).toArray();
+    if (docs.length) await col.bulkWrite(docs.map((d) => ({ updateOne: { filter: { _id: d._id }, update: { $set: { lat: d.long, long: d.lat, ...stamp } } } })), { ordered: false });
+    restored = docs.length;
   } else {
     const filter = p.appliedIds ? { _id: { $in: p.appliedIds }, [p.field]: p.to } : { [p.field]: p.to };
     restored = (await col.updateMany(filter, { $set: { [p.field]: p.from, ...stamp } })).modifiedCount;

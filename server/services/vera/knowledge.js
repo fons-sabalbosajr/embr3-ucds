@@ -34,9 +34,11 @@ const DEFAULT_OFFICE_WEBSITE = 'https://r3.emb.gov.ph';
 
 /**
  * A public visitor asked for a number — how many documents, requests,
- * permits, people… VERA gives no counts to anyone who is not signed in
- * (she has none to give, and a figure without its context misleads): she
- * points them to the office's website instead. Staff get exact figures.
+ * permits, people… Outside the Document Portal VERA gives no counts to anyone
+ * who is not signed in (she has none to give, and a figure without its context
+ * misleads): she points them to the office's website instead. The portal gives
+ * its own totals of what can be requested there (services/vera/lookup
+ * portalLookupFor), never anything about requests. Staff get exact figures.
  */
 const publicCountReply = (website, portal = false) =>
   "I don't give out counts or figures here. For the office's official numbers and reports, please visit the " +
@@ -725,6 +727,28 @@ const COMMON_KB = Object.freeze([
       'A sign-in lasts about a day; after that you are asked to sign in again.\n\n' +
       'To sign out, open your **avatar** at the top right and choose **Sign out**. It signs out that tab.',
     keywords: ['signed out', 'sign out', 'log out', 'logout', 'another tab', 'other tab', 'session', 'expired', 'different account', 'tabs'],
+  },
+  {
+    id: 'password-reset',
+    category: 'Signing in',
+    question: 'How do I change or reset my password?',
+    answer:
+      'Passwords are changed through the reset link, whether you have forgotten yours or only want a new one:\n' +
+      '1. Sign out, then choose **Forgot your password?** on the sign-in page.\n' +
+      '2. Enter the **email address on your account**.\n' +
+      '3. Open the email and follow the **reset link**. It works once and expires after **one hour**.\n' +
+      '4. Choose a new password, then sign in with it.\n\n' +
+      'If no email arrives, check spam, then contact the administrator.',
+    keywords: ['password', 'change password', 'change my password', 'reset password', 'reset my password', 'forgot password', 'forgot my password', 'new password', 'reset link', 'password not working'],
+  },
+  {
+    id: 'developer-answers',
+    category: 'Help',
+    question: 'What is developer mode, or Developer answers, in VERA settings?',
+    answer:
+      '**Developer answers** is a switch in **Admin Settings › VERA Assistant**. While it is on, Developer accounts also get VERA\'s technical articles. ' +
+      'It changes nothing for other accounts, and credentials and secrets stay refused for every role.',
+    keywords: ['developer mode', 'developer answers', 'technical articles', 'vera settings'],
   },
   {
     id: 'nas-banner',

@@ -155,6 +155,7 @@ async function checkOne(cfg, serialNo, by, { force = false } = {}) {
         system: SYSTEM,
         prompt: 'Read the reference number of the attached document.',
         maxTokens: 300,
+        feature: 'ref-check',
         documents: [{ mimeType: 'application/pdf', data: pdf }],
         // Asked to read it again: a fresh reading, not the remembered one.
         cache: !force,

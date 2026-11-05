@@ -23,7 +23,8 @@
 // before (veraController logs metadata, never the question or the answer).
 //   VERA_SEMANTIC_CACHE=false     off
 //   VERA_CACHE_TTL_MS             how long an answer is kept (default 12 h)
-//   VERA_CACHE_MAX                entries kept (default 500, oldest dropped)
+//   VERA_CACHE_MAX                entries kept, for the chat and for the other
+//                                 model calls each (default 500, oldest dropped)
 //   VERA_CACHE_SIMILARITY         0..1, default 0.8
 //
 // Every other model call (29 Oct 2026) — the checks and tools — is kept here
@@ -52,7 +53,11 @@ const NEGATION_RE = /\b(not|no|never|cannot|can'?t|don'?t|doesn'?t|won'?t|isn'?t
 
 /** partition -> Map(id -> entry). Insertion order doubles as age. */
 const store = new Map();
-let size = 0;
+// The chat and the other model calls are counted apart: a batch of scans read
+// (hundreds of entries in one go) must not push out what people have asked.
+const sizes = { chat: 0, tools: 0 };
+const poolOf = (partition) => (partition.startsWith('model|') ? 'tools' : 'chat');
+let born = 0;
 let hits = 0;
 let misses = 0;
 
@@ -79,22 +84,35 @@ function jaccard(a, b) {
 
 const sameHits = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
 
+/** The oldest entry of a pool: each partition's first is its oldest. */
+function oldestIn(pool) {
+  let found = null;
+  for (const [key, entries] of store) {
+    if (poolOf(key) !== pool) continue;
+    const [id, entry] = entries.entries().next().value;
+    if (!found || entry.born < found.born) found = { key, id, born: entry.born };
+  }
+  return found;
+}
+
 function prune(now) {
   for (const [key, entries] of store) {
     for (const [id, e] of entries) {
       if (e.expires <= now) {
         entries.delete(id);
-        size -= 1;
+        sizes[poolOf(key)] -= 1;
       }
     }
     if (!entries.size) store.delete(key);
   }
-  while (size > MAX_ENTRIES()) {
-    const [key, entries] = store.entries().next().value;
-    const [oldest] = entries.keys();
-    entries.delete(oldest);
-    size -= 1;
-    if (!entries.size) store.delete(key);
+  for (const pool of Object.keys(sizes)) {
+    while (sizes[pool] > MAX_ENTRIES()) {
+      const { key, id } = oldestIn(pool);
+      const entries = store.get(key);
+      entries.delete(id);
+      sizes[pool] -= 1;
+      if (!entries.size) store.delete(key);
+    }
   }
 }
 
@@ -136,8 +154,10 @@ function remember(q, answer) {
   }
   // The same words over other hits (other articles, another catalog) are another entry.
   const id = `${[...q.stems].sort().join(' ')}|${q.hitIds.join(',')}`;
-  if (!entries.has(id)) size += 1;
-  entries.set(id, { stems: q.stems, negated: q.negated, hitIds: q.hitIds.slice(), answer, expires: now + TTL_MS(), uses: 0 });
+  // Out and in again when it is already there: the end of the partition is the youngest.
+  if (!entries.delete(id)) sizes[poolOf(q.partition)] += 1;
+  born += 1;
+  entries.set(id, { stems: q.stems, negated: q.negated, hitIds: q.hitIds.slice(), answer, expires: now + TTL_MS(), uses: 0, born });
   prune(now);
 }
 
@@ -166,10 +186,11 @@ function modelQuery(cfg, { feature, tier, system, prompt, documents = [], maxTok
 
 function clear() {
   store.clear();
-  size = 0;
+  sizes.chat = 0;
+  sizes.tools = 0;
 }
 
 /** Counts only — never a question or an answer — for the settings screen. */
-const stats = () => ({ entries: size, hits, misses });
+const stats = () => ({ entries: sizes.chat + sizes.tools, hits, misses });
 
 module.exports = { enabled, partitionOf, modelQuery, lookup, remember, clear, stats, NEGATION_RE, jaccard };

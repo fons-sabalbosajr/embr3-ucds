@@ -195,7 +195,7 @@ async function judge(pairs, cfg) {
     // A batch takes longer than a chat answer; give it room.
     const out = await provider.complete(
       { ...cfg, requestTimeoutMs: Math.max(Number(cfg?.requestTimeoutMs) || 0, 60000) },
-      { system, prompt: JSON.stringify(items), maxTokens: 2048 }
+      { system, prompt: JSON.stringify(items), maxTokens: 2048, feature: 'link-check' }
     );
     calls += 1;
     model = out?.model || model;
@@ -225,16 +225,19 @@ async function scan({ cfg, by }) {
   const started = new Date();
   const notes = [];
 
-  const unlinked = await records()
-    .find(
-      { $or: [{ ucdsRef: null }, { ucdsRef: { $exists: false } }, { 'ucdsRef.unmatched': true }] },
-      { projection: { serialNo: 1, permit: 1, proponentName: 1, projectTitle: 1, location: 1, ucdsRef: 1 } }
-    )
-    .toArray();
-  const register = await db
-    .collection(REGISTER)
-    .find({}, { projection: { sort_key: 1, name: 1, title: 1, ecc_cnc: 1, haz_id: 1, province: 1, city: 1 } })
-    .toArray();
+  // Both at once: about 2.5 s and 4 s, one after the other (4 Nov 2026).
+  const [unlinked, register] = await Promise.all([
+    records()
+      .find(
+        { $or: [{ ucdsRef: null }, { ucdsRef: { $exists: false } }, { 'ucdsRef.unmatched': true }] },
+        { projection: { serialNo: 1, permit: 1, proponentName: 1, projectTitle: 1, location: 1, ucdsRef: 1 } }
+      )
+      .toArray(),
+    db
+      .collection(REGISTER)
+      .find({}, { projection: { sort_key: 1, name: 1, title: 1, ecc_cnc: 1, haz_id: 1, province: 1, city: 1 } })
+      .toArray(),
+  ]);
 
   const ctx = {
     index: pm.buildIndex(register),
@@ -247,7 +250,10 @@ async function scan({ cfg, by }) {
 
   const found = [];
   let noNumber = 0;
-  for (const rec of unlinked) {
+  for (const [i, rec] of unlinked.entries()) {
+    // Thousands of records matched on Node's one thread held up every other
+    // request for most of a second: let them through every so often.
+    if (i % 250 === 249) await new Promise((resolve) => setImmediate(resolve));
     if (!rec.permit?.number || !pm.numbersIn(rec.permit.number).length) noNumber += 1;
     const placed = place(rec, ctx);
     if (placed) found.push({ rec, ...placed });

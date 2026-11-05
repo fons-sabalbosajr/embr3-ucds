@@ -55,6 +55,12 @@ describe('a year with its own register (2027 onward)', () => {
     expect(fields).toEqual(['sort_key', 'name', 'date_monitored', 'date_routed', 'date_signed', 'days_dmds', 'days_drds', 'ecc_cnc', 'haz_id', 'haz_issued']);
     expect(importer.provinceOf('PAMPANGA')).toBe('Pampanga');
     expect(importer.provinceOf('Nueva Ecija')).toBe('Nueva_Ecija');
+    // Blank or mistyped on a province's own sheet: that province. Written in: as written.
+    expect(importer.provinceOfRow(null, 'BATAAN')).toBe('Bataan');
+    expect(importer.provinceOfRow('`', 'PAMPANGA')).toBe('Pampanga');
+    expect(importer.provinceOfRow(undefined, 'NUEVA_ECIJA')).toBe('Nueva_Ecija');
+    expect(importer.provinceOfRow('Zambales', 'BATAAN')).toBe('Zambales');
+    expect(importer.provinceOfRow(null, 'HEALTHCARE')).toBeNull();
     expect(importer.cell(new Date('2016-08-22T16:00:00.000Z'))).toBe('8/23/2016');
   });
 });

@@ -40,6 +40,7 @@ const WRITE = process.argv.includes('--write');
 const TARGET = `ucds-data-${YEAR}`;
 
 const { YEARLY, LOOKUP_SHEETS, SET_ASIDE, squeeze, fieldsOf, cell, serial, provinceOf } = require('../../modules/ucds/services/rawWorkbook');
+const { PROVINCES } = require('../../services/provinces');
 
 
 // Only the sheets the Progress Tracker counts as the universe (the province's
@@ -47,6 +48,18 @@ const { YEARLY, LOOKUP_SHEETS, SET_ASIDE, squeeze, fieldsOf, cell, serial, provi
 // LOG, ADDED FIRM SUMMARY), whose rows are already on the main sheet, nor the
 // review sheets (NEW - CHECK DUPLICATE, HAZWASTE ID ONLY (ERMS)), still pending.
 const { mainSheetsOf } = require('../../services/progressTracker/analyze');
+
+// A row on a province's own sheet with its Province cell empty or mistyped (4
+// Nov 2026: 37 blank and one "`", at the foot of the Bataan, Pampanga and
+// Zambales sheets) is that province's: the screens read a province by this field,
+// so without it the firm is on no screen at all. A province written in the cell
+// is kept, whatever the sheet.
+function provinceOfRow(value, sheetName) {
+  const stated = provinceOf(value);
+  if (PROVINCES.some((p) => p.value === stated)) return stated;
+  const fromSheet = provinceOf(sheetName);
+  return PROVINCES.some((p) => p.value === fromSheet) ? fromSheet : stated;
+}
 
 function readWorkbook(file) {
   const wb = XLSX.readFile(file, { cellDates: true });
@@ -73,7 +86,8 @@ function readWorkbook(file) {
         if (v != null) doc[f] = v;
       });
       if (!doc.title && !doc.name) continue;
-      if (doc.province) doc.province = provinceOf(doc.province);
+      const province = provinceOfRow(doc.province, name);
+      if (province != null && province !== '') doc.province = province;
       rows.push(doc);
     }
     sheets.push({ name, rows, unmapped: grid[at].filter((h, i) => squeeze(h) && !fields[i]).map((h) => squeeze(h).slice(0, 40)) });
@@ -153,4 +167,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { fieldsOf, serial, cell, provinceOf };
+module.exports = { fieldsOf, serial, cell, provinceOf, provinceOfRow, readWorkbook };
