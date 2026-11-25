@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import { useParams } from "react-router-dom";
 import { ROUTES } from "../../../config/routes";
-import { isRawLayout } from "./tabpanes/registerLayout";
+import { isRawLayout, iisNumbersOf, iisTrackerUrl } from "./tabpanes/registerLayout";
 import {
   Table,
   Button,
