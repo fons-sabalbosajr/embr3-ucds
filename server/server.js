@@ -106,8 +106,14 @@ cron.schedule("*/10 * * * *", async () => {
 }, { noOverlap: true, missedExecutionTolerance: 60_000 });
 
 // Handle graceful shutdown
-process.on("SIGINT", async () => {
+// NSSM stops the service with Ctrl+C (SIGINT). Rows still waiting in a SQL
+// batch writer (sign-in history, events) are written first, then the
+// connections close.
+async function shutdown() {
   try {
+    const euSql = require("./services/euSql");
+    await Promise.race([euSql.flushAll(), new Promise((r) => setTimeout(r, 5000))]);
+    await euSql.close();
     if (client) {
       await client.close();
       console.log("MongoDB connection closed");
@@ -117,7 +123,9 @@ process.on("SIGINT", async () => {
   } finally {
     process.exit();
   }
-});
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 const server = http.createServer(app);
 // Keep an idle browser connection open for a minute, not Node's default five
@@ -146,6 +154,18 @@ connectToMongo()
     if (failed.length) console.warn(`[NAS] Windows credentials not restored: ${failed.join(", ")}. Re-save them in Storage Configuration.`);
   })
   .catch((err) => console.warn("[NAS] credential restore skipped:", err.message));
+// E-Universe's own SQL Server database (services/euSql.js): one line at start
+// saying whether it answers and whether migrations are pending. In the
+// background; nothing waits for it, and nothing depends on it yet.
+connectToMongo()
+  .then(async () => {
+    const euSql = require("./services/euSql");
+    if (!(await euSql.isConfigured())) return;
+    const s = await euSql.status();
+    if (!s.ok) console.warn(`[SQL] db_euniverse not reachable: ${s.code} ${s.message}`);
+    else console.log(`[SQL] ${s.database}: schema ${s.schemaVersion}${s.pending.length ? `, ${s.pending.length} migration(s) pending (npm run sql:migrate)` : ""}${s.changed.length ? `, CHANGED: ${s.changed.join(", ")}` : ""}`);
+  })
+  .catch((err) => console.warn("[SQL] status check skipped:", err.message));
 // Watch the NAS bridge and push its state to open screens (see services/nasBridge.js).
 connectToMongo().then(() => require("./services/nasBridge").start(io)).catch((err) => console.warn("[NAS bridge] not started:", err.message));
 // The Progress Tracker: the Planning Unit's SharePoint working files, read

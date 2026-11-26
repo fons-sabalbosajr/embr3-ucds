@@ -21,9 +21,14 @@ const { spawnSync } = require('child_process');
 // loudly on drift.
 // ---------------------------------------------------------------------------
 
-const args = process.argv.slice(2);
-const hasCsv = args.some((a) => a.startsWith('--csv='));
-const csvArg = hasCsv ? [] : [`--csv=${path.resolve(__dirname, '../../data/tb_maindata_erms.csv')}`];
+// divergence.js reads its export from --file=; this script has always been
+// given --csv=, which divergence.js ignored, so a fresh export passed here was
+// silently replaced by the default file. --csv= is now translated.
+// --source=sql reads the legacy SQL Server live instead of any file.
+const args = process.argv.slice(2).map((a) => (a.startsWith('--csv=') ? `--file=${a.slice('--csv='.length)}` : a));
+const fromSql = args.includes('--source=sql');
+const hasFile = args.some((a) => a.startsWith('--file='));
+const csvArg = fromSql || hasFile ? [] : [`--file=${path.resolve(__dirname, '../../data/tb_maindata_erms.csv')}`];
 
 const reportsDir = path.resolve(__dirname, '../../reports');
 fs.mkdirSync(reportsDir, { recursive: true });

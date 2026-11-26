@@ -38,6 +38,8 @@ const sharepoint = require('./sharepoint');
 const { analyzeOff, mapLimit } = require('./analyzePool');
 const { mergeUnits, addInto, groupOfUnit, unitOf,unvalidatedHighlights, unencodedHighlights, bulkHighlight, colourFamily, permitStatus, healthcareIndex, healthcareUnitOf, notHealthcareByPsic, masterlistUnitOf, copiesOf, MASTERLIST_LEGEND, ANALYSIS_VERSION } = require('./analyze');
 const { notesFor } = require('./notes');
+// The event history: MongoDB or SQL Server, as phase B2 says (events.js).
+const eventLog = require('./events');
 
 // The matrix's column order: the provinces, then the 2027 lists that span them.
 const UNIT_ORDER = ['Aurora', 'Bataan', 'Bulacan', 'Nueva_Ecija', 'Pampanga', 'Tarlac', 'Zambales', 'Healthcare Industries', 'Chemical permits', 'TSD / TRC', 'Importers'];
@@ -230,7 +232,7 @@ async function rebaseline(id) {
   const prefix = new RegExp(`^${season}:`);
   await db().collection(BASELINES).deleteMany({ _id: prefix });
   await db().collection(FILES).deleteMany({ season });
-  await db().collection(EVENTS).insertOne({ season, at: new Date(), kind: 'baseline', note: 'Baseline taken again from the files as they are now.' });
+  await eventLog.record({ season, at: new Date(), kind: 'baseline', note: 'Baseline taken again from the files as they are now.' });
   await db().collection(SEASONS).updateOne({ _id: s._id }, { $set: { baselineAt: null } });
   forget();
   invalidate();
@@ -549,7 +551,7 @@ async function poll(season, { listsOnly = false } = {}) {
     countedSince.add(seasonId);
   }
 
-  if (events.length) await db().collection(EVENTS).insertMany(events);
+  if (events.length) await eventLog.record(events);
   const warnings = events.filter((e) => e.kind === 'warning');
   if (warnings.length) warnDevelopers(warnings);
   // A lists-only look is not a look at every file: "checked" stays the last full one's.
@@ -1006,7 +1008,7 @@ async function buildOverview(id) {
   if (!season) return { season: null, seasons: [], defaults: { sources: DEFAULT_SOURCES } };
   const sid = String(season._id);
   const files = await db().collection(FILES).find({ season: sid }).sort({ source: 1, path: 1 }).toArray();
-  const events = await db().collection(EVENTS).find({ season: sid }).sort({ at: -1 }).limit(80).toArray();
+  const events = await eventLog.latest(sid, 80);
 
   // The Monitoring Plan (the seven provinces) and the healthcare lists. The
   // ECP monitoring list is not part of the universe's updating: left out.

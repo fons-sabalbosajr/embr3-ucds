@@ -190,6 +190,26 @@ const SECTIONS = [
     ),
   },
   {
+    key: "sql",
+    label: "The legacy ERMS SQL Server",
+    children: (
+      <>
+        <Paragraph>
+          <Text strong>SQL Server tab</Text>: E-Universe reads the desktop ERMS databases there, read-only, from the office server over the
+          office network. Nothing about the SQL Server is exposed to the internet; you reach it through E-Universe from anywhere.
+        </Paragraph>
+        <ol>
+          <li>Enter the server (as in SSMS), the login and its password, then <Text strong>Save and test</Text>.</li>
+          <li>The test shows which databases are readable, and warns if the login can change data. Ask for a read-only login (db_datareader) if it can.</li>
+          <li>Rotating its password works like the NAS: change it on the SQL Server, then save the new one here straight away.</li>
+          <li>
+            The daily divergence check can read it live: <Text code>npm run daily-check -- --source=sql</Text> on the office server.
+          </li>
+        </ol>
+      </>
+    ),
+  },
+  {
     key: "ops",
     label: "Server and updates",
     children: (

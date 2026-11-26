@@ -146,6 +146,8 @@ app.use(draftReportRoutes);
 app.use(logRoutes);
 // Admin Settings › Audit Logs, by sub-application (services/auditLog.js).
 app.use(require("./routes/auditRoutes"));
+// The legacy ERMS SQL Server, read-only (services/legacySql.js).
+app.use(require("./routes/legacySqlRoutes"));
 app.use(ucdsRoutes);
 app.use(usersRoutes);
 app.use(pdfRoutes);

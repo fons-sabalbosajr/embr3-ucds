@@ -3,6 +3,7 @@
  *
  *   node scripts/migrate-erms/divergence.js --file=data/export-2026-09-15.csv
  *   node scripts/migrate-erms/divergence.js --file=... --report
+ *   node scripts/migrate-erms/divergence.js --source=sql   (live, from the legacy SQL Server)
  *
  * During parallel operation the desktop application and the web module can both
  * hold records. If the desktop app is genuinely read-only, a fresh export
@@ -35,12 +36,36 @@ const dbFlag = process.argv.find((a) => a.startsWith('--db='));
 const DB_NAME = dbFlag ? dbFlag.slice('--db='.length) : 'universe-db';
 const WRITE_REPORT = process.argv.includes('--report');
 
+// --source=sql: read the desktop system's table live from the legacy SQL
+// Server (services/legacySql.js, set up under Storage › SQL Server) instead of
+// a CSV export. Read-only on that side too.
+//   --sql-db=dbmain_records --sql-schema=dbo --sql-table=tb_maindata
+const FROM_SQL = process.argv.includes('--source=sql');
+const flag = (name, fallback) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : fallback;
+};
+
+async function sourceRows() {
+  if (!FROM_SQL) return readRows(sourcePath());
+  const legacySql = require('../../services/legacySql');
+  const db = flag('sql-db', 'dbmain_records');
+  const schema = flag('sql-schema', 'dbo');
+  const table = flag('sql-table', 'tb_maindata');
+  try {
+    const rows = await legacySql.readTable(db, schema, table);
+    return { file: `SQL Server ${db}.${schema}.${table} (live)`, rows };
+  } finally {
+    await legacySql.close();
+  }
+}
+
 const log = (...a) => console.log(...a);
 const pad = (s, n) => String(s === undefined ? '' : s).padEnd(n);
 
 
 async function main() {
-  const { file, rows } = readRows(sourcePath());
+  const { file, rows } = await sourceRows();
   const client = new MongoClient(process.env.MONGO_URI, { ssl: true, serverSelectionTimeoutMS: 30000 });
   await client.connect();
   const records = client.db(DB_NAME).collection('erms-records');

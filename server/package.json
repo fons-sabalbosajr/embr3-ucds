@@ -23,7 +23,11 @@
     "daily-check": "node scripts/daily-check.js",
     "cutover:check": "node scripts/cutover-check.js",
     "nav:check": "node scripts/nav-check.mjs",
-    "seed:test-users": "node scripts/seed-test-users.js"
+    "seed:test-users": "node scripts/seed-test-users.js",
+    "sql:setup": "node scripts/sql/setup-euniverse.js",
+    "sql:migrate": "node scripts/sql/migrate.js",
+    "sql:status": "node scripts/sql/migrate.js --status",
+    "sql:move": "node scripts/sql/move-logs.js"
   },
   "keywords": [],
   "author": "",
@@ -45,6 +49,7 @@
     "express-session": "^1.19.0",
     "helmet": "^8.3.0",
     "mongodb": "^6.21.0",
+    "mssql": "12.7.14",
     "multer": "^2.3.0",
     "node-cron": "^4.6.0",
     "nodemailer": "^10.0.0",
@@ -62,7 +67,8 @@
     "vitest": "^5.0.0"
   },
   "overrides": {
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "tedious": "20.3.9"
   },
   "allowScripts": {
     "bcrypt": false

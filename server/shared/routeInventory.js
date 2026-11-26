@@ -138,6 +138,9 @@ function domainOf(path) {
   if (
     path.startsWith('/api/org-units') ||
     path.startsWith('/api/admin/') ||
+    path.startsWith('/api/audit/') ||
+    path.startsWith('/api/legacy-sql/') ||
+    path.startsWith('/api/eu-sql/') ||
     path.startsWith('/api/users')
   ) {
     return 'admin';

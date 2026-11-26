@@ -16,6 +16,7 @@ import NasReportFilesCard from "./NasReportFilesCard";
 import NasAvailabilityCard from "./NasAvailabilityCard";
 import NasActivityCard from "./NasActivityCard";
 import NasGuideDrawer from "./NasGuideDrawer";
+import LegacySqlCard from "./LegacySqlCard";
 
 const { Text, Paragraph } = Typography;
 
@@ -56,7 +57,9 @@ const StorageConfig = () => {
   const [pinEntry, setPinEntry] = useState("");
   const [forceEmail, setForceEmail] = useState(false);
   const [params, setParams] = useSearchParams();
-  const tab = ["containers", "access", "explorer", "reports", "diagnostics", "activity"].includes(params.get("tab"))
+  // Every tab key below must be listed here, or clicking it falls back to
+  // Containers (the SQL Server tab did exactly that when it was added).
+  const tab = ["containers", "access", "explorer", "reports", "diagnostics", "sql", "activity"].includes(params.get("tab"))
     ? params.get("tab")
     : "containers";
 
@@ -406,6 +409,12 @@ const StorageConfig = () => {
       ),
     },
     {
+      // The legacy ERMS SQL Server, read-only, behind the same verification.
+      key: "sql",
+      label: "SQL Server",
+      children: <LegacySqlCard />,
+    },
+    {
       key: "activity",
       label: "Activity",
       children: (
@@ -422,7 +431,7 @@ const StorageConfig = () => {
       {error && <Alert type="warning" showIcon message={error} closable />}
 
       <Card
-        title="Network Attached Storage (NAS Configuration)"
+        title="Storage and connections (NAS and SQL Server)"
         extra={
           <Space wrap>
             <NasGuideDrawer />
