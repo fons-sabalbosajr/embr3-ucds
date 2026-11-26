@@ -1,20 +1,27 @@
 <#
 .SYNOPSIS
-  Join the Windows Server to the tailnet as the E-Universe server node and
-  advertise its own LAN address, replacing the laptop. Run elevated.
+  Make this Windows Server the E-Universe node on the tailnet: machine name
+  ucds-server, connected whether or not anyone is signed in. Run elevated.
+  Safe to run again.
 
 .DESCRIPTION
-  The server advertises only its own /32. The NAS is never advertised and
-  port 445 never leaves the LAN; staff use the application, the application
-  uses the NAS. See docs/WINSERVER-MIGRATION.md.
+  The VPS front door (server/scripts/vps/add-e-universe-site.sh) reaches
+  E-Universe here, as ucds-server, on ports 5173 and 8081; the tailnet policy
+  lets tag:ucds-proxy reach tag:ucds-server on those ports and nothing else.
 
-  Sign-in opens a browser page: log in as emb.idms@gmail.com. Afterwards, in
-  the console: Machines -> this server -> Edit ACL tags -> tag:ucds-server,
-  Disable key expiry, and confirm "Subnets: <ServerIp>/32" is approved
-  (autoApprovers in the policy approves it for tag:ucds-server).
+  This server is usually already on the tailnet as the NAS bridge
+  (emb3winsrvr2019, tag:nas-bridge, advertising 10.14.76.167/32 for the
+  developer laptop off-site). That stays as it is: this script renames the
+  machine and keeps it connected, and never touches the advertised route.
+  'tailscale up' would require repeating every existing setting and drops
+  the route if one is missed, so an existing node is changed with 'tailscale
+  set' instead.
+
+  DNS is left to Windows (--accept-dns=false): MongoDB Atlas is reached by a
+  mongodb+srv lookup, which Tailscale's resolver has broken before
+  (server/config/dns.js).
 #>
 param(
-  [string]$ServerIp = "10.14.76.122",
   [string]$Hostname = "ucds-server"
 )
 
@@ -33,14 +40,35 @@ if (-not (Test-Path $ts)) {
   }
 }
 
-Write-Host "== Joining the tailnet as $Hostname, advertising $ServerIp/32"
-& $ts up --hostname=$Hostname --advertise-routes="$ServerIp/32" --accept-dns=false
-& $ts status
+# Windows PowerShell 5.1 turns a native program's stderr into a terminating
+# error under "Stop", even when redirected, so probes run under "Continue".
+$ErrorActionPreference = "Continue"
+& $ts status *> $null
+$joined = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = "Stop"
+
+if (-not $joined) {
+  Write-Host "== Joining the tailnet as $Hostname (sign in as the tailnet's admin in the browser)"
+  & $ts up --hostname=$Hostname --unattended --accept-dns=false
+} else {
+  Write-Host "== Already on the tailnet: renaming to $Hostname and staying connected unattended"
+  & $ts set --hostname=$Hostname --accept-dns=false
+  # "Run unattended": stays connected after sign-out and through reboots.
+  $ErrorActionPreference = "Continue"
+  & $ts set --unattended=true *> $null
+  $unattendedOk = ($LASTEXITCODE -eq 0)
+  $ErrorActionPreference = "Stop"
+  if (-not $unattendedOk) {
+    Write-Warning "This Tailscale version could not set unattended mode from the command line. In the Tailscale tray icon: Preferences > Run unattended."
+  }
+}
 
 Write-Host ""
+& $ts status
+Write-Host ""
+Write-Host "Advertised routes are unchanged:" (& $ts debug prefs | Select-String '"AdvertiseRoutes"' -Context 0,2 | Out-String).Trim()
+Write-Host ""
 Write-Host "Now in https://login.tailscale.com/admin/machines :"
-Write-Host "  1. $Hostname -> Edit ACL tags -> tag:ucds-server"
-Write-Host "  2. $Hostname -> Disable key expiry"
-Write-Host "  3. Confirm Subnets: $ServerIp/32 shows no 'pending approval'"
-Write-Host "  4. The old node (laptop-h95ad936): remove its tag and route, or delete it"
+Write-Host "  1. $Hostname -> Edit ACL tags -> add tag:ucds-server (keep tag:nas-bridge)"
+Write-Host "  2. $Hostname -> confirm 'Key expiry: disabled'"
 Write-Host "Next: 3-services.ps1"

@@ -8,9 +8,11 @@
   UCDS Web  vite preview --host       port 5173 (the built front-end)
 
   Both run as the account given in -ServiceUser. That account owns the NAS
-  credentials: after the API is up, open Developer Settings > Storage >
-  Containers and re-enter each container's password so credWrite.ps1 stores
-  it in THIS account's vault. Credentials from the laptop do not carry over.
+  credentials in its Windows vault. Nobody has to enter them there: every time
+  the API starts it copies the passwords saved in Admin > Storage
+  Configuration into this account's vault (nasContainers.syncToWindows), and a
+  password changed there is written at once. This needs the same
+  CONFIG_ENCRYPTION_KEY in server/.env as the machine that saved them.
 
   Prerequisites: the repository at -AppRoot with server/.env filled in,
   `npm ci` run in server/ and front-end/, `npm run build` run in front-end/,
@@ -24,14 +26,24 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$nssm = (Get-Command nssm -ErrorAction SilentlyContinue).Source
+# nssm complains on stderr about a service that is already stopped; Windows
+# PowerShell 5.1 would turn that into a terminating error under "Stop".
+function Invoke-Quiet([scriptblock]$block) {
+  $ErrorActionPreference = "Continue"
+  & $block *> $null
+}
+$nssm =(Get-Command nssm -ErrorAction SilentlyContinue).Source
 if (-not $nssm) { throw "NSSM not found. Install it (winget install NSSM.NSSM) and re-run." }
 $node = (Get-Command node -ErrorAction Stop).Source
-$npx = Join-Path (Split-Path $node) "npx.cmd"
+# vite is started by node directly rather than through npx.cmd: a service
+# wrapped in cmd.exe can leave node running when the service is stopped.
+$vite = Join-Path $AppRoot "front-end\node_modules\vite\bin\vite.js"
+if (-not (Test-Path $vite)) { throw "vite not found at $vite. Run 'npm ci' in front-end first." }
+if (-not (Test-Path (Join-Path $AppRoot "front-end\dist\index.html"))) { throw "No build in front-end\dist. Run 'npm run build' in front-end first." }
 
 if ($Uninstall) {
   foreach ($svc in @("UCDS API", "UCDS Web")) {
-    & $nssm stop $svc 2>$null
+    Invoke-Quiet { & $nssm stop $svc }
     & $nssm remove $svc confirm
   }
   Write-Host "Removed."
@@ -51,9 +63,10 @@ $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServ
 icacls "$AppRoot" /grant "${ServiceUser}:(OI)(CI)M" /T | Out-Null
 icacls "C:\ucds\logs" /grant "${ServiceUser}:(OI)(CI)M" | Out-Null
 
-function Install-Svc($name, $dir, $exe, $args, $log) {
-  if (Get-Service $name -ErrorAction SilentlyContinue) { & $nssm stop $name 2>$null; & $nssm remove $name confirm }
-  & $nssm install $name $exe $args
+# Not $args: that is PowerShell's automatic variable.
+function Install-Svc($name, $dir, $exe, $arguments, $log) {
+  if (Get-Service $name -ErrorAction SilentlyContinue) { Invoke-Quiet { & $nssm stop $name }; & $nssm remove $name confirm }
+  & $nssm install $name $exe $arguments
   & $nssm set $name AppDirectory $dir
   & $nssm set $name AppStdout "C:\ucds\logs\$log.out.log"
   & $nssm set $name AppStderr "C:\ucds\logs\$log.err.log"
@@ -70,8 +83,9 @@ function Install-Svc($name, $dir, $exe, $args, $log) {
 
 Write-Host "== Services"
 Install-Svc "UCDS API" "$AppRoot\server" $node "server.js" "api"
-Install-Svc "UCDS Web" "$AppRoot\front-end" $npx "vite preview --host --port 5173 --strictPort" "web"
+Install-Svc "UCDS Web" "$AppRoot\front-end" $node "`"$vite`" preview --host --port 5173 --strictPort" "web"
 
 Write-Host ""
 Write-Host "Check: http://localhost:8081/healthz  and  http://localhost:5173"
-Write-Host "Then, signed in as the Developer: Storage > Containers -> re-enter each password; Storage > Diagnostics -> Test all."
+Write-Host "C:\ucds\logs\api.out.log should show: [NAS] Windows credentials restored: records, legal, laboratory"
+Write-Host "Then on the VPS: bash add-e-universe-site.sh ucds-server"
