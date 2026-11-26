@@ -185,9 +185,11 @@ export const useTheme = () => {
 // ---------------------------------------------------------------------------
 
 export const ThemeProvider = ({ children }) => {
+  // Light unless this device or account has chosen otherwise. A choice once
+  // made is kept (here, and on the account through bindAccount).
   const [mode, setModeState] = useState(() => {
     const saved = getPreference(THEME_KEY);
-    return saved === "light" || saved === "dark" ? saved : "dark";
+    return saved === "light" || saved === "dark" ? saved : "light";
   });
   const [appearance, setAppearanceState] = useState(readAppearance);
 
@@ -200,7 +202,7 @@ export const ThemeProvider = ({ children }) => {
   }, [mode]);
 
   const setMode = useCallback((next) => {
-    const value = next === "light" || next === "dark" ? next : "dark";
+    const value = next === "light" || next === "dark" ? next : "light";
     setModeState(value);
     setPreference(THEME_KEY, value);
   }, []);

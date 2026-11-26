@@ -10,8 +10,14 @@ import "./authbrand.css";
  * `size` — "sm" for compact headers, "md" (default) for auth cards,
  * "lg" for the landing hero.
  */
+// Written out whole, never as `auth-brand--${size}`: PurgeCSS keeps a rule
+// only if it finds the class name literally in the source, so the assembled
+// form lost every size rule in production and the seals rendered at their
+// natural sizes (the EMB seal is 1500 px square).
+const SIZE_CLASS = { sm: "auth-brand--sm", md: "auth-brand--md", lg: "auth-brand--lg" };
+
 const AuthBrand = ({ size = "md", showText = true, className = "" }) => (
-  <div className={`auth-brand auth-brand--${size} ${className}`.trim()}>
+  <div className={`auth-brand ${SIZE_CLASS[size] || SIZE_CLASS.md} ${className}`.trim()}>
     <div className="auth-brand-marks">
       <img src={embLogo} alt="Environmental Management Bureau" className="auth-brand-emb" />
       <span className="auth-brand-divider" aria-hidden="true" />

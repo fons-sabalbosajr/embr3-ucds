@@ -30,6 +30,17 @@ const ACTION = {
   View: { color: "default", label: "Viewed" },
 };
 
+// Whole class names, never `ph-dot--${color}`: PurgeCSS keeps a rule only if
+// the class appears literally in the source, and the assembled form lost
+// every dot colour in production.
+const DOT_CLASS = {
+  green: "ph-dot ph-dot--green",
+  cyan: "ph-dot ph-dot--cyan",
+  blue: "ph-dot ph-dot--blue",
+  purple: "ph-dot ph-dot--purple",
+  red: "ph-dot ph-dot--red",
+};
+
 // The register's fields, as people call them.
 const LABEL = {
   name: "Proponent", title: "Project title", industry_class: "Industry classification", industry_type: "Industry type", industry_subtype: "Industry sub-type",
@@ -205,7 +216,7 @@ const ProvTransaction = ({ editedRecord, currentUser, handleReload, reloadEdited
     const canRevert = canManageData && ["Modified", "Reverted"].includes(t.actionType);
     return (
       <li key={t.transactionID || t._id} className="ph-entry">
-        <span className={`ph-dot ph-dot--${a.color}`} />
+        <span className={DOT_CLASS[a.color] || "ph-dot"} />
         <div className="ph-card">
           <header className="ph-head">
             <Space size={8} wrap>

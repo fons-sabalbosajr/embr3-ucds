@@ -84,7 +84,8 @@ function LiveMark({ k, editing, watching, checkedAt }) {
     const what = state === "highlighting" ? `Highlighting the newly issued ${KIND_LABEL[k] || k} list now` : `Encoding ${KIND_LABEL[k] || k} in the RAW data now`;
     return (
       <Tooltip title={`${what}: ${whoOf(items, k)}${last}.${checked}`}>
-        <span className={`pt-tile-live is-${state}`} role="status" aria-label={what}>
+        {/* Whole class names, so PurgeCSS keeps their rules in production. */}
+        <span className={state === "highlighting" ? "pt-tile-live is-highlighting" : "pt-tile-live is-encoding"} role="status" aria-label={what}>
           <span className="pt-tile-pen" aria-hidden="true">
             <span className="pt-editing-ring" />
             <EditOutlined className="pt-editing-pen" />
