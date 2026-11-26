@@ -200,8 +200,10 @@ const SECTIONS = [
             which start with Windows and restart themselves.
           </li>
           <li>
-            Update: on the office server, <Text code>git pull</Text>, <Text code>npm ci</Text> in <Text code>server</Text> and{" "}
-            <Text code>front-end</Text>, <Text code>npm run build</Text> in <Text code>front-end</Text>, then restart both services.
+            Update: on the office server, <Text code>git pull</Text>, then <Text code>npm run build</Text> in{" "}
+            <Text code>front-end</Text> and restart the service that changed. When a <Text code>package-lock.json</Text> changed,
+            stop both services first and run <Text code>npm ci</Text> in <Text code>server</Text> and <Text code>front-end</Text>:
+            Windows will not replace packages a running service holds open.
           </li>
           <li>The VPS needs nothing for an update. Its HTTPS certificate renews itself.</li>
           <li>

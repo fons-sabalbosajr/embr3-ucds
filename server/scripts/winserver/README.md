@@ -146,12 +146,23 @@ reaches the NAS through this server's bridge route.
 
 ## Updating E-Universe
 
+When only front-end or server code changed (no `package-lock.json` in the
+`git pull` output), skip `npm ci`: pull, build, and restart the affected
+service.
+
+When a `package-lock.json` changed, stop both services first. `npm ci`
+deletes and reinstalls `node_modules`, and Windows will not delete files a
+running service holds open (the password-hashing module, for one), so it
+fails with EPERM. The site shows its "temporarily unavailable" page for the
+few minutes this takes.
+
 ```powershell
 cd C:\ucds\embr3-ucds
 git pull
-cd server;    npm ci
+nssm stop "UCDS API"; nssm stop "UCDS Web"
+cd server;       npm ci
 cd ..\front-end; npm ci; npm run build
-nssm restart "UCDS API"; nssm restart "UCDS Web"
+nssm start "UCDS API"; nssm start "UCDS Web"
 ```
 
 ## Rotating a NAS password
