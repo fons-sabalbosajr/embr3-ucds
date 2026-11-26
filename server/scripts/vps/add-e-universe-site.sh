@@ -76,7 +76,9 @@ safe_reload() {
 # ---------------------------------------------------------------------------
 step "DNS: $SITE must point straight at this VPS (Cloudflare: DNS only)"
 MY_IPS=" $(hostname -I) "
-DNS_IPS="$(getent ahostsv4 "$SITE" | awk '{print $1}' | sort -u | tr '\n' ' ')"
+# getent fails when the name does not exist; under pipefail that would end the
+# script here without a word, so its failure is absorbed and handled below.
+DNS_IPS="$( { getent ahostsv4 "$SITE" || true; } | awk '{print $1}' | sort -u | tr '\n' ' ')"
 [[ -n "$DNS_IPS" ]] || die "$SITE does not resolve yet. In Cloudflare: DNS > Add record > A, name e-universe, IPv4 72.61.125.232, Proxy status DNS only. Then run again."
 MATCH=""
 for ip in $DNS_IPS; do
