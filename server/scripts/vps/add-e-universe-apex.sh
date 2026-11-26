@@ -136,18 +136,34 @@ else
   BACKUP="/root/nginx-backups/$(basename "$SITE").$(date +%Y%m%d-%H%M%S)"
   cp -p "$SITE" "$BACKUP"
   echo "   backed up to $BACKUP"
-  if grep -qF "include snippets/e-universe-redirect.conf;" "$SITE"; then
+  # Build the new file beside the old one, then swap it in only once it is
+  # written in full — a failed edit must never leave the live site truncated.
+  # awk prints the include line verbatim (no regex replacement), so the `#` and
+  # parentheses in it cannot break anything, unlike a sed s/// delimiter.
+  NEWSITE="$(mktemp)"
+  if grep -qF "include snippets/e-universe-redirect.conf;" "$BACKUP"; then
     # Supersede the old redirect: swap its include line for the new one.
-    sed "s#^\(\s*\)include snippets/e-universe-redirect\.conf;.*#\1$INCLUDE_LINE#" "$BACKUP" > "$SITE"
-    echo "   replaced the old redirect include"
+    awk -v inc="    $INCLUDE_LINE" '
+      /include snippets\/e-universe-redirect\.conf;/ { print inc; next }
+      { print }
+    ' "$BACKUP" > "$NEWSITE"
+    MSG="replaced the old redirect include"
   else
     # Add the include after each `server_name ... embr3-onlinesystems.cloud ...;`.
     awk -v line="    $INCLUDE_LINE" -v host="$MAIN" '
       { print }
       $1 == "server_name" { for (i = 2; i <= NF; i++) { h = $i; sub(/;$/, "", h); if (h == host) { print line; break } } }
-    ' "$BACKUP" > "$SITE"
-    echo "   added the include ($(grep -c 'e-universe.conf' "$SITE") server block(s))"
+    ' "$BACKUP" > "$NEWSITE"
+    MSG="added the include"
   fi
+  # Never install an empty or include-less file (awk failure, bad input).
+  if [[ ! -s "$NEWSITE" ]] || ! grep -qF "include snippets/e-universe.conf;" "$NEWSITE"; then
+    rm -f "$NEWSITE"
+    die "could not build the updated $SITE; it was left untouched."
+  fi
+  cp "$NEWSITE" "$SITE"
+  rm -f "$NEWSITE"
+  echo "   $MSG ($(grep -c 'e-universe.conf' "$SITE") server block(s))"
   if ! nginx -t 2>/tmp/e-universe-apex-test.log; then
     cat /tmp/e-universe-apex-test.log >&2
     cp -p "$BACKUP" "$SITE"
