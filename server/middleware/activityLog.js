@@ -104,12 +104,8 @@ async function logActivity(req, res, next) {
     timestamp: new Date(),
   };
 
-  try {
-    await connectToMongo();
-    await require('../config/db').getDb().collection('app-logs').insertOne(activityLog);
-  } catch (error) {
-    console.error('Error logging activity:', error);
-  }
+  // MongoDB or SQL Server by category (services/activityStore.js); never throws.
+  await require('../services/activityStore').record(activityLog);
 
   next();
 }

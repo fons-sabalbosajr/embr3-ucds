@@ -50,7 +50,8 @@ async function updatePosting(req, res) {
     await collections.postings.updateOne({ _id: new ObjectId(id) }, { $set: cleanUpdates });
 
     if (updates.status && updates.status !== currentPosting.status) {
-      await collections.activityLogs.insertOne({
+      // A UCDS audit entry: MongoDB or SQL Server by category (services/activityStore.js).
+      await require('../services/activityStore').record({
         type: 'PostingStatusChange',
         postingId: id,
         changedBy: req.session?.user?.username || 'unknown',

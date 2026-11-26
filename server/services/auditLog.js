@@ -136,6 +136,9 @@ function present(doc) {
 async function list(category, { page = 1, pageSize = 50, ...criteria } = {}) {
   const filter = buildFilter(category, criteria);
   if (!filter) return null;
+  // UCDS and Admin, once moved (phase B2.2): read from SQL Server.
+  const store = require('./activityStore');
+  if (await store.readsSql(category)) return store.list(category, { page, pageSize, ...criteria });
   const size = Math.min(Math.max(Number(pageSize) || 50, 1), 200);
   const skip = (Math.max(Number(page) || 1, 1) - 1) * size;
   await connectToMongo();
@@ -152,8 +155,14 @@ async function summary(now = new Date()) {
   await connectToMongo();
   const col = getDb().collection(COLLECTION);
   const weekAgo = new Date(now.getTime() - 7 * 86400000);
+  const store = require('./activityStore');
+  const fromSql = (await Promise.all(CATEGORY_KEYS.map((k) => store.readsSql(k)))).some(Boolean) ? await store.summary(now) : null;
   const counts = await Promise.all(
     CATEGORY_KEYS.map(async (key) => {
+      if (fromSql && (await store.readsSql(key))) {
+        const s = fromSql[key] || { total: 0, week: 0 };
+        return [key, { label: CATEGORIES[key].label, total: s.total, week: s.week }];
+      }
       const [total, week] = await Promise.all([
         col.countDocuments(CATEGORIES[key].filter),
         col.countDocuments(buildFilter(key, { start: weekAgo.toISOString() })),

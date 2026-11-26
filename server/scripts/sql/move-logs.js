@@ -2,11 +2,11 @@
 /**
  * Phase B2: copy a history from MongoDB to db_euniverse, check it, and switch.
  *
- *   npm run sql:move -- sign-in-history                copy what is missing, then compare counts
- *   npm run sql:move -- progress-events
- *   npm run sql:move -- all
- *   npm run sql:move -- sign-in-history --mode=dual    also set where it is written and read
- *   npm run sql:move -- status                         the mode and the counts, nothing changed
+ *   node scripts/sql/move-logs.js sign-in-history                copy what is missing, then compare counts
+ *   node scripts/sql/move-logs.js progress-events
+ *   node scripts/sql/move-logs.js all
+ *   node scripts/sql/move-logs.js sign-in-history --mode=dual    also set where it is written and read
+ *   node scripts/sql/move-logs.js status                         the mode and the counts, nothing changed
  *
  * The copy is safe to repeat: each row keeps its MongoDB _id (mongo_id), and
  * rows already in SQL Server are skipped. Nothing is deleted from MongoDB.
@@ -22,10 +22,21 @@ const { connectToMongo, getDb } = require('../../config/db');
 const euSql = require('../../services/euSql');
 const signInHistory = require('../../services/signInHistory');
 const progressEvents = require('../../services/progressTracker/events');
+const activityStore = require('../../services/activityStore');
+const { CATEGORIES } = require('../../services/auditLog');
 
 const MOVES = {
   'sign-in-history': { store: signInHistory.STORE, collection: signInHistory.COLLECTION, table: signInHistory.TABLE, toRow: (d) => signInHistory.toRow(d, String(d._id)) },
   'progress-events': { store: progressEvents.STORE, collection: progressEvents.COLLECTION, table: progressEvents.TABLE, toRow: (d) => progressEvents.toRow(d, String(d._id)) },
+  // Only the UCDS and Admin entries: ERMS, Portal and NAS stay in MongoDB with the records (B2.2).
+  'audit-trail': {
+    store: activityStore.STORE,
+    collection: activityStore.COLLECTION,
+    table: activityStore.TABLE,
+    filter: { $or: [...activityStore.SQL_CATEGORIES].map((c) => CATEGORIES[c].filter) },
+    toRow: (d) => activityStore.toRow(d, String(d._id)),
+    columns: Object.fromEntries(activityStore.COLUMNS.map(([n, t]) => [n, t()])),
+  },
 };
 
 const args = process.argv.slice(2);
@@ -34,7 +45,7 @@ const modeArg = (args.find((a) => a.startsWith('--mode=')) || '').slice(7) || nu
 const log = (...a) => console.log(...a);
 
 async function counts(m) {
-  const mongo = await getDb().collection(m.collection).countDocuments({});
+  const mongo = await getDb().collection(m.collection).countDocuments(m.filter || {});
   const r = (await euSql.query(`SELECT COUNT_BIG(*) AS total, COUNT_BIG(mongo_id) AS copied FROM ${m.table}`)).recordset[0];
   return { mongo, sqlTotal: Number(r.total), sqlCopied: Number(r.copied) };
 }
@@ -48,7 +59,7 @@ async function copy(name, m) {
     intervalMs: 60000,
   });
   let added = 0;
-  for await (const doc of getDb().collection(m.collection).find({}).sort({ _id: 1 })) {
+  for await (const doc of getDb().collection(m.collection).find(m.filter || {}).sort({ _id: 1 })) {
     if (have.has(String(doc._id))) continue;
     writer.add(m.toRow(doc));
     added += 1;
@@ -108,7 +119,12 @@ MOVES['progress-events'].columns = {
     const ok = c.mongo === c.sqlCopied;
     log(`   copied ${added} new row(s); MongoDB ${c.mongo}, SQL ${c.sqlTotal} (${c.sqlCopied} from MongoDB, ${c.sqlTotal - c.sqlCopied} written there first)`);
     log(`   ${ok ? 'counts match' : 'COUNTS DIFFER'}`);
-    if (modeArg) {
+    // With "all", a mode only moves forward (mongo -> dual -> sql): a history
+    // already further along is left as it is. Going back means naming it.
+    const RANK = { mongo: 0, dual: 1, sql: 2 };
+    if (modeArg && target === 'all' && RANK[modeArg] < RANK[mode]) {
+      log(`   left at ${mode} ("all" never moves a history back; name it to do that)`);
+    } else if (modeArg) {
       if (modeArg === 'sql' && !ok) throw new Error(`Not switching ${name} to sql: the counts differ.`);
       await euSql.setStoreMode(m.store, modeArg);
       log(`   mode set to ${modeArg}`);

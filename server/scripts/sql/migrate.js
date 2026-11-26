@@ -3,7 +3,7 @@
  * Apply pending db_euniverse migrations (server/sql/migrations), or report.
  *
  *   npm run sql:migrate            db_euniverse
- *   npm run sql:migrate -- --test  db_euniverse_test
+ *   node scripts/sql/migrate.js --test  db_euniverse_test
  *   npm run sql:status             what is applied and pending, nothing changed
  *
  * Run on every deploy, after `git pull`: a migration is applied once, in a

@@ -197,34 +197,46 @@ async function listActivityLogs(req, res) {
   try {
     await connectToMongo();
     const { username, actionType, method, path, q, start, end, limit = 200, skip = 0 } = req.query;
+    // Search text is matched literally: a caller's regex is never run.
+    const literal = (v) => new RegExp(String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100), 'i');
     const filter = {};
-    if (username) filter.username = username;
-    if (actionType) filter.actionType = actionType;
-    if (method) filter.method = method;
-    if (path) filter.path = { $regex: String(path), $options: 'i' };
-    if (q) {
-      filter.$or = [
-        { actionLabel: { $regex: String(q), $options: 'i' } },
-        { message: { $regex: String(q), $options: 'i' } },
-      ];
-    }
+    if (username) filter.username = String(username);
+    if (actionType) filter.actionType = String(actionType);
+    if (method) filter.method = String(method);
+    if (path) filter.path = literal(path);
+    if (q) filter.$or = [{ actionLabel: literal(q) }, { message: literal(q) }];
     // Date range across timestamp/createdAt
     if (start || end) {
       const range = {};
       if (start) range.$gte = new Date(start);
       if (end) range.$lte = new Date(end);
-      const dateOr = [];
-      dateOr.push({ timestamp: range });
-      dateOr.push({ createdAt: range });
-      filter.$and = [...(filter.$and || []), { $or: dateOr }];
+      filter.$and = [...(filter.$and || []), { $or: [{ timestamp: range }, { createdAt: range }] }];
     }
-    const total = await collections.activityLogs.countDocuments(filter);
-    const items = await collections.activityLogs
-      .find(filter)
-      .sort({ timestamp: -1, createdAt: -1, date: -1 })
-      .skip(Number(skip))
-      .limit(Number(limit))
-      .toArray();
+    const want = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const from = Math.max(Number(skip) || 0, 0);
+
+    // UCDS and Admin entries live in SQL Server once moved (phase B2.2); their
+    // old MongoDB copies are kept as a fallback and left out here, so nothing
+    // is counted twice. Both lists are merged newest first.
+    const store = require('../services/activityStore');
+    const { CATEGORIES } = require('../services/auditLog');
+    const sqlCats = [];
+    for (const c of store.SQL_CATEGORIES) if (await store.readsSql(c)) sqlCats.push(c);
+    const mongoFilter = sqlCats.length ? { $and: [filter, { $nor: sqlCats.map((c) => CATEGORIES[c].filter) }] } : filter;
+
+    const [mongoTotal, mongoItems] = await Promise.all([
+      collections.activityLogs.countDocuments(mongoFilter),
+      collections.activityLogs.find(mongoFilter).sort({ timestamp: -1, createdAt: -1, date: -1 }).limit(from + want).toArray(),
+    ]);
+    let total = mongoTotal;
+    let items = mongoItems;
+    if (sqlCats.length && !actionType && !method && !path) {
+      const parts = await Promise.all(sqlCats.map((c) => store.list(c, { username, q, start, end, page: 1, pageSize: Math.min(from + want, 200) })));
+      total += parts.reduce((n, p) => n + p.total, 0);
+      items = [...items, ...parts.flatMap((p) => p.items)];
+    }
+    const at = (d) => new Date(d.timestamp || d.createdAt || d.date || 0).getTime();
+    items = items.sort((a, b) => at(b) - at(a)).slice(from, from + want);
     res.json({ items, total });
   } catch (err) {
     console.error('listActivityLogs error', err);
@@ -313,19 +325,29 @@ async function updateActivityLog(req, res) {
   try {
     await connectToMongo();
     const { id } = req.params;
-    const payload = req.body || {};
-    delete payload._id;
+    // Only the Developer's note can change. An audit entry's own fields are
+    // the record; this used to $set whatever the request body held.
+    const message = typeof req.body?.message === 'string' ? req.body.message.slice(0, 1000) : null;
+    if (message === null) return res.status(400).json({ message: 'Send the note as { message }.' });
+
+    // An entry in SQL Server (an id like "sql-12"), or the SQL copy of a MongoDB entry.
+    const store = require('../services/activityStore');
+    const inSql = await store.updateNote(id, message);
+    if (inSql === true) return res.json({ ok: true, _id: id, message });
+    if (inSql === false) return res.status(404).json({ error: 'Not found' });
+    if (!ObjectId.isValid(id)) return res.status(404).json({ error: 'Not found' });
+
     // NAS audit entries are the security record of who read what on the
     // share; they are not editable, by anyone, from anywhere.
     const current = await collections.activityLogs.findOne({ _id: new ObjectId(id) }, { projection: { domain: 1 } });
-    if (current?.domain === 'nas') return res.status(403).json({ message: 'NAS audit entries cannot be edited.' });
-    const result = await collections.activityLogs.findOneAndUpdate(
-      { _id: new ObjectId(id) },
-      { $set: payload },
-      { returnDocument: 'after' }
-    );
-    if (!result.value) return res.status(404).json({ error: 'Not found' });
-    res.json(result.value);
+    if (!current) return res.status(404).json({ error: 'Not found' });
+    if (current.domain === 'nas') return res.status(403).json({ message: 'NAS audit entries cannot be edited.' });
+    // The driver returns the document itself (it used to be result.value,
+    // which made every successful save answer 404).
+    const updated = await collections.activityLogs.findOneAndUpdate({ _id: new ObjectId(id) }, { $set: { message } }, { returnDocument: 'after' });
+    const doc = updated && updated.value !== undefined ? updated.value : updated;
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    res.json(doc);
   } catch (err) {
     console.error('updateActivityLog error', err);
     res.status(500).json({ error: 'Failed to update activity log' });
@@ -336,6 +358,10 @@ async function deleteActivityLog(req, res) {
   try {
     await connectToMongo();
     const { id } = req.params;
+    const store = require('../services/activityStore');
+    const inSql = await store.remove(id); // an "sql-12" id, or the SQL copy of a MongoDB entry
+    if (inSql === true) return res.json({ ok: true });
+    if (inSql === false || !ObjectId.isValid(id)) return res.status(404).json({ error: 'Not found' });
     const target = await collections.activityLogs.findOne({ _id: new ObjectId(id) }, { projection: { domain: 1 } });
     if (target?.domain === 'nas') return res.status(403).json({ message: 'NAS audit entries cannot be deleted.' });
     const del = await collections.activityLogs.deleteOne({ _id: new ObjectId(id) });

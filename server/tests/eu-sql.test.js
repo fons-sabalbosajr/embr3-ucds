@@ -54,6 +54,64 @@ describe('Moved histories keep their shape', () => {
   });
 });
 
+describe('Audit trail: where each entry goes (B2.2)', () => {
+  const store = require('../services/activityStore');
+  const { CATEGORIES, CATEGORY_KEYS } = require('../services/auditLog');
+
+  // The same small evaluator as tests/audit-log.test.js, for the MongoDB side.
+  function matches(doc, f) {
+    return Object.entries(f).every(([k, cond]) => {
+      if (k === '$and') return cond.every((c) => matches(doc, c));
+      if (k === '$or') return cond.some((c) => matches(doc, c));
+      if (k === '$nor') return !cond.some((c) => matches(doc, c));
+      const v = doc[k];
+      if (cond instanceof RegExp) return typeof v === 'string' && cond.test(v);
+      if (cond && typeof cond === 'object') {
+        if ('$ne' in cond) return v !== cond.$ne;
+        if ('$not' in cond) return !(typeof v === 'string' && cond.$not.test(v));
+      }
+      if (cond === null) return v == null;
+      return v === cond;
+    });
+  }
+
+  const samples = [
+    { domain: 'nas', actionType: 'NAS', path: '/api/erms/portal/x/file' },
+    { domain: 'erms', actionType: 'portal-request' },
+    { domain: 'erms', actionType: 'Update Record', path: '/api/erms/legal/records/1' },
+    { domain: 'ucds', actionType: 'Generic Action', path: '/api/ucds-data' },
+    { domain: 'vera', actionType: 'vera:chat' },
+    { domain: 'admin', actionType: 'legacy-sql-export' },
+    { actionType: 'Update Data', path: '/api/update-data/x' },
+    { actionType: 'Update Data', path: '/api/users/x' },
+    { type: 'PostingStatusChange', postingId: 'p1' },
+  ];
+
+  it.each(samples)('categoryOf(%j) agrees with the Audit Logs tabs', (doc) => {
+    const tabs = CATEGORY_KEYS.filter((k) => matches(doc, CATEGORIES[k].filter));
+    expect([store.categoryOf(doc)]).toEqual(tabs);
+  });
+
+  it('moves only UCDS and Admin; ERMS, Portal, NAS and VERA stay with MongoDB', () => {
+    expect([...store.SQL_CATEGORIES].sort()).toEqual(['admin', 'ucds']);
+  });
+
+  it('stores request bodies redacted and keeps unknown fields', () => {
+    const row = store.toRow({ domain: 'admin', path: '/api/users/1', actionType: 'Update Data', requestData: { password: 'p', role: 'x' }, type: 'X', postingId: 'p9', timestamp: new Date(0) }, 'abc');
+    expect(JSON.parse(row.request_data)).toEqual({ password: '[hidden]', role: 'x' });
+    expect(JSON.parse(row.extra)).toEqual({ type: 'X', postingId: 'p9' });
+    expect(row).toMatchObject({ category: 'admin', mongo_id: 'abc', action_type: 'Update Data' });
+  });
+
+  it('presents SQL rows with sql- ids, so edits and deletes reach SQL Server', () => {
+    const shown = store.present({ id: 42, occurred_at: new Date(0), username: 'ana', action_type: 'menu-item-update', action_label: 'menu item changed', request_data: '{"a":1}' });
+    expect(shown._id).toBe('sql-42');
+    expect(store.sqlIdOf(shown._id)).toBe(42);
+    expect(store.sqlIdOf('0123456789abcdef01234567')).toBeNull();
+    expect(shown.requestData).toEqual({ a: 1 });
+  });
+});
+
 describe('Batch writer', () => {
   it('inserts many rows at once instead of one per request', async () => {
     const calls = [];

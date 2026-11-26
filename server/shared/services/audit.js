@@ -1,4 +1,3 @@
-const { connectToMongo, getDb } = require('../../config/db');
 
 // ---------------------------------------------------------------------------
 // Audit trail.
@@ -35,9 +34,9 @@ function diff(before = {}, after = {}) {
  */
 async function record(req, entry) {
   try {
-    await connectToMongo();
     const user = req.session?.user;
-    await getDb().collection(COLLECTION).insertOne({
+    // MongoDB or SQL Server by category (services/activityStore.js).
+    await require('../../services/activityStore').record({
       userId: user?.userId || null,
       username: user?.username || null,
       domain: entry.domain,

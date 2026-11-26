@@ -3,7 +3,7 @@
  * Phase B1: create E-Universe's own SQL Server database and login.
  *
  *   npm run sql:setup                       create what is missing, then migrate
- *   npm run sql:setup -- --rotate-password  give eu_app a new password
+ *   node scripts/sql/setup-euniverse.js --rotate-password  give eu_app a new password
  *
  * Creates, on the legacy ERMS SQL Server (the office server):
  *   db_euniverse        E-Universe's data, moved from MongoDB phase by phase

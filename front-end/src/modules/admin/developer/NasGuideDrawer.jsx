@@ -203,7 +203,7 @@ const SECTIONS = [
           <li>The test shows which databases are readable, and warns if the login can change data. Ask for a read-only login (db_datareader) if it can.</li>
           <li>Rotating its password works like the NAS: change it on the SQL Server, then save the new one here straight away.</li>
           <li>
-            The daily divergence check can read it live: <Text code>npm run daily-check -- --source=sql</Text> on the office server.
+            The daily divergence check can read it live: <Text code>node scripts/daily-check.js --source=sql</Text> (in <Text code>server</Text>) on the office server.
           </li>
         </ol>
       </>

@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticateSession, requireDeveloper, principalOf } = require('../middleware/auth');
 const { requireElevation } = require('../services/nasElevation');
 const { expensiveLimiter } = require('../config/security');
-const { connectToMongo, getDb } = require('../config/db');
+// (audit entries go through services/activityStore.js)
 const legacySql = require('../services/legacySql');
 
 // ---------------------------------------------------------------------------
@@ -19,8 +19,8 @@ const verified = [authenticateSession, requireDeveloper, requireElevation];
 async function audit(req, operation, success, detail) {
   try {
     const user = principalOf(req) || {};
-    await connectToMongo();
-    await getDb().collection('app-logs').insertOne({
+    // An Admin entry: MongoDB or SQL Server by category (services/activityStore.js).
+    await require('../services/activityStore').record({
       userId: user.userId || null,
       username: user.username || null,
       domain: 'admin',
