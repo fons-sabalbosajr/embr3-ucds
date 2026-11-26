@@ -25,7 +25,6 @@ import CryptoJS from "crypto-js";
 const Dashboard = lazy(() => import("./modules/ucds/dashboard/Dashboard"));
 const Province = lazy(() => import("./modules/ucds/province/Province"));
 const MBU = lazy(() => import("./modules/ucds/mbu/MBU"));
-const Admin = lazy(() => import("./modules/admin/Admin"));
 const Accounts = lazy(() => import("./modules/admin/users/UserAccounts"));
 const StorageBrowser = lazy(() => import("./modules/storage/StorageBrowser"));
 const DatasetPage = lazy(() => import("./modules/ucds/datasets/DatasetPage"));
@@ -50,7 +49,8 @@ const CustomItemPage = lazy(() => import("./modules/ucds/custom/CustomItemPage")
 const Report = lazy(() => import("./modules/ucds/reports/UcdsReports"));
 const UcdsVeraCheck = lazy(() => import("./modules/ucds/vera/UcdsVeraCheck"));
 const Posting = lazy(() => import("./modules/admin/posting/Posting"));
-import ActivityLog from "./components/ActivityLog/ActivityLog";
+// Admin Settings › Audit Logs: one tab per sub-application.
+const AuditLogs = lazy(() => import("./modules/admin/audit/AuditLogs"));
 const SystemSettings = lazy(() => import("./modules/admin/SystemSettings"));
 import AvatarWithName from "./components/AvatarwithName";
 import SideMenu from "./components/SideMenu";
@@ -772,7 +772,7 @@ const Universe = () => {
                     path="admin/audit"
                     element={
                       <DomainGuard domain="admin" user={currentUser}>
-                        <ActivityLog theme={theme} />
+                        <AuditLogs />
                       </DomainGuard>
                     }
                   />
@@ -841,7 +841,14 @@ const Universe = () => {
                   ))}
 
 
-                  <Route path="admin" element={<Admin theme={theme} />} />
+                  {/* The Admin area has no page of its own. This used to be
+                      the online-users widget stretched across the screen; it
+                      now lives on Sign-in History, and /admin sends each
+                      person to their own home: the Developer and an
+                      Administrator to the main dashboard, a Planning Admin or
+                      Encoder to UCDS, an ERMS User to their unit (see "home"
+                      above). */}
+                  <Route path="admin" element={<Navigate to={ROUTES.appHome} replace />} />
 
                   {/* Shared master data. Administrators only — the API applies
                       requireDomain('admin') to the write endpoints. */}

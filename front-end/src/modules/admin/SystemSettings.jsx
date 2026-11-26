@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Tabs } from "antd";
 import { useSearchParams } from "react-router-dom";
 import DatabaseSettings from "./developer/DatabaseSettings";
-import ActivityHistoryConfig from "./developer/ActivityHistoryConfig";
 import ErmsUnitsCard from "./developer/ErmsUnitsCard";
 import ProgressTrackerCard from "./developer/ProgressTrackerCard";
 import { fetchCurrentUser } from "../../api/universeService";
@@ -22,7 +21,8 @@ import { fetchCurrentUser } from "../../api/universeService";
 
 const TABS = [
   { key: "database", label: "Database", element: DatabaseSettings },
-  { key: "audit", label: "Activity History", element: ActivityHistoryConfig },
+  // Activity History moved to Admin Settings › Audit Logs, one tab per
+  // sub-application (modules/admin/audit/AuditLogs.jsx).
   // Taking an ERMS unit down for maintenance: the Developer's alone (the API
   // refuses anyone else), so the tab is only offered to them.
   { key: "erms-units", label: "ERMS Units", element: ErmsUnitsCard, developerOnly: true },

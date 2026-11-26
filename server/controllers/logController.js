@@ -20,30 +20,7 @@ async function saveUcdsLog(req, res) {
 }
 
 
-// GET /api/logs — migrated from server.js
-async function getLogs(req, res) {
-  try {
-    await connectToMongo();
-    const username = req.query.username;
-    const filter = {};
-    if (username) filter.username = username;
-
-    // Elevation is decided from the session, not from a query parameter that
-    // the caller can set to "admin".
-    const role = roleOf(principalOf(req));
-    if (![ROLES.ADMIN, ROLES.DEVELOPER].includes(role)) {
-      filter.actionType = { $nin: ['Generic Action', 'Patch'] };
-    }
-    const logs = await collections.activityLogs.find(filter).toArray();
-    res.status(200).json(logs);
-  } catch (error) {
-    console.error('Error fetching logs:', error);
-    res.status(500).json({ error: 'An unexpected error occurred.' });
-  }
-}
-
 module.exports.saveUcdsLog = saveUcdsLog;
-module.exports.getLogs = getLogs;
 
 // GET /api/ucds-log — migrated from server.js
 async function getUcdsLog(req, res) {

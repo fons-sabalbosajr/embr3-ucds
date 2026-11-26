@@ -5,6 +5,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE } from "../../../config/api";
+import OnlineNowCard from "./OnlineNowCard";
 
 const { Text, Title } = Typography;
 
@@ -38,6 +39,9 @@ const SignInHistory = () => {
   ];
 
   return (
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    {/* Who is signed in now, then the record of every sign-in and sign-out. */}
+    <OnlineNowCard />
     <Card
       title={<Space direction="vertical" size={0}><Title level={4} style={{ margin: 0 }}>Sign-in history</Title><Text type="secondary">Every sign-in and sign-out, newest first{data ? `, kept for ${data.retentionDays} days` : ""}.</Text></Space>}
       extra={
@@ -59,6 +63,7 @@ const SignInHistory = () => {
         scroll={{ x: "max-content" }}
       />
     </Card>
+    </Space>
   );
 };
 

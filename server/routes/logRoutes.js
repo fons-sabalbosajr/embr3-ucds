@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticateSession, resolveYearContext } = require('../middleware/auth');
-const { saveUcdsLog, getLogs, getUcdsLog, deleteUcdsTransaction } = require('../controllers/logController');
+const { saveUcdsLog, getUcdsLog, deleteUcdsTransaction } = require('../controllers/logController');
 
 const router = express.Router();
 
@@ -11,7 +11,8 @@ router.post('/api/ucds-log', ...yearScoped, saveUcdsLog);
 router.get('/api/ucds-log', ...yearScoped, getUcdsLog);
 router.delete('/api/transaction/:transactionID', ...yearScoped, deleteUcdsTransaction);
 
-// Application activity logs are system-wide, not per year container.
-router.get('/api/logs', authenticateSession, getLogs);
+// GET /api/logs is gone. It returned the audit trail, request bodies
+// included, to any signed-in account; Admin Settings › Audit Logs reads it
+// through /api/audit (routes/auditRoutes.js), Admin domain only and redacted.
 
 module.exports = router;

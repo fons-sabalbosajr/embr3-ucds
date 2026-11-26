@@ -144,6 +144,8 @@ app.use(authRoutes);
 app.use(postingRoutes);
 app.use(draftReportRoutes);
 app.use(logRoutes);
+// Admin Settings › Audit Logs, by sub-application (services/auditLog.js).
+app.use(require("./routes/auditRoutes"));
 app.use(ucdsRoutes);
 app.use(usersRoutes);
 app.use(pdfRoutes);

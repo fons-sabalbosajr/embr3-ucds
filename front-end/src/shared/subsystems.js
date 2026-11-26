@@ -49,7 +49,9 @@ const SUBSYSTEMS = [
     match: /^\/e-universe\/(admin|accounts|activity-log)(\/|$)/,
     name: "Admin Settings",
     detail: "Accounts and configuration",
-    home: "/e-universe/admin",
+    // /e-universe/admin has no page of its own (it sends each person to
+    // their home), so the way back is the first Admin Settings page.
+    home: "/e-universe/admin/users",
     homeLabel: "Back to Admin Settings",
     color: "#542c14",
   },

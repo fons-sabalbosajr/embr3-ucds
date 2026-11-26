@@ -825,6 +825,15 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
             </div>
           ),
         },
+        // The audit trail, one tab per sub-application.
+        {
+          key: "/e-universe/admin/audit",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/e-universe/admin/audit">Audit Logs</Link>
+            </div>
+          ),
+        },
         {
           key: "/e-universe/admin/org-units",
           label: (
