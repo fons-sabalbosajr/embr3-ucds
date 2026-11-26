@@ -15,6 +15,7 @@ import NasAuditCard from "./NasAuditCard";
 import NasReportFilesCard from "./NasReportFilesCard";
 import NasAvailabilityCard from "./NasAvailabilityCard";
 import NasActivityCard from "./NasActivityCard";
+import NasGuideDrawer from "./NasGuideDrawer";
 
 const { Text, Paragraph } = Typography;
 
@@ -422,7 +423,12 @@ const StorageConfig = () => {
 
       <Card
         title="Network Attached Storage (NAS Configuration)"
-        extra={<Button onClick={endSession}>End verified session</Button>}
+        extra={
+          <Space wrap>
+            <NasGuideDrawer />
+            <Button onClick={endSession}>End verified session</Button>
+          </Space>
+        }
         styles={{ body: { paddingTop: 8 } }}
       >
         <Tabs
