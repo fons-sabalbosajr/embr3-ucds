@@ -45,6 +45,7 @@ import { useYear } from "../context/YearContext";
 import { API_BASE_URL } from "../config/api";
 import { message } from "../shared/feedback";
 import { useErmsAvailability } from "../shared/ermsAvailability";
+import { ROUTES } from "../config/routes";
 import "./sidemenu.css";
 
 const { Sider } = Layout;
@@ -253,7 +254,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
         await selectYear(year);
         clearCache?.();
       } catch {
-        navigate("/select-year");
+        navigate(ROUTES.selectYear);
         return;
       }
     }
@@ -353,7 +354,7 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
       clearCache?.();
       navigate(path);
     } catch {
-      navigate("/select-year");
+      navigate(ROUTES.selectYear);
     }
   };
 

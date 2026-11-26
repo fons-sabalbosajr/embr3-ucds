@@ -18,7 +18,10 @@ import { API_BASE } from "../../config/api";
 //     from there (iOS 16.4 or later). Safari tabs cannot receive pushes.
 // ---------------------------------------------------------------------------
 
-const SW_URL = "/sw.js";
+// Under the site's base (/e-universe/ in production), with that as its scope:
+// registered at the root it would claim every page of embr3-onlinesystems.cloud.
+const BASE = import.meta.env.BASE_URL || "/";
+const SW_URL = `${BASE}sw.js`;
 
 const isIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const isStandalone = () => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -54,16 +57,16 @@ function keyBytes(base64Url) {
 }
 
 async function registration() {
-  const existing = await navigator.serviceWorker.getRegistration("/");
+  const existing = await navigator.serviceWorker.getRegistration(BASE);
   if (existing) return existing;
-  await navigator.serviceWorker.register(SW_URL, { scope: "/" });
+  await navigator.serviceWorker.register(SW_URL, { scope: BASE });
   return navigator.serviceWorker.ready;
 }
 
 /** This device's subscription, when there is one. */
 export async function currentSubscription() {
   if (!pushSupport().supported) return null;
-  const reg = await navigator.serviceWorker.getRegistration("/");
+  const reg = await navigator.serviceWorker.getRegistration(BASE);
   return reg ? reg.pushManager.getSubscription() : null;
 }
 

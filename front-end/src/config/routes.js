@@ -14,7 +14,9 @@ export const ROUTES = {
   documentPortal: `${SITE_BASE}/document-portal`,
   // Public: the Progress Tracker's figures, for a link the Developer turned on.
   progressPublic: `${SITE_BASE}/progress/:token`,
-  selectYear: "/select-year",
+  // Under /e-universe like every other page: at the root it would be another
+  // system's address on embr3-onlinesystems.cloud.
+  selectYear: `${SITE_BASE}/select-year`,
   app: "/e-universe",
   // The application's own home: each account lands on its dashboard from
   // here. Bare /e-universe is the public landing page.

@@ -2,7 +2,7 @@
 
 How the office server PC (`emb3winsrvr2019`, in the server room) becomes the
 machine that runs E-Universe around the clock, published at
-**https://e-universe.embr3-onlinesystems.cloud**.
+**https://embr3-onlinesystems.cloud/e-universe**.
 
 ```
 staff anywhere ──HTTPS──▶ VPS nginx (72.61.125.232) ──Tailscale──▶ this server ──LAN──▶ NAS
@@ -46,7 +46,7 @@ these lines:
 
 | Key | Value |
 |---|---|
-| `ALLOWED_ORIGINS` | `https://e-universe.embr3-onlinesystems.cloud` |
+| `ALLOWED_ORIGINS` | `https://embr3-onlinesystems.cloud,https://e-universe.embr3-onlinesystems.cloud` |
 | `VITE_API_BASE_URL` | `https://e-universe.embr3-onlinesystems.cloud` |
 | `SESSION_SECRET` | a new one: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
 | `BYPASS_AUTH` | `false` |
@@ -178,7 +178,7 @@ Documents fail to open only in the time between the two steps.
 | Symptom | Look at |
 |---|---|
 | The site shows "temporarily unavailable" | Is the server on? `Get-Service "UCDS API"`; `tailscale status` shows `ucds-server` online |
-| Sign-in succeeds, then nothing works | `ALLOWED_ORIGINS` and `VITE_API_BASE_URL` both the https domain; front-end rebuilt after changing them |
+| Sign-in succeeds, then nothing works | `ALLOWED_ORIGINS` lists the apex **and** the subdomain; `VITE_API_BASE_URL` is the subdomain; front-end rebuilt after changing them |
 | Documents will not open | `api.out.log` for the `[NAS]` line; Storage Configuration › Test connection |
 | "password unreadable" in Storage Configuration | `CONFIG_ENCRYPTION_KEY` differs from the machine that saved it. Restore it, or re-save the password |
 

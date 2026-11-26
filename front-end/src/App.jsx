@@ -96,6 +96,8 @@ const router = createBrowserRouter(
       {/* Legacy paths — kept so existing bookmarks and password-reset emails work */}
       <Route path='/' element={<RedirectTo to={ROUTES.landing} />} />
       <Route path='/home' element={<RedirectTo to={ROUTES.landing} />} />
+      {/* The year picker moved under /e-universe; old bookmarks still arrive. */}
+      <Route path='/select-year' element={<RedirectTo to={ROUTES.selectYear} />} />
       <Route path='/login' element={<RedirectTo to={ROUTES.login} />} />
       <Route path='/register' element={<RedirectTo to={ROUTES.register} />} />
       <Route path='/forgot-password' element={<RedirectTo to={ROUTES.forgotPassword} />} />

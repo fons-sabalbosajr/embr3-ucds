@@ -50,7 +50,7 @@ export default function useRealtimeNotices({ enabled, username, onNotice }) {
       const open = () => navigate(notice.url || "/e-universe/home");
       if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted" && !(await isPushOn())) {
         try {
-          const n = new Notification(notice.title, { body: notice.body, tag: notice.tag, icon: "/notice-icon.png" });
+          const n = new Notification(notice.title, { body: notice.body, tag: notice.tag, icon: `${import.meta.env.BASE_URL}notice-icon.png` });
           n.onclick = () => {
             window.focus();
             open();

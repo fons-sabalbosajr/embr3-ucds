@@ -44,6 +44,9 @@ set -euo pipefail
 
 UPSTREAM_IN="${1:-}"
 SITE="${2:-e-universe.embr3-onlinesystems.cloud}"
+# The canonical address the app is served at: the subdomain's parent domain
+# (e-universe.embr3-onlinesystems.cloud -> embr3-onlinesystems.cloud).
+MAIN_DOMAIN="${SITE#*.}"
 TS_HOSTNAME="ucds-front-door"
 CONF=/etc/nginx/sites-available/e-universe
 LINK=/etc/nginx/sites-enabled/e-universe
@@ -177,21 +180,17 @@ cat > "$CONF" <<NGINX
 # Every name below starts with eu_ so nothing collides with the other sites.
 
 upstream eu_api { server $UPSTREAM:8081; keepalive 16; }   # Express API
-upstream eu_web { server $UPSTREAM:5173; keepalive 8; }    # vite preview of the build
 
 map \$http_upgrade \$eu_connection { default upgrade; '' ''; }
 
-# /login, /register and /reset-password are both the API's POST and the web
-# app's old-bookmark redirects, so a request a browser makes as a page load
-# goes to the web app and anything else to the API.
-map "\$request_method:\$http_accept" \$eu_root_upstream {
-    default                     eu_api;
-    "~^(GET|HEAD):.*text/html"  eu_web;
-}
-# vite preview only answers its own host name.
-map \$eu_root_upstream \$eu_root_host {
-    eu_web   "localhost:5173";
-    default  \$host;
+# The web app is served from the canonical address, $MAIN_DOMAIN/e-universe
+# (add-e-universe-apex.sh). This subdomain keeps the API — which that app calls
+# cross-origin — and sends any browser page load here on to the canonical
+# address. A page load is a GET/HEAD for text/html; everything else (the app's
+# XHR and socket traffic) is the API and must never be redirected.
+map "\$request_method:\$http_accept" \$eu_is_page {
+    default                     0;
+    "~^(GET|HEAD):.*text/html"  1;
 }
 
 server {
@@ -252,22 +251,23 @@ server {
         proxy_pass http://eu_api;
     }
 
-    # --- The built front-end. Hashed file names never change.
+    # --- The app lives at $MAIN_DOMAIN/e-universe now. Send its old asset and
+    # page URLs there (old PWA caches, bookmarks). The app never asks this host
+    # for them — it loads them from the apex — so these only catch stragglers.
     location ^~ /assets/ {
-        set \$eu_host "localhost:5173";
-        proxy_pass http://eu_web;
-        proxy_hide_header Cache-Control;
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        return 301 https://$MAIN_DOMAIN/e-universe\$request_uri;
     }
+    location ^~ /e-universe/ { return 301 https://$MAIN_DOMAIN\$request_uri; }
+    location = /e-universe   { return 301 https://$MAIN_DOMAIN/e-universe/; }
     location ~ ^/(sw\.js|manifest\.webmanifest|index\.html|[^/]+\.(png|svg|ico))\$ {
-        set \$eu_host "localhost:5173";
-        proxy_pass http://eu_web;
+        return 301 https://$MAIN_DOMAIN/e-universe\$request_uri;
     }
 
-    # --- Everything else: page loads to the web app, the rest to the API.
+    # --- Everything else: a browser page load goes to the canonical address;
+    # the rest is the app's cross-origin API traffic and goes to the API.
     location / {
-        set \$eu_host \$eu_root_host;
-        proxy_pass http://\$eu_root_upstream;
+        if (\$eu_is_page) { return 301 https://$MAIN_DOMAIN/e-universe/; }
+        proxy_pass http://eu_api;
     }
 }
 NGINX
@@ -290,8 +290,10 @@ case "$code" in
 esac
 
 step "Done"
-echo "   On the office server PC, in server/.env, then rebuild the front-end (npm run build):"
-echo "     ALLOWED_ORIGINS=https://$SITE"
+echo "   The API answers here; the app is served at https://$MAIN_DOMAIN/e-universe"
+echo "   (run add-e-universe-apex.sh $UPSTREAM_IN). On the office server PC, in"
+echo "   server/.env, then rebuild the front-end (npm run build):"
+echo "     ALLOWED_ORIGINS=https://$MAIN_DOMAIN,https://$SITE"
 echo "     VITE_API_BASE_URL=https://$SITE"
 [[ -f /var/run/reboot-required ]] && echo "   This VPS has updates waiting for a restart; schedule one when the other systems can take a short break."
 exit 0

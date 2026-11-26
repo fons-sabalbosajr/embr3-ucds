@@ -5,7 +5,7 @@
   server. Safe to run again.
 
 .DESCRIPTION
-  Staff reach E-Universe at https://e-universe.embr3-onlinesystems.cloud,
+  Staff reach E-Universe at https://embr3-onlinesystems.cloud/e-universe,
   through the VPS, which connects to this server over Tailscale. So the web
   (5173) and API (8081) ports only need to accept the tailnet's addresses
   (100.64.0.0/10): nobody on the office LAN or anywhere else can reach the

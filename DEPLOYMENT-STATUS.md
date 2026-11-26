@@ -2,7 +2,7 @@
 
 **Status: LIVE, FOR TESTING ONLY.** Not officially launched.
 **Since:** 26 November 2026
-**Address:** https://e-universe.embr3-onlinesystems.cloud
+**Address:** https://embr3-onlinesystems.cloud/e-universe
 
 E-Universe is running in its production setup so it can be tested end to end:
 the office server runs the application around the clock, the public address
@@ -37,7 +37,7 @@ the office server. How to update the server, rotate NAS passwords and turn
 document access on or off:
 
 - `server/scripts/winserver/README.md`: the office server, updates, rollback
-- `server/scripts/vps/add-e-universe-site.sh`: the public address
+- `server/scripts/vps/add-e-universe-site.sh` and `add-e-universe-apex.sh`: the public address
 - In the application: **Storage › Developer guide** (Developer accounts only)
 
 ## Before the official launch

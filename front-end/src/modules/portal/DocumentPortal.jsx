@@ -100,7 +100,7 @@ function useLiveRoom(mineId) {
       notification.info({ key: "portal-chat", message: n.title, description: n.body, placement: "topRight", duration: 10, icon: <MessageOutlined /> });
       if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted") {
         try {
-          new Notification(n.title, { body: n.body, tag: "e-universe-portal-chat", icon: "/notice-icon.png" });
+          new Notification(n.title, { body: n.body, tag: "e-universe-portal-chat", icon: `${import.meta.env.BASE_URL}notice-icon.png` });
         } catch {
           /* some browsers only allow notifications from a service worker */
         }
@@ -114,7 +114,7 @@ function useLiveRoom(mineId) {
       // The page is in the background: the computer's own notification, if allowed.
       if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted") {
         try {
-          const shown = new Notification(n.title, { body: n.body, tag: "e-universe-portal", icon: "/notice-icon.png" });
+          const shown = new Notification(n.title, { body: n.body, tag: "e-universe-portal", icon: `${import.meta.env.BASE_URL}notice-icon.png` });
           shown.onclick = () => {
             window.focus();
             shown.close();
@@ -759,7 +759,7 @@ function RequestForm({ room, now, initialSerial, tourRefs }) {
                 ]}
                 extra="Where the office can reach you about this request."
               >
-                <Input maxLength={120} placeholder="name@example.com or 0917 123 4567" autoComplete="email" />
+                <Input maxLength={120} placeholder="email addressexample.com or 0917 123 4567" autoComplete="email" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>

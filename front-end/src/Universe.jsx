@@ -530,7 +530,7 @@ const Universe = () => {
     // theme and the dismissed "Toggle Theme" hint — so both came back on the
     // next sign-in and looked like settings that did not work.
     clearSessionStorageKeepingPreferences();
-    window.location.replace("/login");
+    window.location.replace(ROUTES.login);
   };
 
   const handleDismissHint = () => {
