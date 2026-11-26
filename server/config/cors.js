@@ -1,6 +1,6 @@
 function getAllowedOrigins() {
   const env = process.env.ALLOWED_ORIGINS;
-  if (!env) return ["http://localhost:5173", "http://10.14.77.107:5173"];
+  if (!env) return ["http://localhost:5173", "http://10.14.76.199:5173"];
   return env.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
