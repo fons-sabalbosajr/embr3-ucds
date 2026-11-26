@@ -60,8 +60,13 @@ if (-not (Get-LocalUser -Name $ServiceUser -ErrorAction SilentlyContinue)) {
 $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw))
 
 # The service account must read the repository and write logs and uploads.
-icacls "$AppRoot" /grant "${ServiceUser}:(OI)(CI)M" /T | Out-Null
+# Granted once on each top folder with (OI)(CI), so every file below inherits
+# it. Not /T: that writes the entry onto each of the tens of thousands of files
+# in node_modules one by one, and took long enough to look like a hang.
+Write-Host "== Folder access for $ServiceUser"
+icacls "$AppRoot" /grant "${ServiceUser}:(OI)(CI)M" | Out-Null
 icacls "C:\ucds\logs" /grant "${ServiceUser}:(OI)(CI)M" | Out-Null
+Write-Host "   done"
 
 # Not $args: that is PowerShell's automatic variable.
 function Install-Svc($name, $dir, $exe, $arguments, $log) {
