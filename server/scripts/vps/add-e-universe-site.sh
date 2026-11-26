@@ -76,9 +76,19 @@ safe_reload() {
 # ---------------------------------------------------------------------------
 step "DNS: $SITE must point straight at this VPS (Cloudflare: DNS only)"
 MY_IPS=" $(hostname -I) "
-# getent fails when the name does not exist; under pipefail that would end the
-# script here without a word, so its failure is absorbed and handled below.
-DNS_IPS="$( { getent ahostsv4 "$SITE" || true; } | awk '{print $1}' | sort -u | tr '\n' ' ')"
+# Asked of public DNS (Cloudflare's 1.1.1.1, over HTTPS), not this machine's
+# resolver: what matters is what the Internet sees, because that is what
+# Let's Encrypt checks. The provider's resolver may still hold a "no such
+# name" answer from before the record existed, for up to the zone's negative
+# TTL (30 minutes on Cloudflare), and nothing on this machine can clear it.
+# getent is the fallback only if 1.1.1.1 cannot be reached. Failures are
+# absorbed (|| true): under pipefail they would end the script without a word.
+DNS_IPS="$( { curl -fsS --max-time 10 -H 'accept: application/dns-json' \
+  "https://1.1.1.1/dns-query?name=$SITE&type=A" || true; } \
+  | grep -oE '"data":"[0-9.]+"' | grep -oE '[0-9.]+' | sort -u | tr '\n' ' ')"
+if [[ -z "$DNS_IPS" ]]; then
+  DNS_IPS="$( { getent ahostsv4 "$SITE" || true; } | awk '{print $1}' | sort -u | tr '\n' ' ')"
+fi
 [[ -n "$DNS_IPS" ]] || die "$SITE does not resolve yet. In Cloudflare: DNS > Add record > A, name e-universe, IPv4 72.61.125.232, Proxy status DNS only. Then run again."
 MATCH=""
 for ip in $DNS_IPS; do
@@ -267,7 +277,9 @@ echo "   nginx serves https://$SITE"
 
 # ---------------------------------------------------------------------------
 step "Check from this VPS"
-code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$SITE/healthz" || true)"
+# Straight to this machine's nginx (--resolve), so a stale answer in the
+# provider's resolver cannot make a working site look broken.
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$SITE:443:127.0.0.1" "https://$SITE/healthz" || true)"
 case "$code" in
   200) echo "   https://$SITE/healthz -> 200: the office server answers through the front door" ;;
   503) echo "   https://$SITE/healthz -> 503: the front door works; the office server is not answering yet" ;;
