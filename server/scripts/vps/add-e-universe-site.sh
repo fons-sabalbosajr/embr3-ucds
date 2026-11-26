@@ -278,7 +278,10 @@ echo "   nginx serves https://$SITE"
 # ---------------------------------------------------------------------------
 step "Check from this VPS"
 # Straight to this machine's nginx (--resolve), so a stale answer in the
-# provider's resolver cannot make a working site look broken.
+# provider's resolver cannot make a working site look broken. The pause lets
+# the reload finish: until the new workers take over, the old ones answer this
+# name with another site's certificate and curl reports 000.
+sleep 3
 code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$SITE:443:127.0.0.1" "https://$SITE/healthz" || true)"
 case "$code" in
   200) echo "   https://$SITE/healthz -> 200: the office server answers through the front door" ;;
