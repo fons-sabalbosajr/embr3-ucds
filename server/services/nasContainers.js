@@ -530,6 +530,69 @@ async function applyToWindows({ root, username, domain, password }) {
   return { ok: true };
 }
 
+/**
+ * Put every stored share password back into Windows, at startup.
+ *
+ * The passwords live here, encrypted; Windows only holds a copy, written when
+ * someone presses Save (applyToWindows above). That copy belongs to one
+ * machine and one Windows account, and nothing ever wrote it again — so a new
+ * server, a different service account, or a cleared Credential Manager left
+ * every share failing until each password was typed in again, although the
+ * application had them all along. Re-applying at startup makes the stored
+ * configuration the source of truth: whatever runs E-Universe gets the
+ * credentials it needs, with no one retyping anything.
+ *
+ * Same rules as Save: enabled containers only, never an incoming one, and one
+ * account per server name — Windows holds a single credential per host, so a
+ * second container on the same name with a different account is reported,
+ * not written over the first. Passwords are never logged; results name the
+ * container key and a code.
+ *
+ * `list` and `apply` are injectable for the tests.
+ */
+async function syncToWindows({ list = resolveAll, apply = applyToWindows, platform = process.platform } = {}) {
+  if (platform !== 'win32') return { skipped: 'NOT_WINDOWS', results: [] };
+  if (clean(process.env.NAS_ENABLED || 'true').toLowerCase() === 'false') return { skipped: 'NAS_DISABLED', results: [] };
+  if (clean(process.env.NAS_CREDENTIAL_SYNC || 'true').toLowerCase() === 'false') return { skipped: 'SYNC_DISABLED', results: [] };
+
+  const results = [];
+  const accountByHost = new Map();
+  for (const c of await list()) {
+    const skip = (code) => results.push({ key: c.key, ok: false, skipped: true, code });
+    if (!c.enabled || c.incoming) continue; // not in use: nothing to restore, nothing to report
+    if (!UNC.test(c.root || '')) {
+      skip('BAD_ROOT');
+      continue;
+    }
+    if (!c.passwordReadable) {
+      // Usually a changed CONFIG_ENCRYPTION_KEY. Re-saving the password fixes it.
+      skip('PASSWORD_UNREADABLE');
+      continue;
+    }
+    if (!c.password) {
+      skip('NO_PASSWORD');
+      continue;
+    }
+    if (!c.username) {
+      skip('NO_USERNAME');
+      continue;
+    }
+    const host = hostOf(c.root);
+    const account = `${clean(c.domain).toLowerCase()}\\${clean(c.username).toLowerCase()}`;
+    const claimed = accountByHost.get(host);
+    if (claimed && claimed.account !== account) {
+      results.push({ key: c.key, ok: false, skipped: true, code: 'HOST_CONFLICT', with: claimed.key });
+      continue;
+    }
+    accountByHost.set(host, { key: c.key, account });
+    if (claimed) continue; // same host, same account: already written
+
+    const outcome = await apply(c);
+    results.push({ key: c.key, ok: Boolean(outcome?.ok), code: outcome?.ok ? 'APPLIED' : outcome?.code || 'UNKNOWN' });
+  }
+  return { skipped: null, results };
+}
+
 module.exports = {
   COLLECTION,
   RECORDS_KEY,
@@ -546,6 +609,7 @@ module.exports = {
   history,
   recordTest,
   applyToWindows,
+  syncToWindows,
   credentialConflicts,
   slugify,
 };

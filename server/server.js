@@ -132,6 +132,20 @@ require("./services/presence").attach(io);
 // Notices to the person they concern, on their screens and devices (services/notifier.js).
 require("./services/notifier").attach(io, app.locals.sessionStore);
 connectToMongo().then(() => require("./services/notifier").ensureIndexes()).catch((err) => console.warn("[notifier] indexes:", err.message));
+// Put the share passwords saved in Storage Configuration back into Windows, so
+// whatever machine and account runs E-Universe can open the shares without
+// anyone retyping them (services/nasContainers.js syncToWindows). In the
+// background: listening does not wait for it. Logs container keys only.
+connectToMongo()
+  .then(() => require("./services/nasContainers").syncToWindows())
+  .then(({ skipped, results }) => {
+    if (skipped) return;
+    const restored = results.filter((r) => r.ok).map((r) => r.key);
+    const failed = results.filter((r) => !r.ok).map((r) => `${r.key} (${r.code}${r.with ? ` with ${r.with}` : ""})`);
+    if (restored.length) console.log(`[NAS] Windows credentials restored: ${restored.join(", ")}`);
+    if (failed.length) console.warn(`[NAS] Windows credentials not restored: ${failed.join(", ")}. Re-save them in Storage Configuration.`);
+  })
+  .catch((err) => console.warn("[NAS] credential restore skipped:", err.message));
 // Watch the NAS bridge and push its state to open screens (see services/nasBridge.js).
 connectToMongo().then(() => require("./services/nasBridge").start(io)).catch((err) => console.warn("[NAS bridge] not started:", err.message));
 // The Progress Tracker: the Planning Unit's SharePoint working files, read
