@@ -102,9 +102,11 @@ jobs:
   deploy-web:
     name: deploy-web
     needs: check
-    # Version tags only, and only once VPS_HOST is set (a repository variable):
-    # until CI/CD is switched on, a tag gets its checks and nothing else.
-    if: startsWith(github.ref, 'refs/tags/v') && vars.VPS_HOST != ''
+    # Version tags only. VPS_HOST, VPS_SSH_KEY and VPS_KNOWN_HOSTS live on the
+    # production environment, which a job-level `if` cannot see (only
+    # repository variables are visible there): a missing one is reported by
+    # the steps below instead.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The SSH key lives on this environment, not the repository. Add required
@@ -138,6 +140,7 @@ jobs:
         env:
           VPS_HOST: ${{ vars.VPS_HOST }}
         run: |
+          test -n "$VPS_HOST" || { echo "::error::Set the VPS_HOST variable (72.61.125.232) on the production environment: Settings > Environments > production > Environment variables."; exit 1; }
           # The key only runs eu-web-receive on the VPS; "build <tag>" is the
           # whole request. The VPS fetches the tag from GitHub itself.
           ssh -i ~/.ssh/eu_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \

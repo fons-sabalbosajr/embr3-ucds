@@ -161,8 +161,8 @@ if [[ $NEW_KEY -eq 1 || ! -s "$AUTH" ]]; then
   echo
   echo "$HOST_IP $(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"
   echo
-  echo "   And a repository variable (Settings > Secrets and variables > Actions >"
-  echo "   Variables): VPS_HOST = $HOST_IP"
+  echo "   And on the same environment, under Environment variables:"
+  echo "   VPS_HOST = $HOST_IP"
 else
   echo "   already set (run with --new-key to replace it)"
 fi

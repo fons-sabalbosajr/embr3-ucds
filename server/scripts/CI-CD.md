@@ -141,9 +141,9 @@ In GitHub, open the repository's **Settings**:
 |---|---|---|
 | Environments → New environment `production` → Environment secrets | `VPS_SSH_KEY` | the whole key block, `BEGIN` and `END` lines included |
 | same | `VPS_KNOWN_HOSTS` | the `72.61.125.232 ssh-ed25519 …` line |
-| Secrets and variables → Actions → **Variables** (repository) | `VPS_HOST` | `72.61.125.232` |
+| same environment → **Environment variables** | `VPS_HOST` | `72.61.125.232` |
 
-`VPS_HOST` being set is what switches `deploy-web` on. Optional, on the
+From then on every version tag deploys. Optional, on the
 `production` environment: **Deployment tags** `v*` only, and **Required
 reviewers** if each release should wait for your approval.
 
@@ -206,7 +206,8 @@ additive.
 
 | Symptom | Look at |
 |---|---|
-| `deploy-web` skipped | `VPS_HOST` is not set as a **repository** variable (step 9) |
+| `deploy-web` skipped | It runs for version tags only (`v1.2.0`), not for pushes to `main` |
+| `Set the VPS_HOST variable` | `VPS_HOST` is missing from the `production` environment's variables (step 9) |
 | `Permission denied (publickey)` | `VPS_SSH_KEY` pasted whole? Run `setup-e-universe-web.sh --new-key` and paste it again |
 | `Host key verification failed` | `VPS_KNOWN_HOSTS` must match `/etc/ssh/ssh_host_ed25519_key.pub` on the VPS |
 | `may hold only VITE_ keys` | Remove the named keys from the VPS `.env` |
