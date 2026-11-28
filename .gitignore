@@ -21,6 +21,10 @@ docs/
 node_modules/
 .env
 .env.local
+# Any other copy of an env file (a server/.env.download turned up holding the
+# real client keys). The template is the one exception.
+.env.*
+!.env.example
 # Backups taken before editing .env hold the same secrets.
 .env.bak*
 .env.*.bak

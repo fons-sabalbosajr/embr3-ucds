@@ -31,11 +31,21 @@
 #     e-universe-redirect.conf, that line is swapped for the new include and the
 #     old snippet is removed.
 #
+# Two ways to serve the built app, chosen by the argument:
+#   static       from this VPS's disk, /var/www/e-universe/web/public/e-universe,
+#                where GitHub Actions deploys each build (setup-e-universe-web.sh,
+#                eu-web-receive). Pages load even when the office is offline.
+#   <upstream>   proxied over the tailnet from the office server's "UCDS Web".
+#                This was the only way before CI/CD, and stays the fallback.
+# Running it again with the other argument switches between them.
+#
 # Prerequisites: add-e-universe-site.sh has already run on this VPS (Tailscale
-# is joined as tag:ucds-proxy, so the office server's :5173 is reachable).
+# is joined as tag:ucds-proxy, so the office server's :5173 is reachable). For
+# static, setup-e-universe-web.sh has run and a first build has arrived.
 #
 # Usage, as root:
 #
+#   bash add-e-universe-apex.sh static
 #   bash add-e-universe-apex.sh <upstream>
 #
 #   <upstream>   the E-Universe office server on the tailnet: its machine name
@@ -48,6 +58,8 @@ set -euo pipefail
 UPSTREAM_IN="${1:-}"
 MAIN="embr3-onlinesystems.cloud"
 WEBROOT=/var/www/e-universe
+# Static mode: eu-web-receive keeps public/e-universe pointing at the live build.
+STATIC_ROOT=/var/www/e-universe/web/public
 SNIPPET=/etc/nginx/snippets/e-universe.conf
 OLD_SNIPPET=/etc/nginx/snippets/e-universe-redirect.conf
 INCLUDE_LINE="include snippets/e-universe.conf;  # E-Universe at /e-universe (add-e-universe-apex.sh)"
@@ -56,26 +68,35 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 step() { echo; echo "== $*"; }
 
 [[ $EUID -eq 0 ]] || die "run as root"
-[[ -n "$UPSTREAM_IN" ]] || die "usage: bash $0 <upstream>   (e.g. ucds-server)"
+[[ -n "$UPSTREAM_IN" ]] || die "usage: bash $0 static | <upstream>   (e.g. ucds-server)"
 [[ "$UPSTREAM_IN" =~ ^[A-Za-z0-9.-]+$ ]] || die "'$UPSTREAM_IN' does not look like a machine name or address"
 command -v nginx >/dev/null || die "nginx is not installed"
 nginx -t >/dev/null 2>&1 || die "nginx's configuration already fails 'nginx -t'; not touching it."
+MODE=proxy
+[[ "$UPSTREAM_IN" == "static" ]] && MODE=static
 
 # ---------------------------------------------------------------------------
-step "Office server on the tailnet"
-command -v tailscale >/dev/null || die "tailscale is not installed; run add-e-universe-site.sh first"
-if [[ "$UPSTREAM_IN" =~ ^100\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  UPSTREAM="$UPSTREAM_IN"
+if [[ $MODE == static ]]; then
+  step "The build on this VPS"
+  [[ -f "$STATIC_ROOT/e-universe/index.html" ]] \
+    || die "no build at $STATIC_ROOT/e-universe yet. Run setup-e-universe-web.sh, let GitHub Actions deploy once, then run this again."
+  echo "   live build: $(basename "$(readlink "$STATIC_ROOT/e-universe")")"
 else
-  UPSTREAM="$(tailscale ip -4 "$UPSTREAM_IN" 2>/dev/null | head -1 || true)"
-  [[ -n "$UPSTREAM" ]] || die "no tailnet machine called '$UPSTREAM_IN'. Check 'tailscale status', or pass its 100.x address."
-fi
-echo "   E-Universe server: $UPSTREAM_IN = $UPSTREAM"
-if curl -fsS --max-time 10 "http://$UPSTREAM:5173/e-universe/" >/dev/null 2>&1; then
-  echo "   its web app answers over the tailnet"
-else
-  echo "   WARNING: http://$UPSTREAM:5173/e-universe/ did not answer. Continuing; visitors"
-  echo "   will see the 'temporarily unavailable' page until 'UCDS Web' is running there."
+  step "Office server on the tailnet"
+  command -v tailscale >/dev/null || die "tailscale is not installed; run add-e-universe-site.sh first"
+  if [[ "$UPSTREAM_IN" =~ ^100\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    UPSTREAM="$UPSTREAM_IN"
+  else
+    UPSTREAM="$(tailscale ip -4 "$UPSTREAM_IN" 2>/dev/null | head -1 || true)"
+    [[ -n "$UPSTREAM" ]] || die "no tailnet machine called '$UPSTREAM_IN'. Check 'tailscale status', or pass its 100.x address."
+  fi
+  echo "   E-Universe server: $UPSTREAM_IN = $UPSTREAM"
+  if curl -fsS --max-time 10 "http://$UPSTREAM:5173/e-universe/" >/dev/null 2>&1; then
+    echo "   its web app answers over the tailnet"
+  else
+    echo "   WARNING: http://$UPSTREAM:5173/e-universe/ did not answer. Continuing; visitors"
+    echo "   will see the 'temporarily unavailable' page until 'UCDS Web' is running there."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -88,11 +109,45 @@ done
 echo "   $SITE"
 
 # The offline page (shared with the subdomain site) must exist for error_page.
-[[ -f "$WEBROOT/offline.html" ]] || die "$WEBROOT/offline.html is missing; run add-e-universe-site.sh first"
+[[ $MODE == static || -f "$WEBROOT/offline.html" ]] || die "$WEBROOT/offline.html is missing; run add-e-universe-site.sh first"
 
 # ---------------------------------------------------------------------------
-step "Snippet: $SNIPPET"
+step "Snippet: $SNIPPET ($MODE)"
 mkdir -p /etc/nginx/snippets
+if [[ $MODE == static ]]; then
+cat > "$SNIPPET" <<NGINX
+# Written by server/scripts/vps/add-e-universe-apex.sh static — edit there, not here.
+# $MAIN/e-universe serves the E-Universe web app from this VPS's disk, where
+# GitHub Actions deploys each build (eu-web-receive). The API stays on the
+# subdomain. To go back to the office server: add-e-universe-apex.sh ucds-server
+
+# Bare path -> the app's base.
+location = /e-universe { return 301 /e-universe/; }
+
+# Hashed build files never change: cache them hard. A missing one is a 404,
+# never the app's page, so a stale chunk fails loudly instead of as HTML.
+location ^~ /e-universe/assets/ {
+    root $STATIC_ROOT;
+    try_files \$uri =404;
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    add_header X-Content-Type-Options nosniff always;
+}
+
+# Pages, sw.js, the manifest and the other files under the base. Any other
+# path is a screen of the app: answer with its index.html. Never cached, so a
+# deploy reaches everyone on their next page load.
+location ^~ /e-universe/ {
+    root $STATIC_ROOT;
+    try_files \$uri \$uri/ /e-universe/index.html;
+    gzip on;
+    gzip_types text/css application/javascript application/json application/manifest+json image/svg+xml;
+    add_header Cache-Control "no-cache" always;
+    add_header X-Content-Type-Options nosniff always;
+}
+NGINX
+else
 cat > "$SNIPPET" <<NGINX
 # Written by server/scripts/vps/add-e-universe-apex.sh — edit there, not here.
 # $MAIN/e-universe serves the E-Universe web app from the office server
@@ -126,6 +181,7 @@ location ^~ /e-universe/ {
 }
 location = /eu-apex-offline.html { root $WEBROOT; try_files /offline.html =503; internal; }
 NGINX
+fi
 
 # ---------------------------------------------------------------------------
 step "Include it from the main site (additive, with backup and rollback)"

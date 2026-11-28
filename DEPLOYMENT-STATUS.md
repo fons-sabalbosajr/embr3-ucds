@@ -36,6 +36,8 @@ New work is built and tested on the developer laptop first, then deployed to
 the office server. How to update the server, rotate NAS passwords and turn
 document access on or off:
 
+- `server/scripts/CI-CD.md`: how a push to `main` is checked and deployed
+  (front-end to the VPS, API to the office server), and how to roll back
 - `server/scripts/winserver/README.md`: the office server, updates, rollback
 - `server/scripts/vps/add-e-universe-site.sh` and `add-e-universe-apex.sh`: the public address
 - In the application: **Storage › Developer guide** (Developer accounts only)

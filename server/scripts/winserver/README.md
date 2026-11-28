@@ -146,6 +146,12 @@ reaches the NAS through this server's bridge route.
 
 ## Updating E-Universe
 
+With `5-auto-update.ps1` installed, this happens by itself: a release (a
+version tag on `main` that passed CI) is pulled, migrated and restarted
+within minutes, and rolled back if the API does not come back healthy. The
+front-end is built and served on the VPS. See [../CI-CD.md](../CI-CD.md). The manual steps
+below are for when the task is disabled.
+
 When only front-end or server code changed (no `package-lock.json` in the
 `git pull` output), skip `npm ci`: pull, build, and restart the affected
 service.
