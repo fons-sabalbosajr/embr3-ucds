@@ -213,7 +213,7 @@ additive.
 | `Missing required client env keys` | A value is empty in the VPS `.env` (step 4) |
 | `did not answer; rolled back` | `nginx -t`, `/var/log/nginx/error.log`. The previous build is live again |
 | API not updating | `C:\ucds\logs\update.log`: "waiting for CI", "CI … failure", "tracked files are changed", or a rollback |
-| Pages load, sign-in fails | The API side: `ALLOWED_ORIGINS` on the office server, unchanged by this setup |
+| Pages load, sign-in fails | `ALLOWED_ORIGINS` on the office server must list `https://embr3-onlinesystems.cloud` (the apex) first, then the subdomain; restart "UCDS API". Until it can be fixed, `bash eu-origin-bridge.sh on` on the VPS bridges it, and `bash eu-origin-bridge.sh status` says when it can come `off` |
 
 ## Files
 
