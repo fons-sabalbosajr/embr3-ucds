@@ -84,9 +84,10 @@ const hash = (values) => crypto.createHash('sha1').update(values.join('\u0001'))
 const PROVINCE_CODE = { AU: 'Aurora', BA: 'Bataan', BU: 'Bulacan', NE: 'Nueva_Ecija', PA: 'Pampanga', TA: 'Tarlac', ZA: 'Zambales' };
 const SERIES_UNIT = [
   [/^HC(CL)?-/i, 'Healthcare Industries'],
-  [/^HCCP-/i, 'Chemical permits'],
+  // HCCP-/IMT-<province>-n up to the RAW workbooks; CP-/IM-n in the 2027 final ones.
+  [/^(HCCP|CP)-/i, 'Chemical permits'],
   [/^(TSD|TRC)-/i, 'TSD / TRC'],
-  [/^IMT-/i, 'Importers'],
+  [/^(IMT|IM)-/i, 'Importers'],
 ];
 const PROVINCE_NAMES = new Set(Object.values(PROVINCE_CODE));
 function unitOf(key, province) {

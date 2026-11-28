@@ -27,8 +27,13 @@ export const RECOMMENDATIONS = ["For Issuance of NOV", "For Issuance of ORDER/RE
 export const REPORTED_TO_CO = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
 export const PERMIT_PROCESSES = ["ECC Manual", "ECC Online", "ECC (EMB CO)", "ECC (EIS)", "ECC (IEE)", "CNC Manual", "CNC Online"];
 
-/** A list's serial ("HC-BU-12", "TSD-PA-3"), not a province's own ("BU-12"): the template gives the lists no standby gensets. */
-export const isListSerial = (serial) => /^[A-Za-z_]+-[A-Za-z_]+-/.test(String(serial ?? ""));
+/**
+ * A list's serial ("HC-BU-12", "TSD-PA-3"; from the 2027 final workbooks one
+ * series per list, "HC-12", "TSD-3", "CP-1", "IM-4"), not a province's own
+ * ("BU-12"): the template gives the lists no standby gensets.
+ */
+export const isListSerial = (serial) =>
+  /^[A-Za-z_]+-[A-Za-z_]+-/.test(String(serial ?? "")) || /^(HC|HCCL|HCCP|CP|IM|IMT|TSD|TRC)-\d/i.test(String(serial ?? ""));
 
 /** "YES", "✔", "true"… → true; the register's checkmarks and the RAW workbooks' YES/NO alike. */
 export const isYes = (v) => /^(yes|y|true|1|✔|✓)$/i.test(String(v ?? "").trim());

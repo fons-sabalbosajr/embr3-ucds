@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../config/dns').configureDns();
 const fs = require('fs');
 const { BSON } = require('mongodb');
 const { connectToMongo, getDb, client } = require('../../config/db');

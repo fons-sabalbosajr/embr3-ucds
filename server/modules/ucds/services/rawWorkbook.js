@@ -105,6 +105,11 @@ const COLUMNS = [
   ['trc_reference_no', 'tp_trc_ref_no'],
   ['trc_date_issued', 'tp_trc_issued'],
   ['trc_date_expiration', 'tp_trc_expiration'],
+  // The 2027 lists spell the expiry dates out ("…_date_of_expiration (mm/dd/yyyy)").
+  ['chemical_permit_date_of_expiration', 'chem_permit_exp'],
+  ['importer_clearance_date_of_expiration', 'importer_clearance_exp'],
+  ['tsd_date_of_expiration', 'tsd_expiration'],
+  ['trc_date_of_expiration', 'tp_trc_expiration'],
 ];
 // The day counts are all headed TOTAL_NUMBER_OF_DAYS; they are told apart by
 // which date pair precedes them.
