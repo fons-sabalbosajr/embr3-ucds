@@ -21,8 +21,8 @@ async function logActivity(req, res, next) {
 
   if (!req.session || !req.session.user) return res.status(401).send('Unauthorized: No session found');
 
-  const userId = req.session.user.userId;
-  const username = req.session.user.username;
+  // The person acting: a Developer viewing as an officer is named, not the officer.
+  const { userId, username } = require('../services/viewAs').actorOf(req);
 
   let actionType;
   let actionLabel;

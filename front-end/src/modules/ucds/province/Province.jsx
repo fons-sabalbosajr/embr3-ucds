@@ -337,7 +337,9 @@ const Province = ({ theme, currentUser }) => {
     const socket = socketRef.current;
 
     const handleConnect = () => {
-      if (currentUser?.username && displayProvinceName) {
+      // A Developer viewing as an officer does not show up as that officer
+      // among the province's viewers.
+      if (currentUser?.username && displayProvinceName && !currentUser?.viewAs) {
         socket.emit("joinProvince", {
           province: displayProvinceName,
           user: {

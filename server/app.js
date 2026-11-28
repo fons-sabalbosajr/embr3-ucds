@@ -139,6 +139,9 @@ app.use((req, res, next) => (!req.readable ? next() : EXPORT_PATH.test(req.path)
 // General per-account budget for the API; the expensive tier is applied per
 // route where a request scans or aggregates a whole collection.
 app.use(["/api", "/ucds", "/ucds-data", "/check-data", "/archive-data"], apiLimiter);
+// A Developer viewing E-Universe as an officer: view only, and it ends on
+// time. Before every route, so no route can forget it (services/viewAs.js).
+app.use(require("./services/viewAs").guard);
 
 app.use(authRoutes);
 app.use(postingRoutes);
@@ -155,6 +158,7 @@ app.use(fileRoutes);
 app.use(nasRoutes);
 app.use(healthRoutes);
 app.use(developerRoutes);
+app.use(require("./routes/viewAsRoutes"));
 app.use(yearRoutes);
 app.use(require("./routes/datasetRoutes"));
 // VERA, the in-app assistant (services/vera, controllers/veraController.js).

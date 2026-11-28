@@ -893,6 +893,15 @@ const SideMenu = ({ theme, currentUser, collapsed, setCollapsed, mobile = false 
             </div>
           ),
         },
+        // See the application as a Planning or ERMS officer, view only.
+        isDeveloper && {
+          key: "/e-universe/admin/developer/view-as",
+          label: (
+            <div className="menu-label-wrapper submenu-item-label">
+              <Link to="/e-universe/admin/developer/view-as">View as an account</Link>
+            </div>
+          ),
+        },
       ].filter(Boolean),
     },
     // canViewAdminPanel && {

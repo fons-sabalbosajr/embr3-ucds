@@ -12,7 +12,7 @@
     "dev": "node --watch server.js",
     "test:watch": "vitest",
     "test:db:refresh": "node scripts/refresh-test-db.js",
-    "test:unit": "vitest run tests/authorization.test.js tests/provinces.test.js tests/nas-path.test.js",
+    "test:unit": "vitest run tests/authorization.test.js tests/provinces.test.js tests/nas-path.test.js tests/view-as.test.js",
     "audit:routes": "node scripts/audit-routes.js",
     "audit:routes:unprotected": "node scripts/audit-routes.js --unprotected",
     "walkthrough": "node scripts/walkthrough.js",

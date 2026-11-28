@@ -18,10 +18,13 @@ const { principalOf } = require('../middleware/auth');
 
 async function recordFileEvent(req, { operation, serialNo, fileName, success, detail, bytes, containerKey }) {
   const user = principalOf(req) || {};
+  // A Developer viewing as an officer opens documents under their own name.
+  const actor = require('./viewAs').actorOf(req);
 
   const entry = {
-    userId: user.userId || user._id || null,
-    username: user.username || null,
+    userId: actor.userId || user.userId || user._id || null,
+    username: actor.username || user.username || null,
+    ...(actor.viewingAs ? { viewingAs: actor.viewingAs } : {}),
     domain: 'nas',
     method: req?.method || null,
     path: req?.originalUrl ? String(req.originalUrl).split('?')[0] : null,

@@ -63,11 +63,13 @@ import PageLoading from "./shared/components/PageLoading";
 import { DataProvider } from "./modules/ucds/province/DataContext";
 import EnvStatus from "./components/EnvStatus";
 import NasStatusBanner from "./components/NasStatusBanner";
+import ViewAsBanner from "./components/ViewAsBanner";
 import AppFooter from "./components/AppFooter";
 import VeraChat from "./modules/vera/VeraChat";
 import moment from "moment";
 
 const StorageConfig = lazy(() => import("./modules/admin/developer/StorageConfig"));
+const ViewAs = lazy(() => import("./modules/admin/developer/ViewAs"));
 
 import { ROUTES } from "./config/routes";
 import DomainGuard from "./auth/DomainGuard";
@@ -131,6 +133,8 @@ const Universe = () => {
   // The ERMS unit ("System") on the account, the units this person may see,
   // and whether the year container picker is skipped for them.
   const [erms, setErms] = useState({ unit: null, units: [], skipYearSelect: false });
+  // A Developer viewing as an officer (server/services/viewAs.js), or null.
+  const [viewAs, setViewAs] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [ermsNotifications, setErmsNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -178,6 +182,7 @@ const Universe = () => {
       setStorageContainers(data.storageContainers || []);
       setProvinces(data.provinces || []);
       setErms({ unit: data.ermsUnit || null, units: data.ermsUnits || [], skipYearSelect: data.skipYearSelect === true });
+      setViewAs(data.viewAs || null);
       setUserRole(data.role || "viewer");
       setUserHandle(data.user?.username);
       setDivision(data.user?.division || "");
@@ -571,6 +576,7 @@ const Universe = () => {
     ermsUnit: erms.unit,
     ermsUnits: erms.units,
     skipYearSelect: erms.skipYearSelect,
+    viewAs,
   };
 
   return (
@@ -690,6 +696,7 @@ const Universe = () => {
 
               {/* Under the header on every screen: the NAS is not connected,
                   and the rest of the application still is. */}
+              <ViewAsBanner viewAs={viewAs} />
               <NasStatusBanner />
 
               <Content className="content-container">
@@ -994,6 +1001,8 @@ const Universe = () => {
                       path="admin/developer/storage-config"
                       element={<StorageConfig theme={theme} />}
                     />
+                    {/* See the application as a Planning or ERMS officer, view only. */}
+                    <Route path="admin/developer/view-as" element={<ViewAs />} />
                   </Route>
 
                   {/* Old locations. Kept as redirects rather than deleted: the

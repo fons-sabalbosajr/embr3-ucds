@@ -438,6 +438,9 @@ async function me(req, res) {
       // The look this person chose, kept on the account so it follows them
       // to any device (see PUT /api/profile/theme).
       theme: account?.preferences?.theme || null,
+      // A Developer seeing this account's view (services/viewAs.js): the
+      // shell shows a banner with Exit. null for everyone else.
+      viewAs: require('../services/viewAs').describe(req),
     });
   } catch (error) {
     console.error('Error building /api/auth/me:', error);
@@ -493,6 +496,8 @@ function protectedSample(req, res) {
 }
 
 module.exports = {
+  // Also the snapshot a Developer's "view as" session takes (services/viewAs.js).
+  buildSessionPayload,
   register,
   login,
   requestPasswordReset,

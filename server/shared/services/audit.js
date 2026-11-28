@@ -34,11 +34,13 @@ function diff(before = {}, after = {}) {
  */
 async function record(req, entry) {
   try {
-    const user = req.session?.user;
+    // The person acting: a Developer viewing as an officer is named, not the officer.
+    const user = require('../../services/viewAs').actorOf(req);
     // MongoDB or SQL Server by category (services/activityStore.js).
     await require('../../services/activityStore').record({
       userId: user?.userId || null,
       username: user?.username || null,
+      ...(user?.viewingAs ? { viewingAs: user.viewingAs } : {}),
       domain: entry.domain,
       method: req.method,
       path: req.path,
