@@ -6,6 +6,7 @@ import { loginUser } from "./api/authService";
 import { ROUTES } from "./config/routes";
 import { API_BASE_URL } from "./config/api";
 import AuthShell, { AuthError } from "./components/AuthShell";
+import VeraChat from "./modules/vera/VeraChat";
 import { setSessionToken, getRememberedUsername, setRememberedUsername } from "./shared/sessionToken";
 import { refreshPushRegistration } from "./shared/notifications/devicePush";
 import { useYear } from "./context/YearContext";
@@ -77,6 +78,7 @@ const Login = () => {
 
   return (
     <AuthShell
+      assistant={<VeraChat variant="public" />}
       title="Sign in"
       footer={
         <>

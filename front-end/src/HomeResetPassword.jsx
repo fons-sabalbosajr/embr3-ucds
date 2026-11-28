@@ -7,6 +7,7 @@ import { message } from "./shared/feedback";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
 import AuthShell, { AuthError } from "./components/AuthShell";
+import VeraChat from "./modules/vera/VeraChat";
 
 const HomeResetPassword = () => {
   const location = useLocation();
@@ -46,7 +47,7 @@ const HomeResetPassword = () => {
 
   if (done) {
     return (
-      <AuthShell>
+      <AuthShell assistant={<VeraChat variant="public" />}>
         <Result
           status="success"
           title="Password updated"
@@ -74,6 +75,7 @@ const HomeResetPassword = () => {
 
   return (
     <AuthShell
+      assistant={<VeraChat variant="public" />}
       title="Choose a new password"
       intro="Use at least 8 characters. Avoid something you use elsewhere."
       footer={

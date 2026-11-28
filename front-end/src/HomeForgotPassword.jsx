@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
 import AuthShell, { AuthError } from "./components/AuthShell";
+import VeraChat from "./modules/vera/VeraChat";
 
 const HomeForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +35,7 @@ const HomeForgotPassword = () => {
 
   if (sentTo) {
     return (
-      <AuthShell>
+      <AuthShell assistant={<VeraChat variant="public" />}>
         <Result
           status="success"
           icon={<MailOutlined />}
@@ -60,6 +61,7 @@ const HomeForgotPassword = () => {
 
   return (
     <AuthShell
+      assistant={<VeraChat variant="public" />}
       title="Forgot your password?"
       intro="Enter the email address registered to your account and we will send you a link to choose a new one."
       footer={

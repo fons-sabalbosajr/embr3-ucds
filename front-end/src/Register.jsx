@@ -6,6 +6,7 @@ import { modal } from "./shared/feedback";
 import { API_BASE_URL } from "./config/api";
 import { ROUTES } from "./config/routes";
 import AuthShell, { AuthError } from "./components/AuthShell";
+import VeraChat from "./modules/vera/VeraChat";
 
 // The request is recorded and the notification emails are sent by the server.
 // This page used to send the administrator's email itself through EmailJS
@@ -59,6 +60,7 @@ const Register = () => {
 
   return (
     <AuthShell
+      assistant={<VeraChat variant="public" />}
       width={460}
       title="Request access"
       intro="Accounts are issued to EMB Region III personnel. Tell us who you are and which system you need; the Developer approves each request."

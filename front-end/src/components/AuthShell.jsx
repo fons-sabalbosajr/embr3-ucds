@@ -5,7 +5,6 @@ import { BulbFilled, BulbOutlined } from "@ant-design/icons";
 import AuthBrand from "./AuthBrand";
 import { useTheme } from "../theme/ThemeProvider";
 import { ROUTES } from "../config/routes";
-import VeraChat from "../modules/vera/VeraChat";
 import "./authshell.css";
 
 // ---------------------------------------------------------------------------
@@ -23,7 +22,7 @@ import "./authshell.css";
 
 const CIRCLES = 10;
 
-const AuthShell = ({ title, intro, children, width = 420, footer }) => {
+const AuthShell = ({ title, intro, children, width = 420, footer, assistant }) => {
   const { token } = antdTheme.useToken();
   const { isDark, toggleMode } = useTheme();
 
@@ -88,9 +87,10 @@ const AuthShell = ({ title, intro, children, width = 420, footer }) => {
           Environmental Management Bureau · Regional Office III · For official use only
         </p>
       </main>
-      {/* VERA's sign-in page surface. Shows only when an administrator has
-          turned it on (Admin Settings › VERA Assistant). */}
-      <VeraChat variant="public" />
+      {/* VERA's sign-in page surface, passed in by each page so shared layout
+          does not import the VERA module. It shows only when an administrator
+          has turned it on (Admin Settings › VERA Assistant). */}
+      {assistant}
     </div>
   );
 };

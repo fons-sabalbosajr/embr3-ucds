@@ -53,7 +53,7 @@ The repo is `https://github.com/fons-sabalbosajr/embr3-ucds.git`, remote `origin
 - **Diverged:** `git pull --rebase` keeps history straight. If it conflicts, stop and show the conflicts rather than choosing a side.
 - **Never** `push --force`, `reset --hard` to the remote, or delete a branch without asking. A force-push to `main` overwrites what others pulled.
 - Uncommitted work blocks a pull. Ask whether to commit it or `git stash` it first.
-- `origin/PROD` is a separate deploy branch that has diverged from `main` (3 commits of its own, 109 behind, as of 2026-11-26). Do not merge or push to it as part of a sync unless asked.
+- `origin/PROD` is a separate deploy branch that has diverged from `main` (3 commits of its own, 131 behind, as of 2026-11-28). Do not merge or push to it as part of a sync unless asked.
 - `gh` is not installed on this machine. Use plain `git` over HTTPS, and do pull requests in the browser.
 
 ## What it does not cover
@@ -66,13 +66,14 @@ The repo is `https://github.com/fons-sabalbosajr/embr3-ucds.git`, remote `origin
 
 Lead with the FAILs, each with its file and line and what it breaks, then the warnings, then a one-line count of the passes. Say what was skipped and why, especially the full test suite: a run without it is not a clean bill of health. If you fixed something, say so and leave it uncommitted unless asked.
 
-## Baseline, 2026-11-26 (main at 7e7c05d)
+## Baseline, 2026-11-28 (main at 7d5089e)
 
 Use this to tell a new problem from a known one, and update it when it changes.
 
 - repo: in sync with `origin/main`. `erms-unification` is fully merged into `main`.
 - secrets: clean.
 - config: `SESSION_SECRET` is 18 characters (warn).
-- lint: about 2,400 problems, 2,121 of them `react/prop-types`. Likely bugs: `src/components/AuthShell.jsx:8` imports `modules/vera/VeraChat` across the domain boundary. Two `no-undef` errors in `Province.jsx` (a missing import added with the 2027 template) were fixed that day.
+- lint: 2,388 problems, 2,120 of them `react/prop-types`; the step reports FAIL on that noise alone. Likely bugs: none. The `AuthShell.jsx` import of `modules/vera/VeraChat` was fixed on 2026-11-28: the four public account pages now pass VERA in through the `assistant` prop. Two `no-undef` errors in `Province.jsx` were fixed on 2026-11-26.
 - build and bundle budget: pass. Route guards and unit tests: pass. Full suite: not run (no test database on this machine).
-- deps: server high 3 (`body-parser`, `multer`, `zod`), moderate 3 (`express`, `nodemailer`, `qs`). Front-end high 1 (`follow-redirects`). All fixable without `--force`.
+- deps: clean in both folders (the 2026-11-26 highs and moderates are gone).
+- working tree: `core.autocrlf=true` can make the `demo/e-universe-3d/` files show as modified with line-ending-only changes. Check with `git diff --ignore-cr-at-eol`, and clear them with `git restore demo/e-universe-3d/`. A stray copy of `front-end/.env.local` turned up as `server/.env.download` (not gitignored, real keys) and was deleted on 2026-11-28. Look out for it coming back.
